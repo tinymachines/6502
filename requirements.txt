@@ -1,0 +1,7 @@
+# Core dependencies
+requests>=2.32.0
+numpy>=1.24.0
+python-dotenv>=1.0.0
+
+# Note: vectl (vector-cluster-store) must be installed separately from extern/vectl/
+# Run: cd extern/vectl && pip install -e .
