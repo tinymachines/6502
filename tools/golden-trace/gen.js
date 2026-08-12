@@ -1,0 +1,177 @@
+#!/usr/bin/env node
+// Generate a golden reference trace by running the original visual6502 JavaScript
+// engine headlessly. The output is the oracle the Rust engine is diffed against:
+// the logic level of EVERY node, at EVERY half-cycle.
+//
+// The reference code is 2010-era browser JS with no module boundaries, so we load
+// it into a shared `vm` context and stub out the DOM/canvas entry points it calls
+// from initChip()/chipStatus(). Nothing that affects simulation is stubbed.
+//
+// Usage: node gen.js [--steps N] [--out FILE]
+
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const REF = path.resolve(__dirname, '../../extern/visual6502');
+
+function arg(name, dflt) {
+  const i = process.argv.indexOf(name);
+  return i === -1 ? dflt : process.argv[i + 1];
+}
+
+const steps = parseInt(arg('--steps', '3000'), 10);
+const outPath = path.resolve(arg('--out', path.join(__dirname, 'golden.txt')));
+
+// The program under test. Mirrored by the Rust differential test, which reads
+// these bytes back out of the golden file header rather than duplicating them.
+// This is visual6502's own default testprogram.js: exercises JSR/RTS, INX, DEY,
+// a read-modify-write (INC zp), SEC, ADC and JMP -- a tight loop that touches the
+// ALU, the stack, both index registers and the RMW bus timing.
+const PROGRAM_ADDR = 0x0000;
+const PROGRAM = [
+  0xa9, 0x00,       // LDA #$00
+  0x20, 0x10, 0x00, // JSR $0010
+  0x4c, 0x02, 0x00, // JMP $0002
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x40,
+  0xe8,             // INX
+  0x88,             // DEY
+  0xe6, 0x0f,       // INC $0F
+  0x38,             // SEC
+  0x69, 0x02,       // ADC #$02
+  0x60,             // RTS
+];
+const RESET_VECTOR = 0x0000;
+
+// ---------------------------------------------------------------------------
+// Minimal environment. `chipLayoutIsVisible=false` makes refresh() a no-op on
+// its own; the rest are display-only functions called from initChip/chipStatus.
+// ---------------------------------------------------------------------------
+const sandbox = {
+  console,
+  window: {},
+  document: {
+    getElementById: () => null,
+    createElement: () => ({ appendChild() {}, childNodes: [] }),
+    createTextNode: () => ({}),
+  },
+  navigator: { appVersion: '', appName: 'node' },
+  location: { search: '' },
+  setTimeout,
+};
+sandbox.global = sandbox;
+vm.createContext(sandbox);
+
+function load(file) {
+  const src = fs.readFileSync(path.join(REF, file), 'utf8');
+  vm.runInContext(src, sandbox, { filename: file });
+}
+
+// Load order is the reference's dependency graph: data first (wires.js reads
+// nodenames['vss'] at top level), then graph builder, solver, 6502 layer.
+load('segdefs.js');
+load('transdefs.js');
+load('nodenames.js');
+load('wires.js');
+load('chipsim.js');
+load('macros.js');
+
+vm.runInContext(
+  `
+  chipLayoutIsVisible = false;   // refresh() early-returns
+  animateChipLayout   = false;
+  expertMode          = undefined;
+  loglevel            = 0;
+  logThese            = [];
+
+  // display-only sinks
+  refresh      = function(){};
+  chipStatus   = function(){};
+  setStatus    = function(){};
+  selectCell   = function(){};
+  setCellValue = function(){};
+  updateLogbox = function(){};
+  initLogbox   = function(){};
+
+  // trigger tables hold JS source strings eval'd by the bus handlers; the Rust
+  // engine has no equivalent, so run with them empty for a clean comparison.
+  clockTriggers = {}; readTriggers = {}; writeTriggers = {}; fetchTriggers = {};
+
+  setupNodes();
+  setupTransistors();
+  setupNodeNameList();
+`,
+  sandbox
+);
+
+// Load the program directly into the simulated memory array.
+vm.runInContext(
+  `
+  memory = [];
+  var __prog = ${JSON.stringify(PROGRAM)};
+  for (var i = 0; i < __prog.length; i++) mWrite(${PROGRAM_ADDR} + i, __prog[i]);
+  mWrite(0xfffc, ${RESET_VECTOR & 0xff});
+  mWrite(0xfffd, ${(RESET_VECTOR >> 8) & 0xff});
+  initChip();
+`,
+  sandbox
+);
+
+const run = (expr) => vm.runInContext(expr, sandbox);
+
+// nodenames has `p5: -1` -- the 6502 status register has no bit 5, so the
+// reference's own readP() (unused there) dereferences nodes[-1] and throws.
+// Compose P from the seven real storage nodes and force bit 5 high, which is
+// what the silicon presents when the register is pushed or read.
+vm.runInContext(
+  `
+  readP = function(){
+    return (isNodeHigh(nodenames['p0']) ? 0x01 : 0)
+         | (isNodeHigh(nodenames['p1']) ? 0x02 : 0)
+         | (isNodeHigh(nodenames['p2']) ? 0x04 : 0)
+         | (isNodeHigh(nodenames['p3']) ? 0x08 : 0)
+         | (isNodeHigh(nodenames['p4']) ? 0x10 : 0)
+         | 0x20
+         | (isNodeHigh(nodenames['p6']) ? 0x40 : 0)
+         | (isNodeHigh(nodenames['p7']) ? 0x80 : 0);
+  };
+`,
+  sandbox
+);
+
+const nodeCount = run('nodes.length');
+const transCount = run('Object.keys(transistors).length');
+process.stderr.write(`nodes=${nodeCount} transistors=${transCount}\n`);
+
+const lines = [];
+lines.push('# visual6502 golden trace (generated by tools/golden-trace/gen.js)');
+lines.push(`# nodes ${nodeCount}`);
+lines.push(`# transistors ${transCount}`);
+lines.push(`# program_addr ${PROGRAM_ADDR}`);
+lines.push(`# program ${PROGRAM.map((b) => b.toString(16).padStart(2, '0')).join('')}`);
+lines.push(`# reset_vector ${RESET_VECTOR}`);
+lines.push(`# steps ${steps}`);
+lines.push('# columns: halfcycle ab db rw sync pc a x y s p state');
+
+for (let i = 0; i < steps; i++) {
+  const ab = run('readAddressBus()');
+  const db = run('readDataBus()');
+  const rw = run("readBit('rw')");
+  const sync = run("readBit('sync')");
+  const pc = run('readPC()');
+  const a = run('readA()');
+  const x = run('readX()');
+  const y = run('readY()');
+  const s = run('readSP()');
+  const p = run('readP()');
+  const state = run('stateString()');
+  const hex = (v, w) => v.toString(16).padStart(w, '0');
+  lines.push(
+    [i, hex(ab, 4), hex(db, 2), rw, sync, hex(pc, 4), hex(a, 2), hex(x, 2), hex(y, 2), hex(s, 2), hex(p, 2), state].join(' ')
+  );
+  run('halfStep()');
+}
+
+fs.writeFileSync(outPath, lines.join('\n') + '\n');
+process.stderr.write(`wrote ${outPath} (${steps} half-cycles, ${(fs.statSync(outPath).size / 1e6).toFixed(1)} MB)\n`);

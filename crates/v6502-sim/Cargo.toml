@@ -1,0 +1,8 @@
+[package]
+name = "v6502-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+v6502-netlist = { path = "../v6502-netlist" }

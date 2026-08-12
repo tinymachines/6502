@@ -1,0 +1,79 @@
+# 6502.tinymachines.ai -- transistor-level 6502 simulator.
+#
+# Entirely static: HTML/CSS/JS, a ~110 KB .wasm, and a 1.5 MB die-geometry blob.
+# There is no application process; nginx serves files from a release directory
+# that 6502-deploy.service swaps a symlink into.
+
+# Cache policy lives in a map rather than in per-location `add_header`, and that
+# is load-bearing rather than stylistic. nginx's add_header does not merge
+# across levels: a location containing ANY add_header discards every inherited
+# one. An earlier version set Cache-Control per location and silently dropped
+# the CSP and HSTS headers from the HTML document -- the one response where they
+# actually matter. With the value in a variable, every header can be declared
+# once at server level and no location needs add_header at all.
+#
+# Assets are not content-hashed, so everything revalidates. A 304 is cheap and a
+# deploy takes effect immediately, which matters more here than saving a round
+# trip on a repeat visit.
+map $uri $tm6502_cache {
+    default    "public, max-age=60, must-revalidate";
+    "/"        "no-cache";
+    ~*\.html$  "no-cache";
+}
+
+server {
+    include snippets/scanner-trap.conf;
+    server_name 6502.tinymachines.ai;
+    listen 80;
+    listen [::]:80;
+
+    location /.well-known/acme-challenge/ { root /var/www/html; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    include snippets/scanner-trap.conf;
+    server_name 6502.tinymachines.ai;
+
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    # Issued by:
+    #   certbot certonly --webroot -w /var/www/html -d 6502.tinymachines.ai
+    # Note this box's snakeoil pair is broken (the .pem holds a private key), so
+    # the usual "bootstrap with snakeoil, let certbot replace it" trick does not
+    # work here -- this vhost was brought up HTTP-only first instead.
+    ssl_certificate     /etc/letsencrypt/live/6502.tinymachines.ai/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/6502.tinymachines.ai/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    root /var/www/6502.tinymachines.ai/current;
+    index index.html;
+
+    access_log /var/log/nginx/6502.access.log;
+    error_log  /var/log/nginx/6502.error.log;
+
+    # The deploy precompresses everything with gzip -9, so nginx never spends CPU
+    # compressing. This is not an optimisation but a requirement: the global
+    # gzip_types is commented out in nginx.conf, so runtime gzip would cover only
+    # text/html and the 1.5 MB geometry blob would ship raw.
+    gzip_static on;
+    gzip_vary on;
+
+    # Nothing is loaded from another origin, so the policy can be strict.
+    # 'wasm-unsafe-eval' is load-bearing: without it the browser refuses to
+    # instantiate the WebAssembly module and the page boots to a blank canvas.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Cache-Control $tm6502_cache always;
+
+    # Releases are reachable only through the `current` symlink; there is no
+    # reason to expose the archive or let anyone enumerate it.
+    location /releases/ { return 404; }
+
+    location / { try_files $uri $uri/ =404; }
+}

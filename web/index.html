@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visual 6502 — transistor-level</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="boot">
+  <div class="boot-inner">
+    <h1>Visual&nbsp;6502</h1>
+    <p id="boot-status">Loading simulator…</p>
+    <div class="boot-bar"><div id="boot-bar-fill"></div></div>
+    <p id="boot-error" hidden></p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>Visual <span>6502</span></h1>
+    <div class="subtitle">
+      transistor-level simulation ·
+      <span id="chip-facts">…</span>
+    </div>
+    <div class="spacer"></div>
+    <label class="field">
+      <span>Program</span>
+      <select id="program-select"></select>
+    </label>
+  </header>
+
+  <main>
+    <div id="stage">
+      <canvas id="die"></canvas>
+      <div id="hover-card" hidden></div>
+      <div id="stage-hint">drag to pan · scroll to zoom · click a wire to trace it</div>
+      <div id="fps"></div>
+    </div>
+
+    <aside>
+      <section class="panel">
+        <h2>Registers</h2>
+        <div class="reg-grid">
+          <div class="reg wide"><label>PC</label><span id="r-pc">0000</span></div>
+          <div class="reg"><label>A</label><span id="r-a">00</span></div>
+          <div class="reg"><label>X</label><span id="r-x">00</span></div>
+          <div class="reg"><label>Y</label><span id="r-y">00</span></div>
+          <div class="reg"><label>S</label><span id="r-s">00</span></div>
+        </div>
+        <div class="flags" id="flags"></div>
+        <div class="disasm">
+          <span class="disasm-label">executing</span>
+          <span id="disasm">—</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Bus &amp; timing</h2>
+        <div class="kv"><label>Address</label><span id="b-ab">0000</span></div>
+        <div class="kv"><label>Data</label><span id="b-db">00</span></div>
+        <div class="kv"><label>Direction</label><span id="b-rw">read</span></div>
+        <div class="kv"><label>Cycle</label><span id="b-cycle">0</span></div>
+        <div class="kv"><label>Half-cycle</label><span id="b-half">0</span></div>
+        <div class="kv"><label>Clock</label><span id="b-phase">φ1</span></div>
+        <div class="pins">
+          <span class="pin" id="pin-sync">SYNC</span>
+          <span class="pin" id="pin-clk">CLK0</span>
+          <span class="pin" id="pin-rw">R/W</span>
+        </div>
+        <div class="tstates" id="tstates"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Selection</h2>
+        <div id="selection">Nothing selected. Click a wire on the die.</div>
+        <div class="row">
+          <input type="text" id="find-input" placeholder="find signal, e.g. sync or ab3" spellcheck="false">
+          <button id="find-btn" class="btn">Find</button>
+        </div>
+        <label class="check">
+          <input type="checkbox" id="trace-group" checked>
+          <span>Highlight the whole connected group</span>
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>Layers</h2>
+        <div id="layers"></div>
+        <label class="slider">
+          <span>Inactive brightness</span>
+          <input type="range" id="dim" min="0" max="100" value="50">
+        </label>
+        <label class="slider">
+          <span>Glow</span>
+          <input type="range" id="bloom" min="0" max="250" value="115">
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>Memory</h2>
+        <div class="row">
+          <input type="text" id="mem-addr" value="0000" spellcheck="false" maxlength="4">
+          <label class="check inline">
+            <input type="checkbox" id="mem-follow" checked>
+            <span>follow bus</span>
+          </label>
+        </div>
+        <pre id="memory"></pre>
+      </section>
+    </aside>
+  </main>
+
+  <footer>
+    <div class="transport">
+      <button id="btn-reset" class="btn" title="Power cycle (R)">⏻</button>
+      <button id="btn-back" class="btn" title="Step back one half-cycle (,)">◀|</button>
+      <button id="btn-run" class="btn primary" title="Run / pause (space)">▶</button>
+      <button id="btn-half" class="btn" title="Step one half-cycle (.)">|▶</button>
+      <button id="btn-cycle" class="btn" title="Step one full cycle (C)">▶|</button>
+      <button id="btn-instr" class="btn" title="Step one instruction (I)">▶▶</button>
+    </div>
+    <label class="field speed">
+      <span>Speed</span>
+      <select id="speed">
+        <option value="1">1 half-cycle / frame</option>
+        <option value="4">4 / frame</option>
+        <option value="16" selected>16 / frame</option>
+        <option value="64">64 / frame</option>
+        <option value="0">as fast as possible</option>
+      </select>
+    </label>
+    <div class="timeline">
+      <input type="range" id="scrub" min="0" max="0" value="0">
+      <span id="scrub-label">—</span>
+    </div>
+  </footer>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+[package]
+name = "v6502-netlist"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Immutable transistor netlist for the MOS 6502, extracted from the visual6502 die trace"
+
+[dependencies]
+
+[features]
+default = []
+
+[build-dependencies]
+earcutr = "0.5.0"

@@ -1,0 +1,32 @@
+[Unit]
+Description=Build and publish 6502.tinymachines.ai
+Documentation=file:/home/bisenbek/projects/tinymachines/6502/CLAUDE.md
+# Only needed if a build has to fetch crates; a warm cargo cache works offline.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=bisenbek
+Group=bisenbek
+WorkingDirectory=/home/bisenbek/projects/tinymachines/6502
+ExecStart=/home/bisenbek/projects/tinymachines/6502/deploy/deploy.sh
+
+# A cold build (wasm-pack + the netlist build script, which triangulates 8233
+# polygons) takes a couple of minutes; the default 90s would kill it.
+TimeoutStartSec=1800
+
+# The unit publishes into /var/www and reads the repo. Nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/www/6502.tinymachines.ai /home/bisenbek/projects/tinymachines/6502
+ProtectHome=false
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+# Deliberately not enabled: this is a deploy action, not a boot-time service.
+# `systemctl start 6502-deploy` after a change, or attach a .timer/.path unit.
+WantedBy=multi-user.target

@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/v6502-netlist",
+    "crates/v6502-sim",
+    "crates/v6502-wasm",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+license = "MIT"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
+# The differential test replays 3000 half-cycles of full-chip state; unoptimised
+# it takes minutes, so give test dependencies real optimisation.
+[profile.test]
+opt-level = 2
+
+[profile.dev.package."*"]
+opt-level = 2

@@ -1,0 +1,11 @@
+/target
+/web/pkg
+node_modules
+
+# Generated oracle: 5 MB of reference trace, rebuilt on demand.
+# node tools/golden-trace/gen.js --steps 3000
+/tools/golden-trace/golden.txt
+/web/layout.bin
+
+# Operator-specific runbook: addresses, zone paths, local host details.
+/deploy/HOSTING.local.md
