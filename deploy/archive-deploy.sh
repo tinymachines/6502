@@ -44,7 +44,7 @@ done
 # A truncated harvest publishes an archive full of broken images, which is
 # worse than not publishing: it looks complete and is not.
 imgs=$(find archive/mirror/visual6502.org/images -type f 2>/dev/null | wc -l)
-want=$(grep -c . archive/urls/site-images.txt)
+want=$(grep -c '^http' archive/urls/site-images.txt)   # the list carries a # header
 log "die photographs: $imgs local, $want in the manifest"
 [ "$imgs" -ge $(( want * 95 / 100 )) ] || {
   echo "archive-deploy: only $imgs/$want images -- finish harvest-site.sh first" >&2

@@ -112,21 +112,16 @@ def main() -> None:
 
     PUBLIC.mkdir(parents=True, exist_ok=True)
 
-    # Full-resolution originals, linked rather than copied (2.3 GB).
+    # The mirror, linked rather than copied (2.3 GB). This exposes the WHOLE
+    # tree, not just images/, and that is deliberate: the site's own per-chip
+    # description pages live at images/pages/*.html and reference
+    # ../<chip>/photo.jpg and ../../main.css. Serving the tree intact means
+    # every one of those relative links resolves exactly as it did on the
+    # original site, with no rewriting to get wrong.
     link = PUBLIC / "full"
     if link.is_symlink() or link.exists():
         link.unlink() if link.is_symlink() else shutil.rmtree(link)
-    link.symlink_to(Path("..") / "mirror" / "visual6502.org" / "images")
-
-    # The live site as it still stands, minus the images already in the gallery.
-    site = PUBLIC / "site"
-    if site.exists():
-        shutil.rmtree(site)
-    site.mkdir(parents=True)
-    for item in MIRROR.iterdir():
-        if item.name == "images":
-            continue
-        (shutil.copytree if item.is_dir() else shutil.copy2)(item, site / item.name)
+    link.symlink_to(Path("..") / "mirror" / "visual6502.org")
 
     wiki_n = len(list((PUBLIC / "wiki").glob("*.html"))) - 1
     gm = PUBLIC / "gallery" / "gallery-manifest.json"
@@ -134,7 +129,8 @@ def main() -> None:
     n_chips = len(g["chips"])
     n_imgs = sum(c["images"] for c in g["chips"])
     gb = g["total_bytes"] / 1e9
-    site_n = sum(1 for _ in site.rglob("*") if _.is_file())
+    site_n = sum(1 for f in MIRROR.rglob("*")
+                 if f.is_file() and "/images/" not in f.as_posix())
 
     body = f"""
 <h1>visual6502.org, preserved</h1>
@@ -185,7 +181,7 @@ this material disappears. Not deleted, just orphaned.</p>
   <p>visual6502.org as it still stands, including the JavaScript simulator that
   started all of this and the SIGGRAPH&nbsp;2010 talk describing how the chip
   was photographed and vectorised.</p>
-  <a class="go" href="site/index.html">Open the mirror</a></li>
+  <a class="go" href="full/index.html">Open the mirror</a></li>
 </ul>
 
 <div class="eyebrow">Attribution</div>

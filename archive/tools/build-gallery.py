@@ -25,7 +25,9 @@ re-runs after adding chips are cheap.
 import html
 import json
 import os
+import re
 import sys
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -49,6 +51,29 @@ THUMB, VIEW = 480, 2000
 ATTRIB = ("Visual6502 project &mdash; Greg James, Barry Silverman and "
           "Brian Silverman, and the Visual6502 team")
 LICENCE = "https://creativecommons.org/licenses/by-nc-sa/3.0/"
+
+
+def description_pages() -> dict:
+    """Map a chip directory to the site's own page describing that die shoot.
+
+    visual6502.org wrote a short page per chip under images/pages/, which is
+    where the project's own words about each part live -- what it is, who
+    donated it, how it was decapped. Those pages reference ../<chip>/photo.jpg,
+    so the directory they point at most often identifies the chip they describe.
+    Without this the gallery would show the photographs stripped of everything
+    the people who took them had to say about them.
+    """
+    out, d = {}, SRC / "pages"
+    if not d.exists():
+        return out
+    for f in sorted(d.glob("*.html")):
+        text = f.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"<title>(.*?)</title>", text, re.S | re.I)
+        title = " ".join(html.unescape(m.group(1)).split()) if m else f.stem
+        refs = Counter(re.findall(r'(?:href|src)="\.\./([^/"]+)/', text))
+        if refs:
+            out.setdefault(refs.most_common(1)[0][0], []).append((title, f.name))
+    return out
 
 
 def human(n: int) -> str:
@@ -130,11 +155,19 @@ padding:0;list-style:none}
 .grid img{width:100%;display:block;background:#0a1526}
 .grid figcaption{padding:.55rem .7rem;font-size:.8rem}
 .grid figcaption b{display:block;font-weight:600;word-break:break-word}
-.grid figcaption small{color:var(--muted);font-family:var(--mono);font-size:.7rem}
+.grid figcaption small{display:block;color:var(--muted);font-family:var(--mono);
+font-size:.7rem}
 .grid a{text-decoration:none;color:var(--fg)}
 .dl{display:inline-block;margin-top:.3rem;font-family:var(--mono);font-size:.7rem;
 color:var(--gold)}
 .dl.src{color:var(--muted);margin-left:.5rem}
+.orig-wrap{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.25rem 0}
+.orig{display:inline-block;border:2px solid var(--accent);color:var(--accent);
+padding:.45rem .8rem;text-decoration:none;font-weight:600;font-size:.88rem}
+.orig:hover{background:var(--accent);color:#06121f}
+.orig.doc{border-color:var(--gold);color:var(--gold);font-family:var(--mono);
+font-size:.78rem;font-weight:400}
+.orig.doc:hover{background:var(--gold);color:#06121f}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:2px solid var(--line);
 color:var(--muted);font-size:.85rem}
 """
@@ -178,16 +211,22 @@ def main() -> None:
     if not SRC.exists():
         sys.exit(f"no mirror at {SRC} -- run archive/tools/harvest-site.sh first")
 
-    chips = {}
+    chips, docs = {}, {}
     for d in sorted(SRC.iterdir()):
-        if not d.is_dir():
+        if not d.is_dir() or d.name == "pages":
             continue
         files = sorted(f for f in d.rglob("*")
                        if f.is_file() and f.suffix.lower() in EXT)
         if files:
             chips[d.name] = files
+            # Datasheets and programming guides sit beside the photographs in
+            # a few directories. They are part of what was collected and would
+            # otherwise be mirrored but never surfaced anywhere.
+            docs[d.name] = sorted(f for f in d.rglob("*")
+                                  if f.is_file() and f.suffix.lower() == ".pdf")
     if not chips:
         sys.exit(f"no images under {SRC}")
+    described = description_pages()
 
     jobs = []
     for chip, files in chips.items():
@@ -225,7 +264,7 @@ def main() -> None:
             # visual6502.org. An archive that sources its originals from the
             # site it is archiving stops working the moment that site does,
             # which is the failure this whole exercise is about.
-            full = f"../full/{rel.as_posix()}"
+            full = f"../full/images/{rel.as_posix()}"
             upstream = f"http://visual6502.org/images/{rel.as_posix()}"
             px = f"{w}&times;{h}" if w else "unknown"
             items.append(
@@ -237,11 +276,24 @@ def main() -> None:
                 f'{human(size)} &darr;</a> '
                 f'<a class="dl src" href="{upstream}" rel="noopener">source</a>'
                 f'</figcaption></figure></li>')
+        extra = ""
+        for title, name in described.get(chip, []):
+            extra += (f'<a class="orig" href="../full/images/pages/{name}">'
+                      f'{html.escape(title)} &mdash; the project\'s own page '
+                      f'about this chip &rarr;</a>')
+        for doc in docs.get(chip, []):
+            r = doc.relative_to(SRC).as_posix()
+            extra += (f'<a class="orig doc" href="../full/images/{r}">'
+                      f'{html.escape(doc.name)} '
+                      f'({human(doc.stat().st_size)}) &darr;</a>')
+
         body = (f'<h1>{html.escape(chip)}</h1>'
                 f'<p class="lede">{len(files)} images, {human(total)}. '
                 f'Click a photograph for a 2000px view; the original full-resolution '
-                f'scan is linked beneath each one.</p>{BANNER}'
-                f'<ul class="grid">{"".join(items)}</ul>')
+                f'scan is linked beneath each one.</p>'
+                + (f'<div class="orig-wrap">{extra}</div>' if extra else "")
+                + BANNER
+                + f'<ul class="grid">{"".join(items)}</ul>')
         (OUT / "chip").mkdir(parents=True, exist_ok=True)
         (OUT / "chip" / f"{chip}.html").write_text(
             shell(chip, body, up_href="../index.html", depth=1))

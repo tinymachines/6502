@@ -27,3 +27,4 @@ node_modules
 /archive/cdx
 /archive/*.log
 /archive/harvest-wiki-failed.txt
+/archive/harvest-wiki-nosource.txt
