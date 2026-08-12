@@ -9,11 +9,32 @@ explorer for the chip. Nothing here models 6502 *behaviour* — the behaviour fa
 out of simulating 3510 switches. Every register value is read back out of storage
 nodes; every cycle count is emergent.
 
-`extern/visual6502/` is a checkout of [trebonian/visual6502](https://github.com/trebonian/visual6502),
+`extern/visual6502/` is a **git submodule** of [trebonian/visual6502](https://github.com/trebonian/visual6502),
 kept **read-only** as the source of the die data and as the correctness oracle.
-Do not edit it.
+Do not edit it. It is a submodule rather than a copy so this repository does not
+redistribute CC BY-NC-SA data — see Licensing at the end, which is not boilerplate.
 
-Status: simulation core and WebGL renderer both working and verified.
+## Status
+
+Everything below is built, verified and live. Nothing is half-finished.
+
+| | |
+|---|---|
+| Simulation | Complete. 25 tests, bit-exact against the original. |
+| Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
+| Front end | Responsive page (phone → desktop), installable PWA, offline. |
+| Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
+| Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
+
+Known gaps, all deliberate:
+
+- **Touch gestures are unverified on real hardware.** Pinch/pan/tap are
+  implemented and the plumbing is right, but headless Chrome cannot synthesise a
+  two-finger pinch. Needs a phone.
+- **Mobile GPU performance unmeasured.** Every headless number here is
+  SwiftShader software rasterisation (~2–5 fps), which says nothing about a real
+  device.
+- No CI. The tests and checks below are run by hand.
 
 ## Commands
 
@@ -38,38 +59,77 @@ node tools/golden-trace/gen.js --steps 3000
 # ...without it the golden test SKIPS. Set V6502_REQUIRE_GOLDEN=1 to make its
 # absence a failure instead (use this in CI).
 
-# Web app: build the wasm, export the geometry, serve
+# Web app, development: no build step, no service worker. Serve web/ directly.
 wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
 python3 -m http.server 8777 --directory web        # http://localhost:8777/
+
+# Web app, production shape: content-hashed bundle + service worker into dist/
+python3 tools/build-web.py web dist
+
+# Regenerate the PWA icons (only after changing the artwork)
+python3 tools/make-icons.py web/icons
+
+# Publish. Does all of the above, verifies it, and swaps the live symlink.
+sudo systemctl start 6502-deploy
+journalctl -u 6502-deploy -n 40
 
 # Run the original for comparison
 python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
-Both `web/pkg/` and `web/layout.bin` are generated and gitignored — regenerate
-after any change to the Rust crates or the die data.
+`web/pkg/`, `web/layout.bin`, `dist/` and the golden trace are all generated and
+gitignored. Regenerate after any change to the Rust crates or the die data.
 
-### Verifying the renderer without a browser
+**Develop against `web/`, not `dist/`.** The hashed bundle exists for production
+caching; iterating through it means rebuilding for every edit, and a service
+worker in development will serve you yesterday's code.
 
-There is no browser automation configured, but Chrome is installed and headless
-WebGL works via SwiftShader:
+### Verifying in a browser, headlessly
+
+There is no browser automation configured (the Chrome extension was declined),
+but Chrome is installed and headless WebGL works via SwiftShader. This is the
+only way to check the front end, so it is worth knowing well.
 
 ```bash
-google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader \
-  --use-gl=angle --use-angle=swiftshader --window-size=1600,1000 \
-  --virtual-time-budget=25000 --screenshot=/tmp/shot.png \
-  "http://localhost:8777/index.html?steps=51"
+CHROME="google-chrome --headless=new --no-sandbox --disable-dev-shm-usage \
+  --enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader"
+
+# Desktop
+$CHROME --window-size=1600,1000 --virtual-time-budget=25000 \
+  --screenshot=/tmp/shot.png "http://localhost:8777/index.html?steps=51"
+
+# Live site (the public name resolves to the LAN address from inside)
+$CHROME --host-resolver-rules="MAP 6502.tinymachines.ai <addr>" ...
+
+# Mobile: viewport + DPR + UA. DPR matters -- everything renders at 1 by default
+# and the canvas backing store is the thing most likely to break at 3.
+$CHROME --window-size=390,844 --force-device-scale-factor=3 \
+  --user-agent="Mozilla/5.0 (Linux; Android 14; Pixel 8) ... Mobile Safari/537.36" ...
 ```
 
-Expect ~5 fps under SwiftShader; that is software rasterisation, not the
-renderer. Add `--dump-dom` and write values into the DOM to read measurements out
-of the page.
+Expect ~2–5 fps: that is software rasterisation, not the renderer.
 
-**Diffing two screenshots is the only reliable check that the state overlay is
-live** — a dead overlay still renders a perfect-looking die. Capture `?steps=0`
-and `?steps=51` and compare the canvas region; roughly a third of pixels should
-change.
+**Three checks that catch what screenshots alone do not:**
+
+1. **The state overlay.** A dead overlay still renders a perfect-looking die.
+   Capture `?steps=0` and `?steps=51` and diff the canvas region — roughly a
+   third of pixels should change. This is how the "node levels uploaded as 1
+   instead of 255" bug was found; nothing else would have shown it.
+2. **Offline.** Load once with `--user-data-dir=<dir>`, then load again with the
+   same profile and the server unreachable (stop it, or point
+   `--host-resolver-rules` at a dead IP such as `127.0.0.2` — same origin, so the
+   worker's cache still applies). The app must render fully.
+3. **Measurements.** Add `--dump-dom` and have the page write values into the DOM
+   (e.g. `document.title`). This is how the canvas-sizing bug was diagnosed.
+
+**Two headless artifacts that look exactly like catastrophic bugs:**
+
+- A screenshot taken after a programmatic scroll to a `#hash`, with a sticky
+  header, can come back **blank or with a huge blank band**. Re-capture without
+  the hash before believing it.
+- `--screenshot=/dev/null` logs an "Unsupported screenshot image file type"
+  error. Harmless.
 
 ### Deep links
 
@@ -302,6 +362,21 @@ Touch-specific behaviour that is easy to break:
 - A tap that selects a node also switches the panel tab to Trace on small
   screens, since the result would otherwise be behind a tab.
 
+Layout gotchas already paid for, in narrowing order of subtlety:
+
+- **A flex item defaults to `min-width: auto`,** so it refuses to shrink below
+  its content — and `min-width: 0` on a *child* cannot rescue it. The program
+  `<select>` overflowed the console at 320px until `min-width: 0` was set on the
+  wrapping `.field`, not just the select. Suspect this for any "why won't this
+  shrink" question.
+- **Grid tracks need `minmax(0, 1fr)`**, not `1fr`, or the track takes its
+  automatic minimum from content. This sized the canvas to 1280×1280 in a 913px
+  window.
+- **`[hidden]` needs `!important`** here, because the UA rule is specificity
+  (0,1,0) and `#boot`/`#app` declare `display`.
+- Test at **320px**, not just 390. Several things only break at the narrowest
+  common phone width.
+
 PWA: `manifest.webmanifest` plus icons generated by `tools/make-icons.py` (kept
 in the repo so they are reproducible, not mystery binaries). nginx has no
 `webmanifest` MIME type, so the site config sets it with `default_type` in a
@@ -432,19 +507,47 @@ server instead.
 Operator-specific details (addresses, zone paths, the local runbook) live in
 `deploy/HOSTING.local.md`, which is deliberately not in version control.
 
-### Verifying the live site
+### After any nginx or deploy change
+
+Load the **live** URL headlessly, not a local server — see "Verifying in a
+browser, headlessly" above for the invocation. That is the only thing that
+exercises the real TLS, CSP, MIME types and cache headers together, and a CSP
+mistake produces a blank canvas rather than an error.
+
+Then confirm the headers directly, because a wrong one is invisible in a
+screenshot:
 
 ```bash
-google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader \
-  --use-gl=angle --use-angle=swiftshader --window-size=1600,1000 \
-  --virtual-time-budget=30000 \
-  --screenshot=/tmp/live.png "https://6502.tinymachines.ai/?steps=51&find=sync"
+curl -sS -D- -o /dev/null --resolve 6502.tinymachines.ai:443:<addr> \
+  https://6502.tinymachines.ai/<path>
 ```
 
-This exercises the real TLS, the real CSP and the real cache headers — worth
-doing after any nginx change, since a CSP mistake produces a blank canvas rather
-than an error. Add `--host-resolver-rules="MAP <host> <addr>"` when testing from
-inside the network that hosts it.
+Expect `no-cache` on `/`, `index.html` and `sw.js`; `max-age=31536000, immutable`
+on hashed assets; `application/manifest+json` on the manifest; and the CSP
+present on *every* response, including assets.
+
+## Repository
+
+Public at <https://github.com/tinymachines/6502>, pushed as `isenbek`. `main` is
+the simulator; `legacy-rag-agent` preserves the unrelated Python project that
+previously occupied the repo (also still in `../6502-prev`).
+
+```bash
+git clone --recurse-submodules https://github.com/tinymachines/6502
+git submodule update --init      # if cloned without --recurse-submodules
+```
+
+Before pushing anything, two things worth keeping true:
+
+- **Do not commit host-specific detail.** Addresses, zone paths and the local
+  runbook live in `deploy/HOSTING.local.md`, which is gitignored. The public docs
+  keep the transferable engineering lessons only. This split exists because
+  CLAUDE.md previously documented an internal LAN address and a security
+  weakness on the host.
+- **Nothing generated is committed** — `target/`, `dist/`, `web/pkg/`,
+  `web/layout.bin`, the golden trace. A fresh clone must build; verify with a
+  real `git clone` into a temp directory and `cargo test --workspace`, which is
+  how the "test fails out of the box" bug was found.
 
 ## Licensing — read before shipping
 
