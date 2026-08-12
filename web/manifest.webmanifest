@@ -1,0 +1,23 @@
+{
+  "name": "Visual 6502 — transistor-level",
+  "short_name": "Visual 6502",
+  "description": "A transistor-level simulation of the MOS 6502, rendered from the real die.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
+  "categories": ["education", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Fibonacci", "url": "/?program=1&run=1" },
+    { "name": "Fill page $0300", "url": "/?program=2&run=1" }
+  ]
+}

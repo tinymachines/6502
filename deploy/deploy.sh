@@ -69,7 +69,7 @@ rsync -a --delete \
 log "precompressing"
 find "$DEST" -type f \
   \( -name '*.js' -o -name '*.html' -o -name '*.css' -o -name '*.wasm' \
-     -o -name '*.bin' -o -name '*.json' -o -name '*.svg' \) \
+     -o -name '*.bin' -o -name '*.json' -o -name '*.svg' -o -name '*.webmanifest' \) \
   -exec gzip -9 -k -f {} +
 
 # ---------------------------------------------------------------------------

@@ -117,8 +117,13 @@ async function boot() {
     state.rails = [state.machine.nodeId('vss'), state.machine.nodeId('vcc')].filter((n) => n >= 0);
     state.renderer.setRailNodes(state.rails);
 
-    $('chip-facts').textContent =
-      `${netlistInfo()} · ${(layout.vertexCount / 3).toLocaleString()} triangles`;
+    const [nodes, transistors] = netlistInfo().split(', ');
+    $('chip-facts').innerHTML = [
+      nodes,
+      transistors,
+      `${(layout.vertexCount / 3).toLocaleString()} triangles`,
+      'revD die trace',
+    ].map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('');
 
     setupUI();
 
@@ -130,6 +135,14 @@ async function boot() {
     // be computing against a 1x1 viewport.
     state.renderer.resize();
     applyUrlParams();
+
+    // A #hash in the URL was resolved while #app was still hidden, so the
+    // browser's initial scroll went nowhere. Redo it now that the target exists.
+    if (location.hash) {
+      const target = document.querySelector(location.hash);
+      if (target) target.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+
     requestAnimationFrame(frame);
   } catch (err) {
     status.textContent = 'Failed to start';
@@ -255,59 +268,189 @@ function setupUI() {
   // -- memory --
   $('mem-addr').onchange = () => { $('mem-follow').checked = false; };
 
+  setupNavMenu();
+  setupTabs();
+  setupFullscreen();
   setupCanvasInput();
   setupKeyboard();
   window.addEventListener('resize', () => r.resize());
 }
 
+/** Disclosure menu, matching the header behaviour on the rest of the site. */
+function setupNavMenu() {
+  const head = $('site-head');
+  const btn = head.querySelector('.menu-btn');
+  const close = () => {
+    head.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  btn.onclick = () => {
+    const open = head.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
+  };
+  // Any navigation dismisses it; so does Escape and a click outside.
+  $('site-nav').addEventListener('click', (e) => { if (e.target.tagName === 'A') close(); });
+  document.addEventListener('click', (e) => { if (!head.contains(e.target)) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+}
+
+/**
+ * Panel tabs.
+ *
+ * The tab bar only exists below the sidebar breakpoint; above it every panel is
+ * visible at once and CSS ignores `data-active`. The state is tracked either
+ * way so rotating a tablet does not lose your place.
+ */
+function setupTabs() {
+  const panels = $('panels');
+  for (const tab of panels.querySelectorAll('.tab')) {
+    tab.onclick = () => {
+      panels.dataset.active = tab.dataset.tab;
+      for (const t of panels.querySelectorAll('.tab')) {
+        t.setAttribute('aria-selected', String(t === tab));
+      }
+    };
+  }
+}
+
+/** Show a panel by name, and make sure it is the visible tab on small screens. */
+function focusPanel(name) {
+  const panels = $('panels');
+  const tab = panels.querySelector(`.tab[data-tab="${name}"]`);
+  if (tab) tab.click();
+}
+
+function setupFullscreen() {
+  const consoleEl = $('console');
+  const btn = $('btn-fullscreen');
+  btn.onclick = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await consoleEl.requestFullscreen({ navigationUI: 'hide' });
+    } catch {
+      // Safari on iPhone has no element fullscreen; the layout is already
+      // usable without it, so failing quietly is the right behaviour.
+    }
+  };
+  // The canvas backing store must follow the new viewport.
+  document.addEventListener('fullscreenchange', () => {
+    btn.textContent = document.fullscreenElement ? '⤡' : '⛶';
+    requestAnimationFrame(() => state.renderer.resize());
+  });
+}
+
+/**
+ * Pointer handling for mouse, pen and touch through one code path.
+ *
+ * Pointer Events already unify the three; what touch adds is a *second*
+ * simultaneous contact, so the live pointers are tracked in a map:
+ *
+ *   one pointer  -> pan
+ *   two pointers -> pinch to zoom about the midpoint, and pan by the midpoint's
+ *                   movement, so the gesture feels anchored to the die
+ *
+ * `touch-action: none` on the canvas (see style.css) is what stops the browser
+ * treating a drag as a page scroll. Without it none of this runs on a phone.
+ */
 function setupCanvasInput() {
   const canvas = $('die');
   const r = state.renderer;
-  let dragStart = null;
+  const pointers = new Map();
   let movedDuring = 0;
+  let lastPinch = null; // { dist, cx, cy }
+
+  const positions = () => [...pointers.values()];
+  const midpoint = (pts) => ({
+    x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+    y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+  });
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
-    dragStart = { x: e.clientX, y: e.clientY };
-    movedDuring = 0;
-    state.dragging = true;
-    canvas.classList.add('dragging');
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1) {
+      movedDuring = 0;
+      state.dragging = true;
+      canvas.classList.add('dragging');
+      hideHint();
+    } else {
+      // A second finger starts a pinch; seed it so the first move is a delta.
+      const pts = positions();
+      lastPinch = { dist: distance(pts[0], pts[1]), ...midpoint(pts) };
+    }
   });
 
   canvas.addEventListener('pointermove', (e) => {
+    const prev = pointers.get(e.pointerId);
+    if (!prev) {
+      // Hover with no button down: only useful for the identify card.
+      state.mouse.x = e.clientX;
+      state.mouse.y = e.clientY;
+      state.mouse.inside = true;
+      state.mouse.moved = true;
+      return;
+    }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     state.mouse.x = e.clientX;
     state.mouse.y = e.clientY;
-    state.mouse.inside = true;
-    state.mouse.moved = true;
-    if (dragStart) {
-      const dx = e.clientX - dragStart.x;
-      const dy = e.clientY - dragStart.y;
+
+    const pts = positions();
+    if (pts.length >= 2) {
+      const dist = distance(pts[0], pts[1]);
+      const mid = midpoint(pts);
+      if (lastPinch && lastPinch.dist > 0) {
+        r.zoomAt(mid.x, mid.y, dist / lastPinch.dist);
+        r.panByPixels(mid.x - lastPinch.cx, mid.y - lastPinch.cy);
+      }
+      lastPinch = { dist, cx: mid.x, cy: mid.y };
+      movedDuring += 99; // a pinch is never a tap
+    } else {
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
       movedDuring += Math.abs(dx) + Math.abs(dy);
       r.panByPixels(dx, dy);
-      dragStart = { x: e.clientX, y: e.clientY };
+      state.mouse.moved = true;
     }
   });
 
-  canvas.addEventListener('pointerup', (e) => {
-    canvas.releasePointerCapture(e.pointerId);
+  const endPointer = (e) => {
+    if (!pointers.delete(e.pointerId)) return;
+    try { canvas.releasePointerCapture(e.pointerId); } catch { /* already gone */ }
+
+    if (pointers.size < 2) lastPinch = null;
+    if (pointers.size > 0) return;
+
     state.dragging = false;
     canvas.classList.remove('dragging');
-    // A click is a drag that went nowhere.
-    if (movedDuring < 4) {
+    // A tap is a drag that went nowhere. The threshold is generous because a
+    // finger is not a mouse and always moves a little.
+    const slop = e.pointerType === 'touch' ? 12 : 4;
+    if (movedDuring < slop) {
       const hit = r.pick(e.clientX, e.clientY);
-      if (hit) selectNode(hit.node, false);
-      else clearSelection();
+      if (hit) {
+        selectNode(hit.node, false);
+        // On a phone the Trace panel is behind a tab, so surface it.
+        if (window.matchMedia('(max-width: 67.999rem)').matches) focusPanel('selection');
+      } else {
+        clearSelection();
+      }
     }
-    dragStart = null;
-  });
+    if (e.pointerType === 'touch') $('hover-card').hidden = true;
+  };
 
-  canvas.addEventListener('pointerleave', () => {
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+
+  canvas.addEventListener('pointerleave', (e) => {
+    if (pointers.has(e.pointerId)) return; // still dragging, just outside
     state.mouse.inside = false;
     $('hover-card').hidden = true;
   });
 
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
+    hideHint();
     // Exponential in the wheel delta so trackpads and mice both feel right.
     r.zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
   }, { passive: false });
@@ -316,6 +459,26 @@ function setupCanvasInput() {
     const hit = r.pick(e.clientX, e.clientY);
     if (hit) selectNode(hit.node, true);
   });
+
+  // Double-tap to zoom to a signal, which has no mouse equivalent on touch.
+  let lastTap = 0;
+  canvas.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch') return;
+    const now = performance.now();
+    if (now - lastTap < 300 && movedDuring < 12) {
+      const hit = r.pick(e.clientX, e.clientY);
+      if (hit) selectNode(hit.node, true);
+    }
+    lastTap = now;
+  });
+}
+
+let hintHidden = false;
+function hideHint() {
+  if (hintHidden) return;
+  hintHidden = true;
+  const hint = $('stage-hint');
+  if (hint) hint.hidden = true;
 }
 
 function setupKeyboard() {
@@ -328,7 +491,8 @@ function setupKeyboard() {
       case 'c': setRunning(false); state.machine.stepCycle(); break;
       case 'i': setRunning(false); state.machine.stepInstruction(400); break;
       case 'r': setRunning(false); resetMachine(); break;
-      case 'f': state.renderer.fitToDie(); break;
+      case 'f': $('btn-fullscreen').click(); break;
+      case 'z': state.renderer.userFramed = false; state.renderer.fitToDie(); break;
       case 'Escape': clearSelection(); break;
     }
   });
@@ -469,6 +633,8 @@ function currentSpeed() {
 
 function updateHover() {
   const card = $('hover-card');
+  // Coarse pointers have no hover state; the card would stick where you tapped.
+  if (window.matchMedia('(hover: none)').matches) { card.hidden = true; return; }
   if (!state.mouse.inside || state.dragging) {
     card.hidden = true;
     return;

@@ -2,15 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Visual 6502 — transistor-level</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visual 6502 — the chip, switch by switch</title>
+<meta name="description" content="A transistor-level simulation of the MOS 6502, rendered from the real die. 1725 nodes, 3510 transistors, no instruction decoder.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="boot">
   <div class="boot-inner">
-    <h1>Visual&nbsp;6502</h1>
+    <p class="eyebrow">Transistor-level</p>
+    <h1 class="boot-title">Visual <span>6502</span></h1>
     <p id="boot-status">Loading simulator…</p>
     <div class="boot-bar"><div id="boot-bar-fill"></div></div>
     <p id="boot-error" hidden></p>
@@ -18,124 +26,286 @@
 </div>
 
 <div id="app" hidden>
-  <header>
-    <h1>Visual <span>6502</span></h1>
-    <div class="subtitle">
-      transistor-level simulation ·
-      <span id="chip-facts">…</span>
+
+  <header class="site-head" id="site-head">
+    <div class="wrap">
+      <nav aria-label="Site">
+        <a class="mark" href="#top">Visual<span>6502</span></a>
+        <div class="navlinks" id="site-nav">
+          <a href="#explorer">Explorer</a>
+          <a href="#looking-at">What you see</a>
+          <a href="#verification">Verification</a>
+          <a href="#credit">Credit</a>
+        </div>
+        <a class="btn btn-primary nav-cta" href="#explorer">Run it</a>
+        <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+          <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="mtxt">Menu</span>
+        </button>
+      </nav>
     </div>
-    <div class="spacer"></div>
-    <label class="field">
-      <span>Program</span>
-      <select id="program-select"></select>
-    </label>
   </header>
 
-  <main>
-    <div id="stage">
-      <canvas id="die"></canvas>
-      <div id="hover-card" hidden></div>
-      <div id="stage-hint">drag to pan · scroll to zoom · click a wire to trace it</div>
-      <div id="fps"></div>
-    </div>
+  <main id="top">
 
-    <aside>
-      <section class="panel">
-        <h2>Registers</h2>
-        <div class="reg-grid">
-          <div class="reg wide"><label>PC</label><span id="r-pc">0000</span></div>
-          <div class="reg"><label>A</label><span id="r-a">00</span></div>
-          <div class="reg"><label>X</label><span id="r-x">00</span></div>
-          <div class="reg"><label>Y</label><span id="r-y">00</span></div>
-          <div class="reg"><label>S</label><span id="r-s">00</span></div>
-        </div>
-        <div class="flags" id="flags"></div>
-        <div class="disasm">
-          <span class="disasm-label">executing</span>
-          <span id="disasm">—</span>
-        </div>
-      </section>
+    <!-- ── hero ─────────────────────────────────────────────── -->
+    <section class="hero wrap">
+      <p class="eyebrow">Transistor-level · from the real die</p>
+      <h1>The 6502,<br><span class="hl">switch by switch.</span></h1>
+      <p class="lede">
+        Nothing here models the 6502's behaviour. There are wires and switches,
+        simulated from the real die, and the behaviour falls out of them. Every
+        register you see is read back out of storage nodes; every cycle count is
+        emergent.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#explorer">Run the chip</a>
+        <a class="btn btn-ghost" href="#looking-at">What am I looking at?</a>
+      </div>
+      <div class="statbar" id="chip-facts">…</div>
+    </section>
 
-      <section class="panel">
-        <h2>Bus &amp; timing</h2>
-        <div class="kv"><label>Address</label><span id="b-ab">0000</span></div>
-        <div class="kv"><label>Data</label><span id="b-db">00</span></div>
-        <div class="kv"><label>Direction</label><span id="b-rw">read</span></div>
-        <div class="kv"><label>Cycle</label><span id="b-cycle">0</span></div>
-        <div class="kv"><label>Half-cycle</label><span id="b-half">0</span></div>
-        <div class="kv"><label>Clock</label><span id="b-phase">φ1</span></div>
-        <div class="pins">
-          <span class="pin" id="pin-sync">SYNC</span>
-          <span class="pin" id="pin-clk">CLK0</span>
-          <span class="pin" id="pin-rw">R/W</span>
-        </div>
-        <div class="tstates" id="tstates"></div>
-      </section>
+    <!-- ── the explorer console ─────────────────────────────── -->
+    <section class="wrap" id="explorer">
+      <div class="console" id="console">
 
-      <section class="panel">
-        <h2>Selection</h2>
-        <div id="selection">Nothing selected. Click a wire on the die.</div>
-        <div class="row">
-          <input type="text" id="find-input" placeholder="find signal, e.g. sync or ab3" spellcheck="false">
-          <button id="find-btn" class="btn">Find</button>
-        </div>
-        <label class="check">
-          <input type="checkbox" id="trace-group" checked>
-          <span>Highlight the whole connected group</span>
-        </label>
-      </section>
-
-      <section class="panel">
-        <h2>Layers</h2>
-        <div id="layers"></div>
-        <label class="slider">
-          <span>Inactive brightness</span>
-          <input type="range" id="dim" min="0" max="100" value="50">
-        </label>
-        <label class="slider">
-          <span>Glow</span>
-          <input type="range" id="bloom" min="0" max="250" value="115">
-        </label>
-      </section>
-
-      <section class="panel">
-        <h2>Memory</h2>
-        <div class="row">
-          <input type="text" id="mem-addr" value="0000" spellcheck="false" maxlength="4">
-          <label class="check inline">
-            <input type="checkbox" id="mem-follow" checked>
-            <span>follow bus</span>
+        <div class="console-bar">
+          <span class="tag live">die · live</span>
+          <label class="field prog">
+            <span>Program</span>
+            <select id="program-select"></select>
           </label>
+          <div class="bar-spacer"></div>
+          <button class="iconbtn" id="btn-fullscreen" type="button" title="Fullscreen (F)" aria-label="Fullscreen">⛶</button>
         </div>
-        <pre id="memory"></pre>
-      </section>
-    </aside>
+
+        <div class="console-body">
+
+          <div id="stage">
+            <canvas id="die"></canvas>
+            <div id="hover-card" hidden></div>
+            <div id="stage-hint">drag to pan · pinch or scroll to zoom · tap a wire to trace it</div>
+            <div id="fps"></div>
+          </div>
+
+          <aside id="panels" data-active="registers">
+
+            <div class="tabs" role="tablist">
+              <button class="tab" role="tab" data-tab="registers" aria-selected="true">CPU</button>
+              <button class="tab" role="tab" data-tab="bus" aria-selected="false">Bus</button>
+              <button class="tab" role="tab" data-tab="selection" aria-selected="false">Trace</button>
+              <button class="tab" role="tab" data-tab="layers" aria-selected="false">Layers</button>
+              <button class="tab" role="tab" data-tab="memory" aria-selected="false">Memory</button>
+            </div>
+
+            <section class="panel" data-tab="registers">
+              <h2>Registers</h2>
+              <div class="reg-grid">
+                <div class="reg wide"><label>PC</label><span id="r-pc">0000</span></div>
+                <div class="reg"><label>A</label><span id="r-a">00</span></div>
+                <div class="reg"><label>X</label><span id="r-x">00</span></div>
+                <div class="reg"><label>Y</label><span id="r-y">00</span></div>
+                <div class="reg"><label>S</label><span id="r-s">00</span></div>
+              </div>
+              <div class="flags" id="flags"></div>
+              <div class="disasm">
+                <span class="disasm-label">executing</span>
+                <span id="disasm">—</span>
+              </div>
+            </section>
+
+            <section class="panel" data-tab="bus">
+              <h2>Bus &amp; timing</h2>
+              <div class="kv"><label>Address</label><span id="b-ab">0000</span></div>
+              <div class="kv"><label>Data</label><span id="b-db">00</span></div>
+              <div class="kv"><label>Direction</label><span id="b-rw">read</span></div>
+              <div class="kv"><label>Cycle</label><span id="b-cycle">0</span></div>
+              <div class="kv"><label>Half-cycle</label><span id="b-half">0</span></div>
+              <div class="kv"><label>Clock</label><span id="b-phase">φ1</span></div>
+              <div class="pins">
+                <span class="pin" id="pin-sync">SYNC</span>
+                <span class="pin" id="pin-clk">CLK0</span>
+                <span class="pin" id="pin-rw">R/W</span>
+              </div>
+              <div class="tstates" id="tstates"></div>
+            </section>
+
+            <section class="panel" data-tab="selection">
+              <h2>Selection</h2>
+              <div id="selection">Nothing selected. Tap a wire on the die.</div>
+              <div class="row">
+                <input type="text" id="find-input" placeholder="find signal, e.g. sync" spellcheck="false" autocapitalize="off" autocomplete="off">
+                <button id="find-btn" class="btn btn-ghost btn-sm">Find</button>
+              </div>
+              <label class="check">
+                <input type="checkbox" id="trace-group" checked>
+                <span>Highlight the whole connected group</span>
+              </label>
+            </section>
+
+            <section class="panel" data-tab="layers">
+              <h2>Layers</h2>
+              <div id="layers"></div>
+              <label class="slider">
+                <span>Inactive brightness</span>
+                <input type="range" id="dim" min="0" max="100" value="50">
+              </label>
+              <label class="slider">
+                <span>Glow</span>
+                <input type="range" id="bloom" min="0" max="250" value="115">
+              </label>
+            </section>
+
+            <section class="panel" data-tab="memory">
+              <h2>Memory</h2>
+              <div class="row">
+                <input type="text" id="mem-addr" value="0000" spellcheck="false" maxlength="4" autocapitalize="off" autocomplete="off">
+                <label class="check inline">
+                  <input type="checkbox" id="mem-follow" checked>
+                  <span>follow bus</span>
+                </label>
+              </div>
+              <pre id="memory"></pre>
+            </section>
+
+          </aside>
+        </div>
+
+        <div class="console-foot">
+          <div class="transport">
+            <button id="btn-reset" class="iconbtn" type="button" title="Power cycle (R)" aria-label="Power cycle">⏻</button>
+            <button id="btn-back" class="iconbtn" type="button" title="Back one half-cycle (,)" aria-label="Step back">◀|</button>
+            <button id="btn-run" class="iconbtn primary" type="button" title="Run / pause (space)" aria-label="Run">▶</button>
+            <button id="btn-half" class="iconbtn" type="button" title="One half-cycle (.)" aria-label="Step half-cycle">|▶</button>
+            <button id="btn-cycle" class="iconbtn" type="button" title="One cycle (C)" aria-label="Step cycle">▶|</button>
+            <button id="btn-instr" class="iconbtn" type="button" title="One instruction (I)" aria-label="Step instruction">▶▶</button>
+          </div>
+          <label class="field speed">
+            <span>Speed</span>
+            <select id="speed">
+              <option value="1">1×</option>
+              <option value="4">4×</option>
+              <option value="16" selected>16×</option>
+              <option value="64">64×</option>
+              <option value="0">max</option>
+            </select>
+          </label>
+          <div class="timeline">
+            <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Timeline">
+            <span id="scrub-label">—</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── explanatory sections ─────────────────────────────── -->
+    <section class="wrap sec" id="looking-at">
+      <div class="sec-head">
+        <p class="eyebrow">What you're looking at</p>
+        <h2>A photograph of a chip, running.</h2>
+      </div>
+      <div class="cards">
+        <article class="card">
+          <h3>The die is real</h3>
+          <p>Every polygon comes from the visual6502 team's trace of a decapped
+          6502 — 8,233 shapes across six mask layers, triangulated into 83,227
+          triangles. Metal sits translucent on top, exactly as it does on silicon.</p>
+        </article>
+        <article class="card">
+          <h3>The glow is the simulation</h3>
+          <p>A node lights up when it is logically high. That is not an
+          animation: it is 3,510 switches being solved to a fixed point, twice
+          per clock cycle, and then painted.</p>
+        </article>
+        <article class="card">
+          <h3>Wires move</h3>
+          <p>Tap any trace to see what it is connected to <em>at that instant</em>.
+          The connected group changes as transistors open and close — which is
+          the whole idea. A wire is not a fixed thing.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap sec" id="try-this">
+      <div class="sec-head">
+        <p class="eyebrow">Try this</p>
+        <h2>Watch the accumulator lag.</h2>
+      </div>
+      <p class="lede">
+        The 6502 does not put an ALU result into the accumulator when the
+        instruction ends. Run <code>ADC</code> and step one half-cycle at a
+        time: it reaches the <em>next</em> opcode fetch with <code>A</code> still
+        holding the old value. The result is sitting in the ALU's hold register,
+        and it transfers a cycle later. <code>LDA</code>, which bypasses the ALU,
+        lands a cycle earlier.
+      </p>
+      <p class="lede">
+        An emulator that commits results at instruction boundaries cannot show
+        you this, because it isn't true of the silicon.
+      </p>
+    </section>
+
+    <section class="wrap sec" id="verification">
+      <div class="sec-head">
+        <p class="eyebrow">Verification</p>
+        <h2>Two oracles, because one proves nothing.</h2>
+      </div>
+      <div class="cards">
+        <article class="card">
+          <h3>Against the original</h3>
+          <p>A headless harness runs the original visual6502 JavaScript and dumps
+          the level of <strong>all 1725 nodes at every half-cycle</strong>. This
+          engine matches bit-exactly. Matching registers would only show
+          agreement about the 6502; matching every node shows agreement about the
+          silicon.</p>
+        </article>
+        <article class="card">
+          <h3>Against the datasheet</h3>
+          <p>Documented cycle counts including page-crossing and branch
+          penalties, the read-modify-write double write, JSR/RTS stack layout,
+          ADC/SBC flags, decimal mode. A shared misreading of the die data would
+          pass the first test and fail this one.</p>
+        </article>
+        <article class="card">
+          <h3>Fast enough to feel</h3>
+          <p>About 28,500 half-cycles per second natively — roughly 94× the
+          original JavaScript — and the renderer redraws in six draw calls
+          regardless of zoom, because the layout never changes.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap sec" id="credit">
+      <div class="sec-head">
+        <p class="eyebrow">Credit</p>
+        <h2>Someone had to trace every polygon.</h2>
+      </div>
+      <p class="lede">
+        This exists because the <a href="http://visual6502.org">visual6502</a>
+        team decapped a 6502, photographed the die, traced it by hand, and gave
+        it away. Greg James, Brian Silverman, Barry Silverman, Ed Spittles,
+        Segher Boessenkool, Achim Breidenbach, and everyone else who contributed.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-ghost" href="https://github.com/tinymachines/6502">Source</a>
+        <a class="btn btn-ghost" href="http://visual6502.org">visual6502.org</a>
+      </div>
+      <p class="fineprint">
+        Code is MIT. The die geometry is CC BY-NC-SA 3.0 — attribution to Greg
+        James and www.visual6502.org — and those terms carry to this deployment.
+      </p>
+    </section>
+
   </main>
 
-  <footer>
-    <div class="transport">
-      <button id="btn-reset" class="btn" title="Power cycle (R)">⏻</button>
-      <button id="btn-back" class="btn" title="Step back one half-cycle (,)">◀|</button>
-      <button id="btn-run" class="btn primary" title="Run / pause (space)">▶</button>
-      <button id="btn-half" class="btn" title="Step one half-cycle (.)">|▶</button>
-      <button id="btn-cycle" class="btn" title="Step one full cycle (C)">▶|</button>
-      <button id="btn-instr" class="btn" title="Step one instruction (I)">▶▶</button>
-    </div>
-    <label class="field speed">
-      <span>Speed</span>
-      <select id="speed">
-        <option value="1">1 half-cycle / frame</option>
-        <option value="4">4 / frame</option>
-        <option value="16" selected>16 / frame</option>
-        <option value="64">64 / frame</option>
-        <option value="0">as fast as possible</option>
-      </select>
-    </label>
-    <div class="timeline">
-      <input type="range" id="scrub" min="0" max="0" value="0">
-      <span id="scrub-label">—</span>
+  <footer class="site-foot">
+    <div class="wrap">
+      <span class="mark">Visual<span>6502</span></span>
+      <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
     </div>
   </footer>
+
 </div>
 
 <script type="module" src="app.js"></script>
