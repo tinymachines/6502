@@ -161,6 +161,7 @@ def main() -> None:
     b.copy_hashed("style.css")
     b.copy_hashed("renderer.js")
     b.copy_hashed("disasm.js")
+    b.copy_hashed("version-footer.js")
     for icon in sorted((src / "icons").iterdir()):
         if icon.suffix in {".png", ".svg"}:
             b.copy_hashed(f"icons/{icon.name}")
@@ -195,12 +196,25 @@ def main() -> None:
 
     # 5. index.html: the unhashed entry point that points at everything else.
     html = b.read("index.html").decode()
-    for original in ["style.css", "app.js", "manifest.webmanifest",
+    for original in ["style.css", "app.js", "version-footer.js",
+                     "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         html = replace_once(html, f'"{original}"', f'"{b.ref(original)}"', where="index.html")
     b.emit("index.html", html.encode(), hashed=False)
 
-    # 6. The worker, last, since it precaches everything above.
+    # 6. build-info.json: copied unhashed, and deliberately NOT routed through
+    #    emit(), so it never enters the precache list. Everything else here is
+    #    immutable-by-hash and safe to cache forever; this is the one file whose
+    #    whole job is to reflect the deploy that just happened, and a worker
+    #    serving yesterday's copy cache-first would make the footer lie.
+    info = src / "build-info.json"
+    if info.exists():
+        (out / "build-info.json").write_bytes(info.read_bytes())
+    else:
+        print("  note: no build-info.json in source; the version footer will be "
+              "empty (run tools/build-info.py first)")
+
+    # 7. The worker, last, since it precaches everything above.
     precache = ["./"] + sorted(b.map.values())
     version = digest("\n".join(precache).encode())
     sw = SW_TEMPLATE % {

@@ -27,6 +27,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parent
 TOOLS = ROOT / "tools"
 PUBLIC = ROOT / "public"
 MIRROR = ROOT / "mirror" / "visual6502.org"
@@ -99,6 +100,18 @@ color:var(--muted)}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:2px solid var(--line);
 color:var(--muted);font-size:.88rem}
 footer strong{color:var(--fg)}
+
+.version-foot{display:inline-flex;align-items:center;gap:.5rem;
+font-family:var(--mono);font-size:.7rem;margin-left:.75rem}
+.version-foot:empty{display:none}
+.vf-rev{display:inline-flex;align-items:center;gap:.35rem;text-decoration:none}
+.vf-pill{border:1px solid var(--line);background:var(--subtle);color:var(--accent);
+padding:.1rem .4rem;letter-spacing:.04em}
+.vf-hash{color:var(--muted)}
+.vf-rev:hover .vf-pill{border-color:var(--accent)}
+.vf-rev:hover .vf-hash{color:var(--fg)}
+.vf-built{color:var(--muted)}
+.vf-built::before{content:"\00b7";margin-right:.5rem;opacity:.6}
 """
 
 
@@ -111,6 +124,14 @@ def main() -> None:
     run("build-gallery.py")
 
     PUBLIC.mkdir(parents=True, exist_ok=True)
+
+    # The version footer, shared verbatim with the simulator rather than
+    # reimplemented. The archive publishes its own build-info.json because it is
+    # deployed separately: its footer should report when the *archive* was last
+    # rebuilt, which is rarely the same moment the front end was.
+    shutil.copy2(REPO / "web" / "version-footer.js", PUBLIC / "version-footer.js")
+    subprocess.run([sys.executable, str(REPO / "tools" / "build-info.py"),
+                    str(PUBLIC), "--kind", "archive"], check=True)
 
     # The mirror, linked rather than copied (2.3 GB). This exposes the WHOLE
     # tree, not just images/, and that is deliberate: the site's own per-chip
@@ -246,8 +267,11 @@ builds a transistor-level 6502 simulator from this project's data. Content
 <a href="{LICENCE}" rel="noopener">CC BY-NC-SA 3.0</a>.
 <strong>Not affiliated with the Visual6502 project.</strong> If you are one of
 its authors and want any of this changed or taken down, open an issue on the
-repository and it will be.</footer>
-</div></body></html>
+repository and it will be.
+<span class="version-foot" data-version-footer></span></footer>
+</div>
+<script type="module" src="version-footer.js"></script>
+</body></html>
 """, encoding="utf-8")
     (PUBLIC / "archive.css").write_text(CSS)
 

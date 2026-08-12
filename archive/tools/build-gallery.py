@@ -170,6 +170,18 @@ font-size:.78rem;font-weight:400}
 .orig.doc:hover{background:var(--gold);color:#06121f}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:2px solid var(--line);
 color:var(--muted);font-size:.85rem}
+
+.version-foot{display:inline-flex;align-items:center;gap:.5rem;
+font-family:var(--mono);font-size:.7rem;margin-left:.75rem}
+.version-foot:empty{display:none}
+.vf-rev{display:inline-flex;align-items:center;gap:.35rem;text-decoration:none}
+.vf-pill{border:1px solid var(--line);background:var(--subtle);color:var(--accent);
+padding:.1rem .4rem;letter-spacing:.04em}
+.vf-hash{color:var(--muted)}
+.vf-rev:hover .vf-pill{border-color:var(--accent)}
+.vf-rev:hover .vf-hash{color:var(--fg)}
+.vf-built{color:var(--muted)}
+.vf-built::before{content:"\00b7";margin-right:.5rem;opacity:.6}
 """
 
 
@@ -195,8 +207,11 @@ def shell(title: str, body: str, *, up_href: str, depth: int) -> str:
 <footer>Images &copy; the {ATTRIB}, licensed
 <a href="{LICENCE}" rel="noopener">CC BY-NC-SA 3.0</a>. Mirrored from
 <a href="http://visual6502.org/" rel="noopener">visual6502.org</a> for
-preservation; not affiliated with the Visual6502 project.</footer>
-</div></body></html>
+preservation; not affiliated with the Visual6502 project.
+<span class="version-foot" data-version-footer></span></footer>
+</div>
+<script type="module" src="{root}../version-footer.js"></script>
+</body></html>
 """
 
 

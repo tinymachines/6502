@@ -7,6 +7,10 @@ node_modules
 /tools/golden-trace/golden.txt
 /web/layout.bin
 
+# Git metadata for the version footer, stamped at build time.
+# python3 tools/build-info.py web --kind simulator
+/web/build-info.json
+
 # Operator-specific runbook: addresses, zone paths, local host details.
 /deploy/HOSTING.local.md
 

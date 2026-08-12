@@ -53,6 +53,12 @@ head -c 8 web/layout.bin | grep -q '^V6502LAY' || {
 # Content-hash everything and emit the service worker
 # ---------------------------------------------------------------------------
 
+# Git metadata for the version footer. Must run before the hashing step, which
+# copies build-info.json into dist/ -- and it reads the working tree, so it also
+# records whether this deploy came from uncommitted changes.
+log "stamping build info"
+python3 tools/build-info.py web --kind simulator
+
 log "hashing assets"
 python3 tools/build-web.py web dist
 

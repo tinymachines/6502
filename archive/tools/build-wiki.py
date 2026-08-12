@@ -391,6 +391,18 @@ font-size:.68rem;margin-top:.15rem}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:2px solid var(--line);
 color:var(--muted);font-size:.85rem}
 @media(max-width:40rem){header.top nav a{margin-left:.6rem;font-size:.8rem}}
+
+.version-foot{display:inline-flex;align-items:center;gap:.5rem;
+font-family:var(--mono);font-size:.7rem;margin-left:.75rem}
+.version-foot:empty{display:none}
+.vf-rev{display:inline-flex;align-items:center;gap:.35rem;text-decoration:none}
+.vf-pill{border:1px solid var(--line);background:var(--subtle);color:var(--accent);
+padding:.1rem .4rem;letter-spacing:.04em}
+.vf-hash{color:var(--muted)}
+.vf-rev:hover .vf-pill{border-color:var(--accent)}
+.vf-rev:hover .vf-hash{color:var(--fg)}
+.vf-built{color:var(--muted)}
+.vf-built::before{content:"\00b7";margin-right:.5rem;opacity:.6}
 """
 
 
@@ -532,8 +544,10 @@ def shell(title: str, body: str, *, banner: str, home: str = "index.html",
   Content &copy; the {ATTRIB}, licensed
   <a class="ext" href="{LICENCE}" rel="noopener">CC BY-NC-SA 3.0</a>.
   Mirrored for preservation; not affiliated with the Visual6502 project.
+  <span class="version-foot" data-version-footer></span>
 </footer>
 </article></div>
+<script type="module" src="../version-footer.js"></script>
 </body></html>
 """
 

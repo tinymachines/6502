@@ -518,6 +518,25 @@ select:focus { outline: none; border-color: var(--accent); }
 .site-foot .wrap { display: flex; flex-wrap: wrap; gap: .6rem 1.25rem; align-items: center; }
 .foot-meta { color: var(--muted); font-family: var(--font-mono); font-size: .72rem; }
 
+/* Version footer. `margin-left: auto` pushes it to the far end on a wide
+   footer; once the flex row wraps on a phone it simply starts its own line. */
+.version-foot {
+  margin-left: auto;
+  display: flex; align-items: center; gap: .5rem;
+  font-family: var(--font-mono); font-size: .7rem;
+}
+.version-foot:empty { display: none; }   /* before the fetch resolves, or if it fails */
+.vf-rev { display: inline-flex; align-items: center; gap: .35rem; text-decoration: none; }
+.vf-pill {
+  border: 1px solid var(--line); background: var(--subtle); color: var(--accent);
+  padding: .1rem .4rem; letter-spacing: .04em;
+}
+.vf-hash { color: var(--muted); }
+.vf-rev:hover .vf-pill { border-color: var(--accent); }
+.vf-rev:hover .vf-hash { color: var(--foreground); }
+.vf-built { color: var(--muted); }
+.vf-built::before { content: "·"; margin-right: .5rem; opacity: .6; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   * { transition: none !important; }
