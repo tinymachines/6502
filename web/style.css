@@ -452,7 +452,7 @@ input[type=text]:focus { outline: none; border-color: var(--accent); }
 #memory .addr { color: color-mix(in srgb, var(--muted) 60%, transparent); }
 #memory .cur { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--foreground); border-radius: 2px; }
 
-.field { display: flex; align-items: center; gap: .45rem; color: var(--muted); font-family: var(--font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; }
+.field { display: flex; align-items: center; gap: .45rem; min-width: 0; color: var(--muted); font-family: var(--font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; }
 select {
   background: color-mix(in srgb, var(--space) 70%, transparent); color: var(--foreground);
   border: 2px solid color-mix(in srgb, var(--line) 60%, transparent); border-radius: .35rem;
@@ -528,7 +528,7 @@ select:focus { outline: none; border-color: var(--accent); }
    the end. `order` does this without a second markup path. */
 @media (max-width: 43.999rem) {
   .console-bar .bar-spacer { display: none; }
-  .console-bar .field.prog { order: 3; flex: 1 1 100%; }
-  .console-bar .field.prog select { flex: 1; min-width: 0; }
+  .console-bar .field.prog { order: 3; flex: 1 1 100%; min-width: 0; }
+  .console-bar .field.prog select { flex: 1 1 0; min-width: 0; max-width: 100%; }
   .console-bar #btn-fullscreen { margin-left: auto; }
 }
