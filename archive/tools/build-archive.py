@@ -201,12 +201,22 @@ worth less than one that shows them.</p>
 <a href="https://github.com/trebonian/visual6502" rel="noopener">source data on
 GitHub</a></p>
 
-<div class="eyebrow">Still missing</div>
-<p>Two images have no surviving copy at any resolution, and they are among the
-most historically interesting things the wiki held: scans of hand-drawn 6502
-schematic sheets dated <strong>November 1974</strong> and
-<strong>August 1975</strong>. Their description pages survive; the scans do not.
-If you have them, they are the hole in this archive.</p>
+<div class="eyebrow">What survived</div>
+<p>Nothing in the wiki is known to be lost. Two filenames looked at first like
+the one real gap &mdash; description pages for what appeared to be scans of
+hand-drawn 6502 schematic sheets, with no image behind them at any resolution.
+They turned out to be <em>red links</em>: the archived pages read &ldquo;No file
+by this name exists&rdquo;, and the Internet Archive holds no record of either
+name at any date. Nothing was ever uploaded under them.</p>
+<p>The hand-drawn schematics themselves &mdash; dated
+<strong>November 1974</strong> and <strong>August 1975</strong>, from before the
+6502 shipped &mdash; survive under different filenames and are in this archive at
+2593&times;873 and 2597&times;877, each with a lower-resolution variant.</p>
+<p>Six wiki pages exist only as renderings rather than as source, and 39
+<code>File:</code> description pages could not be recovered as source because the
+wiki refused anonymous edits, so the Internet Archive captured a
+permission-denied form instead of the editor. Those are served as archived HTML.
+Everything else is rebuilt from the original wikitext.</p>
 """
 
     (PUBLIC / "index.html").write_text(f"""<!doctype html>

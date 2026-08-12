@@ -208,6 +208,26 @@ def main() -> None:
                    "copy of these was ever archived")
     lost = [f for f in gap if up.unquote(f) not in thumbs]
 
+    # A File: page with no archived binary is not automatically a loss. MediaWiki
+    # renders a description page for any filename that is merely *referenced*,
+    # uploaded or not, and those red links look identical to deletions from the
+    # index alone. Two of them here read "No file by this name exists" -- there
+    # was never a file to crawl. Distinguishing the two needs the rendered
+    # capture, so this only runs once harvest-wiki.py has fetched them.
+    rendered_dir = ROOT / "wiki-raw" / "rendered"
+    never = []
+    if rendered_dir.exists():
+        for f in list(lost):
+            for cand in rendered_dir.glob(f"File__{f.split('.')[0]}*"):
+                if "No file by this name exists" in cand.read_text(
+                        encoding="utf-8", errors="replace"):
+                    never.append(f)
+                    lost.remove(f)
+                    break
+    if never:
+        print(f"\nreferenced but never uploaded ({len(never)}) -- red links, not "
+              f"losses:\n   " + "\n   ".join(never))
+
     if missing:
         print(f"\nrendered-only (no wikitext archived): {', '.join(missing)}")
     if lost:

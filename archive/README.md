@@ -79,11 +79,20 @@ it over. If you re-run these, please leave the limits alone.
   and convertible, where captured HTML is only viewable.
 - Six pages exist as rendered HTML only, among them `6502_Timing_States` and
   `Decode_ROM`.
-- **Two images have no surviving copy at any resolution**, and they are the two
-  that matter most: `6502_dc_sheet2-8-12-75.id.jpeg` and
-  `6502_rb_sheet1-11-74.id.jpeg` — hand-drawn 6502 schematic sheets dated
-  November 1974 and August 1975. Their wiki description pages survive; the scans
-  do not. If anyone has these, they are the gap in this archive.
+- **Nothing is known to be lost.** Two filenames initially looked like the
+  archive's one real gap — `6502_dc_sheet2-8-12-75.id.jpeg` and
+  `6502_rb_sheet1-11-74.id.jpeg`, apparently scans of hand-drawn 6502 schematic
+  sheets, with description pages but no binary at any resolution. They are not
+  losses: the archived pages read *"No file by this name exists"*, and Wayback
+  has **zero rows for either name at any status or date**. They were red links —
+  filenames referenced but never uploaded.
+
+  The schematics themselves survive under different names, and are here:
+  `6502_schematic_sheet1-11-74.id.jpeg` (2593×873) and
+  `6502_schematic_sheet2-8-12-75.id.jpeg` (2597×877), each with a lower-
+  resolution variant. Worth knowing generally: a MediaWiki `File:` page proves a
+  filename was *referenced*, not that anything was ever stored under it, and from
+  a CDX index alone a red link is indistinguishable from a deletion.
 - The `Special:` namespace is skipped. It is navigation a wiki regenerates for
   itself; capturing it means capturing 410 permutations of RecentChanges.
 

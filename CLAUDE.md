@@ -602,9 +602,16 @@ originally archived bytes — no Wayback toolbar, no link rewriting to undo late
   readonly textarea. This is permanent, not transient — `harvest-wiki.py` records
   them in `harvest-wiki-nosource.txt`, apart from real failures, so nobody
   re-runs them hoping for a different answer. They fall back to rendered HTML.
-- **Two images have no copy at any resolution**, and they are the two that matter
-  most: hand-drawn 6502 schematic sheets dated November 1974 and August 1975.
-  Description pages survive; the scans do not.
+- **Nothing is known to be lost.** Two filenames looked like the one real gap —
+  `6502_dc_sheet2-8-12-75.id.jpeg` and `6502_rb_sheet1-11-74.id.jpeg`, with
+  description pages but no binary at any resolution. They are **red links**: the
+  archived pages read "No file by this name exists" and Wayback has zero rows for
+  either name at any status or date. The schematics survive under
+  `6502_schematic_sheet{1-11-74,2-8-12-75}.id.jpeg` (2593×873, 2597×877).
+  A MediaWiki `File:` page proves a filename was *referenced*, not that anything
+  was stored under it — from a CDX index alone a red link and a deletion look
+  identical. `wayback-index.py` now separates them using the rendered capture,
+  so this needs `harvest-wiki.py` to have run first.
 - The build marks these rather than hiding them: gold links are Wayback-only,
   struck-red links were never archived. An archive that hides its gaps is worth
   less than one that shows them.
