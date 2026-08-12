@@ -774,4 +774,11 @@ function updateScrubber() {
       : `half-cycle ${now.toLocaleString()} · rewind to ${Math.round(earliest).toLocaleString()}`;
 }
 
+// The service worker only exists in a built (hashed) bundle; when serving web/
+// directly during development there is nothing to register and the rejection is
+// expected. Registering unhashed assets would be actively harmful.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
 boot();

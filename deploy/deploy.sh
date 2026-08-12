@@ -50,6 +50,38 @@ head -c 8 web/layout.bin | grep -q '^V6502LAY' || {
   echo "deploy: web/layout.bin has the wrong magic" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
+# Content-hash everything and emit the service worker
+# ---------------------------------------------------------------------------
+
+log "hashing assets"
+python3 tools/build-web.py web dist
+
+for f in dist/index.html dist/sw.js dist/asset-manifest.json; do
+  [ -s "$f" ] || { echo "deploy: build produced no $f" >&2; exit 1; }
+done
+
+# One wasm, one layout blob: more than one means a stale artefact survived a
+# rebuild and the worker would precache both.
+for pat in 'dist/pkg/v6502_wasm_bg.*.wasm' 'dist/layout.*.bin'; do
+  # shellcheck disable=SC2086
+  n=$(ls -1 $pat 2>/dev/null | wc -l)
+  [ "$n" = 1 ] || { echo "deploy: expected exactly one $pat, found $n" >&2; exit 1; }
+done
+
+# Every asset the worker promises to precache must actually exist, or install
+# fails and the app silently loses offline support.
+python3 - <<'PY' || exit 1
+import json, re, sys, pathlib
+sw = pathlib.Path("dist/sw.js").read_text()
+listed = json.loads(re.search(r"const PRECACHE = (\[.*?\]);", sw, re.S).group(1))
+missing = [p for p in listed if p != "./" and not (pathlib.Path("dist") / p[2:]).exists()]
+if missing:
+    print(f"deploy: sw.js precaches missing files: {missing}", file=sys.stderr)
+    sys.exit(1)
+print(f"  precache list verified: {len(listed)} entries")
+PY
+
+# ---------------------------------------------------------------------------
 # Stage a release
 # ---------------------------------------------------------------------------
 
@@ -58,11 +90,9 @@ DEST="$RELEASES/$STAMP"
 log "staging $DEST"
 mkdir -p "$DEST"
 
-rsync -a --delete \
-  --exclude '.gitignore' \
-  --exclude 'pkg/package.json' \
-  --exclude 'pkg/*.d.ts' \
-  web/ "$DEST/"
+# dist/ contains exactly what should be served -- build-web.py emits nothing
+# else, so there is no exclude list to keep in sync.
+rsync -a --delete dist/ "$DEST/"
 
 # Precompress once here rather than per-request: `gzip_static on` serves these
 # directly, so nginx spends no CPU and we get -9 instead of the runtime default.
@@ -92,5 +122,7 @@ done
 
 raw=$(du -sh "$DEST" | cut -f1)
 log "published $STAMP ($raw on disk)"
-log "layout.bin $(stat -c%s "$DEST/layout.bin" | numfmt --to=iec) -> gz $(stat -c%s "$DEST/layout.bin.gz" | numfmt --to=iec)"
-log "wasm       $(stat -c%s "$DEST/pkg/v6502_wasm_bg.wasm" | numfmt --to=iec) -> gz $(stat -c%s "$DEST/pkg/v6502_wasm_bg.wasm.gz" | numfmt --to=iec)"
+for f in "$DEST"/layout.*.bin "$DEST"/pkg/v6502_wasm_bg.*.wasm; do
+  [ -f "$f" ] || continue
+  log "$(basename "$f") $(stat -c%s "$f" | numfmt --to=iec) -> gz $(stat -c%s "$f.gz" | numfmt --to=iec)"
+done

@@ -12,13 +12,21 @@
 # actually matter. With the value in a variable, every header can be declared
 # once at server level and no location needs add_header at all.
 #
-# Assets are not content-hashed, so everything revalidates. A 304 is cheap and a
-# deploy takes effect immediately, which matters more here than saving a round
-# trip on a repeat visit.
+# Assets are content-hashed by tools/build-web.py, so a given URL's bytes can
+# never change and `immutable` is honest rather than a gamble. index.html and
+# sw.js are the entry points and must never be held: they are what point at the
+# hashed names, and a stale sw.js would pin an old build indefinitely.
+#
+# The hashed pattern is listed first: nginx evaluates map regexes in order, and
+# putting the specific case ahead of the general one keeps it that way if more
+# rules are added later.
 map $uri $tm6502_cache {
-    default    "public, max-age=60, must-revalidate";
-    "/"        "no-cache";
-    ~*\.html$  "no-cache";
+    default                                                   "public, max-age=60, must-revalidate";
+    # Quoted: nginx parses a bare { in a map key as the start of a block.
+    "~*\.[0-9a-f]{8}\.(?:js|css|wasm|bin|png|svg|webmanifest)$"  "public, max-age=31536000, immutable";
+    ~*\.html$                                                  "no-cache";
+    "/"                                                        "no-cache";
+    "/sw.js"                                                   "no-cache";
 }
 
 server {
@@ -78,7 +86,7 @@ server {
     #
     # Note this location deliberately declares no add_header: adding one would
     # discard every inherited security header, as it did once already.
-    location = /manifest.webmanifest {
+    location ~* \.webmanifest$ {
         default_type application/manifest+json;
     }
 

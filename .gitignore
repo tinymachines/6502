@@ -9,3 +9,6 @@ node_modules
 
 # Operator-specific runbook: addresses, zone paths, local host details.
 /deploy/HOSTING.local.md
+
+# Hashed production bundle, produced by tools/build-web.py.
+/dist
