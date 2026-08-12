@@ -42,6 +42,9 @@ UA = ("Mozilla/5.0 (compatible; archival retrieval for preservation; "
 TEXTAREA = re.compile(
     r'<textarea[^>]*\bname=["\']wpTextbox1["\'][^>]*>(.*?)</textarea>', re.S | re.I)
 TEXTAREA_ANY = re.compile(r"<textarea[^>]*>(.*?)</textarea>", re.S | re.I)
+# A capture of MediaWiki's "you may view the source but not edit" page.
+DENIED = re.compile(r"do not have permission to edit|Login required|"
+                    r"view and copy the source", re.I)
 
 
 def get(url: str, *, tries: int = 4) -> bytes | None:
@@ -83,9 +86,9 @@ def read_list(name: str) -> list[str]:
             if l.strip() and not l.startswith("#")]
 
 
-def harvest(kind: str, urls: list[str], dest: Path, *, pace: float) -> list[str]:
+def harvest(kind: str, urls: list[str], dest: Path, *, pace: float) -> tuple:
     dest.mkdir(parents=True, exist_ok=True)
-    failed, n_new = [], 0
+    failed, denied, n_new = [], [], 0
     for i, u in enumerate(urls, 1):
         if kind == "images":
             path = up.unquote(up.urlparse(u.split("id_/", 1)[1]).path)
@@ -103,9 +106,17 @@ def harvest(kind: str, urls: list[str], dest: Path, *, pace: float) -> list[str]
             text = body.decode("utf-8", "replace")
             m = TEXTAREA.search(text) or TEXTAREA_ANY.search(text)
             if not m or not m.group(1).strip():
-                # An edit form with no textarea means the capture caught a login
-                # prompt or an error page rather than the editor.
-                failed.append(u)
+                # The wiki refused anonymous edits on some pages -- almost all
+                # of the File: namespace -- so the Internet Archive's crawler
+                # captured a permission-denied form with an empty readonly
+                # textarea rather than the editor. The source is not in that
+                # snapshot and never will be, so this is a permanent absence,
+                # not a transient fetch failure. Retrying it forever would be
+                # both futile and rude to the Archive.
+                if DENIED.search(text):
+                    denied.append(u)
+                else:
+                    failed.append(u)
                 continue
             body = html.unescape(m.group(1)).encode("utf-8")
 
@@ -116,8 +127,9 @@ def harvest(kind: str, urls: list[str], dest: Path, *, pace: float) -> list[str]
             print(f"  {kind}: {i}/{len(urls)} ({n_new} new)", flush=True)
         time.sleep(pace)
     print(f"  {kind}: {n_new} fetched, {len(failed)} failed, "
-          f"{len(urls) - n_new - len(failed)} already had")
-    return failed
+          f"{len(denied)} source withheld in the capture, "
+          f"{len(urls) - n_new - len(failed) - len(denied)} already had")
+    return failed, denied
 
 
 def main() -> None:
@@ -133,19 +145,29 @@ def main() -> None:
         ("images", "wiki-images.txt", OUT / "images"),
         ("images", "wiki-images-thumb-only.txt", OUT / "images"),
     ]
-    failed = []
+    failed, denied = [], []
     for kind, listname, dest in jobs:
         if args.only and kind != args.only:
             continue
         urls = read_list(listname)
         print(f"{listname}: {len(urls)} URLs")
-        failed += harvest(kind, urls, dest, pace=args.pace)
+        f, d = harvest(kind, urls, dest, pace=args.pace)
+        failed += f
+        denied += d
 
     if failed:
         p = ROOT / "harvest-wiki-failed.txt"
         p.write_text("".join(f"{u}\n" for u in failed))
-        print(f"\n{len(failed)} failures written to {p.name} -- re-running the "
-              f"script retries only these")
+        print(f"\n{len(failed)} transient failures written to {p.name} -- "
+              f"re-running the script retries only these")
+    if denied:
+        # Kept apart from failures precisely so nobody re-runs them hoping for a
+        # different answer. These pages fall back to their rendered capture.
+        p = ROOT / "harvest-wiki-nosource.txt"
+        p.write_text("".join(f"{u}\n" for u in denied))
+        print(f"{len(denied)} pages have no source in any capture (the wiki "
+              f"refused anonymous edits); listed in {p.name}. These are served "
+              f"from their rendered HTML instead.")
 
 
 if __name__ == "__main__":

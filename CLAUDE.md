@@ -549,6 +549,89 @@ Before pushing anything, two things worth keeping true:
   real `git clone` into a temp directory and `cargo test --workspace`, which is
   how the "test fails out of the box" bug was found.
 
+## The preservation archive (`archive/`)
+
+A mirror of visual6502.org, which is decaying. Separate from the simulator and
+deployed separately; see `archive/README.md` for the full account.
+
+What is wrong with the source site, as of August 2026:
+
+| | |
+|---|---|
+| Wiki | **HTTP 500 on every page.** MediaWiki is failing. 169 pages unreachable. |
+| Die photography | **Serves fine, but nothing links to it.** 548 files, 2.3 GB, 41 chips. |
+| JSSim, docs, `/sim/` | Still working. 36 files reachable by crawling. |
+
+The wiki returning **500 rather than 404** suggests the pages are still on disk
+behind a broken database — worth asking the maintainers before treating Wayback
+as the only route. The photography is the subtler loss: every byte is served
+correctly, but the wiki pages that linked to it are dead and the directory
+listings are 403, so nothing on the open web points at it. The file list had to
+be reconstructed from the Wayback CDX index even though the bytes come from the
+live origin.
+
+```bash
+python3 archive/tools/wayback-index.py --refetch   # rebuild the URL manifests
+bash     archive/tools/mirror-live.sh              # crawl what the site links
+bash     archive/tools/harvest-site.sh             # the 2.3 GB nothing links to
+python3  archive/tools/harvest-wiki.py             # the wiki, out of Wayback
+python3  archive/tools/build-archive.py            # -> archive/public/
+sudo bash deploy/archive-deploy.sh                 # publish to /archive/
+```
+
+### What makes the recovery work
+
+**163 of 169 pages have archived `action=edit` captures, and MediaWiki puts page
+source in a `<textarea>` on its edit form.** So the wiki rebuilds from *wikitext*
+rather than from rendered HTML — re-renderable and convertible instead of merely
+viewable. This is the single fact the whole rebuild rests on.
+
+A naive `url=visual6502.org/wiki*` CDX query returns ~90k rows that are almost
+entirely navigation: `Special:RecentChanges` in every permutation of
+hideminor/hideliu/hidemyself/hideanons, login redirects carrying `returnto=`, and
+thousands of oldid/diff pairs. Under 1 row in 100 is content.
+`wayback-index.py` filters that to a few hundred URLs, one best snapshot each.
+
+Snapshot URLs use the **`id_` modifier** (`/web/<ts>id_/<url>`), which returns the
+originally archived bytes — no Wayback toolbar, no link rewriting to undo later.
+
+### Recovery gaps, deliberately visible
+
+- **39 `File:` pages have no source in any capture.** The wiki refused anonymous
+  edits there, so the Archive captured a permission-denied form with an empty
+  readonly textarea. This is permanent, not transient — `harvest-wiki.py` records
+  them in `harvest-wiki-nosource.txt`, apart from real failures, so nobody
+  re-runs them hoping for a different answer. They fall back to rendered HTML.
+- **Two images have no copy at any resolution**, and they are the two that matter
+  most: hand-drawn 6502 schematic sheets dated November 1974 and August 1975.
+  Description pages survive; the scans do not.
+- The build marks these rather than hiding them: gold links are Wayback-only,
+  struck-red links were never archived. An archive that hides its gaps is worth
+  less than one that shows them.
+
+### Invariants
+
+- **`build-wiki.py` fails rather than emit a page without the attribution
+  banner**, and `archive-deploy.sh` refuses to publish an `index.html` missing the
+  licence or the authors' names. This is CC BY-NC-SA material; the banner *is*
+  the licence compliance, not decoration.
+- **Full-size image links point at our own mirror, not at visual6502.org.** An
+  archive that sources originals from the site it is archiving stops working the
+  moment that site does.
+- **`archive/public/full` is a relative symlink** to `../mirror/visual6502.org/images`,
+  so `mirror/` must be published as a *sibling* of `archive/`. `rsync -a`
+  preserves the symlink instead of copying 2.3 GB through it.
+- **Nothing fetched is committed** — only `archive/urls/` (the manifests, which
+  are ours) and the tools. Same reasoning as the `extern/` submodule: this repo
+  points at NC-SA data rather than redistributing it.
+- **Harvesting is deliberately slow** (`--wait`, `--limit-rate`, resumable).
+  visual6502.org is a fragile fifteen-year-old server and the one way this
+  exercise could do real harm is by knocking it over. Do not "optimise" the rate
+  limits.
+- The archive deploys **beside** `releases/`, not inside one: it is ~2.5 GB that
+  changes only when something new is recovered, and copying that on every
+  front-end deploy would be absurd.
+
 ## Licensing — read before shipping
 
 See `NOTICE.md`. The short version: this project's code is MIT, but
