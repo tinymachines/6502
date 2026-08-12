@@ -1,0 +1,2908 @@
+{
+  "pages": [
+    {
+      "title": "6502DecimalMode",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20130815213847",
+        "url": "https://web.archive.org/web/20130815213847id_/http://visual6502.org/wiki/index.php?title=6502DecimalMode",
+        "original": "http://visual6502.org/wiki/index.php?title=6502DecimalMode"
+      },
+      "wikitext": {
+        "timestamp": "20141224041651",
+        "url": "https://web.archive.org/web/20141224041651id_/http://visual6502.org/wiki/index.php?title=6502DecimalMode&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502DecimalMode&action=edit"
+      }
+    },
+    {
+      "title": "6502Observations",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224040827",
+        "url": "https://web.archive.org/web/20141224040827id_/http://visual6502.org/wiki/index.php?title=6502Observations",
+        "original": "http://visual6502.org/wiki/index.php?title=6502Observations"
+      },
+      "wikitext": {
+        "timestamp": "20141224041435",
+        "url": "https://web.archive.org/web/20141224041435id_/http://visual6502.org/wiki/index.php?title=6502Observations&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502Observations&action=edit"
+      }
+    },
+    {
+      "title": "6502TestPrograms",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140904175006",
+        "url": "https://web.archive.org/web/20140904175006id_/http://visual6502.org/wiki/index.php?title=6502TestPrograms",
+        "original": "http://visual6502.org/wiki/index.php?title=6502TestPrograms"
+      },
+      "wikitext": {
+        "timestamp": "20141224041643",
+        "url": "https://web.archive.org/web/20141224041643id_/http://visual6502.org/wiki/index.php?title=6502TestPrograms&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502TestPrograms&action=edit"
+      }
+    },
+    {
+      "title": "6502_-_simulating_in_real_time_on_an_FPGA",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141105234050",
+        "url": "https://web.archive.org/web/20141105234050id_/http://visual6502.org/wiki/index.php?title=6502_-_simulating_in_real_time_on_an_FPGA",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_-_simulating_in_real_time_on_an_FPGA"
+      },
+      "wikitext": {
+        "timestamp": "20141224041434",
+        "url": "https://web.archive.org/web/20141224041434id_/http://visual6502.org/wiki/index.php?title=6502_-_simulating_in_real_time_on_an_FPGA&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_-_simulating_in_real_time_on_an_FPGA&action=edit"
+      }
+    },
+    {
+      "title": "6502_BRK_and_B_bit",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140921033853",
+        "url": "https://web.archive.org/web/20140921033853id_/http://visual6502.org/wiki/index.php?title=6502_BRK_and_B_bit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_BRK_and_B_bit"
+      },
+      "wikitext": {
+        "timestamp": "20141224041645",
+        "url": "https://web.archive.org/web/20141224041645id_/http://visual6502.org/wiki/index.php?title=6502_BRK_and_B_bit&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_BRK_and_B_bit&action=edit"
+      }
+    },
+    {
+      "title": "6502_Interrupt_Hijacking",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20210405071346",
+        "url": "https://web.archive.org/web/20210405071346id_/http://visual6502.org/wiki/index.php?title=6502_Interrupt_Hijacking",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Interrupt_Hijacking"
+      },
+      "wikitext": null
+    },
+    {
+      "title": "6502_Interrupt_Recognition_Stages_and_Tolerances",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20190824085604",
+        "url": "https://web.archive.org/web/20190824085604id_/http://visual6502.org/wiki/index.php?title=6502_Interrupt_Recognition_Stages_and_Tolerances",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Interrupt_Recognition_Stages_and_Tolerances"
+      },
+      "wikitext": null
+    },
+    {
+      "title": "6502_Opcode_8B_(XAA,_ANE)",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140921040846",
+        "url": "https://web.archive.org/web/20140921040846id_/http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_%28XAA,_ANE%29",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_%28XAA,_ANE%29"
+      },
+      "wikitext": {
+        "timestamp": "20141224041318",
+        "url": "https://web.archive.org/web/20141224041318id_/http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_(XAA,_ANE)&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_(XAA,_ANE)&action=edit"
+      }
+    },
+    {
+      "title": "6502_Opcode_8B_(XAA,_ANE)_explained",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041259",
+        "url": "https://web.archive.org/web/20141224041259id_/http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_(XAA,_ANE)_explained",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_(XAA,_ANE)_explained"
+      },
+      "wikitext": {
+        "timestamp": "20141224041958",
+        "url": "https://web.archive.org/web/20141224041958id_/http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_(XAA,_ANE)_explained&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Opcode_8B_(XAA,_ANE)_explained&action=edit"
+      }
+    },
+    {
+      "title": "6502_ROR_bug",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041133",
+        "url": "https://web.archive.org/web/20141224041133id_/http://visual6502.org/wiki/index.php?title=6502_ROR_bug",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_ROR_bug"
+      },
+      "wikitext": {
+        "timestamp": "20141224041639",
+        "url": "https://web.archive.org/web/20141224041639id_/http://visual6502.org/wiki/index.php?title=6502_ROR_bug&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_ROR_bug&action=edit"
+      }
+    },
+    {
+      "title": "6502_Stack_Register_High_Bits",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101208053603",
+        "url": "https://web.archive.org/web/20101208053603id_/http://visual6502.org:80/wiki/index.php?title=6502_Stack_Register_High_Bits",
+        "original": "http://visual6502.org:80/wiki/index.php?title=6502_Stack_Register_High_Bits"
+      },
+      "wikitext": {
+        "timestamp": "20141224041441",
+        "url": "https://web.archive.org/web/20141224041441id_/http://visual6502.org/wiki/index.php?title=6502_Stack_Register_High_Bits&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Stack_Register_High_Bits&action=edit"
+      }
+    },
+    {
+      "title": "6502_State_Machine",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041152",
+        "url": "https://web.archive.org/web/20141224041152id_/http://visual6502.org/wiki/index.php?title=6502_State_Machine",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_State_Machine"
+      },
+      "wikitext": {
+        "timestamp": "20141224041656",
+        "url": "https://web.archive.org/web/20141224041656id_/http://visual6502.org/wiki/index.php?title=6502_State_Machine&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_State_Machine&action=edit"
+      }
+    },
+    {
+      "title": "6502_Taken_Branch_Delays_Interrupts",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041253",
+        "url": "https://web.archive.org/web/20141224041253id_/http://visual6502.org/wiki/index.php?title=6502_Taken_Branch_Delays_Interrupts",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Taken_Branch_Delays_Interrupts"
+      },
+      "wikitext": {
+        "timestamp": "20141224041723",
+        "url": "https://web.archive.org/web/20141224041723id_/http://visual6502.org/wiki/index.php?title=6502_Taken_Branch_Delays_Interrupts&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Taken_Branch_Delays_Interrupts&action=edit"
+      }
+    },
+    {
+      "title": "6502_Taken_Branch_Delays_Interrupts_Branches_and_interrupts",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041300",
+        "url": "https://web.archive.org/web/20141224041300id_/http://visual6502.org/wiki/index.php?title=6502_Taken_Branch_Delays_Interrupts_Branches_and_interrupts",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Taken_Branch_Delays_Interrupts_Branches_and_interrupts"
+      },
+      "wikitext": {
+        "timestamp": "20141224041956",
+        "url": "https://web.archive.org/web/20141224041956id_/http://visual6502.org/wiki/index.php?title=6502_Taken_Branch_Delays_Interrupts_Branches_and_interrupts&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Taken_Branch_Delays_Interrupts_Branches_and_interrupts&action=edit"
+      }
+    },
+    {
+      "title": "6502_Timing_States",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20210405071320",
+        "url": "https://web.archive.org/web/20210405071320id_/http://visual6502.org/wiki/index.php?title=6502_Timing_States",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Timing_States"
+      },
+      "wikitext": null
+    },
+    {
+      "title": "6502_Timing_of_Interrupt_Handling",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140920210810",
+        "url": "https://web.archive.org/web/20140920210810id_/http://visual6502.org/wiki/index.php?title=6502_Timing_of_Interrupt_Handling",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Timing_of_Interrupt_Handling"
+      },
+      "wikitext": {
+        "timestamp": "20141224041641",
+        "url": "https://web.archive.org/web/20141224041641id_/http://visual6502.org/wiki/index.php?title=6502_Timing_of_Interrupt_Handling&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Timing_of_Interrupt_Handling&action=edit"
+      }
+    },
+    {
+      "title": "6502_Unsupported_Opcodes",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20130121221253",
+        "url": "https://web.archive.org/web/20130121221253id_/http://visual6502.org/wiki/index.php?title=6502_Unsupported_Opcodes",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Unsupported_Opcodes"
+      },
+      "wikitext": {
+        "timestamp": "20141224041429",
+        "url": "https://web.archive.org/web/20141224041429id_/http://visual6502.org/wiki/index.php?title=6502_Unsupported_Opcodes&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_Unsupported_Opcodes&action=edit"
+      }
+    },
+    {
+      "title": "6502_all_256_Opcodes",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20120424074453",
+        "url": "https://web.archive.org/web/20120424074453id_/http://visual6502.org/wiki/index.php?title=6502_all_256_Opcodes",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_all_256_Opcodes"
+      },
+      "wikitext": {
+        "timestamp": "20141224041407",
+        "url": "https://web.archive.org/web/20141224041407id_/http://visual6502.org/wiki/index.php?title=6502_all_256_Opcodes&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_all_256_Opcodes&action=edit"
+      }
+    },
+    {
+      "title": "6502_datapath",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224040824",
+        "url": "https://web.archive.org/web/20141224040824id_/http://visual6502.org/wiki/index.php?title=6502_datapath",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_datapath"
+      },
+      "wikitext": {
+        "timestamp": "20141224041336",
+        "url": "https://web.archive.org/web/20141224041336id_/http://visual6502.org/wiki/index.php?title=6502_datapath&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_datapath&action=edit"
+      }
+    },
+    {
+      "title": "6502_datapath_control_timing_fix",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041136",
+        "url": "https://web.archive.org/web/20141224041136id_/http://visual6502.org/wiki/index.php?title=6502_datapath_control_timing_fix",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_datapath_control_timing_fix"
+      },
+      "wikitext": {
+        "timestamp": "20141224041643",
+        "url": "https://web.archive.org/web/20141224041643id_/http://visual6502.org/wiki/index.php?title=6502_datapath_control_timing_fix&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_datapath_control_timing_fix&action=edit"
+      }
+    },
+    {
+      "title": "6502_increment_PC_control",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041149",
+        "url": "https://web.archive.org/web/20141224041149id_/http://visual6502.org/wiki/index.php?title=6502_increment_PC_control",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_increment_PC_control"
+      },
+      "wikitext": {
+        "timestamp": "20141224041656",
+        "url": "https://web.archive.org/web/20141224041656id_/http://visual6502.org/wiki/index.php?title=6502_increment_PC_control&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_increment_PC_control&action=edit"
+      }
+    },
+    {
+      "title": "6502_traces_of_6501",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20121104060554",
+        "url": "https://web.archive.org/web/20121104060554id_/http://visual6502.org/wiki/index.php?title=6502_traces_of_6501",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_traces_of_6501"
+      },
+      "wikitext": {
+        "timestamp": "20141224041647",
+        "url": "https://web.archive.org/web/20141224041647id_/http://visual6502.org/wiki/index.php?title=6502_traces_of_6501&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6502_traces_of_6501&action=edit"
+      }
+    },
+    {
+      "title": "6507_Decode_PLA",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041256",
+        "url": "https://web.archive.org/web/20141224041256id_/http://visual6502.org/wiki/index.php?title=6507_Decode_PLA",
+        "original": "http://visual6502.org/wiki/index.php?title=6507_Decode_PLA"
+      },
+      "wikitext": {
+        "timestamp": "20141224041959",
+        "url": "https://web.archive.org/web/20141224041959id_/http://visual6502.org/wiki/index.php?title=6507_Decode_PLA&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6507_Decode_PLA&action=edit"
+      }
+    },
+    {
+      "title": "6507_Decode_ROM",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20120320065743",
+        "url": "https://web.archive.org/web/20120320065743id_/http://visual6502.org/wiki/index.php?title=6507_Decode_ROM",
+        "original": "http://visual6502.org/wiki/index.php?title=6507_Decode_ROM"
+      },
+      "wikitext": {
+        "timestamp": "20120403032616",
+        "url": "https://web.archive.org/web/20120403032616id_/http://visual6502.org/wiki/index.php?title=6507_Decode_ROM&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=6507_Decode_ROM&action=edit"
+      }
+    },
+    {
+      "title": "650X_Schematic_Notes",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140920225149",
+        "url": "https://web.archive.org/web/20140920225149id_/http://visual6502.org/wiki/index.php?title=650X_Schematic_Notes",
+        "original": "http://visual6502.org/wiki/index.php?title=650X_Schematic_Notes"
+      },
+      "wikitext": {
+        "timestamp": "20141224041655",
+        "url": "https://web.archive.org/web/20141224041655id_/http://visual6502.org/wiki/index.php?title=650X_Schematic_Notes&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=650X_Schematic_Notes&action=edit"
+      }
+    },
+    {
+      "title": "AMD",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041251",
+        "url": "https://web.archive.org/web/20141224041251id_/http://visual6502.org/wiki/index.php?title=AMD",
+        "original": "http://visual6502.org/wiki/index.php?title=AMD"
+      },
+      "wikitext": {
+        "timestamp": "20141224041717",
+        "url": "https://web.archive.org/web/20141224041717id_/http://visual6502.org/wiki/index.php?title=AMD&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=AMD&action=edit"
+      }
+    },
+    {
+      "title": "Acorn",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140829014615",
+        "url": "https://web.archive.org/web/20140829014615id_/http://visual6502.org/wiki/index.php?title=Acorn",
+        "original": "http://visual6502.org/wiki/index.php?title=Acorn"
+      },
+      "wikitext": {
+        "timestamp": "20141224041053",
+        "url": "https://web.archive.org/web/20141224041053id_/http://visual6502.org/wiki/index.php?title=Acorn&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Acorn&action=edit"
+      }
+    },
+    {
+      "title": "Atari",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140829020355",
+        "url": "https://web.archive.org/web/20140829020355id_/http://visual6502.org/wiki/index.php?title=Atari",
+        "original": "http://visual6502.org/wiki/index.php?title=Atari"
+      },
+      "wikitext": {
+        "timestamp": "20141224040809",
+        "url": "https://web.archive.org/web/20141224040809id_/http://visual6502.org/wiki/index.php?title=Atari&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Atari&action=edit"
+      }
+    },
+    {
+      "title": "Atari's_6507_Schematics",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101208053823",
+        "url": "https://web.archive.org/web/20101208053823id_/http://visual6502.org:80/wiki/index.php?title=Atari%27s_6507_Schematics",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Atari%27s_6507_Schematics"
+      },
+      "wikitext": {
+        "timestamp": "20141224041358",
+        "url": "https://web.archive.org/web/20141224041358id_/http://visual6502.org/wiki/index.php?title=Atari%27s_6507_Schematics&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Atari%27s_6507_Schematics&action=edit"
+      }
+    },
+    {
+      "title": "Balazs'_schematic_and_documents",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101208053838",
+        "url": "https://web.archive.org/web/20101208053838id_/http://visual6502.org:80/wiki/index.php?title=Balazs%27_schematic_and_documents",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Balazs%27_schematic_and_documents"
+      },
+      "wikitext": {
+        "timestamp": "20141224041428",
+        "url": "https://web.archive.org/web/20141224041428id_/http://visual6502.org/wiki/index.php?title=Balazs%27_schematic_and_documents&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Balazs%27_schematic_and_documents&action=edit"
+      }
+    },
+    {
+      "title": "Chips_in_our_collection",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110912022740",
+        "url": "https://web.archive.org/web/20110912022740id_/http://visual6502.org:80/wiki/index.php?title=Chips_in_our_collection",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Chips_in_our_collection"
+      },
+      "wikitext": {
+        "timestamp": "20140829003659",
+        "url": "https://web.archive.org/web/20140829003659id_/http://visual6502.org/wiki/index.php?title=Chips_in_our_collection&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Chips_in_our_collection&action=edit"
+      }
+    },
+    {
+      "title": "Chips_listed_by_manufacturer",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041250",
+        "url": "https://web.archive.org/web/20141224041250id_/http://visual6502.org/wiki/index.php?title=Chips_listed_by_manufacturer",
+        "original": "http://visual6502.org/wiki/index.php?title=Chips_listed_by_manufacturer"
+      },
+      "wikitext": {
+        "timestamp": "20141224041634",
+        "url": "https://web.archive.org/web/20141224041634id_/http://visual6502.org/wiki/index.php?title=Chips_listed_by_manufacturer&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Chips_listed_by_manufacturer&action=edit"
+      }
+    },
+    {
+      "title": "Company_MOS_Technology",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041135",
+        "url": "https://web.archive.org/web/20141224041135id_/http://visual6502.org/wiki/index.php?title=Company_MOS_Technology",
+        "original": "http://visual6502.org/wiki/index.php?title=Company_MOS_Technology"
+      },
+      "wikitext": {
+        "timestamp": "20141224041640",
+        "url": "https://web.archive.org/web/20141224041640id_/http://visual6502.org/wiki/index.php?title=Company_MOS_Technology&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Company_MOS_Technology&action=edit"
+      }
+    },
+    {
+      "title": "Decode_ROM",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101208054058",
+        "url": "https://web.archive.org/web/20101208054058id_/http://visual6502.org:80/wiki/index.php?title=Decode_ROM",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Decode_ROM"
+      },
+      "wikitext": null
+    },
+    {
+      "title": "Educational_Resources",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041147",
+        "url": "https://web.archive.org/web/20141224041147id_/http://visual6502.org/wiki/index.php?title=Educational_Resources",
+        "original": "http://visual6502.org/wiki/index.php?title=Educational_Resources"
+      },
+      "wikitext": {
+        "timestamp": "20141224041652",
+        "url": "https://web.archive.org/web/20141224041652id_/http://visual6502.org/wiki/index.php?title=Educational_Resources&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Educational_Resources&action=edit"
+      }
+    },
+    {
+      "title": "File:1802_dpth-small.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041454",
+        "url": "https://web.archive.org/web/20141224041454id_/http://visual6502.org/wiki/index.php?title=File:1802_dpth-small.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:1802_dpth-small.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041845",
+        "url": "https://web.archive.org/web/20141224041845id_/http://visual6502.org/wiki/index.php?title=File:1802_dpth-small.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:1802_dpth-small.png&action=edit"
+      }
+    },
+    {
+      "title": "File:1802_dpth.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041454",
+        "url": "https://web.archive.org/web/20141224041454id_/http://visual6502.org/wiki/index.php?title=File:1802_dpth.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:1802_dpth.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041850",
+        "url": "https://web.archive.org/web/20141224041850id_/http://visual6502.org/wiki/index.php?title=File:1802_dpth.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:1802_dpth.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-XAA-Idb-sb.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041320",
+        "url": "https://web.archive.org/web/20141224041320id_/http://visual6502.org/wiki/index.php?title=File:6502-XAA-Idb-sb.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-XAA-Idb-sb.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041730",
+        "url": "https://web.archive.org/web/20141224041730id_/http://visual6502.org/wiki/index.php?title=File:6502-XAA-Idb-sb.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-XAA-Idb-sb.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-decimal-DAA-removed-visual6502.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041447",
+        "url": "https://web.archive.org/web/20141224041447id_/http://visual6502.org/wiki/index.php?title=File:6502-decimal-DAA-removed-visual6502.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-decimal-DAA-removed-visual6502.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041842",
+        "url": "https://web.archive.org/web/20141224041842id_/http://visual6502.org/wiki/index.php?title=File:6502-decimal-DAA-removed-visual6502.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-decimal-DAA-removed-visual6502.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-decimal-subtract-visual6502.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041455",
+        "url": "https://web.archive.org/web/20141224041455id_/http://visual6502.org/wiki/index.php?title=File:6502-decimal-subtract-visual6502.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-decimal-subtract-visual6502.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041844",
+        "url": "https://web.archive.org/web/20141224041844id_/http://visual6502.org/wiki/index.php?title=File:6502-decimal-subtract-visual6502.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-decimal-subtract-visual6502.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-fpga-apple2-img_0040.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041435",
+        "url": "https://web.archive.org/web/20141224041435id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-apple2-img_0040.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-apple2-img_0040.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041817",
+        "url": "https://web.archive.org/web/20141224041817id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-apple2-img_0040.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-apple2-img_0040.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-fpga-apple2-overview-IMG_1086.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041432",
+        "url": "https://web.archive.org/web/20141224041432id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-apple2-overview-IMG_1086.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-apple2-overview-IMG_1086.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041808",
+        "url": "https://web.archive.org/web/20141224041808id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-apple2-overview-IMG_1086.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-apple2-overview-IMG_1086.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-fpga-c64-overview-IMG_1080.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20120820111911",
+        "url": "https://web.archive.org/web/20120820111911id_/http://www.visual6502.org:80/wiki/index.php?title=File:6502-fpga-c64-overview-IMG_1080.jpg",
+        "original": "http://www.visual6502.org:80/wiki/index.php?title=File:6502-fpga-c64-overview-IMG_1080.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041816",
+        "url": "https://web.archive.org/web/20141224041816id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-c64-overview-IMG_1080.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-c64-overview-IMG_1080.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-fpga-vic20-img_0039.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041433",
+        "url": "https://web.archive.org/web/20141224041433id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-vic20-img_0039.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-vic20-img_0039.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041811",
+        "url": "https://web.archive.org/web/20141224041811id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-vic20-img_0039.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-vic20-img_0039.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-fpga-vic20-overview-IMG_1081.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041434",
+        "url": "https://web.archive.org/web/20141224041434id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-vic20-overview-IMG_1081.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-vic20-overview-IMG_1081.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041815",
+        "url": "https://web.archive.org/web/20141224041815id_/http://visual6502.org/wiki/index.php?title=File:6502-fpga-vic20-overview-IMG_1081.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-fpga-vic20-overview-IMG_1081.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-ipc-circuit.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041530",
+        "url": "https://web.archive.org/web/20141224041530id_/http://visual6502.org/wiki/index.php?title=File:6502-ipc-circuit.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-ipc-circuit.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041938",
+        "url": "https://web.archive.org/web/20141224041938id_/http://visual6502.org/wiki/index.php?title=File:6502-ipc-circuit.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-ipc-circuit.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-ipc-layout.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041532",
+        "url": "https://web.archive.org/web/20141224041532id_/http://visual6502.org/wiki/index.php?title=File:6502-ipc-layout.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-ipc-layout.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041947",
+        "url": "https://web.archive.org/web/20141224041947id_/http://visual6502.org/wiki/index.php?title=File:6502-ipc-layout.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-ipc-layout.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502-ipc-logic.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041529",
+        "url": "https://web.archive.org/web/20141224041529id_/http://visual6502.org/wiki/index.php?title=File:6502-ipc-logic.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-ipc-logic.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041934",
+        "url": "https://web.archive.org/web/20141224041934id_/http://visual6502.org/wiki/index.php?title=File:6502-ipc-logic.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502-ipc-logic.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_dc_sheet2-8-12-75.id.jpeg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224042411",
+        "url": "https://web.archive.org/web/20141224042411id_/http://visual6502.org/wiki/index.php?title=File:6502_dc_sheet2-8-12-75.id.jpeg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_dc_sheet2-8-12-75.id.jpeg"
+      },
+      "wikitext": null
+    },
+    {
+      "title": "File:6502_photo_wrong-clock-annot.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041529",
+        "url": "https://web.archive.org/web/20141224041529id_/http://visual6502.org/wiki/index.php?title=File:6502_photo_wrong-clock-annot.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_photo_wrong-clock-annot.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041933",
+        "url": "https://web.archive.org/web/20141224041933id_/http://visual6502.org/wiki/index.php?title=File:6502_photo_wrong-clock-annot.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_photo_wrong-clock-annot.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_photo_wrong-clock.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041529",
+        "url": "https://web.archive.org/web/20141224041529id_/http://visual6502.org/wiki/index.php?title=File:6502_photo_wrong-clock.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_photo_wrong-clock.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041936",
+        "url": "https://web.archive.org/web/20141224041936id_/http://visual6502.org/wiki/index.php?title=File:6502_photo_wrong-clock.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_photo_wrong-clock.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_rb_sheet1-11-74.id.jpeg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224042411",
+        "url": "https://web.archive.org/web/20141224042411id_/http://visual6502.org/wiki/index.php?title=File:6502_rb_sheet1-11-74.id.jpeg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_rb_sheet1-11-74.id.jpeg"
+      },
+      "wikitext": null
+    },
+    {
+      "title": "File:6502_schematic_sheet1-11-74.id.jpeg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041529",
+        "url": "https://web.archive.org/web/20141224041529id_/http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet1-11-74.id.jpeg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet1-11-74.id.jpeg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041937",
+        "url": "https://web.archive.org/web/20141224041937id_/http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet1-11-74.id.jpeg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet1-11-74.id.jpeg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_schematic_sheet1-11-74.jpeg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041528",
+        "url": "https://web.archive.org/web/20141224041528id_/http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet1-11-74.jpeg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet1-11-74.jpeg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041932",
+        "url": "https://web.archive.org/web/20141224041932id_/http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet1-11-74.jpeg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet1-11-74.jpeg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_schematic_sheet2-8-12-75.id.jpeg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041530",
+        "url": "https://web.archive.org/web/20141224041530id_/http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet2-8-12-75.id.jpeg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet2-8-12-75.id.jpeg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041940",
+        "url": "https://web.archive.org/web/20141224041940id_/http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet2-8-12-75.id.jpeg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet2-8-12-75.id.jpeg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_schematic_sheet2-8-12-75.jpeg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041526",
+        "url": "https://web.archive.org/web/20141224041526id_/http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet2-8-12-75.jpeg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet2-8-12-75.jpeg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041926",
+        "url": "https://web.archive.org/web/20141224041926id_/http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet2-8-12-75.jpeg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_schematic_sheet2-8-12-75.jpeg&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_sub.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041156",
+        "url": "https://web.archive.org/web/20141224041156id_/http://visual6502.org/wiki/index.php?title=File:6502_sub.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_sub.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041704",
+        "url": "https://web.archive.org/web/20141224041704id_/http://visual6502.org/wiki/index.php?title=File:6502_sub.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_sub.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_sub_algn_01_quarterSize.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041458",
+        "url": "https://web.archive.org/web/20141224041458id_/http://visual6502.org/wiki/index.php?title=File:6502_sub_algn_01_quarterSize.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_sub_algn_01_quarterSize.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041905",
+        "url": "https://web.archive.org/web/20141224041905id_/http://visual6502.org/wiki/index.php?title=File:6502_sub_algn_01_quarterSize.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_sub_algn_01_quarterSize.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_top.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041155",
+        "url": "https://web.archive.org/web/20141224041155id_/http://visual6502.org/wiki/index.php?title=File:6502_top.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_top.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041702",
+        "url": "https://web.archive.org/web/20141224041702id_/http://visual6502.org/wiki/index.php?title=File:6502_top.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_top.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6502_top_algn_01_quarterSize.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041456",
+        "url": "https://web.archive.org/web/20141224041456id_/http://visual6502.org/wiki/index.php?title=File:6502_top_algn_01_quarterSize.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_top_algn_01_quarterSize.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041900",
+        "url": "https://web.archive.org/web/20141224041900id_/http://visual6502.org/wiki/index.php?title=File:6502_top_algn_01_quarterSize.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6502_top_algn_01_quarterSize.png&action=edit"
+      }
+    },
+    {
+      "title": "File:6507-demo0.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041434",
+        "url": "https://web.archive.org/web/20141224041434id_/http://visual6502.org/wiki/index.php?title=File:6507-demo0.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507-demo0.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041813",
+        "url": "https://web.archive.org/web/20141224041813id_/http://visual6502.org/wiki/index.php?title=File:6507-demo0.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507-demo0.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6507-demo1.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041432",
+        "url": "https://web.archive.org/web/20141224041432id_/http://visual6502.org/wiki/index.php?title=File:6507-demo1.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507-demo1.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041810",
+        "url": "https://web.archive.org/web/20141224041810id_/http://visual6502.org/wiki/index.php?title=File:6507-demo1.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507-demo1.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6507_20x_top-000000r.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041441",
+        "url": "https://web.archive.org/web/20141224041441id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000000r.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000000r.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041832",
+        "url": "https://web.archive.org/web/20141224041832id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000000r.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000000r.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6507_20x_top-000003r.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041440",
+        "url": "https://web.archive.org/web/20141224041440id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000003r.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000003r.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041831",
+        "url": "https://web.archive.org/web/20141224041831id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000003r.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000003r.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6507_20x_top-000004r.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041439",
+        "url": "https://web.archive.org/web/20141224041439id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000004r.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000004r.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041827",
+        "url": "https://web.archive.org/web/20141224041827id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000004r.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000004r.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6507_20x_top-000007r.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041439",
+        "url": "https://web.archive.org/web/20141224041439id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000007r.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000007r.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041825",
+        "url": "https://web.archive.org/web/20141224041825id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000007r.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000007r.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:6507_20x_top-000008r.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041438",
+        "url": "https://web.archive.org/web/20141224041438id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000008r.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000008r.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041823",
+        "url": "https://web.archive.org/web/20141224041823id_/http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000008r.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:6507_20x_top-000008r.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:650X-CPS-pad.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041527",
+        "url": "https://web.archive.org/web/20141224041527id_/http://visual6502.org/wiki/index.php?title=File:650X-CPS-pad.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:650X-CPS-pad.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041929",
+        "url": "https://web.archive.org/web/20141224041929id_/http://visual6502.org/wiki/index.php?title=File:650X-CPS-pad.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:650X-CPS-pad.png&action=edit"
+      }
+    },
+    {
+      "title": "File:650X-onchipclocking.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041531",
+        "url": "https://web.archive.org/web/20141224041531id_/http://visual6502.org/wiki/index.php?title=File:650X-onchipclocking.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:650X-onchipclocking.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041945",
+        "url": "https://web.archive.org/web/20141224041945id_/http://visual6502.org/wiki/index.php?title=File:650X-onchipclocking.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:650X-onchipclocking.png&action=edit"
+      }
+    },
+    {
+      "title": "File:650X-revC-ROR-pla.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041531",
+        "url": "https://web.archive.org/web/20141224041531id_/http://visual6502.org/wiki/index.php?title=File:650X-revC-ROR-pla.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:650X-revC-ROR-pla.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041946",
+        "url": "https://web.archive.org/web/20141224041946id_/http://visual6502.org/wiki/index.php?title=File:650X-revC-ROR-pla.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:650X-revC-ROR-pla.png&action=edit"
+      }
+    },
+    {
+      "title": "File:68000_vec_annot.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224040907",
+        "url": "https://web.archive.org/web/20141224040907id_/http://visual6502.org/wiki/index.php?title=File:68000_vec_annot.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:68000_vec_annot.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041513",
+        "url": "https://web.archive.org/web/20141224041513id_/http://visual6502.org/wiki/index.php?title=File:68000_vec_annot.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:68000_vec_annot.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:ARM1-LeeSmith.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041526",
+        "url": "https://web.archive.org/web/20141224041526id_/http://visual6502.org/wiki/index.php?title=File:ARM1-LeeSmith.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:ARM1-LeeSmith.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041925",
+        "url": "https://web.archive.org/web/20141224041925id_/http://visual6502.org/wiki/index.php?title=File:ARM1-LeeSmith.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:ARM1-LeeSmith.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:ARM1_promo_large.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041532",
+        "url": "https://web.archive.org/web/20141224041532id_/http://visual6502.org/wiki/index.php?title=File:ARM1_promo_large.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:ARM1_promo_large.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041948",
+        "url": "https://web.archive.org/web/20141224041948id_/http://visual6502.org/wiki/index.php?title=File:ARM1_promo_large.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:ARM1_promo_large.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_1.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041402",
+        "url": "https://web.archive.org/web/20141224041402id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_1.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_1.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041751",
+        "url": "https://web.archive.org/web/20141224041751id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_1.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_1.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_1A.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041404",
+        "url": "https://web.archive.org/web/20141224041404id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_1A.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_1A.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041756",
+        "url": "https://web.archive.org/web/20141224041756id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_1A.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_1A.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_1B.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041404",
+        "url": "https://web.archive.org/web/20141224041404id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_1B.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_1B.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041759",
+        "url": "https://web.archive.org/web/20141224041759id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_1B.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_1B.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_2.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041402",
+        "url": "https://web.archive.org/web/20141224041402id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_2.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_2.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041749",
+        "url": "https://web.archive.org/web/20141224041749id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_2.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_2.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_3.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041401",
+        "url": "https://web.archive.org/web/20141224041401id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_3.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_3.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041746",
+        "url": "https://web.archive.org/web/20141224041746id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_3.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_3.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_3A.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041359",
+        "url": "https://web.archive.org/web/20141224041359id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_3A.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_3A.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041737",
+        "url": "https://web.archive.org/web/20141224041737id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_3A.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_3A.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_4.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041404",
+        "url": "https://web.archive.org/web/20141224041404id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_4.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_4.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041757",
+        "url": "https://web.archive.org/web/20141224041757id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_4.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_4.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_5.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041401",
+        "url": "https://web.archive.org/web/20141224041401id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_5.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_5.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041743",
+        "url": "https://web.archive.org/web/20141224041743id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_5.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_5.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_5A.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041401",
+        "url": "https://web.archive.org/web/20141224041401id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_5A.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_5A.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041745",
+        "url": "https://web.archive.org/web/20141224041745id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_5A.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_5A.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_6.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041359",
+        "url": "https://web.archive.org/web/20141224041359id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_6.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_6.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041738",
+        "url": "https://web.archive.org/web/20141224041738id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_6.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_6.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_6A.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041400",
+        "url": "https://web.archive.org/web/20141224041400id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_6A.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_6A.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041741",
+        "url": "https://web.archive.org/web/20141224041741id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_6A.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_6A.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_6B.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20130116111134",
+        "url": "https://web.archive.org/web/20130116111134id_/http://www.visual6502.org/wiki/index.php?title=File:Atari_6507_6B.jpg",
+        "original": "http://www.visual6502.org/wiki/index.php?title=File:Atari_6507_6B.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041736",
+        "url": "https://web.archive.org/web/20141224041736id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_6B.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_6B.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_7.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041401",
+        "url": "https://web.archive.org/web/20141224041401id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041743",
+        "url": "https://web.archive.org/web/20141224041743id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_7A.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041403",
+        "url": "https://web.archive.org/web/20141224041403id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7A.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7A.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041755",
+        "url": "https://web.archive.org/web/20141224041755id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7A.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7A.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_7B.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041403",
+        "url": "https://web.archive.org/web/20141224041403id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7B.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7B.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041752",
+        "url": "https://web.archive.org/web/20141224041752id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7B.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7B.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_7C.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041405",
+        "url": "https://web.archive.org/web/20141224041405id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7C.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7C.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041802",
+        "url": "https://web.archive.org/web/20141224041802id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7C.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7C.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_7D.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041358",
+        "url": "https://web.archive.org/web/20141224041358id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7D.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7D.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041734",
+        "url": "https://web.archive.org/web/20141224041734id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_7D.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_7D.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_A.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041405",
+        "url": "https://web.archive.org/web/20141224041405id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_A.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_A.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041800",
+        "url": "https://web.archive.org/web/20141224041800id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_A.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_A.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_B.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041400",
+        "url": "https://web.archive.org/web/20141224041400id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_B.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_B.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041740",
+        "url": "https://web.archive.org/web/20141224041740id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_B.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_B.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_C.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041402",
+        "url": "https://web.archive.org/web/20141224041402id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_C.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_C.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041747",
+        "url": "https://web.archive.org/web/20141224041747id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_C.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_C.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Atari_6507_D.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041403",
+        "url": "https://web.archive.org/web/20141224041403id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_D.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_D.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041753",
+        "url": "https://web.archive.org/web/20141224041753id_/http://visual6502.org/wiki/index.php?title=File:Atari_6507_D.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Atari_6507_D.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Compare-r6502-balazs-2a03-dbe-short.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041530",
+        "url": "https://web.archive.org/web/20141224041530id_/http://visual6502.org/wiki/index.php?title=File:Compare-r6502-balazs-2a03-dbe-short.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Compare-r6502-balazs-2a03-dbe-short.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041942",
+        "url": "https://web.archive.org/web/20141224041942id_/http://visual6502.org/wiki/index.php?title=File:Compare-r6502-balazs-2a03-dbe-short.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Compare-r6502-balazs-2a03-dbe-short.png&action=edit"
+      }
+    },
+    {
+      "title": "File:Example.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041500",
+        "url": "https://web.archive.org/web/20141224041500id_/http://visual6502.org/wiki/index.php?title=File:Example.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Example.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041907",
+        "url": "https://web.archive.org/web/20141224041907id_/http://visual6502.org/wiki/index.php?title=File:Example.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Example.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:M6800-arch.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224040920",
+        "url": "https://web.archive.org/web/20141224040920id_/http://visual6502.org/wiki/index.php?title=File:M6800-arch.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:M6800-arch.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041515",
+        "url": "https://web.archive.org/web/20141224041515id_/http://visual6502.org/wiki/index.php?title=File:M6800-arch.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:M6800-arch.png&action=edit"
+      }
+    },
+    {
+      "title": "File:Mc6800a-Layout-svg-150h.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041527",
+        "url": "https://web.archive.org/web/20141224041527id_/http://visual6502.org/wiki/index.php?title=File:Mc6800a-Layout-svg-150h.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Mc6800a-Layout-svg-150h.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041928",
+        "url": "https://web.archive.org/web/20141224041928id_/http://visual6502.org/wiki/index.php?title=File:Mc6800a-Layout-svg-150h.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Mc6800a-Layout-svg-150h.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:NES-2A03-decimal-DAA-removed.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041448",
+        "url": "https://web.archive.org/web/20141224041448id_/http://visual6502.org/wiki/index.php?title=File:NES-2A03-decimal-DAA-removed.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:NES-2A03-decimal-DAA-removed.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041847",
+        "url": "https://web.archive.org/web/20141224041847id_/http://visual6502.org/wiki/index.php?title=File:NES-2A03-decimal-DAA-removed.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:NES-2A03-decimal-DAA-removed.png&action=edit"
+      }
+    },
+    {
+      "title": "File:Rca1802-control-reversed-small.gif",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041449",
+        "url": "https://web.archive.org/web/20141224041449id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-control-reversed-small.gif",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-control-reversed-small.gif"
+      },
+      "wikitext": {
+        "timestamp": "20141224041849",
+        "url": "https://web.archive.org/web/20141224041849id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-control-reversed-small.gif&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-control-reversed-small.gif&action=edit"
+      }
+    },
+    {
+      "title": "File:Rca1802-control-reversed.gif",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041453",
+        "url": "https://web.archive.org/web/20141224041453id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-control-reversed.gif",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-control-reversed.gif"
+      },
+      "wikitext": {
+        "timestamp": "20141224041846",
+        "url": "https://web.archive.org/web/20141224041846id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-control-reversed.gif&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-control-reversed.gif&action=edit"
+      }
+    },
+    {
+      "title": "File:Rca1802-detail-annotated.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224040946",
+        "url": "https://web.archive.org/web/20141224040946id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-detail-annotated.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-detail-annotated.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041629",
+        "url": "https://web.archive.org/web/20141224041629id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-detail-annotated.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-detail-annotated.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Rca1802-detail-nor4.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041525",
+        "url": "https://web.archive.org/web/20141224041525id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-detail-nor4.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-detail-nor4.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041923",
+        "url": "https://web.archive.org/web/20141224041923id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-detail-nor4.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-detail-nor4.png&action=edit"
+      }
+    },
+    {
+      "title": "File:Rca1802-detail.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041530",
+        "url": "https://web.archive.org/web/20141224041530id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-detail.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-detail.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041941",
+        "url": "https://web.archive.org/web/20141224041941id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-detail.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-detail.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Rca1802-detail2-nor4.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224040948",
+        "url": "https://web.archive.org/web/20141224040948id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-detail2-nor4.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-detail2-nor4.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041631",
+        "url": "https://web.archive.org/web/20141224041631id_/http://visual6502.org/wiki/index.php?title=File:Rca1802-detail2-nor4.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rca1802-detail2-nor4.png&action=edit"
+      }
+    },
+    {
+      "title": "File:Rdy-sync-no-via-2A03.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041528",
+        "url": "https://web.archive.org/web/20141224041528id_/http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-2A03.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-2A03.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041930",
+        "url": "https://web.archive.org/web/20141224041930id_/http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-2A03.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-2A03.png&action=edit"
+      }
+    },
+    {
+      "title": "File:Rdy-sync-no-via-6502d-jssim.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041528",
+        "url": "https://web.archive.org/web/20141224041528id_/http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-6502d-jssim.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-6502d-jssim.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041931",
+        "url": "https://web.archive.org/web/20141224041931id_/http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-6502d-jssim.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-6502d-jssim.png&action=edit"
+      }
+    },
+    {
+      "title": "File:Rdy-sync-no-via-R6502-balazs.png",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041531",
+        "url": "https://web.archive.org/web/20141224041531id_/http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-R6502-balazs.png",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-R6502-balazs.png"
+      },
+      "wikitext": {
+        "timestamp": "20141224041943",
+        "url": "https://web.archive.org/web/20141224041943id_/http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-R6502-balazs.png&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Rdy-sync-no-via-R6502-balazs.png&action=edit"
+      }
+    },
+    {
+      "title": "File:Stack_reg_high2_SPVTB.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041440",
+        "url": "https://web.archive.org/web/20141224041440id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_SPVTB.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_SPVTB.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041828",
+        "url": "https://web.archive.org/web/20141224041828id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_SPVTB.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_SPVTB.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Stack_reg_high2_sub.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041440",
+        "url": "https://web.archive.org/web/20141224041440id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_sub.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_sub.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041831",
+        "url": "https://web.archive.org/web/20141224041831id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_sub.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_sub.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Stack_reg_high2_subTied.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041438",
+        "url": "https://web.archive.org/web/20141224041438id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_subTied.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_subTied.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041822",
+        "url": "https://web.archive.org/web/20141224041822id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_subTied.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_subTied.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Stack_reg_high2_top.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041439",
+        "url": "https://web.archive.org/web/20141224041439id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_top.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_top.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041825",
+        "url": "https://web.archive.org/web/20141224041825id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_top.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_top.jpg&action=edit"
+      }
+    },
+    {
+      "title": "File:Stack_reg_high2_vec.jpg",
+      "namespace": "File",
+      "rendered": {
+        "timestamp": "20141224041438",
+        "url": "https://web.archive.org/web/20141224041438id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_vec.jpg",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_vec.jpg"
+      },
+      "wikitext": {
+        "timestamp": "20141224041820",
+        "url": "https://web.archive.org/web/20141224041820id_/http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_vec.jpg&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=File:Stack_reg_high2_vec.jpg&action=edit"
+      }
+    },
+    {
+      "title": "Fujitsu",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041249",
+        "url": "https://web.archive.org/web/20141224041249id_/http://visual6502.org/wiki/index.php?title=Fujitsu",
+        "original": "http://visual6502.org/wiki/index.php?title=Fujitsu"
+      },
+      "wikitext": {
+        "timestamp": "20141224041717",
+        "url": "https://web.archive.org/web/20141224041717id_/http://visual6502.org/wiki/index.php?title=Fujitsu&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Fujitsu&action=edit"
+      }
+    },
+    {
+      "title": "General_Instrument",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141021230431",
+        "url": "https://web.archive.org/web/20141021230431id_/http://visual6502.org:80/wiki/index.php?title=General_Instrument",
+        "original": "http://visual6502.org:80/wiki/index.php?title=General_Instrument"
+      },
+      "wikitext": {
+        "timestamp": "20141224040859",
+        "url": "https://web.archive.org/web/20141224040859id_/http://visual6502.org/wiki/index.php?title=General_Instrument&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=General_Instrument&action=edit"
+      }
+    },
+    {
+      "title": "Hanson's_Block_Diagram",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101208054103",
+        "url": "https://web.archive.org/web/20101208054103id_/http://visual6502.org:80/wiki/index.php?title=Hanson%27s_Block_Diagram",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Hanson%27s_Block_Diagram"
+      },
+      "wikitext": {
+        "timestamp": "20141224041405",
+        "url": "https://web.archive.org/web/20141224041405id_/http://visual6502.org/wiki/index.php?title=Hanson%27s_Block_Diagram&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Hanson%27s_Block_Diagram&action=edit"
+      }
+    },
+    {
+      "title": "Help:Contents",
+      "namespace": "Help",
+      "rendered": {
+        "timestamp": "20110912101723",
+        "url": "https://web.archive.org/web/20110912101723id_/http://visual6502.org:80/wiki/index.php?title=Help:Contents",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Help:Contents"
+      },
+      "wikitext": {
+        "timestamp": "20141224040904",
+        "url": "https://web.archive.org/web/20141224040904id_/http://visual6502.org/wiki/index.php?title=Help:Contents&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Help:Contents&action=edit"
+      }
+    },
+    {
+      "title": "Help:Editing",
+      "namespace": "Help",
+      "rendered": {
+        "timestamp": "20141224041545",
+        "url": "https://web.archive.org/web/20141224041545id_/http://visual6502.org/wiki/index.php?title=Help:Editing",
+        "original": "http://visual6502.org/wiki/index.php?title=Help:Editing"
+      },
+      "wikitext": {
+        "timestamp": "20141224042022",
+        "url": "https://web.archive.org/web/20141224042022id_/http://visual6502.org/wiki/index.php?title=Help:Editing&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Help:Editing&action=edit"
+      }
+    },
+    {
+      "title": "Hitachi",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041300",
+        "url": "https://web.archive.org/web/20141224041300id_/http://visual6502.org/wiki/index.php?title=Hitachi",
+        "original": "http://visual6502.org/wiki/index.php?title=Hitachi"
+      },
+      "wikitext": {
+        "timestamp": "20141224041724",
+        "url": "https://web.archive.org/web/20141224041724id_/http://visual6502.org/wiki/index.php?title=Hitachi&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Hitachi&action=edit"
+      }
+    },
+    {
+      "title": "Incrementers_and_adders",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041302",
+        "url": "https://web.archive.org/web/20141224041302id_/http://visual6502.org/wiki/index.php?title=Incrementers_and_adders",
+        "original": "http://visual6502.org/wiki/index.php?title=Incrementers_and_adders"
+      },
+      "wikitext": {
+        "timestamp": "20141224041725",
+        "url": "https://web.archive.org/web/20141224041725id_/http://visual6502.org/wiki/index.php?title=Incrementers_and_adders&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Incrementers_and_adders&action=edit"
+      }
+    },
+    {
+      "title": "Inmos",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041134",
+        "url": "https://web.archive.org/web/20141224041134id_/http://visual6502.org/wiki/index.php?title=Inmos",
+        "original": "http://visual6502.org/wiki/index.php?title=Inmos"
+      },
+      "wikitext": {
+        "timestamp": "20141224041640",
+        "url": "https://web.archive.org/web/20141224041640id_/http://visual6502.org/wiki/index.php?title=Inmos&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Inmos&action=edit"
+      }
+    },
+    {
+      "title": "Intel",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041153",
+        "url": "https://web.archive.org/web/20141224041153id_/http://visual6502.org/wiki/index.php?title=Intel",
+        "original": "http://visual6502.org/wiki/index.php?title=Intel"
+      },
+      "wikitext": {
+        "timestamp": "20141224041659",
+        "url": "https://web.archive.org/web/20141224041659id_/http://visual6502.org/wiki/index.php?title=Intel&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Intel&action=edit"
+      }
+    },
+    {
+      "title": "JssimUserHelp",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101208035122",
+        "url": "https://web.archive.org/web/20101208035122id_/http://visual6502.org:80/wiki/index.php?title=JssimUserHelp",
+        "original": "http://visual6502.org:80/wiki/index.php?title=JssimUserHelp"
+      },
+      "wikitext": {
+        "timestamp": "20141224041055",
+        "url": "https://web.archive.org/web/20141224041055id_/http://visual6502.org/wiki/index.php?title=JssimUserHelp&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=JssimUserHelp&action=edit"
+      }
+    },
+    {
+      "title": "MOS_6502",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140828224008",
+        "url": "https://web.archive.org/web/20140828224008id_/http://visual6502.org/wiki/index.php?title=MOS_6502",
+        "original": "http://visual6502.org/wiki/index.php?title=MOS_6502"
+      },
+      "wikitext": {
+        "timestamp": "20141224040828",
+        "url": "https://web.archive.org/web/20141224040828id_/http://visual6502.org/wiki/index.php?title=MOS_6502&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=MOS_6502&action=edit"
+      }
+    },
+    {
+      "title": "MOS_Technnology",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041250",
+        "url": "https://web.archive.org/web/20141224041250id_/http://visual6502.org/wiki/index.php?title=MOS_Technnology",
+        "original": "http://visual6502.org/wiki/index.php?title=MOS_Technnology"
+      },
+      "wikitext": {
+        "timestamp": "20141224041912",
+        "url": "https://web.archive.org/web/20141224041912id_/http://visual6502.org/wiki/index.php?title=MOS_Technnology&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=MOS_Technnology&action=edit"
+      }
+    },
+    {
+      "title": "Main_Page",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101206150125",
+        "url": "https://web.archive.org/web/20101206150125id_/http://visual6502.org:80/wiki/index.php?title=Main_Page",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Main_Page"
+      },
+      "wikitext": {
+        "timestamp": "20101208054108",
+        "url": "https://web.archive.org/web/20101208054108id_/http://visual6502.org:80/wiki/index.php?title=Main_Page&action=edit",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Main_Page&action=edit"
+      }
+    },
+    {
+      "title": "MediaWiki:Disambiguationspage",
+      "namespace": "MediaWiki",
+      "rendered": {
+        "timestamp": "20141224041535",
+        "url": "https://web.archive.org/web/20141224041535id_/http://visual6502.org/wiki/index.php?title=MediaWiki:Disambiguationspage",
+        "original": "http://visual6502.org/wiki/index.php?title=MediaWiki:Disambiguationspage"
+      },
+      "wikitext": {
+        "timestamp": "20141224041952",
+        "url": "https://web.archive.org/web/20141224041952id_/http://visual6502.org/wiki/index.php?title=MediaWiki:Disambiguationspage&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=MediaWiki:Disambiguationspage&action=edit"
+      }
+    },
+    {
+      "title": "Motorola",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041153",
+        "url": "https://web.archive.org/web/20141224041153id_/http://visual6502.org/wiki/index.php?title=Motorola",
+        "original": "http://visual6502.org/wiki/index.php?title=Motorola"
+      },
+      "wikitext": {
+        "timestamp": "20141224041700",
+        "url": "https://web.archive.org/web/20141224041700id_/http://visual6502.org/wiki/index.php?title=Motorola&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Motorola&action=edit"
+      }
+    },
+    {
+      "title": "Motorola_6800",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110901163023",
+        "url": "https://web.archive.org/web/20110901163023id_/http://visual6502.org/wiki/index.php?title=Motorola_6800",
+        "original": "http://visual6502.org/wiki/index.php?title=Motorola_6800"
+      },
+      "wikitext": {
+        "timestamp": "20141224040918",
+        "url": "https://web.archive.org/web/20141224040918id_/http://visual6502.org/wiki/index.php?title=Motorola_6800&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Motorola_6800&action=edit"
+      }
+    },
+    {
+      "title": "Motorola_68000",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110912031325",
+        "url": "https://web.archive.org/web/20110912031325id_/http://visual6502.org:80/wiki/index.php?title=Motorola_68000",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Motorola_68000"
+      },
+      "wikitext": {
+        "timestamp": "20141224040907",
+        "url": "https://web.archive.org/web/20141224040907id_/http://visual6502.org/wiki/index.php?title=Motorola_68000&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Motorola_68000&action=edit"
+      }
+    },
+    {
+      "title": "NEC",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041254",
+        "url": "https://web.archive.org/web/20141224041254id_/http://visual6502.org/wiki/index.php?title=NEC",
+        "original": "http://visual6502.org/wiki/index.php?title=NEC"
+      },
+      "wikitext": {
+        "timestamp": "20141224041720",
+        "url": "https://web.archive.org/web/20141224041720id_/http://visual6502.org/wiki/index.php?title=NEC&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=NEC&action=edit"
+      }
+    },
+    {
+      "title": "NMOS_Depletion_Mode_Transistors",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20130116111130",
+        "url": "https://web.archive.org/web/20130116111130id_/http://visual6502.org/wiki/index.php?title=NMOS_Depletion_Mode_Transistors",
+        "original": "http://visual6502.org/wiki/index.php?title=NMOS_Depletion_Mode_Transistors"
+      },
+      "wikitext": {
+        "timestamp": "20141224041658",
+        "url": "https://web.archive.org/web/20141224041658id_/http://visual6502.org/wiki/index.php?title=NMOS_Depletion_Mode_Transistors&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=NMOS_Depletion_Mode_Transistors&action=edit"
+      }
+    },
+    {
+      "title": "National_Semiconductor",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041257",
+        "url": "https://web.archive.org/web/20141224041257id_/http://visual6502.org/wiki/index.php?title=National_Semiconductor",
+        "original": "http://visual6502.org/wiki/index.php?title=National_Semiconductor"
+      },
+      "wikitext": {
+        "timestamp": "20141224041721",
+        "url": "https://web.archive.org/web/20141224041721id_/http://visual6502.org/wiki/index.php?title=National_Semiconductor&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=National_Semiconductor&action=edit"
+      }
+    },
+    {
+      "title": "Nintendo",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041301",
+        "url": "https://web.archive.org/web/20141224041301id_/http://visual6502.org/wiki/index.php?title=Nintendo",
+        "original": "http://visual6502.org/wiki/index.php?title=Nintendo"
+      },
+      "wikitext": {
+        "timestamp": "20141224041724",
+        "url": "https://web.archive.org/web/20141224041724id_/http://visual6502.org/wiki/index.php?title=Nintendo&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Nintendo&action=edit"
+      }
+    },
+    {
+      "title": "Opcodes",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101208053623",
+        "url": "https://web.archive.org/web/20101208053623id_/http://visual6502.org:80/wiki/index.php?title=Opcodes",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Opcodes"
+      },
+      "wikitext": {
+        "timestamp": "20141224041538",
+        "url": "https://web.archive.org/web/20141224041538id_/http://visual6502.org/wiki/index.php?title=Opcodes&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Opcodes&action=edit"
+      }
+    },
+    {
+      "title": "Opcodes.txt",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041257",
+        "url": "https://web.archive.org/web/20141224041257id_/http://visual6502.org/wiki/index.php?title=Opcodes.txt",
+        "original": "http://visual6502.org/wiki/index.php?title=Opcodes.txt"
+      },
+      "wikitext": {
+        "timestamp": "20141224041957",
+        "url": "https://web.archive.org/web/20141224041957id_/http://visual6502.org/wiki/index.php?title=Opcodes.txt&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Opcodes.txt&action=edit"
+      }
+    },
+    {
+      "title": "Other_Chip_Image_Sites",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140828230859",
+        "url": "https://web.archive.org/web/20140828230859id_/http://visual6502.org/wiki/index.php?title=Other_Chip_Image_Sites",
+        "original": "http://visual6502.org/wiki/index.php?title=Other_Chip_Image_Sites"
+      },
+      "wikitext": {
+        "timestamp": "20141224040752",
+        "url": "https://web.archive.org/web/20141224040752id_/http://visual6502.org/wiki/index.php?title=Other_Chip_Image_Sites&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Other_Chip_Image_Sites&action=edit"
+      }
+    },
+    {
+      "title": "Photos_of_MOS_6502D",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110912150419",
+        "url": "https://web.archive.org/web/20110912150419id_/http://visual6502.org:80/wiki/index.php?title=Photos_of_MOS_6502D",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Photos_of_MOS_6502D"
+      },
+      "wikitext": {
+        "timestamp": "20141224041155",
+        "url": "https://web.archive.org/web/20141224041155id_/http://visual6502.org/wiki/index.php?title=Photos_of_MOS_6502D&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Photos_of_MOS_6502D&action=edit"
+      }
+    },
+    {
+      "title": "Photos_of_R6502",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20101208054138",
+        "url": "https://web.archive.org/web/20101208054138id_/http://visual6502.org:80/wiki/index.php?title=Photos_of_R6502",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Photos_of_R6502"
+      },
+      "wikitext": {
+        "timestamp": "20141224041442",
+        "url": "https://web.archive.org/web/20141224041442id_/http://visual6502.org/wiki/index.php?title=Photos_of_R6502&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Photos_of_R6502&action=edit"
+      }
+    },
+    {
+      "title": "PolygonCaptureProgress",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041253",
+        "url": "https://web.archive.org/web/20141224041253id_/http://visual6502.org/wiki/index.php?title=PolygonCaptureProgress",
+        "original": "http://visual6502.org/wiki/index.php?title=PolygonCaptureProgress"
+      },
+      "wikitext": {
+        "timestamp": "20141224041719",
+        "url": "https://web.archive.org/web/20141224041719id_/http://visual6502.org/wiki/index.php?title=PolygonCaptureProgress&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=PolygonCaptureProgress&action=edit"
+      }
+    },
+    {
+      "title": "RCA_1802E",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110728164049",
+        "url": "https://web.archive.org/web/20110728164049id_/http://www.visual6502.org/wiki/index.php?title=RCA_1802E",
+        "original": "http://www.visual6502.org/wiki/index.php?title=RCA_1802E"
+      },
+      "wikitext": {
+        "timestamp": "20141224040946",
+        "url": "https://web.archive.org/web/20141224040946id_/http://visual6502.org/wiki/index.php?title=RCA_1802E&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=RCA_1802E&action=edit"
+      }
+    },
+    {
+      "title": "Rockwell",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041153",
+        "url": "https://web.archive.org/web/20141224041153id_/http://visual6502.org/wiki/index.php?title=Rockwell",
+        "original": "http://visual6502.org/wiki/index.php?title=Rockwell"
+      },
+      "wikitext": {
+        "timestamp": "20141224041658",
+        "url": "https://web.archive.org/web/20141224041658id_/http://visual6502.org/wiki/index.php?title=Rockwell&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Rockwell&action=edit"
+      }
+    },
+    {
+      "title": "SGS_Thomson",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20111206025253",
+        "url": "https://web.archive.org/web/20111206025253id_/http://visual6502.org:80/wiki/index.php?title=SGS_Thomson",
+        "original": "http://visual6502.org:80/wiki/index.php?title=SGS_Thomson"
+      },
+      "wikitext": {
+        "timestamp": "20141224041720",
+        "url": "https://web.archive.org/web/20141224041720id_/http://visual6502.org/wiki/index.php?title=SGS_Thomson&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=SGS_Thomson&action=edit"
+      }
+    },
+    {
+      "title": "SMC",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20140926065745",
+        "url": "https://web.archive.org/web/20140926065745id_/http://visual6502.org/wiki/index.php?title=SMC",
+        "original": "http://visual6502.org/wiki/index.php?title=SMC"
+      },
+      "wikitext": {
+        "timestamp": "20141224041653",
+        "url": "https://web.archive.org/web/20141224041653id_/http://visual6502.org/wiki/index.php?title=SMC&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=SMC&action=edit"
+      }
+    },
+    {
+      "title": "Sandbox",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041152",
+        "url": "https://web.archive.org/web/20141224041152id_/http://visual6502.org/wiki/index.php?title=Sandbox",
+        "original": "http://visual6502.org/wiki/index.php?title=Sandbox"
+      },
+      "wikitext": {
+        "timestamp": "20141224041657",
+        "url": "https://web.archive.org/web/20141224041657id_/http://visual6502.org/wiki/index.php?title=Sandbox&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Sandbox&action=edit"
+      }
+    },
+    {
+      "title": "Siemens",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041258",
+        "url": "https://web.archive.org/web/20141224041258id_/http://visual6502.org/wiki/index.php?title=Siemens",
+        "original": "http://visual6502.org/wiki/index.php?title=Siemens"
+      },
+      "wikitext": {
+        "timestamp": "20141224041722",
+        "url": "https://web.archive.org/web/20141224041722id_/http://visual6502.org/wiki/index.php?title=Siemens&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Siemens&action=edit"
+      }
+    },
+    {
+      "title": "Signetics",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041255",
+        "url": "https://web.archive.org/web/20141224041255id_/http://visual6502.org/wiki/index.php?title=Signetics",
+        "original": "http://visual6502.org/wiki/index.php?title=Signetics"
+      },
+      "wikitext": {
+        "timestamp": "20141224041721",
+        "url": "https://web.archive.org/web/20141224041721id_/http://visual6502.org/wiki/index.php?title=Signetics&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Signetics&action=edit"
+      }
+    },
+    {
+      "title": "Sinclair",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041133",
+        "url": "https://web.archive.org/web/20141224041133id_/http://visual6502.org/wiki/index.php?title=Sinclair",
+        "original": "http://visual6502.org/wiki/index.php?title=Sinclair"
+      },
+      "wikitext": {
+        "timestamp": "20141224041638",
+        "url": "https://web.archive.org/web/20141224041638id_/http://visual6502.org/wiki/index.php?title=Sinclair&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Sinclair&action=edit"
+      }
+    },
+    {
+      "title": "Synertek",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041303",
+        "url": "https://web.archive.org/web/20141224041303id_/http://visual6502.org/wiki/index.php?title=Synertek",
+        "original": "http://visual6502.org/wiki/index.php?title=Synertek"
+      },
+      "wikitext": {
+        "timestamp": "20141224041726",
+        "url": "https://web.archive.org/web/20141224041726id_/http://visual6502.org/wiki/index.php?title=Synertek&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Synertek&action=edit"
+      }
+    },
+    {
+      "title": "Talk:JssimUserHelp",
+      "namespace": "Talk",
+      "rendered": {
+        "timestamp": "20141224041056",
+        "url": "https://web.archive.org/web/20141224041056id_/http://visual6502.org/wiki/index.php?title=Talk:JssimUserHelp",
+        "original": "http://visual6502.org/wiki/index.php?title=Talk:JssimUserHelp"
+      },
+      "wikitext": {
+        "timestamp": "20141224041636",
+        "url": "https://web.archive.org/web/20141224041636id_/http://visual6502.org/wiki/index.php?title=Talk:JssimUserHelp&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Talk:JssimUserHelp&action=edit"
+      }
+    },
+    {
+      "title": "Tektronix",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041303",
+        "url": "https://web.archive.org/web/20141224041303id_/http://visual6502.org/wiki/index.php?title=Tektronix",
+        "original": "http://visual6502.org/wiki/index.php?title=Tektronix"
+      },
+      "wikitext": {
+        "timestamp": "20141224041725",
+        "url": "https://web.archive.org/web/20141224041725id_/http://visual6502.org/wiki/index.php?title=Tektronix&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Tektronix&action=edit"
+      }
+    },
+    {
+      "title": "Template:Endnote",
+      "namespace": "Template",
+      "rendered": {
+        "timestamp": "20141224041613",
+        "url": "https://web.archive.org/web/20141224041613id_/http://visual6502.org/wiki/index.php?title=Template:Endnote",
+        "original": "http://visual6502.org/wiki/index.php?title=Template:Endnote"
+      },
+      "wikitext": {
+        "timestamp": "20141224041834",
+        "url": "https://web.archive.org/web/20141224041834id_/http://visual6502.org/wiki/index.php?title=Template:Endnote&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Template:Endnote&action=edit"
+      }
+    },
+    {
+      "title": "Template:Note",
+      "namespace": "Template",
+      "rendered": {
+        "timestamp": "20141224041536",
+        "url": "https://web.archive.org/web/20141224041536id_/http://visual6502.org/wiki/index.php?title=Template:Note",
+        "original": "http://visual6502.org/wiki/index.php?title=Template:Note"
+      },
+      "wikitext": {
+        "timestamp": "20141224041835",
+        "url": "https://web.archive.org/web/20141224041835id_/http://visual6502.org/wiki/index.php?title=Template:Note&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Template:Note&action=edit"
+      }
+    },
+    {
+      "title": "Template:Ref",
+      "namespace": "Template",
+      "rendered": {
+        "timestamp": "20141224041536",
+        "url": "https://web.archive.org/web/20141224041536id_/http://visual6502.org/wiki/index.php?title=Template:Ref",
+        "original": "http://visual6502.org/wiki/index.php?title=Template:Ref"
+      },
+      "wikitext": {
+        "timestamp": "20141224041835",
+        "url": "https://web.archive.org/web/20141224041835id_/http://visual6502.org/wiki/index.php?title=Template:Ref&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Template:Ref&action=edit"
+      }
+    },
+    {
+      "title": "Template_talk:Note",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041954",
+        "url": "https://web.archive.org/web/20141224041954id_/http://visual6502.org/wiki/index.php?title=Template_talk:Note",
+        "original": "http://visual6502.org/wiki/index.php?title=Template_talk:Note"
+      },
+      "wikitext": {
+        "timestamp": "20141224042256",
+        "url": "https://web.archive.org/web/20141224042256id_/http://visual6502.org/wiki/index.php?title=Template_talk:Note&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Template_talk:Note&action=edit"
+      }
+    },
+    {
+      "title": "Template_talk:Ref",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041953",
+        "url": "https://web.archive.org/web/20141224041953id_/http://visual6502.org/wiki/index.php?title=Template_talk:Ref",
+        "original": "http://visual6502.org/wiki/index.php?title=Template_talk:Ref"
+      },
+      "wikitext": {
+        "timestamp": "20141224042255",
+        "url": "https://web.archive.org/web/20141224042255id_/http://visual6502.org/wiki/index.php?title=Template_talk:Ref&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Template_talk:Ref&action=edit"
+      }
+    },
+    {
+      "title": "Texas_Instruments",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20120424074444",
+        "url": "https://web.archive.org/web/20120424074444id_/http://visual6502.org/wiki/index.php?title=Texas_Instruments",
+        "original": "http://visual6502.org/wiki/index.php?title=Texas_Instruments"
+      },
+      "wikitext": {
+        "timestamp": "20141224041700",
+        "url": "https://web.archive.org/web/20141224041700id_/http://visual6502.org/wiki/index.php?title=Texas_Instruments&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Texas_Instruments&action=edit"
+      }
+    },
+    {
+      "title": "The_ChipSim_Simulator",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041057",
+        "url": "https://web.archive.org/web/20141224041057id_/http://visual6502.org/wiki/index.php?title=The_ChipSim_Simulator",
+        "original": "http://visual6502.org/wiki/index.php?title=The_ChipSim_Simulator"
+      },
+      "wikitext": {
+        "timestamp": "20141224041637",
+        "url": "https://web.archive.org/web/20141224041637id_/http://visual6502.org/wiki/index.php?title=The_ChipSim_Simulator&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=The_ChipSim_Simulator&action=edit"
+      }
+    },
+    {
+      "title": "The_reverse_engineering_process",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110912085245",
+        "url": "https://web.archive.org/web/20110912085245id_/http://visual6502.org:80/wiki/index.php?title=The_reverse_engineering_process",
+        "original": "http://visual6502.org:80/wiki/index.php?title=The_reverse_engineering_process"
+      },
+      "wikitext": {
+        "timestamp": "20141224041157",
+        "url": "https://web.archive.org/web/20141224041157id_/http://visual6502.org/wiki/index.php?title=The_reverse_engineering_process&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=The_reverse_engineering_process&action=edit"
+      }
+    },
+    {
+      "title": "Toshiba",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041252",
+        "url": "https://web.archive.org/web/20141224041252id_/http://visual6502.org/wiki/index.php?title=Toshiba",
+        "original": "http://visual6502.org/wiki/index.php?title=Toshiba"
+      },
+      "wikitext": {
+        "timestamp": "20141224041718",
+        "url": "https://web.archive.org/web/20141224041718id_/http://visual6502.org/wiki/index.php?title=Toshiba&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Toshiba&action=edit"
+      }
+    },
+    {
+      "title": "User:AmyK",
+      "namespace": "User",
+      "rendered": {
+        "timestamp": "20141224041454",
+        "url": "https://web.archive.org/web/20141224041454id_/http://visual6502.org/wiki/index.php?title=User:AmyK",
+        "original": "http://visual6502.org/wiki/index.php?title=User:AmyK"
+      },
+      "wikitext": {
+        "timestamp": "20141224041856",
+        "url": "https://web.archive.org/web/20141224041856id_/http://visual6502.org/wiki/index.php?title=User:AmyK&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=User:AmyK&action=edit"
+      }
+    },
+    {
+      "title": "User:EdS",
+      "namespace": "User",
+      "rendered": {
+        "timestamp": "20141224040848",
+        "url": "https://web.archive.org/web/20141224040848id_/http://visual6502.org/wiki/index.php?title=User:EdS",
+        "original": "http://visual6502.org/wiki/index.php?title=User:EdS"
+      },
+      "wikitext": {
+        "timestamp": "20141224041447",
+        "url": "https://web.archive.org/web/20141224041447id_/http://visual6502.org/wiki/index.php?title=User:EdS&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=User:EdS&action=edit"
+      }
+    },
+    {
+      "title": "User:Keith",
+      "namespace": "User",
+      "rendered": {
+        "timestamp": "20141224040850",
+        "url": "https://web.archive.org/web/20141224040850id_/http://visual6502.org/wiki/index.php?title=User:Keith",
+        "original": "http://visual6502.org/wiki/index.php?title=User:Keith"
+      },
+      "wikitext": {
+        "timestamp": "20141224041501",
+        "url": "https://web.archive.org/web/20141224041501id_/http://visual6502.org/wiki/index.php?title=User:Keith&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=User:Keith&action=edit"
+      }
+    },
+    {
+      "title": "VisualChips:About",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110912095357",
+        "url": "https://web.archive.org/web/20110912095357id_/http://visual6502.org:80/wiki/index.php?title=VisualChips:About",
+        "original": "http://visual6502.org:80/wiki/index.php?title=VisualChips:About"
+      },
+      "wikitext": {
+        "timestamp": "20141224040846",
+        "url": "https://web.archive.org/web/20141224040846id_/http://visual6502.org/wiki/index.php?title=VisualChips:About&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=VisualChips:About&action=edit"
+      }
+    },
+    {
+      "title": "VisualChips:Community_portal",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110912032643",
+        "url": "https://web.archive.org/web/20110912032643id_/http://visual6502.org:80/wiki/index.php?title=VisualChips:Community_portal",
+        "original": "http://visual6502.org:80/wiki/index.php?title=VisualChips:Community_portal"
+      },
+      "wikitext": {
+        "timestamp": "20141224041001",
+        "url": "https://web.archive.org/web/20141224041001id_/http://visual6502.org/wiki/index.php?title=VisualChips:Community_portal&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=VisualChips:Community_portal&action=edit"
+      }
+    },
+    {
+      "title": "VisualChips:Current_events",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110911195950",
+        "url": "https://web.archive.org/web/20110911195950id_/http://visual6502.org:80/wiki/index.php?title=VisualChips:Current_events",
+        "original": "http://visual6502.org:80/wiki/index.php?title=VisualChips:Current_events"
+      },
+      "wikitext": {
+        "timestamp": "20141224040759",
+        "url": "https://web.archive.org/web/20141224040759id_/http://visual6502.org/wiki/index.php?title=VisualChips:Current_events&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=VisualChips:Current_events&action=edit"
+      }
+    },
+    {
+      "title": "WikiContributionPolicy",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110911210356",
+        "url": "https://web.archive.org/web/20110911210356id_/http://visual6502.org:80/wiki/index.php?title=WikiContributionPolicy",
+        "original": "http://visual6502.org:80/wiki/index.php?title=WikiContributionPolicy"
+      },
+      "wikitext": {
+        "timestamp": "20141224041247",
+        "url": "https://web.archive.org/web/20141224041247id_/http://visual6502.org/wiki/index.php?title=WikiContributionPolicy&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=WikiContributionPolicy&action=edit"
+      }
+    },
+    {
+      "title": "Z8400",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20110913045757",
+        "url": "https://web.archive.org/web/20110913045757id_/http://visual6502.org:80/wiki/index.php?title=Z8400",
+        "original": "http://visual6502.org:80/wiki/index.php?title=Z8400"
+      },
+      "wikitext": {
+        "timestamp": "20141224041305",
+        "url": "https://web.archive.org/web/20141224041305id_/http://visual6502.org/wiki/index.php?title=Z8400&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Z8400&action=edit"
+      }
+    },
+    {
+      "title": "Zilog",
+      "namespace": "(article)",
+      "rendered": {
+        "timestamp": "20141224041147",
+        "url": "https://web.archive.org/web/20141224041147id_/http://visual6502.org/wiki/index.php?title=Zilog",
+        "original": "http://visual6502.org/wiki/index.php?title=Zilog"
+      },
+      "wikitext": {
+        "timestamp": "20141224041652",
+        "url": "https://web.archive.org/web/20141224041652id_/http://visual6502.org/wiki/index.php?title=Zilog&action=edit",
+        "original": "http://visual6502.org/wiki/index.php?title=Zilog&action=edit"
+      }
+    }
+  ],
+  "uploads": [
+    {
+      "path": "/wiki/images/0/07/Atari_6507_7B.jpg",
+      "timestamp": "20141224041752",
+      "url": "https://web.archive.org/web/20141224041752id_/http://visual6502.org/wiki/images/0/07/Atari_6507_7B.jpg",
+      "mime": "image/jpeg",
+      "bytes": 714516
+    },
+    {
+      "path": "/wiki/images/0/0b/Atari_6507_A.jpg",
+      "timestamp": "20141224041801",
+      "url": "https://web.archive.org/web/20141224041801id_/http://visual6502.org/wiki/images/0/0b/Atari_6507_A.jpg",
+      "mime": "image/jpeg",
+      "bytes": 904738
+    },
+    {
+      "path": "/wiki/images/0/0b/Atari_6507_D.jpg",
+      "timestamp": "20141224041753",
+      "url": "https://web.archive.org/web/20141224041753id_/http://visual6502.org/wiki/images/0/0b/Atari_6507_D.jpg",
+      "mime": "image/jpeg",
+      "bytes": 762035
+    },
+    {
+      "path": "/wiki/images/0/0d/Stack_reg_high2_vec.jpg",
+      "timestamp": "20141224041618",
+      "url": "https://web.archive.org/web/20141224041618id_/http://visual6502.org/wiki/images/0/0d/Stack_reg_high2_vec.jpg",
+      "mime": "image/jpeg",
+      "bytes": 218854
+    },
+    {
+      "path": "/wiki/images/1/10/6502_schematic_sheet2-8-12-75.id.jpeg",
+      "timestamp": "20141224041621",
+      "url": "https://web.archive.org/web/20141224041621id_/http://visual6502.org/wiki/images/1/10/6502_schematic_sheet2-8-12-75.id.jpeg",
+      "mime": "image/jpeg",
+      "bytes": 397614
+    },
+    {
+      "path": "/wiki/images/1/12/Atari_6507_3.jpg",
+      "timestamp": "20141224041746",
+      "url": "https://web.archive.org/web/20141224041746id_/http://visual6502.org/wiki/images/1/12/Atari_6507_3.jpg",
+      "mime": "image/jpeg",
+      "bytes": 833247
+    },
+    {
+      "path": "/wiki/images/1/13/650X-CPS-pad.png",
+      "timestamp": "20140921043735",
+      "url": "https://web.archive.org/web/20140921043735id_/http://visual6502.org/wiki/images/1/13/650X-CPS-pad.png",
+      "mime": "image/png",
+      "bytes": 125963
+    },
+    {
+      "path": "/wiki/images/1/15/Stack_reg_high2_sub.jpg",
+      "timestamp": "20141224041616",
+      "url": "https://web.archive.org/web/20141224041616id_/http://visual6502.org/wiki/images/1/15/Stack_reg_high2_sub.jpg",
+      "mime": "image/jpeg",
+      "bytes": 211810
+    },
+    {
+      "path": "/wiki/images/1/1b/650X-onchipclocking.png",
+      "timestamp": "20141224041625",
+      "url": "https://web.archive.org/web/20141224041625id_/http://visual6502.org/wiki/images/1/1b/650X-onchipclocking.png",
+      "mime": "image/png",
+      "bytes": 352562
+    },
+    {
+      "path": "/wiki/images/2/29/Rca1802-control-reversed-small.gif",
+      "timestamp": "20140926081221",
+      "url": "https://web.archive.org/web/20140926081221id_/http://visual6502.org/wiki/images/2/29/Rca1802-control-reversed-small.gif",
+      "mime": "image/gif",
+      "bytes": 47475
+    },
+    {
+      "path": "/wiki/images/2/2c/Atari_6507_1A.jpg",
+      "timestamp": "20141224041756",
+      "url": "https://web.archive.org/web/20141224041756id_/http://visual6502.org/wiki/images/2/2c/Atari_6507_1A.jpg",
+      "mime": "image/jpeg",
+      "bytes": 927768
+    },
+    {
+      "path": "/wiki/images/3/36/6507_20x_top-000004r.jpg",
+      "timestamp": "20141224041617",
+      "url": "https://web.archive.org/web/20141224041617id_/http://visual6502.org/wiki/images/3/36/6507_20x_top-000004r.jpg",
+      "mime": "image/jpeg",
+      "bytes": 245160
+    },
+    {
+      "path": "/wiki/images/3/37/6502-fpga-c64-overview-IMG_1080.jpg",
+      "timestamp": "20141224041621",
+      "url": "https://web.archive.org/web/20141224041621id_/http://visual6502.org/wiki/images/3/37/6502-fpga-c64-overview-IMG_1080.jpg",
+      "mime": "image/jpeg",
+      "bytes": 277976
+    },
+    {
+      "path": "/wiki/images/3/3e/Atari_6507_1.jpg",
+      "timestamp": "20141224041750",
+      "url": "https://web.archive.org/web/20141224041750id_/http://visual6502.org/wiki/images/3/3e/Atari_6507_1.jpg",
+      "mime": "image/jpeg",
+      "bytes": 917091
+    },
+    {
+      "path": "/wiki/images/4/40/Rdy-sync-no-via-2A03.png",
+      "timestamp": "20141224041623",
+      "url": "https://web.archive.org/web/20141224041623id_/http://visual6502.org/wiki/images/4/40/Rdy-sync-no-via-2A03.png",
+      "mime": "image/png",
+      "bytes": 112951
+    },
+    {
+      "path": "/wiki/images/4/42/Rca1802-detail2-nor4.png",
+      "timestamp": "20110728164233",
+      "url": "https://web.archive.org/web/20110728164233id_/http://www.visual6502.org/wiki/images/4/42/Rca1802-detail2-nor4.png",
+      "mime": "image/png",
+      "bytes": 274261
+    },
+    {
+      "path": "/wiki/images/4/4e/Compare-r6502-balazs-2a03-dbe-short.png",
+      "timestamp": "20141224041626",
+      "url": "https://web.archive.org/web/20141224041626id_/http://visual6502.org/wiki/images/4/4e/Compare-r6502-balazs-2a03-dbe-short.png",
+      "mime": "image/png",
+      "bytes": 194924
+    },
+    {
+      "path": "/wiki/images/5/51/Atari_6507_7.jpg",
+      "timestamp": "20141224041742",
+      "url": "https://web.archive.org/web/20141224041742id_/http://visual6502.org/wiki/images/5/51/Atari_6507_7.jpg",
+      "mime": "image/jpeg",
+      "bytes": 821376
+    },
+    {
+      "path": "/wiki/images/5/56/650X-revC-ROR-pla.png",
+      "timestamp": "20140921043735",
+      "url": "https://web.archive.org/web/20140921043735id_/http://visual6502.org/wiki/images/5/56/650X-revC-ROR-pla.png",
+      "mime": "image/png",
+      "bytes": 62463
+    },
+    {
+      "path": "/wiki/images/5/58/6502-ipc-logic.png",
+      "timestamp": "20141224041615",
+      "url": "https://web.archive.org/web/20141224041615id_/http://visual6502.org/wiki/images/5/58/6502-ipc-logic.png",
+      "mime": "image/png",
+      "bytes": 20142
+    },
+    {
+      "path": "/wiki/images/5/59/6502_schematic_sheet1-11-74.jpeg",
+      "timestamp": "20141224041615",
+      "url": "https://web.archive.org/web/20141224041615id_/http://visual6502.org/wiki/images/5/59/6502_schematic_sheet1-11-74.jpeg",
+      "mime": "image/jpeg",
+      "bytes": 100256
+    },
+    {
+      "path": "/wiki/images/6/60/6502_top.png",
+      "timestamp": "20210211234728",
+      "url": "https://web.archive.org/web/20210211234728id_/http://visual6502.org/wiki/images/6/60/6502_top.png",
+      "mime": "image/png",
+      "bytes": 6944958
+    },
+    {
+      "path": "/wiki/images/6/62/1802_dpth.png",
+      "timestamp": "20141224040946",
+      "url": "https://web.archive.org/web/20141224040946id_/http://visual6502.org/wiki/images/6/62/1802_dpth.png",
+      "mime": "image/png",
+      "bytes": 158530
+    },
+    {
+      "path": "/wiki/images/6/64/Rca1802-control-reversed.gif",
+      "timestamp": "20141224040947",
+      "url": "https://web.archive.org/web/20141224040947id_/http://visual6502.org/wiki/images/6/64/Rca1802-control-reversed.gif",
+      "mime": "image/gif",
+      "bytes": 219266
+    },
+    {
+      "path": "/wiki/images/6/6a/6502_schematic_sheet2-8-12-75.jpeg",
+      "timestamp": "20141224041616",
+      "url": "https://web.archive.org/web/20141224041616id_/http://visual6502.org/wiki/images/6/6a/6502_schematic_sheet2-8-12-75.jpeg",
+      "mime": "image/jpeg",
+      "bytes": 384628
+    },
+    {
+      "path": "/wiki/images/6/6a/Atari_6507_1B.jpg",
+      "timestamp": "20141224041759",
+      "url": "https://web.archive.org/web/20141224041759id_/http://visual6502.org/wiki/images/6/6a/Atari_6507_1B.jpg",
+      "mime": "image/jpeg",
+      "bytes": 800506
+    },
+    {
+      "path": "/wiki/images/6/6e/6502-fpga-apple2-img_0040.jpg",
+      "timestamp": "20141224041622",
+      "url": "https://web.archive.org/web/20141224041622id_/http://visual6502.org/wiki/images/6/6e/6502-fpga-apple2-img_0040.jpg",
+      "mime": "image/jpeg",
+      "bytes": 2815182
+    },
+    {
+      "path": "/wiki/images/7/70/6502-fpga-vic20-img_0039.jpg",
+      "timestamp": "20141224041623",
+      "url": "https://web.archive.org/web/20141224041623id_/http://visual6502.org/wiki/images/7/70/6502-fpga-vic20-img_0039.jpg",
+      "mime": "image/jpeg",
+      "bytes": 2328651
+    },
+    {
+      "path": "/wiki/images/7/70/Stack_reg_high2_top.jpg",
+      "timestamp": "20141224041620",
+      "url": "https://web.archive.org/web/20141224041620id_/http://visual6502.org/wiki/images/7/70/Stack_reg_high2_top.jpg",
+      "mime": "image/jpeg",
+      "bytes": 404248
+    },
+    {
+      "path": "/wiki/images/7/75/6502-ipc-circuit.png",
+      "timestamp": "20141224041621",
+      "url": "https://web.archive.org/web/20141224041621id_/http://visual6502.org/wiki/images/7/75/6502-ipc-circuit.png",
+      "mime": "image/png",
+      "bytes": 19295
+    },
+    {
+      "path": "/wiki/images/7/76/6502-decimal-subtract-visual6502.png",
+      "timestamp": "20131217023558",
+      "url": "https://web.archive.org/web/20131217023558id_/http://visual6502.org/wiki/images/7/76/6502-decimal-subtract-visual6502.png",
+      "mime": "image/png",
+      "bytes": 119673
+    },
+    {
+      "path": "/wiki/images/7/77/Mc6800a-Layout-svg-150h.jpg",
+      "timestamp": "20110901163054",
+      "url": "https://web.archive.org/web/20110901163054id_/http://visual6502.org/wiki/images/7/77/Mc6800a-Layout-svg-150h.jpg",
+      "mime": "image/jpeg",
+      "bytes": 8166
+    },
+    {
+      "path": "/wiki/images/7/78/6502-decimal-DAA-removed-visual6502.png",
+      "timestamp": "20141224041619",
+      "url": "https://web.archive.org/web/20141224041619id_/http://visual6502.org/wiki/images/7/78/6502-decimal-DAA-removed-visual6502.png",
+      "mime": "image/png",
+      "bytes": 22655
+    },
+    {
+      "path": "/wiki/images/7/78/68000_vec_annot.jpg",
+      "timestamp": "20140926083231",
+      "url": "https://web.archive.org/web/20140926083231id_/http://visual6502.org/wiki/images/7/78/68000_vec_annot.jpg",
+      "mime": "image/jpeg",
+      "bytes": 781094
+    },
+    {
+      "path": "/wiki/images/8/85/Atari_6507_7A.jpg",
+      "timestamp": "20141224041755",
+      "url": "https://web.archive.org/web/20141224041755id_/http://visual6502.org/wiki/images/8/85/Atari_6507_7A.jpg",
+      "mime": "image/jpeg",
+      "bytes": 760841
+    },
+    {
+      "path": "/wiki/images/8/85/Atari_6507_7C.jpg",
+      "timestamp": "20141224041801",
+      "url": "https://web.archive.org/web/20141224041801id_/http://visual6502.org/wiki/images/8/85/Atari_6507_7C.jpg",
+      "mime": "image/jpeg",
+      "bytes": 727621
+    },
+    {
+      "path": "/wiki/images/8/87/Atari_6507_B.jpg",
+      "timestamp": "20141224041739",
+      "url": "https://web.archive.org/web/20141224041739id_/http://visual6502.org/wiki/images/8/87/Atari_6507_B.jpg",
+      "mime": "image/jpeg",
+      "bytes": 780160
+    },
+    {
+      "path": "/wiki/images/8/89/6507_20x_top-000008r.jpg",
+      "timestamp": "20141224041618",
+      "url": "https://web.archive.org/web/20141224041618id_/http://visual6502.org/wiki/images/8/89/6507_20x_top-000008r.jpg",
+      "mime": "image/jpeg",
+      "bytes": 258389
+    },
+    {
+      "path": "/wiki/images/8/89/NES-2A03-decimal-DAA-removed.png",
+      "timestamp": "20131217023347",
+      "url": "https://web.archive.org/web/20131217023347id_/http://visual6502.org/wiki/images/8/89/NES-2A03-decimal-DAA-removed.png",
+      "mime": "image/png",
+      "bytes": 38834
+    },
+    {
+      "path": "/wiki/images/8/8b/Atari_6507_5A.jpg",
+      "timestamp": "20141224041744",
+      "url": "https://web.archive.org/web/20141224041744id_/http://visual6502.org/wiki/images/8/8b/Atari_6507_5A.jpg",
+      "mime": "image/jpeg",
+      "bytes": 728153
+    },
+    {
+      "path": "/wiki/images/9/97/6502_photo_wrong-clock-annot.jpg",
+      "timestamp": "20141224041627",
+      "url": "https://web.archive.org/web/20141224041627id_/http://visual6502.org/wiki/images/9/97/6502_photo_wrong-clock-annot.jpg",
+      "mime": "image/jpeg",
+      "bytes": 45537
+    },
+    {
+      "path": "/wiki/images/9/97/Atari_6507_7D.jpg",
+      "timestamp": "20141224041734",
+      "url": "https://web.archive.org/web/20141224041734id_/http://visual6502.org/wiki/images/9/97/Atari_6507_7D.jpg",
+      "mime": "image/jpeg",
+      "bytes": 710954
+    },
+    {
+      "path": "/wiki/images/9/9e/6502_schematic_sheet1-11-74.id.jpeg",
+      "timestamp": "20141224041625",
+      "url": "https://web.archive.org/web/20141224041625id_/http://visual6502.org/wiki/images/9/9e/6502_schematic_sheet1-11-74.id.jpeg",
+      "mime": "image/jpeg",
+      "bytes": 385397
+    },
+    {
+      "path": "/wiki/images/a/a9/Example.jpg",
+      "timestamp": "20141224041908",
+      "url": "https://web.archive.org/web/20141224041908id_/http://visual6502.org/wiki/images/a/a9/Example.jpg",
+      "mime": "image/jpeg",
+      "bytes": 14767
+    },
+    {
+      "path": "/wiki/images/archive/4/42/20110313092919%21Rca1802-detail2-nor4.png",
+      "timestamp": "20141224041631",
+      "url": "https://web.archive.org/web/20141224041631id_/http://visual6502.org/wiki/images/archive/4/42/20110313092919%21Rca1802-detail2-nor4.png",
+      "mime": "image/png",
+      "bytes": 274429
+    },
+    {
+      "path": "/wiki/images/archive/5/58/20110220140415%216502-ipc-logic.png",
+      "timestamp": "20141224041935",
+      "url": "https://web.archive.org/web/20141224041935id_/http://visual6502.org/wiki/images/archive/5/58/20110220140415%216502-ipc-logic.png",
+      "mime": "image/png",
+      "bytes": 16575
+    },
+    {
+      "path": "/wiki/images/archive/5/58/20110220170427%216502-ipc-logic.png",
+      "timestamp": "20141224041934",
+      "url": "https://web.archive.org/web/20141224041934id_/http://visual6502.org/wiki/images/archive/5/58/20110220170427%216502-ipc-logic.png",
+      "mime": "image/png",
+      "bytes": 14650
+    },
+    {
+      "path": "/wiki/images/archive/5/58/20110220181007%216502-ipc-logic.png",
+      "timestamp": "20141224041935",
+      "url": "https://web.archive.org/web/20141224041935id_/http://visual6502.org/wiki/images/archive/5/58/20110220181007%216502-ipc-logic.png",
+      "mime": "image/png",
+      "bytes": 19839
+    },
+    {
+      "path": "/wiki/images/archive/7/75/20110221102837%216502-ipc-circuit.png",
+      "timestamp": "20141224041939",
+      "url": "https://web.archive.org/web/20141224041939id_/http://visual6502.org/wiki/images/archive/7/75/20110221102837%216502-ipc-circuit.png",
+      "mime": "image/png",
+      "bytes": 12919
+    },
+    {
+      "path": "/wiki/images/archive/7/78/20120909173741%216502-decimal-DAA-removed-visual6502.png",
+      "timestamp": "20141224041843",
+      "url": "https://web.archive.org/web/20141224041843id_/http://visual6502.org/wiki/images/archive/7/78/20120909173741%216502-decimal-DAA-removed-visual6502.png",
+      "mime": "image/png",
+      "bytes": 70251
+    },
+    {
+      "path": "/wiki/images/archive/e/e3/20110110194756%216502-XAA-Idb-sb.png",
+      "timestamp": "20141224041729",
+      "url": "https://web.archive.org/web/20141224041729id_/http://visual6502.org/wiki/images/archive/e/e3/20110110194756%216502-XAA-Idb-sb.png",
+      "mime": "image/png",
+      "bytes": 9536
+    },
+    {
+      "path": "/wiki/images/b/b2/6502-fpga-apple2-overview-IMG_1086.jpg",
+      "timestamp": "20141224041623",
+      "url": "https://web.archive.org/web/20141224041623id_/http://visual6502.org/wiki/images/b/b2/6502-fpga-apple2-overview-IMG_1086.jpg",
+      "mime": "image/jpeg",
+      "bytes": 196194
+    },
+    {
+      "path": "/wiki/images/b/b2/6502-ipc-layout.png",
+      "timestamp": "20141224041614",
+      "url": "https://web.archive.org/web/20141224041614id_/http://visual6502.org/wiki/images/b/b2/6502-ipc-layout.png",
+      "mime": "image/png",
+      "bytes": 127386
+    },
+    {
+      "path": "/wiki/images/b/b3/6502_photo_wrong-clock.jpg",
+      "timestamp": "20141224041620",
+      "url": "https://web.archive.org/web/20141224041620id_/http://visual6502.org/wiki/images/b/b3/6502_photo_wrong-clock.jpg",
+      "mime": "image/jpeg",
+      "bytes": 45880
+    },
+    {
+      "path": "/wiki/images/b/b7/6507_20x_top-000007r.jpg",
+      "timestamp": "20141224041625",
+      "url": "https://web.archive.org/web/20141224041625id_/http://visual6502.org/wiki/images/b/b7/6507_20x_top-000007r.jpg",
+      "mime": "image/jpeg",
+      "bytes": 762085
+    },
+    {
+      "path": "/wiki/images/b/ba/Atari_6507_4.jpg",
+      "timestamp": "20141224041758",
+      "url": "https://web.archive.org/web/20141224041758id_/http://visual6502.org/wiki/images/b/ba/Atari_6507_4.jpg",
+      "mime": "image/jpeg",
+      "bytes": 886586
+    },
+    {
+      "path": "/wiki/images/b/ba/Stack_reg_high2_SPVTB.jpg",
+      "timestamp": "20141224041617",
+      "url": "https://web.archive.org/web/20141224041617id_/http://visual6502.org/wiki/images/b/ba/Stack_reg_high2_SPVTB.jpg",
+      "mime": "image/jpeg",
+      "bytes": 251823
+    },
+    {
+      "path": "/wiki/images/b/be/Rca1802-detail-nor4.png",
+      "timestamp": "20141224041615",
+      "url": "https://web.archive.org/web/20141224041615id_/http://visual6502.org/wiki/images/b/be/Rca1802-detail-nor4.png",
+      "mime": "image/png",
+      "bytes": 485776
+    },
+    {
+      "path": "/wiki/images/c/c0/1802_dpth-small.png",
+      "timestamp": "20140926081506",
+      "url": "https://web.archive.org/web/20140926081506id_/http://visual6502.org/wiki/images/c/c0/1802_dpth-small.png",
+      "mime": "image/png",
+      "bytes": 178003
+    },
+    {
+      "path": "/wiki/images/c/c1/6502_sub.png",
+      "timestamp": "20141224041705",
+      "url": "https://web.archive.org/web/20141224041705id_/http://visual6502.org/wiki/images/c/c1/6502_sub.png",
+      "mime": "image/png",
+      "bytes": 5118907
+    },
+    {
+      "path": "/wiki/images/c/c3/6502-fpga-vic20-overview-IMG_1081.jpg",
+      "timestamp": "20141224041617",
+      "url": "https://web.archive.org/web/20141224041617id_/http://visual6502.org/wiki/images/c/c3/6502-fpga-vic20-overview-IMG_1081.jpg",
+      "mime": "image/jpeg",
+      "bytes": 240020
+    },
+    {
+      "path": "/wiki/images/c/c6/ARM1-LeeSmith.jpg",
+      "timestamp": "20141224041620",
+      "url": "https://web.archive.org/web/20141224041620id_/http://visual6502.org/wiki/images/c/c6/ARM1-LeeSmith.jpg",
+      "mime": "image/jpeg",
+      "bytes": 379635
+    },
+    {
+      "path": "/wiki/images/c/c6/Rdy-sync-no-via-R6502-balazs.png",
+      "timestamp": "20141224041622",
+      "url": "https://web.archive.org/web/20141224041622id_/http://visual6502.org/wiki/images/c/c6/Rdy-sync-no-via-R6502-balazs.png",
+      "mime": "image/png",
+      "bytes": 229413
+    },
+    {
+      "path": "/wiki/images/c/c9/6507-demo1.jpg",
+      "timestamp": "20141224041615",
+      "url": "https://web.archive.org/web/20141224041615id_/http://visual6502.org/wiki/images/c/c9/6507-demo1.jpg",
+      "mime": "image/jpeg",
+      "bytes": 283745
+    },
+    {
+      "path": "/wiki/images/d/d2/6507_20x_top-000000r.jpg",
+      "timestamp": "20141224041622",
+      "url": "https://web.archive.org/web/20141224041622id_/http://visual6502.org/wiki/images/d/d2/6507_20x_top-000000r.jpg",
+      "mime": "image/jpeg",
+      "bytes": 524518
+    },
+    {
+      "path": "/wiki/images/d/d3/6507_20x_top-000003r.jpg",
+      "timestamp": "20141224041620",
+      "url": "https://web.archive.org/web/20141224041620id_/http://visual6502.org/wiki/images/d/d3/6507_20x_top-000003r.jpg",
+      "mime": "image/jpeg",
+      "bytes": 403347
+    },
+    {
+      "path": "/wiki/images/d/d8/Atari_6507_6A.jpg",
+      "timestamp": "20141224041741",
+      "url": "https://web.archive.org/web/20141224041741id_/http://visual6502.org/wiki/images/d/d8/Atari_6507_6A.jpg",
+      "mime": "image/jpeg",
+      "bytes": 812733
+    },
+    {
+      "path": "/wiki/images/d/dc/Atari_6507_2.jpg",
+      "timestamp": "20141224041749",
+      "url": "https://web.archive.org/web/20141224041749id_/http://visual6502.org/wiki/images/d/dc/Atari_6507_2.jpg",
+      "mime": "image/jpeg",
+      "bytes": 907455
+    },
+    {
+      "path": "/wiki/images/d/de/Atari_6507_6B.jpg",
+      "timestamp": "20141224041735",
+      "url": "https://web.archive.org/web/20141224041735id_/http://visual6502.org/wiki/images/d/de/Atari_6507_6B.jpg",
+      "mime": "image/jpeg",
+      "bytes": 834037
+    },
+    {
+      "path": "/wiki/images/e/e1/Atari_6507_3A.jpg",
+      "timestamp": "20141224041736",
+      "url": "https://web.archive.org/web/20141224041736id_/http://visual6502.org/wiki/images/e/e1/Atari_6507_3A.jpg",
+      "mime": "image/jpeg",
+      "bytes": 773989
+    },
+    {
+      "path": "/wiki/images/e/e1/Atari_6507_6.jpg",
+      "timestamp": "20141224041738",
+      "url": "https://web.archive.org/web/20141224041738id_/http://visual6502.org/wiki/images/e/e1/Atari_6507_6.jpg",
+      "mime": "image/jpeg",
+      "bytes": 851111
+    },
+    {
+      "path": "/wiki/images/e/e3/6502-XAA-Idb-sb.png",
+      "timestamp": "20140921154327",
+      "url": "https://web.archive.org/web/20140921154327id_/http://visual6502.org/wiki/images/e/e3/6502-XAA-Idb-sb.png",
+      "mime": "image/png",
+      "bytes": 7895
+    },
+    {
+      "path": "/wiki/images/e/ea/Atari_6507_5.jpg",
+      "timestamp": "20141224041743",
+      "url": "https://web.archive.org/web/20141224041743id_/http://visual6502.org/wiki/images/e/ea/Atari_6507_5.jpg",
+      "mime": "image/jpeg",
+      "bytes": 830917
+    },
+    {
+      "path": "/wiki/images/e/ea/M6800-arch.png",
+      "timestamp": "20110901163115",
+      "url": "https://web.archive.org/web/20110901163115id_/http://visual6502.org/wiki/images/e/ea/M6800-arch.png",
+      "mime": "image/png",
+      "bytes": 187089
+    },
+    {
+      "path": "/wiki/images/e/ea/Rca1802-detail.jpg",
+      "timestamp": "20141224041619",
+      "url": "https://web.archive.org/web/20141224041619id_/http://visual6502.org/wiki/images/e/ea/Rca1802-detail.jpg",
+      "mime": "image/jpeg",
+      "bytes": 42050
+    },
+    {
+      "path": "/wiki/images/e/ef/Rdy-sync-no-via-6502d-jssim.png",
+      "timestamp": "20141224041626",
+      "url": "https://web.archive.org/web/20141224041626id_/http://visual6502.org/wiki/images/e/ef/Rdy-sync-no-via-6502d-jssim.png",
+      "mime": "image/png",
+      "bytes": 48282
+    },
+    {
+      "path": "/wiki/images/f/f0/Atari_6507_C.jpg",
+      "timestamp": "20141224041748",
+      "url": "https://web.archive.org/web/20141224041748id_/http://visual6502.org/wiki/images/f/f0/Atari_6507_C.jpg",
+      "mime": "image/jpeg",
+      "bytes": 882228
+    },
+    {
+      "path": "/wiki/images/f/f1/Stack_reg_high2_subTied.jpg",
+      "timestamp": "20141224041621",
+      "url": "https://web.archive.org/web/20141224041621id_/http://visual6502.org/wiki/images/f/f1/Stack_reg_high2_subTied.jpg",
+      "mime": "image/jpeg",
+      "bytes": 351040
+    },
+    {
+      "path": "/wiki/images/f/f4/Rca1802-detail-annotated.jpg",
+      "timestamp": "20110728164207",
+      "url": "https://web.archive.org/web/20110728164207id_/http://www.visual6502.org/wiki/images/f/f4/Rca1802-detail-annotated.jpg",
+      "mime": "image/jpeg",
+      "bytes": 43937
+    },
+    {
+      "path": "/wiki/images/f/f6/6507-demo0.jpg",
+      "timestamp": "20141224041619",
+      "url": "https://web.archive.org/web/20141224041619id_/http://visual6502.org/wiki/images/f/f6/6507-demo0.jpg",
+      "mime": "image/jpeg",
+      "bytes": 236448
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+# visual6502 wiki -- REDUCED RESOLUTION fallbacks: no full-size copy of these was ever archived
+https://web.archive.org/web/20141224041556id_/http://visual6502.org/wiki/images/thumb/e/e1/6502_sub_algn_01_quarterSize.png/110px-6502_sub_algn_01_quarterSize.png
+https://web.archive.org/web/20141224041859id_/http://visual6502.org/wiki/images/thumb/6/68/6502_top_algn_01_quarterSize.png/747px-6502_top_algn_01_quarterSize.png
+https://web.archive.org/web/20141224041948id_/http://visual6502.org/wiki/images/thumb/c/c3/ARM1_promo_large.jpg/552px-ARM1_promo_large.jpg

@@ -12,3 +12,18 @@ node_modules
 
 # Hashed production bundle, produced by tools/build-web.py.
 /dist
+
+# visual6502.org preservation mirror. Everything here is fetched, not authored:
+# ~2.3 GB of CC BY-NC-SA die photography plus the wiki recovered from the
+# Wayback Machine. Kept out of git for the same reason extern/visual6502 is a
+# submodule -- this repository does not redistribute NC-SA data, it points at
+# it. The URL manifests in archive/urls/ ARE committed: they are the index that
+# makes the mirror reproducible, and they are ours.
+#   bash archive/tools/harvest-site.sh
+#   python3 archive/tools/harvest-wiki.py
+/archive/mirror
+/archive/wiki-raw
+/archive/public
+/archive/cdx
+/archive/*.log
+/archive/harvest-wiki-failed.txt
