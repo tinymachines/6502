@@ -181,7 +181,7 @@ padding:.1rem .4rem;letter-spacing:.04em}
 .vf-rev:hover .vf-pill{border-color:var(--accent)}
 .vf-rev:hover .vf-hash{color:var(--fg)}
 .vf-built{color:var(--muted)}
-.vf-built::before{content:"\00b7";margin-right:.5rem;opacity:.6}
+.vf-built::before{content:"·";margin-right:.5rem;opacity:.6}
 """
 
 
