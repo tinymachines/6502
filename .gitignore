@@ -29,6 +29,8 @@ node_modules
 /archive/wiki-raw
 /archive/public
 /archive/cdx
+/archive/cdx-full
+/archive/wayback
 /archive/*.log
 /archive/harvest-wiki-failed.txt
 /archive/harvest-wiki-nosource.txt
