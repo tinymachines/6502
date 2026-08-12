@@ -85,6 +85,10 @@ cd 6502
 
 cargo test --workspace
 
+# The differential test against the original needs an oracle generated first;
+# without it that one test skips.
+node tools/golden-trace/gen.js --steps 3000
+
 wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
 python3 -m http.server 8777 --directory web
@@ -116,8 +120,9 @@ In short: fork it, learn from it, host it non-commercially with attribution. A
 commercial use would need the geometry re-derived from an independent die trace,
 or separate permission from the rights holders.
 
-See [`NOTICE.md`](NOTICE.md) for the full breakdown and [`LICENSE`](LICENSE) for
-the texts.
+See [`NOTICE.md`](NOTICE.md) for the full breakdown,
+[`LICENSE-THIRD-PARTY`](LICENSE-THIRD-PARTY) for the upstream texts and
+obligations, and [`LICENSE`](LICENSE) for the MIT terms covering this source.
 
 ## Credit
 

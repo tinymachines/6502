@@ -91,11 +91,20 @@ fn load_golden() -> Option<Golden> {
 #[test]
 fn matches_reference_node_for_node() {
     let Some(golden) = load_golden() else {
-        panic!(
-            "golden trace not found at {}\n\
-             generate it with: node tools/golden-trace/gen.js --steps 3000",
+        // The oracle is ~5 MB and is itself derived from the CC BY-NC-SA die
+        // data, so it is generated rather than committed. Skip rather than fail
+        // so `cargo test` works on a fresh clone -- but let CI demand it, since
+        // a silently-skipped differential test is worse than none.
+        let msg = format!(
+            "golden trace not found at {}\n    generate it with: node tools/golden-trace/gen.js --steps 3000",
             golden_path().display()
         );
+        assert!(
+            std::env::var_os("V6502_REQUIRE_GOLDEN").is_none(),
+            "V6502_REQUIRE_GOLDEN is set but the {msg}"
+        );
+        eprintln!("\n  SKIPPED (differential vs the reference): {msg}\n");
+        return;
     };
 
     let mut mem = FlatMemory::new();

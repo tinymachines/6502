@@ -35,6 +35,8 @@ cargo run --release -p v6502-sim --example trace   # per-half-cycle state dump
 
 # Regenerate the oracle (5 MB, gitignored; required by the golden test)
 node tools/golden-trace/gen.js --steps 3000
+# ...without it the golden test SKIPS. Set V6502_REQUIRE_GOLDEN=1 to make its
+# absence a failure instead (use this in CI).
 
 # Web app: build the wasm, export the geometry, serve
 wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg

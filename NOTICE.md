@@ -10,7 +10,7 @@ tooling (`deploy/`) and anything under `web/` are MIT licensed — see `LICENSE`
 
 Portions of `crates/v6502-sim` and `crates/v6502-netlist` are a Rust port of
 MIT-licensed visual6502 JavaScript; that copyright notice is reproduced in
-`LICENSE`.
+`LICENSE-THIRD-PARTY`.
 
 ## Why the die data is a submodule
 
