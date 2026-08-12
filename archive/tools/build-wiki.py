@@ -373,10 +373,133 @@ padding:.6rem .75rem;text-decoration:none;color:var(--fg);font-weight:600;font-s
 .idx a:hover{border-color:var(--accent);box-shadow:var(--hard)}
 .idx a small{display:block;color:var(--muted);font-weight:400;font-family:var(--mono);
 font-size:.7rem;margin-top:.15rem}
+.sheet{display:grid;gap:1rem;list-style:none;padding:0;
+grid-template-columns:repeat(auto-fill,minmax(min(100%,13rem),1fr))}
+.sheet li{border:2px solid var(--line);background:var(--surface)}
+.sheet li:hover{border-color:var(--accent);box-shadow:var(--hard)}
+.sheet a.pic{display:block;text-decoration:none}
+.sheet a.desc{display:inline-block;margin-top:.3rem;font-family:var(--mono);
+font-size:.68rem;color:var(--gold)}
+.sheet img{width:100%;aspect-ratio:4/3;object-fit:contain;display:block;
+background:#0a1526}
+.sheet .noimg{aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;
+background:#0a1526;color:var(--muted);font-family:var(--mono);font-size:.75rem}
+.sheet .cap{display:block;padding:.5rem .6rem}
+.sheet .cap b{display:block;font-size:.8rem;font-weight:600;word-break:break-word}
+.sheet .cap small{display:block;color:var(--muted);font-family:var(--mono);
+font-size:.68rem;margin-top:.15rem}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:2px solid var(--line);
 color:var(--muted);font-size:.85rem}
 @media(max-width:40rem){header.top nav a{margin-left:.6rem;font-size:.8rem}}
 """
+
+
+def build_image_index(out: Path, images: dict, pages: set, known: dict) -> int:
+    """A contact sheet of every recovered image, so none is merely served.
+
+    Images reach a reader only if some rebuilt page embeds them. 43 pages
+    survive as renderings rather than as source, so the images they embedded
+    have nothing pointing at them -- present on disk, unreachable by clicking,
+    which is exactly the failure this archive exists to undo. This page is the
+    backstop: every image appears here whether or not an article uses it.
+
+    Superseded revisions (MediaWiki's `<timestamp>!name` archives) and thumbnail
+    variants are separated out rather than mixed in. They are duplicates, and
+    presenting them beside the images they duplicate would imply the collection
+    is twice the size it is.
+    """
+    imgdir = out / "images"
+    if not imgdir.is_dir():
+        return 0
+
+    # What do the rebuilt pages actually reference? Computed from the emitted
+    # HTML rather than from the wikitext, so it reflects what shipped.
+    used = set()
+    for f in out.glob("*.html"):
+        for m in re.findall(r'images/([^"\']+)', f.read_text(encoding="utf-8",
+                                                             errors="replace")):
+            if not m.startswith("thumb/"):
+                used.add(up.unquote(m))
+
+    thumbs = imgdir / "thumb"
+    thumbs.mkdir(exist_ok=True)
+    try:
+        from PIL import Image, ImageFile
+        Image.MAX_IMAGE_PIXELS = None
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+    except ImportError:
+        Image = None
+
+    groups = {"used": [], "orphan": [], "revision": [], "variant": []}
+    for f in sorted(p for p in imgdir.iterdir() if p.is_file()):
+        if re.match(r"^\d{14}!", f.name):
+            kind = "revision"
+        elif re.match(r"^\d+px-", f.name):
+            kind = "variant"
+        else:
+            kind = "used" if f.name in used else "orphan"
+
+        dims, thumb = "", ""
+        if Image:
+            t = thumbs / (f.stem + ".jpg")
+            try:
+                with Image.open(f) as im:
+                    dims = f"{im.size[0]}&times;{im.size[1]}"
+                    if not t.exists() or t.stat().st_mtime < f.stat().st_mtime:
+                        c = im.convert("RGB")
+                        c.thumbnail((320, 320), Image.LANCZOS)
+                        c.save(t, "JPEG", quality=82, optimize=True)
+                thumb = f"images/thumb/{t.name}"
+            except Exception:  # noqa: BLE001 - a bad image must not stop the build
+                thumb = ""
+        groups[kind].append((f, dims, thumb))
+
+    def card(entry) -> str:
+        f, dims, thumb = entry
+        title = norm("File:" + f.name)
+        pic = (f'<img loading="lazy" src="{thumb}" alt="{html.escape(f.name)}">'
+               if thumb else '<div class="noimg">no preview</div>')
+        kb = f.stat().st_size / 1024
+        size = f"{kb / 1024:.1f} MB" if kb > 1024 else f"{kb:.0f} KB"
+        # The picture always links the full-size file. Linking only the
+        # description page would leave images reachable at 320px and no more,
+        # which is a subtler version of not being reachable at all.
+        desc = (f'<a class="desc" href="{page_href(title)}">description</a>'
+                if (out / page_href(title)).exists() else "")
+        return (f'<li><a class="pic" href="images/{f.name}">{pic}</a>'
+                f'<span class="cap"><b>{html.escape(f.name)}</b>'
+                f'<small>{dims}{" &middot; " if dims else ""}{size}</small>'
+                f'{desc}</span></li>')
+
+    sections, total = [], 0
+    for key, heading, note in [
+        ("used", "Shown in the wiki",
+         "Embedded by one or more of the rebuilt pages."),
+        ("orphan", "Recovered but not shown",
+         "These were embedded by pages that survive only as renderings, so "
+         "nothing rebuilt links to them. They are here so they are reachable."),
+        ("revision", "Superseded revisions",
+         "Earlier versions MediaWiki kept when a file was re-uploaded."),
+        ("variant", "Thumbnail variants",
+         "Reduced-size copies of images held here at full size."),
+    ]:
+        if not groups[key]:
+            continue
+        total += len(groups[key])
+        sections.append(
+            f'<h2 id="{key}">{heading} <span class="eyebrow">'
+            f'{len(groups[key])}</span></h2><p>{note}</p>'
+            f'<ul class="sheet">{"".join(card(e) for e in groups[key])}</ul>')
+
+    body = (f"<h1>Images</h1><p>Every image recovered from the wiki, "
+            f"{total} in all. Click one for its description page where the wiki "
+            f"had one, or for the image itself where it did not.</p>"
+            + "".join(sections))
+    (out / "images.html").write_text(shell(
+        "Images", body,
+        banner=banner_for("Main_Page", known.get("Main_Page"), "archived pages"),
+        desc="Every image recovered from the visual6502 wiki."), encoding="utf-8")
+    return total
 
 
 def shell(title: str, body: str, *, banner: str, home: str = "index.html",
@@ -397,8 +520,9 @@ def shell(title: str, body: str, *, banner: str, home: str = "index.html",
   <a href="{home}">visual6502 wiki <span class="eyebrow">archived</span></a>
   <nav>
     <a href="{home}">Index</a>
-    <a href="http://visual6502.org/">Original site</a>
-    <a href="/">Simulator</a>
+    <a href="images.html">Images</a>
+    <a href="../gallery/index.html">Die photos</a>
+    <a href="../index.html">Archive</a>
   </nav>
 </div></header>
 <div class="wrap"><article>
@@ -467,6 +591,14 @@ def main() -> None:
 
     for title, text in sorted(pages.items()):
         body, toc = conv.convert(text, title)
+        # A File: page's wikitext is only its description -- MediaWiki supplied
+        # the image itself from the upload. Without this the page reads as a
+        # caption for something invisible.
+        if title.split(":")[0] in ("File", "Image") and ":" in title:
+            path = images.get(norm(title.split(":", 1)[1]))
+            if path:
+                body = (f'<figure><a href="{path}"><img src="{path}" '
+                        f'alt="{html.escape(title)}"></a></figure>\n' + body)
         if len(toc) > 3:
             items = "".join(
                 '<a class="l%d" href="#%s">%s</a>'
@@ -516,7 +648,10 @@ readable.</p>
 <p>Pages are rebuilt from the original wikitext where it survived. Links are
 marked to show what survived: <a class="wb" href="#">gold</a> means the page
 exists only as a Wayback rendering, <a class="dead" href="#">struck red</a>
-means no copy was archived at all.</p>"""
+means no copy was archived at all.</p>
+<p><a href="images.html"><strong>Every recovered image</strong></a> is listed on
+one contact sheet, including those whose articles survive only as renderings and
+which therefore appear on no rebuilt page.</p>"""
 
     (OUT / "index.html").write_text(shell(
         "Index", intro + "".join(sections),
@@ -524,6 +659,9 @@ means no copy was archived at all.</p>"""
         desc="Static reconstruction of the visual6502.org wiki."),
         encoding="utf-8")
     (OUT / "wiki.css").write_text(CSS, encoding="utf-8")
+
+    n_img = build_image_index(OUT, images, set(pages), known)
+    print(f"image index: {n_img} images")
 
     print(f"pages: {len(pages)} rebuilt, {len(only_rendered)} rendering-only")
     if conv.missing:
