@@ -765,7 +765,12 @@ symlink. The unit is installed but **not enabled** — it is a deploy action, no
 a boot service.
 
 After editing anything in `deploy/`, copy it to the system location; the repo
-copy is the source of truth but is not read live.
+copy is the source of truth but is not read live. **The nginx site installs as
+`/etc/nginx/sites-available/6502.tinymachines.ai.nginx` — with the `.nginx`
+suffix**, which is what `sites-enabled` symlinks to. Copying to the name without
+it creates a second, unreferenced file: `nginx -t` passes, the reload succeeds,
+and nothing changes. Check the symlink target rather than the directory
+listing.
 
 ### Load-bearing details
 
@@ -783,6 +788,12 @@ copy is the source of truth but is not read live.
   variable so every header is declared once at server level.
 - Assets are not content-hashed, so everything revalidates (`max-age=60,
   must-revalidate`; HTML `no-cache`). Deploys take effect immediately.
+- **The `immutable` map keys on the hash segment, not the extension.** It reads
+  `\.[0-9a-f]{8}\.(?:js|css|wasm|bin|png|svg|json|webmanifest)$`. `json` is in
+  that list for the derived blueprint and is safe *only* because the hash
+  segment is required: `build-info.json` has none and keeps the short cache,
+  which is the entire point of it. Matching on extension alone would make the
+  version footer report whatever it said an hour ago.
 - **`/archive/` is an `alias` beside `releases/`, not inside a release.** It is
   ~2.5 GB that changes only when something new is recovered, so copying it on
   every front-end deploy would be absurd. That location declares no `add_header`

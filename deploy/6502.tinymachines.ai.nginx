@@ -23,7 +23,11 @@
 map $uri $tm6502_cache {
     default                                                   "public, max-age=60, must-revalidate";
     # Quoted: nginx parses a bare { in a map key as the start of a block.
-    "~*\.[0-9a-f]{8}\.(?:js|css|wasm|bin|png|svg|webmanifest)$"  "public, max-age=31536000, immutable";
+    # `json` is here for the derived blueprint, and it is safe only because the
+    # pattern demands the hash segment: build-info.json has none, so it keeps
+    # the short default -- which is the point of it, since its whole job is to
+    # report the deploy that just happened.
+    "~*\.[0-9a-f]{8}\.(?:js|css|wasm|bin|png|svg|json|webmanifest)$"  "public, max-age=31536000, immutable";
     # Archive imagery: mirrored third-party originals and their generated
     # thumbnails. Not content-hashed, but these are archived bytes -- a file
     # only changes if the upstream original does, which is the event this
