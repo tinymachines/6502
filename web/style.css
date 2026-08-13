@@ -585,19 +585,46 @@ select:focus { outline: none; border-color: var(--accent); }
 }
 .console.immersive .console-body { flex: 1; min-height: 0; }
 .console.immersive #stage { height: auto; flex: 1; }
-/* Fixed height, not max-height: the panels sit below the canvas here, so a tab
-   change that resized them would resize the stage and jump the die. app.js
-   measures the tallest panel into --panel-lock; the cap keeps a long Memory
-   dump from eating the view, and the fallback covers the first frame. */
-.console.immersive #panels {
-  height: min(var(--panel-lock, 40vh), 45vh);
-  overflow-y: auto; overscroll-behavior: contain;
+
+/* On a phone, fullscreen means the die -- so the panels stop taking a share of
+   the height and become a drawer over it, collapsed to its handle by default.
+   The stage is absolutely positioned and therefore never resizes when a panel
+   opens, closes, or changes tab: the die cannot jump, which is what the earlier
+   measure-the-tallest-panel approach was working around. */
+@media (max-width: 67.999rem) {
+  .console.immersive .console-body { position: relative; }
+  .console.immersive #stage { position: absolute; inset: 0; }
+  .console.immersive #panels {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+    height: auto; max-height: 68%;
+    border-top: 2px solid color-mix(in srgb, var(--line) 70%, transparent);
+    background: color-mix(in srgb, var(--space) 94%, transparent);
+    backdrop-filter: blur(10px);
+    overflow-y: auto; overscroll-behavior: contain;
+  }
+  .console.immersive .drawer-grip { display: flex; }
+  /* Collapsed by hiding the content rather than translating by a measured
+     offset: the drawer then shrinks to exactly its handle and tab strip, with
+     no magic number to drift out of step with either. */
+  .console.immersive[data-drawer="closed"] #panels .panel { display: none; }
+  .console.immersive[data-drawer="closed"] #panels { max-height: none; }
 }
-@media (min-width: 68rem) {
-  /* Above the breakpoint the panels are a side column and cannot affect the
-     stage's height at all, so the lock is unnecessary. */
-  .console.immersive #panels { height: auto; max-height: none; }
+
+.drawer-grip {
+  display: none; width: 100%; align-items: center; gap: .55rem;
+  padding: .5rem .75rem; border: 0; cursor: pointer;
+  background: color-mix(in srgb, var(--subtle) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
+  color: var(--muted); font-family: var(--font-mono); font-size: .68rem;
+  font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
 }
+.drawer-grip .grip-bar {
+  width: 2.25rem; height: 4px; border-radius: 2px; flex: none;
+  background: color-mix(in srgb, var(--line) 90%, transparent);
+}
+.drawer-grip .grip-chev { margin-left: auto; color: var(--accent); font-size: .7rem; }
+.console[data-drawer="open"] .drawer-grip .grip-chev { transform: rotate(180deg); }
+.drawer-grip:hover { color: var(--foreground); }
 
 /* The fallback when the Fullscreen API is missing or refuses: cover the
    viewport ourselves. Not as good as real fullscreen — the browser's own chrome

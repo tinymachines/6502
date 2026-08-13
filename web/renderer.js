@@ -631,8 +631,13 @@ export class DieRenderer {
     const py = (clientY - r.top) * dpr;
     return {
       x: this.camera.cx + (px - this.canvas.width / 2) / this.camera.scale,
-      // Screen y grows downward, die y grows upward.
-      y: this.camera.cy - (py - this.canvas.height / 2) / this.camera.scale,
+      // Both axes ADD, because this must invert the projection rather than the
+      // raw die coordinates. The negative sign in uScale.y already flips the die
+      // for display, so in the image that reaches the screen die Y runs
+      // downward, same as screen Y. Subtracting here -- on the theory that "die
+      // Y grows upward" -- inverted vertical panning and made zoom drift the
+      // wrong way from the cursor.
+      y: this.camera.cy + (py - this.canvas.height / 2) / this.camera.scale,
       px,
       py,
     };
@@ -640,8 +645,11 @@ export class DieRenderer {
 
   panByPixels(dx, dy) {
     const dpr = this.canvas.width / this.canvas.getBoundingClientRect().width;
+    // Both subtract: the die follows the pointer, so the camera moves opposite
+    // to it on each axis. See screenToDie for why Y is not the exception it
+    // looks like.
     this.camera.cx -= (dx * dpr) / this.camera.scale;
-    this.camera.cy += (dy * dpr) / this.camera.scale;
+    this.camera.cy -= (dy * dpr) / this.camera.scale;
     this._clampCamera();
     this.pickDirty = true;
     this.userFramed = true;

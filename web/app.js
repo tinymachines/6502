@@ -305,7 +305,7 @@ function setupUI() {
   setupFullscreen();
   setupCanvasInput();
   setupKeyboard();
-  window.addEventListener('resize', () => { lockPanelHeight(); r.resize(); });
+  window.addEventListener('resize', () => r.resize());
 }
 
 /**
@@ -356,12 +356,16 @@ function setupTabs() {
       for (const t of panels.querySelectorAll('.tab')) {
         t.setAttribute('aria-selected', String(t === tab));
       }
+      // Reaching for a tab is asking to see it, so a shut drawer opens.
+      if (drawerIsClosed()) setDrawer(true);
       // Above the breakpoint every panel is visible at once and there is no
       // "opening" the Lab, so it starts on demand instead: from a click here,
       // or from the first interaction with its own controls.
       if (tab.dataset.tab === 'lab' && state.lab) state.lab.start();
     };
   }
+
+  $('drawer-grip').onclick = () => setDrawer(drawerIsClosed());
 }
 
 /** Show a panel by name, and make sure it is the visible tab on small screens. */
@@ -400,12 +404,13 @@ function setupFullscreen() {
     btn.textContent = on ? '⤡' : '⛶';
     btn.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Fullscreen');
     btn.title = on ? 'Exit fullscreen (F)' : 'Fullscreen (F)';
-    // The canvas backing store must follow the new viewport, and the panel
-    // lock has to be measured against it.
-    requestAnimationFrame(() => {
-      lockPanelHeight();
-      state.renderer.resize();
-    });
+    // Entering fullscreen gives the die the screen; the drawer starts shut and
+    // the reader opens it if they want the numbers. Leaving drops the attribute
+    // entirely so the ordinary page layout is not left in a drawer state.
+    if (on) setDrawer(false);
+    else delete consoleEl.dataset.drawer;
+    // The canvas backing store must follow the new viewport.
+    requestAnimationFrame(() => state.renderer.resize());
   };
 
   const setFaux = (on) => {
@@ -447,41 +452,24 @@ function setupFullscreen() {
 }
 
 /**
- * Pin the control area to the height of its tallest panel, in fullscreen.
+ * The panel drawer, used in fullscreen on small screens.
  *
- * Fullscreen is the one layout where the panels sit *below* the canvas and the
- * canvas takes what is left, so a short panel like Bus and a tall one like
- * Memory give the stage two different heights. Switching tabs then resized the
- * viewport and the die visibly jumped. Measuring the tallest panel once and
- * holding that height costs a little dead space under the short ones and buys a
- * stage that never moves.
- *
- * Only fullscreen: in the normal page flow the console is not competing for a
- * fixed amount of vertical space, and reserving the maximum there would just
- * push the rest of the page down for no gain.
+ * On a phone, fullscreen should mean the die. So the panels stop taking a share
+ * of the height and overlay it instead, collapsed to their handle until asked
+ * for. This also removes the problem outright rather than compensating for it:
+ * the stage is absolutely positioned in that layout, so switching tabs cannot
+ * change its size and the die cannot jump. An earlier version measured the
+ * tallest panel and pinned the container to it; the drawer makes that
+ * unnecessary, so it is gone rather than left to rot alongside.
  */
-function lockPanelHeight() {
-  const panels = $('panels');
-  panels.style.removeProperty('--panel-lock');
-  // Keyed on the class, not on document.fullscreenElement: the fallback path
-  // has no fullscreen element and needs the lock just as much, since it is the
-  // same layout.
-  if (!$('console').classList.contains('immersive')) return;
+function setDrawer(open) {
+  const consoleEl = $('console');
+  consoleEl.dataset.drawer = open ? 'open' : 'closed';
+  $('drawer-grip').setAttribute('aria-expanded', String(open));
+}
 
-  let tallest = 0;
-  for (const p of panels.querySelectorAll('.panel')) {
-    // The hidden panels have `display: none`, which measures as zero. Reveal
-    // each in turn rather than all at once, so they cannot stack and inflate
-    // one another's height.
-    const prev = p.style.display;
-    p.style.display = 'block';
-    tallest = Math.max(tallest, p.offsetHeight);
-    p.style.display = prev;
-  }
-  const tabs = panels.querySelector('.tabs');
-  if (tallest > 0) {
-    panels.style.setProperty('--panel-lock', `${tallest + (tabs ? tabs.offsetHeight : 0)}px`);
-  }
+function drawerIsClosed() {
+  return $('console').dataset.drawer === 'closed';
 }
 
 /**

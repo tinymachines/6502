@@ -26,6 +26,67 @@ try {
   ok('fits on construction', Math.abs(r.camera.scale - r.fitScale()) < 1e-9,
       `scale=${r.camera.scale} fit=${r.fitScale()}`);
 
+  // --- the pointer maps to the same place the shader draws ------------------
+  // Ground truth is the vertex shader, mirrored here, NOT screenToDie -- a test
+  // written in terms of screenToDie would happily pass with both directions
+  // inverted, which is exactly the bug that shipped.
+  //   gl_Position = (aPos - uCenter) * uScale,  uScale.y negative
+  //   clip y = +1 is the TOP of the viewport
+  const project = (dieX, dieY) => {
+    const clipX = (dieX - r.camera.cx) * ((2 * r.camera.scale) / r.canvas.width);
+    const clipY = (dieY - r.camera.cy) * ((-2 * r.camera.scale) / r.canvas.height);
+    return {
+      px: ((clipX + 1) / 2) * r.canvas.width,
+      py: ((1 - clipY) / 2) * r.canvas.height,
+    };
+  };
+  const rect = () => r.canvas.getBoundingClientRect();
+  const toClient = (p) => {
+    const b = rect();
+    const dpr = r.canvas.width / b.width;
+    return { x: b.left + p.px / dpr, y: b.top + p.py / dpr };
+  };
+
+  {
+    const probe = { x: 3000, y: 7000 };          // an arbitrary die point
+    const c = toClient(project(probe.x, probe.y));
+    const back = r.screenToDie(c.x, c.y);
+    ok('screenToDie inverts the projection on X', Math.abs(back.x - probe.x) < 1,
+       `${back.x.toFixed(1)} vs ${probe.x}`);
+    ok('screenToDie inverts the projection on Y', Math.abs(back.y - probe.y) < 1,
+       `${back.y.toFixed(1)} vs ${probe.y}`);
+  }
+
+  // --- dragging moves the die with the pointer, on both axes ----------------
+  {
+    const b = rect();
+    const from = { x: b.left + b.width * 0.4, y: b.top + b.height * 0.4 };
+    const d = { x: 90, y: 70 };
+    const grabbed = r.screenToDie(from.x, from.y);
+    r.panByPixels(d.x, d.y);
+    const under = r.screenToDie(from.x + d.x, from.y + d.y);
+    ok('drag carries the die with the pointer on X', Math.abs(under.x - grabbed.x) < 1,
+       `${under.x.toFixed(1)} vs ${grabbed.x.toFixed(1)}`);
+    ok('drag carries the die with the pointer on Y', Math.abs(under.y - grabbed.y) < 1,
+       `${under.y.toFixed(1)} vs ${grabbed.y.toFixed(1)}`);
+  }
+
+  // --- zoom stays anchored under the cursor ---------------------------------
+  {
+    const b = rect();
+    const at = { x: b.left + b.width * 0.28, y: b.top + b.height * 0.72 };
+    for (const factor of [2.5, 0.4]) {
+      const before = r.screenToDie(at.x, at.y);
+      r.zoomAt(at.x, at.y, factor);
+      const after = r.screenToDie(at.x, at.y);
+      ok(`zoom x${factor} keeps the cursor's point on X`, Math.abs(after.x - before.x) < 1,
+         `${after.x.toFixed(1)} vs ${before.x.toFixed(1)}`);
+      ok(`zoom x${factor} keeps the cursor's point on Y`, Math.abs(after.y - before.y) < 1,
+         `${after.y.toFixed(1)} vs ${before.y.toFixed(1)}`);
+    }
+    r.resetView();
+  }
+
   // 1. Fling it: a thousand hard drags in one direction, zoomed in.
   r.zoomAt(400, 250, 8);
   for (let i = 0; i < 1000; i++) r.panByPixels(400, 300);
