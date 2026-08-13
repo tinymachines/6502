@@ -99,9 +99,13 @@ def safe_path(url: str) -> str:
     """
     u = up.urlparse(url)
     host = u.netloc.lower().replace(":80", "")
-    parts = [p for p in up.unquote(u.path).split("/") if p not in ("", ".", "..")]
-    if not parts:
-        parts = ["index.html"]
+    path = up.unquote(u.path)
+    parts = [p for p in path.split("/") if p not in ("", ".", "..")]
+    # A URL ending in "/" is a directory listing, and something else in the
+    # index almost certainly lives underneath it. Naming it index.html keeps the
+    # directory free for its children instead of racing them for the name.
+    if not parts or path.endswith("/"):
+        parts.append("index.html")
     if u.query:
         parts[-1] += "@" + up.unquote(u.query)
 
@@ -120,6 +124,41 @@ def safe_path(url: str) -> str:
 def wb_url(timestamp: str, original: str) -> str:
     """Original archived bytes: no toolbar, no rewritten links."""
     return f"https://web.archive.org/web/{timestamp}id_/{original}"
+
+
+def prepare_dest(db: sqlite3.Connection, rel: str) -> Path:
+    """Resolve file/directory name collisions, self-healing in either order.
+
+    A URL can be both a page and a directory prefix -- /images serves a listing
+    and /images/6502/x.png lives under it -- and the index yields them in
+    arbitrary order. Whichever arrives first would otherwise claim the name and
+    make the other unwritable, which is how the first run of this died.
+
+    The web's own convention resolves it: a path that is also a directory keeps
+    its content at <path>/index.html. Applied to whichever side is already on
+    disk, so neither ordering loses.
+    """
+    dest = FILES / rel
+
+    # An ancestor already written as a file: move it into its own directory.
+    for i in range(1, len(dest.relative_to(FILES).parts)):
+        anc = FILES / Path(*dest.relative_to(FILES).parts[:i])
+        if anc.is_file():
+            tmp = anc.with_name(anc.name + ".__tmp")
+            anc.rename(tmp)
+            anc.mkdir(parents=True, exist_ok=True)
+            tmp.rename(anc / "index.html")
+            moved = str((anc / "index.html").relative_to(FILES))
+            db.execute("UPDATE urls SET path=? WHERE path=?",
+                       (moved, str(anc.relative_to(FILES))))
+            db.execute("UPDATE blobs SET path=? WHERE path=?",
+                       (moved, str(anc.relative_to(FILES))))
+            db.commit()
+
+    # The target itself is already a directory: put the page inside it.
+    if dest.is_dir():
+        dest = dest / "index.html"
+    return dest
 
 
 # --------------------------------------------------------------------------
@@ -192,14 +231,21 @@ def run(db: sqlite3.Connection, delay: float, limit: int) -> None:
     for i, (url, ts, digest) in enumerate(todo, 1):
         if stop:
             break
-        rel = safe_path(url)
-        dest = FILES / rel
+        try:
+            dest = prepare_dest(db, safe_path(url))
+        except OSError as e:
+            db.execute("UPDATE urls SET state='failed', attempts=attempts+1, "
+                       "error=? WHERE url=?", (f"path: {e}", url))
+            db.commit()
+            failed += 1
+            continue
+        rel = str(dest.relative_to(FILES))
 
         # Content we already hold under another URL: hardlink instead of
         # refetching. This is where most of the time is saved.
         prior = db.execute("SELECT path FROM blobs WHERE digest=?",
                            (digest,)).fetchone() if digest else None
-        if prior and (FILES / prior[0]).exists():
+        if prior and (FILES / prior[0]).is_file():
             try:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 if not dest.exists():
