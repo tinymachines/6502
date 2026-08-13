@@ -35,11 +35,15 @@ wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 log "exporting die geometry"
 cargo run --quiet -p v6502-netlist --bin export-layout -- web/layout.bin
 
+log "deriving the blueprint"
+cargo run --quiet -p v6502-netlist --bin export-blueprint -- web/blueprint.json
+
 # ---------------------------------------------------------------------------
 # Sanity-check the build before it can replace a working site
 # ---------------------------------------------------------------------------
 
 for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
+         web/programs.js web/blueprint.html web/blueprint.js web/blueprint.json \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
   [ -s "$f" ] || { echo "deploy: missing or empty $f" >&2; exit 1; }
 done
@@ -48,6 +52,18 @@ done
 # a truncated file still "loads" and then renders nothing.
 head -c 8 web/layout.bin | grep -q '^V6502LAY' || {
   echo "deploy: web/layout.bin has the wrong magic" >&2; exit 1; }
+
+# The blueprint is derived, so an empty derivation is a silent failure: the page
+# would load and draw nothing at all. Insist it actually found the datapath.
+python3 - <<'PY' || exit 1
+import json, sys
+bp = json.load(open("web/blueprint.json"))
+if len(bp["units"]) < 12 or len(bp["links"]) < 16:
+    sys.exit(f"deploy: blueprint derived only {len(bp['units'])} units / "
+             f"{len(bp['links'])} links -- the extraction has broken")
+if bp["coverage"]["transistorsDrawn"] < 100:
+    sys.exit("deploy: blueprint covers almost no transistors")
+PY
 
 # ---------------------------------------------------------------------------
 # Content-hash everything and emit the service worker

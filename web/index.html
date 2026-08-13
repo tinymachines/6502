@@ -34,6 +34,7 @@
         <div class="navlinks" id="site-nav">
           <a href="#explorer">Explorer</a>
           <a href="#lab">Lab</a>
+          <a href="blueprint.html">Blueprint</a>
           <a href="#looking-at">What you see</a>
           <a href="#verification">Verification</a>
           <a href="#credit">Credit</a>
@@ -328,6 +329,29 @@
         The ADC link opens on the step worth arguing about: the adder holds the
         answer, and the accumulator does not have it yet.
       </p>
+    </section>
+
+    <section class="wrap sec" id="blueprint">
+      <div class="sec-head">
+        <p class="eyebrow">The Blueprint</p>
+        <h2>The same chip, without the geometry.</h2>
+      </div>
+      <p class="lede">
+        The die view is honest and nearly unreadable: 3510 switches where they
+        actually sit. The Blueprint is the datapath drawn as a block diagram —
+        buses as lines, registers as boxes, a switch wherever the silicon has
+        one — running live off the same engine.
+      </p>
+      <p class="lede">
+        Nobody drew it. Every unit and every path was found by asking which
+        transistors join which nodes, and each one is labelled with the decode
+        line that opens it. It accounts for 159 of the 3510 transistors, and it
+        says so on the page.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="blueprint.html">Open the Blueprint</a>
+        <a class="btn btn-ghost" href="blueprint.html?program=1&amp;run=1">Watch Fibonacci move</a>
+      </div>
     </section>
 
     <section class="wrap sec" id="try-this">

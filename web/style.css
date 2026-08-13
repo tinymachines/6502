@@ -737,3 +737,76 @@ body.no-scroll #explorer { z-index: 70; }
   .transport { flex-wrap: wrap; }
   .transport .iconbtn { min-width: 2.5rem; padding: .5rem .35rem; }
 }
+
+/* ---------- the blueprint (blueprint.html) ---------- */
+
+.bp-boot { padding: 2.5rem .9rem; text-align: center; color: var(--muted); font-family: var(--font-mono); font-size: .8rem; }
+.bp-boot .error { color: var(--warn); }
+
+/* The diagram is wider than a phone and must scroll inside its own box --
+   never widen the page. Same rule as every other wide block on the site. */
+.bp-stage { overflow-x: auto; overflow-y: hidden; padding: .9rem .6rem; }
+#bp-svg { display: block; width: 100%; min-width: 46rem; height: auto; }
+
+.bp-transport {
+  display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  padding: .6rem .75rem;
+  border-top: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
+  background: color-mix(in srgb, var(--subtle) 55%, transparent);
+}
+.bp-readout { margin-left: auto; color: var(--muted); font-size: .72rem; white-space: nowrap; }
+
+/* -- rails and blocks -- */
+.rail-line { stroke: var(--line); stroke-width: 3; }
+.rail-name { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; }
+.rail-value { fill: var(--gold); font-family: var(--font-mono); font-size: 12px; }
+
+.block-box { fill: color-mix(in srgb, var(--subtle) 85%, transparent); stroke: var(--line); stroke-width: 2; }
+.block-name { fill: var(--foreground); font-family: var(--font-sans); font-weight: 700; font-size: 13px; }
+.block-value { fill: var(--gold); font-family: var(--font-mono); font-size: 13px; }
+
+/* -- edges: a switch, and whether it is conducting -- */
+.edge-line { stroke: color-mix(in srgb, var(--line) 60%, transparent); stroke-width: 2; }
+.edge-switch { fill: var(--space); stroke: var(--line); stroke-width: 2; }
+.edge-label { fill: var(--muted); font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .04em; }
+.edge-label.partial { fill: var(--hot); }
+
+.bp-edge { cursor: pointer; }
+.bp-edge:hover .edge-switch,
+.bp-edge:focus-visible .edge-switch { stroke: var(--accent); }
+.bp-edge:focus-visible { outline: none; }
+.bp-edge:focus-visible .edge-label { fill: var(--foreground); }
+
+/* Open: the control line is high, the eight switches conduct, and the two
+   units either side of them are one wire this half-cycle. */
+.bp-edge.open .edge-switch { fill: var(--accent); stroke: var(--accent); }
+.bp-edge.open .edge-line { stroke: var(--accent); stroke-width: 3; }
+.bp-edge.open .edge-label { fill: var(--foreground); }
+
+.bp-edge.picked .edge-switch { stroke: var(--pink); stroke-width: 3; }
+.bp-edge.picked .edge-label { fill: var(--pink); }
+
+/* -- the detail panel -- */
+.bp-detail {
+  padding: .85rem 1rem 1.1rem;
+  border-top: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
+  font-size: .85rem;
+}
+.bp-detail h3 { margin: 0 0 .3rem; font-family: var(--font-mono); font-size: .82rem; color: var(--accent); letter-spacing: .04em; }
+.bp-detail-path { margin: 0 0 .6rem; color: var(--foreground); }
+.bp-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .25rem .9rem; margin: 0 0 .7rem; }
+.bp-detail dt { color: var(--muted); font-family: var(--font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .1em; }
+.bp-detail dd { margin: 0; color: var(--foreground); overflow-wrap: anywhere; }
+.bp-detail-note, .bp-detail-empty { margin: 0; color: var(--muted); font-size: .78rem; }
+
+@media (max-width: 40rem) {
+  .bp-readout { margin-left: 0; white-space: normal; }
+}
+
+/* Blueprint prose: `p` is margin-free site-wide, and these sections stack
+   several plain paragraphs under each heading. Scoped so the explorer's
+   sections, which use .lede throughout, are untouched. */
+.bp-prose p { max-width: 68ch; }
+.bp-prose p + p { margin-top: 1rem; }
+.bp-prose .sec-head { margin-top: 2.75rem; }
+.bp-prose .sec-head:first-child { margin-top: 0; }

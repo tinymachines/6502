@@ -8,6 +8,9 @@ __pycache__/
 /tools/golden-trace/golden.txt
 /web/layout.bin
 
+# cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json
+/web/blueprint.json
+
 # Git metadata for the version footer, stamped at build time.
 # python3 tools/build-info.py web --kind simulator
 /web/build-info.json

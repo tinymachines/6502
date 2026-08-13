@@ -1,0 +1,141 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>pending</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="margin:0">
+<!--
+  Drives the real blueprint page and checks what a screenshot cannot report.
+
+  Two of these assertions come straight from bugs: rail names ran off the left
+  edge of the canvas, and six control labels piled up in the program counter's
+  corner. Both were plainly visible in a screenshot and neither *said* anything
+  -- somebody had to look and notice. A collision test says it.
+
+  Top level, not an iframe: headless throttles animation frames in an iframe to
+  nearly zero, so the page would never tick and every check would fail for the
+  wrong reason.
+-->
+<div id="bp-boot"><p id="bp-status">…</p></div>
+<div id="bp-main" hidden>
+  <div class="bp-stage"><svg id="bp-svg"></svg></div>
+  <div class="bp-transport">
+    <select id="bp-program"></select>
+    <select id="bp-speed"><option value="8" selected>8</option></select>
+    <button id="bp-run">Run</button>
+    <button id="bp-step">half</button>
+    <button id="bp-cycle">cycle</button>
+    <button id="bp-reset">reset</button>
+    <span id="bp-readout"></span>
+  </div>
+  <div id="bp-detail"></div>
+</div>
+<div id="bp-coverage"></div>
+
+<script type="module">
+import './blueprint.js';
+
+const results = [];
+const ok = (name, cond, detail) =>
+  results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`);
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+try {
+  // blueprint.js boots itself on import; wait for it to reveal the diagram.
+  for (let i = 0; i < 200 && document.getElementById('bp-main').hidden; i++) await sleep(50);
+  const main = document.getElementById('bp-main');
+  ok('page booted', !main.hidden, document.getElementById('bp-status').textContent);
+
+  const svg = document.getElementById('bp-svg');
+  const bp = await (await fetch('blueprint.json')).json();
+
+  // --- everything derived is actually drawn --------------------------------
+  const edges = [...svg.querySelectorAll('.bp-edge')];
+  ok('every link is drawn', edges.length === bp.links.length,
+     `${edges.length} drawn vs ${bp.links.length} derived`);
+  const missingLink = bp.links.find(
+    (l) => !svg.querySelector(`[data-control="${CSS.escape(l.control)}"]`));
+  ok('no link is missing', !missingLink, missingLink && missingLink.control);
+  const missingUnit = bp.units.find(
+    (u) => !svg.querySelector(`[data-value="${u.name}"]`));
+  ok('every unit has a live readout', !missingUnit, missingUnit && missingUnit.name);
+
+  // --- nothing is drawn outside the canvas ---------------------------------
+  // The rail names used to be anchored to the left of the rail, which put the
+  // longest of them at a negative x -- clipped away with no error anywhere.
+  const vb = svg.viewBox.baseVal;
+  let worstOut = null;
+  for (const t of svg.querySelectorAll('text')) {
+    const b = t.getBBox();
+    const out = Math.max(-b.x, -b.y, b.x + b.width - vb.width, b.y + b.height - vb.height);
+    if (out > 1 && (!worstOut || out > worstOut.out)) {
+      worstOut = { out, text: t.textContent, x: b.x.toFixed(0), y: b.y.toFixed(0) };
+    }
+  }
+  ok('all text is inside the viewBox', !worstOut,
+     worstOut && `"${worstOut.text}" at ${worstOut.x},${worstOut.y} overflows by ${worstOut.out.toFixed(0)}`);
+
+  // --- no two labels sit on top of each other ------------------------------
+  const texts = [...svg.querySelectorAll('text')].map((t) => ({
+    t, b: t.getBBox(), s: t.textContent,
+  }));
+  const overlaps = [];
+  for (let i = 0; i < texts.length; i++) {
+    for (let j = i + 1; j < texts.length; j++) {
+      const a = texts[i].b, c = texts[j].b;
+      const ox = Math.min(a.x + a.width, c.x + c.width) - Math.max(a.x, c.x);
+      const oy = Math.min(a.y + a.height, c.y + c.height) - Math.max(a.y, c.y);
+      if (ox > 1 && oy > 1) {
+        overlaps.push(`"${texts[i].s}" x "${texts[j].s}" (${ox.toFixed(0)}x${oy.toFixed(0)}px)`);
+      }
+    }
+  }
+  ok('no two labels overlap', overlaps.length === 0,
+     overlaps.length ? `${overlaps.length}: ` + overlaps.slice(0, 6).join('; ') : '');
+
+  // --- the drawing is bound to the engine, not a static picture ------------
+  const valueOf = (name) =>
+    svg.querySelector(`[data-value="${name}"]`).textContent;
+  const before = bp.units.map((u) => valueOf(u.name)).join('|');
+  for (let i = 0; i < 40; i++) document.getElementById('bp-cycle').click();
+  const after = bp.units.map((u) => valueOf(u.name)).join('|');
+  ok('values follow the running chip', before !== after, `${before} -> ${after}`);
+  ok('values render as bytes', bp.units.every((u) => /^\$[0-9A-F]{2}\*?$/.test(valueOf(u.name))),
+     bp.units.map((u) => u.name + '=' + valueOf(u.name)).join(' '));
+
+  // The status register has no bit 5, so its readout must say so rather than
+  // printing a value for a flag that does not exist.
+  ok('the status register marks its missing bit', valueOf('p').endsWith('*'), valueOf('p'));
+
+  // --- switches actually open ----------------------------------------------
+  // Over a few instructions the decode PLA must open *something*; if no edge
+  // ever gains .open the control binding is dead and the diagram is decorative.
+  let sawOpen = new Set();
+  for (let i = 0; i < 120; i++) {
+    document.getElementById('bp-step').click();
+    for (const g of svg.querySelectorAll('.bp-edge.open')) sawOpen.add(g.dataset.control);
+  }
+  ok('control lines open switches', sawOpen.size >= 4,
+     `${sawOpen.size} distinct paths opened: ${[...sawOpen].slice(0, 6).join(', ')}`);
+
+  // --- picking a path explains it ------------------------------------------
+  const target = svg.querySelector('.bp-edge');
+  target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const detail = document.getElementById('bp-detail').textContent;
+  ok('picking a path fills the detail panel',
+     detail.includes(target.dataset.control) && /switches/i.test(detail),
+     detail.slice(0, 80));
+  ok('the picked path is marked', !!svg.querySelector('.bp-edge.picked'));
+
+  // --- coverage is stated, not implied -------------------------------------
+  const cov = document.getElementById('bp-coverage').textContent;
+  ok('coverage is on the page', /\d+ of \d+ transistors/.test(cov), cov);
+} catch (e) {
+  results.push('FAIL threw :: ' + (e && e.message));
+}
+
+document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+document.body.insertAdjacentHTML('beforeend',
+  '<pre id="out" style="color:#eaf2ff;padding:1rem">' + results.join('\n') + '</pre>');
+</script>
+</body></html>

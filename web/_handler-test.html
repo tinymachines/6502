@@ -149,7 +149,15 @@ f.addEventListener('load', async () => {
   ok('button reflects the state', fsBtn.textContent.trim() === '⤡', `"${fsBtn.textContent}"`);
 
   await step('exit the fallback', () => fsBtn.click());
-  await wait(300);
+  // Poll rather than sleep a fixed 300ms. Leaving fullscreen runs an async
+  // verification (webkit's request returns undefined, so a resolved await
+  // proves nothing), and on a loaded machine that can outlast any constant --
+  // this assertion failed roughly one run in four for exactly that reason,
+  // which is worse than useless: an intermittent red that is not a bug.
+  for (let i = 0; i < 60; i++) {
+    if (!con.classList.contains('immersive') && !d.body.classList.contains('no-scroll')) break;
+    await wait(50);
+  }
   ok('fallback exits cleanly',
      !con.classList.contains('immersive') && !con.classList.contains('faux') &&
      !d.body.classList.contains('no-scroll'),

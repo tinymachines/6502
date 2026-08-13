@@ -20,10 +20,11 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 25 tests, bit-exact against the original. |
+| Simulation | Complete. 38 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
+| Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
@@ -59,7 +60,7 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 25 tests: netlist, functional, golden, rewind
+cargo test --workspace              # 38 tests: netlist, functional, golden, rewind, blueprint
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
 cargo clippy --workspace --all-targets
@@ -74,6 +75,7 @@ node tools/golden-trace/gen.js --steps 3000
 # Web app, development: no build step, no service worker. Serve web/ directly.
 wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
+cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 python3 -m http.server 8777 --directory web        # http://localhost:8777/
 
 # Web app, production shape: content-hashed bundle + service worker into dist/
@@ -97,7 +99,7 @@ python3 archive/tools/build-archive.py && bash deploy/archive-deploy.sh
 python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
-`web/pkg/`, `web/layout.bin`, `web/build-info.json`, `dist/`, the golden trace
+`web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/build-info.json`, `dist/`, the golden trace
 and everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
 die data.
@@ -159,6 +161,9 @@ mirrors the spirit of the original's query parameters, and is how the app is
 driven in headless checks. `?lab=adc&step=4` opens one moment of a walkthrough,
 which is the only practical way to point someone at a specific half-cycle.
 
+`blueprint.html` takes `?program=N&run=1&path=CONTROL` — e.g.
+`blueprint.html?path=dpc23_SBAC` pins the accumulator's path to the special bus.
+
 ### Development harnesses in `web/`
 
 Four pages prefixed `_` that are **never shipped** — `build-web.py` copies only
@@ -172,6 +177,7 @@ _handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320   # what pushes the page wider than the viewport
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
+_blueprint-test.html   # the block diagram: drawn, bound, and no label collisions
 ```
 
 **Do not test the running app inside an iframe.** Headless throttles animation
@@ -339,7 +345,8 @@ plus the transistor bounding boxes for hit-testing.
 ## The renderer (`web/`)
 
 Plain ES modules, no build step, no framework: `renderer.js` (WebGL2),
-`app.js` (glue + UI), `disasm.js`, `lab.js`, `index.html`, `style.css`, plus
+`app.js` (glue + UI), `disasm.js`, `lab.js`, `programs.js` (shared program list),
+`blueprint.js` (a second page, see below), `index.html`, `style.css`, plus
 `site-nav.js` and `version-footer.js` which are **shared verbatim with the
 archive** (`build-archive.py` copies them). A second copy of either would drift.
 
@@ -391,6 +398,86 @@ through `nodeId()` gives both a die region to frame and a live readout.
 What `adc` demonstrates is the thing the whole project exists to show: at +5
 half-cycles the adder holds `$42` and the accumulator still reads `$40`. The
 result exists and is in no register. `?lab=adc&step=4` links to that moment.
+
+### The Blueprint (`blueprint.html`, `blueprint.js`, `blueprint.rs`)
+
+An idealised block diagram of the datapath, on its own page. The die view shows
+the chip as it is and is nearly unreadable; this shows the same chip with the
+geometry removed — buses as rails, registers as boxes, a switch wherever the
+silicon has one, running live off the same engine.
+
+**Nothing in it is drawn.** The units, the paths, the control line on each path
+and the order things sit in are all derived in
+`crates/v6502-netlist/src/blueprint.rs` and exported as `web/blueprint.json`;
+`blueprint.js` is a layout engine and a state binding. If a fact about the 6502
+ever appears in the JavaScript, it is in the wrong file.
+
+Three measurements make the derivation possible, and each is worth knowing
+before changing anything here:
+
+1. **Names decompose.** ~300 node names are `stem` + `bit` (`sb0`, `alua7`), so
+   the units and their widths fall out of the name table.
+2. **The datapath is a real bit-slice.** For 29 of 34 wide units, bit index runs
+   monotonically down the die while die X stays fixed. The five exceptions —
+   `ir`, `notir`, `p`, `Pout`, `pipeUNK` — are exactly the control section,
+   which is not bit-sliced and is not drawn.
+3. **Every datapath connection is a switch under one named control line.** A
+   pass transistor joining two named units *on the same bit row* is one bit of a
+   bus path, and the name on its gate is the decode-PLA output that opens it.
+
+Result: 16 units, 21 paths, 159 switches — the 6502 datapath, computed.
+
+- **The control line is the edge, not the unit pair.** This is the load-bearing
+  design choice. Keying by unit pair invents two edges where the silicon has
+  one, because `sb0` and `dasb0` are the *same node*; keying by control puts all
+  eight switches in one group. It also keeps genuine splits visible:
+  `dpc20_ADDSB06` opens the adder onto SB for bits 0–6 and `dpc19_ADDSB7` does
+  bit 7 alone — that is the shifter, and merging them would hide it.
+- **Stems sharing any node are merged into one wire.** Without this, `dasb`'s
+  *unshared* bits survive as a phantom unit and the accumulator draws as
+  connected to a stub with nothing at the far end.
+- **A narrow link survives if a wider link already joins the same pair.** The
+  width filter exists to reject two wires that happen to touch, but
+  `dpc19_ADDSB7` is a legitimate *single* switch. Dropping it left the diagram
+  claiming the ALU reaches SB on seven bits and bit 7 goes nowhere.
+- **Bus vs register is decided by connectivity, and the physical criterion is
+  wrong.** "A bus is a net nothing drives statically" sounds better and was
+  measured: it separates *dynamic from static* storage, not bus from register.
+  It calls `a`/`x`/`y`/`s` buses (the 6502's registers are dynamic, with no
+  static pulldown) and `adh` driven (it carries constant generators). Degree
+  over distinct partners is what is actually used.
+- **Rail order needs `row_offset`, not mean Y.** Every bus spans all eight rows,
+  so their mean Y values are all mid-datapath and say nothing about which wire
+  is above which. Measured against its *own* row, a bus has a consistent offset,
+  and that is the stacking order.
+- **Rows come from the bit index in the name, never from the centroid.** On
+  `adh` the two disagree — its constant generators for `$01` stack access and
+  vector fetches drag bits 2 and 3 out of order. `bit_index_runs_down_the_die`
+  pins that single inversion so a second, real one cannot hide behind it.
+- **`placeLabels()` must run after the SVG is visible.** `getBBox()` inside a
+  `hidden` container measures zero, every box then "clears" every other box, and
+  the collision pass silently does nothing. Same trap as sizing a canvas in a
+  hidden panel. This shipped once and `_blueprint-test.html` caught it.
+- **The service worker's offline navigation fallback now tries the requested
+  page before `SHELL`.** With one entry point, falling back to `index.html` was
+  right; with two, opening `blueprint.html` offline silently served the
+  *explorer* — a wrong page that renders perfectly, which is the hardest kind of
+  failure to notice.
+- `web/programs.js` is shared by `app.js` and `blueprint.js`. It was inlined in
+  `app.js`; two copies would drift, and "Fibonacci" meaning different things on
+  two pages is exactly the difference nobody notices.
+
+The Rust side is tested (`crates/v6502-netlist/tests/blueprint.rs`, 13 tests)
+rather than snapshotted. The important one is
+`every_switch_is_a_real_transistor_on_the_right_bit`, which re-resolves every
+drawn switch through the netlist instead of taking the blueprint's word for it —
+that is what makes the picture a derivation rather than an illustration.
+
+**It states its own coverage: 159 of 3510 transistors.** The bus fabric is a
+small slice of a chip that is 76% pass transistors, and the static gates, the
+decode PLA, the timing chain and the pads are all outside what a bus diagram can
+honestly show. An idealised view that hides how much it idealised is the same
+failure as an archive that hides its gaps, so the number is on the page.
 
 ### Renderer invariants — each of these was a real bug
 

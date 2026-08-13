@@ -67,13 +67,23 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Navigations: network first, so a deploy is picked up as soon as the user is
-  // online, with the cached shell as the offline fallback.
+  // online, with the cache as the offline fallback.
+  //
+  // The requested page is tried before SHELL. There is more than one entry
+  // point now, and falling straight back to the shell meant that opening
+  // blueprint.html offline silently served the explorer instead -- a wrong page
+  // that renders perfectly, which is the hardest kind of failure to notice.
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       try {
         return await fetch(req);
       } catch {
-        return (await caches.match(SHELL)) || Response.error();
+        const url = new URL(req.url);
+        url.hash = '';
+        url.search = '';
+        return (await caches.match(url.href))
+          || (await caches.match(SHELL))
+          || Response.error();
       }
     })());
     return;
@@ -165,6 +175,8 @@ def main() -> None:
     b.copy_hashed("lab.js")
     b.copy_hashed("version-footer.js")
     b.copy_hashed("site-nav.js")
+    b.copy_hashed("programs.js")
+    b.copy_hashed("blueprint.json")
     for icon in sorted((src / "icons").iterdir()):
         if icon.suffix in {".png", ".svg"}:
             b.copy_hashed(f"icons/{icon.name}")
@@ -180,17 +192,31 @@ def main() -> None:
     )
     b.emit("pkg/v6502_wasm.js", glue.encode())
 
-    # 3. app.js: four module imports plus one runtime fetch.
+    # 3. app.js: five module imports plus one runtime fetch.
     app = b.read("app.js").decode()
     for original, resolved in [
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./renderer.js", "./" + b.ref("renderer.js")),
         ("./disasm.js", "./" + b.ref("disasm.js")),
         ("./lab.js", "./" + b.ref("lab.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
     ]:
         app = replace_once(app, f"'{original}'", f"'{resolved}'", where="app.js")
     app = replace_once(app, "fetch('layout.bin')", f"fetch('{b.ref('layout.bin')}')", where="app.js")
     b.emit("app.js", app.encode())
+
+    # 3b. blueprint.js: two module imports plus its own runtime fetch. The JSON
+    #     is data the page cannot start without, so it is hashed like any other
+    #     dependency rather than left mutable.
+    bp = b.read("blueprint.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+    ]:
+        bp = replace_once(bp, f"'{original}'", f"'{resolved}'", where="blueprint.js")
+    bp = replace_once(bp, "fetch('blueprint.json')",
+                      f"fetch('{b.ref('blueprint.json')}')", where="blueprint.js")
+    b.emit("blueprint.js", bp.encode())
 
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
@@ -205,6 +231,17 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         html = replace_once(html, f'"{original}"', f'"{b.ref(original)}"', where="index.html")
     b.emit("index.html", html.encode(), hashed=False)
+
+    # 5b. blueprint.html: the second unhashed entry point. Same treatment, and
+    #     it must be listed here explicitly -- build-web.py copies only the
+    #     files it names, which is also why the `_`-prefixed dev harnesses
+    #     cannot reach dist/.
+    bph = b.read("blueprint.html").decode()
+    for original in ["style.css", "blueprint.js", "version-footer.js", "site-nav.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        bph = replace_once(bph, f'"{original}"', f'"{b.ref(original)}"', where="blueprint.html")
+    b.emit("blueprint.html", bph.encode(), hashed=False)
 
     # 6. build-info.json: copied unhashed, and deliberately NOT routed through
     #    emit(), so it never enters the precache list. Everything else here is

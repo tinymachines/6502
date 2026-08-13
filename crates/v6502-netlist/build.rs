@@ -240,6 +240,7 @@ struct Polygon {
 const LAYER_COUNT: usize = 6;
 
 const LAYOUT_MAGIC: &[u8; 8] = b"V6502LAY";
+const CENTROID_MAGIC: &[u8; 8] = b"V6502CEN";
 /// Byte offset at which the vertex array starts. Fixed so the JS side can build
 /// typed-array views without arithmetic, and 4-byte aligned for `Uint16Array`.
 const LAYOUT_HEADER_LEN: usize = 96;
@@ -515,6 +516,44 @@ fn build(refdir: &Path, out: &Path) -> Result<String, String> {
     let layout_path = out.join("layout.bin");
     fs::write(&layout_path, &layout)
         .map_err(|e| format!("writing {}: {e}", layout_path.display()))?;
+
+    // --- centroids: where each node sits on the die ---
+    //
+    // The blueprint derivation orders its columns and rails by real die
+    // position, so the idealised drawing is a *monotone remap* of the silicon
+    // rather than an independent invention -- a reader can carry left-of/
+    // above-of relationships between the two views. That needs one point per
+    // node, which the simulation itself has no use for, so it goes in its own
+    // small blob rather than into `netlist.bin`.
+    //
+    // The mean of per-polygon centroids, not of raw vertices: a node with one
+    // sprawling polygon and twenty small ones should not be dragged toward
+    // whichever happens to have the most points.
+    let mut sums = vec![(0f64, 0f64, 0u32); node_count];
+    for p in &polygons {
+        let n = p.node as usize;
+        let cx = p.pts.iter().map(|q| q.0 as f64).sum::<f64>() / p.pts.len() as f64;
+        let cy = p.pts.iter().map(|q| q.1 as f64).sum::<f64>() / p.pts.len() as f64;
+        sums[n].0 += cx;
+        sums[n].1 += cy;
+        sums[n].2 += 1;
+    }
+    let mut c = Blob(Vec::with_capacity(8 + 4 + node_count * 4));
+    c.0.extend_from_slice(CENTROID_MAGIC);
+    c.u32(node_count as u32);
+    for (sx, sy, n) in &sums {
+        if *n == 0 {
+            // No geometry: not placeable. NO_CENTROID rather than (0,0), which
+            // is a real corner of the die and would silently anchor a column.
+            c.u16(u16::MAX);
+            c.u16(u16::MAX);
+        } else {
+            c.u16((sx / *n as f64).round() as u16);
+            c.u16((sy / *n as f64).round() as u16);
+        }
+    }
+    let cen_path = out.join("centroids.bin");
+    fs::write(&cen_path, &c.0).map_err(|e| format!("writing {}: {e}", cen_path.display()))?;
 
     let mut summary = String::new();
     let _ = write!(
