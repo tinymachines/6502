@@ -371,25 +371,78 @@ function focusPanel(name) {
   if (tab) tab.click();
 }
 
+/**
+ * Fullscreen, including on the platforms that do not have it.
+ *
+ * iOS Safari implements fullscreen only for video elements: `requestFullscreen`
+ * on a div is absent on iPhone and unreliable elsewhere. This used to be a bare
+ * try/catch that swallowed the failure, so on a phone the button did nothing at
+ * all and said nothing about why.
+ *
+ * So the API is treated as an optimisation rather than a requirement. Try it;
+ * if it is missing, throws, or silently does not take effect, cover the viewport
+ * with position:fixed instead. The layout is identical either way because both
+ * paths set `.immersive` — only `.faux` adds the covering.
+ */
 function setupFullscreen() {
   const consoleEl = $('console');
   const btn = $('btn-fullscreen');
-  btn.onclick = async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await consoleEl.requestFullscreen({ navigationUI: 'hide' });
-    } catch {
-      // Safari on iPhone has no element fullscreen; the layout is already
-      // usable without it, so failing quietly is the right behaviour.
-    }
-  };
-  // The canvas backing store must follow the new viewport.
-  document.addEventListener('fullscreenchange', () => {
-    btn.textContent = document.fullscreenElement ? '⤡' : '⛶';
+
+  // Resolved per click rather than captured once: the capability is a property
+  // of the browser we are running in, and reading it at the moment of use keeps
+  // this honest about what is actually available.
+  const nativeEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const request = () => consoleEl.requestFullscreen || consoleEl.webkitRequestFullscreen;
+  const exit = () => document.exitFullscreen || document.webkitExitFullscreen;
+
+  const paint = () => {
+    const on = consoleEl.classList.contains('immersive');
+    btn.textContent = on ? '⤡' : '⛶';
+    btn.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Fullscreen');
+    btn.title = on ? 'Exit fullscreen (F)' : 'Fullscreen (F)';
+    // The canvas backing store must follow the new viewport, and the panel
+    // lock has to be measured against it.
     requestAnimationFrame(() => {
       lockPanelHeight();
       state.renderer.resize();
     });
+  };
+
+  const setFaux = (on) => {
+    consoleEl.classList.toggle('immersive', on);
+    consoleEl.classList.toggle('faux', on);
+    document.body.classList.toggle('no-scroll', on);
+    paint();
+  };
+
+  btn.onclick = async () => {
+    if (consoleEl.classList.contains('faux')) { setFaux(false); return; }
+    if (nativeEl()) {
+      const off = exit();
+      if (off) { try { await off.call(document); } catch { /* leaves the class alone */ } }
+      return;
+    }
+    const on = request();
+    if (on) {
+      // webkitRequestFullscreen returns undefined rather than a promise, so a
+      // resolved await proves nothing. Check whether it actually took.
+      try { await on.call(consoleEl, { navigationUI: 'hide' }); } catch { /* fall through */ }
+      await new Promise((r) => setTimeout(r, 120));
+      if (nativeEl()) return;
+    }
+    setFaux(true);
+  };
+
+  for (const ev of ['fullscreenchange', 'webkitfullscreenchange']) {
+    document.addEventListener(ev, () => {
+      consoleEl.classList.toggle('immersive', !!nativeEl());
+      paint();
+    });
+  }
+
+  // Real fullscreen exits itself on Escape; the fallback has to be told.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && consoleEl.classList.contains('faux')) setFaux(false);
   });
 }
 
@@ -410,7 +463,10 @@ function setupFullscreen() {
 function lockPanelHeight() {
   const panels = $('panels');
   panels.style.removeProperty('--panel-lock');
-  if (!document.fullscreenElement) return;
+  // Keyed on the class, not on document.fullscreenElement: the fallback path
+  // has no fullscreen element and needs the lock just as much, since it is the
+  // same layout.
+  if (!$('console').classList.contains('immersive')) return;
 
   let tallest = 0;
   for (const p of panels.querySelectorAll('.panel')) {

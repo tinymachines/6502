@@ -572,22 +572,60 @@ select:focus { outline: none; border-color: var(--accent); }
 
 /* ---------- fullscreen ---------- */
 
-.console:fullscreen { border-radius: 0; border: 0; box-shadow: none; height: 100vh; }
-.console:fullscreen .console-body { flex: 1; min-height: 0; }
-.console:fullscreen #stage { height: auto; flex: 1; }
+/* Keyed on a class, not on `:fullscreen`.
+
+   Two reasons. iOS Safari has no element fullscreen at all, so the console has
+   to be able to fill the viewport without the API — app.js adds `.immersive`
+   either way. And an unknown pseudo-class invalidates the *whole* selector
+   list, so `.console:fullscreen, .console.immersive { ... }` would silently
+   drop everything on any browser that does not know `:fullscreen`. */
+.console.immersive {
+  border-radius: 0; border: 0; box-shadow: none;
+  height: 100vh; height: 100dvh;   /* dvh: excludes mobile browser chrome */
+}
+.console.immersive .console-body { flex: 1; min-height: 0; }
+.console.immersive #stage { height: auto; flex: 1; }
 /* Fixed height, not max-height: the panels sit below the canvas here, so a tab
    change that resized them would resize the stage and jump the die. app.js
    measures the tallest panel into --panel-lock; the cap keeps a long Memory
    dump from eating the view, and the fallback covers the first frame. */
-.console:fullscreen #panels {
+.console.immersive #panels {
   height: min(var(--panel-lock, 40vh), 45vh);
   overflow-y: auto; overscroll-behavior: contain;
 }
 @media (min-width: 68rem) {
   /* Above the breakpoint the panels are a side column and cannot affect the
      stage's height at all, so the lock is unnecessary. */
-  .console:fullscreen #panels { height: auto; max-height: none; }
+  .console.immersive #panels { height: auto; max-height: none; }
 }
+
+/* The fallback when the Fullscreen API is missing or refuses: cover the
+   viewport ourselves. Not as good as real fullscreen — the browser's own chrome
+   stays — but it is the difference between a button that works and one that
+   does nothing on every iPhone. */
+.console.faux {
+  position: fixed; inset: 0; z-index: 60;
+  padding-bottom: var(--sa-b);
+  /* Opaque. The normal console is 92% and relies on the page behind it being a
+     solid background; once it is fixed over a scrolling page, the hero text
+     shows straight through it. */
+  background: var(--surface);
+}
+body.no-scroll { overflow: hidden; overscroll-behavior: none; }
+
+/* The console's own z-index is powerless here, and it took two rounds to see
+   why. `.wrap` is `position: relative; z-index: 1`, so every section opens a
+   stacking context and confines its descendants: the console's z-index only
+   orders it *within* #explorer. Against everything outside, what competes is
+   #explorer's own z-index of 1.
+
+   That loses twice over. The header sits at the root with z-index 30, so it
+   paints on top; and every later `.wrap` section is also z-index 1, so document
+   order puts all of them on top too — which looks exactly like the console
+   being transparent, and is not. Lifting #explorer is the fix; the header is
+   simply removed, which an immersive mode wants anyway. */
+body.no-scroll .site-head { display: none; }
+body.no-scroll #explorer { z-index: 70; }
 
 /* ---------- content sections ---------- */
 

@@ -502,8 +502,30 @@ Layout gotchas already paid for, in narrowing order of subtlety:
   dropped and the transport tightened. `_overflow-test.html?w=320` names the
   culprit, which is otherwise very hard to attribute — the element that
   overflows is rarely the element at fault.
+- **Fullscreen does not depend on the Fullscreen API.** iOS Safari implements it
+  for video elements only, so `requestFullscreen` on a div is absent on iPhone;
+  this used to be a bare try/catch, meaning the button did nothing and said
+  nothing. It now tries the API, *verifies it actually took* (webkit's returns
+  undefined, not a promise, so a resolved await proves nothing), and otherwise
+  covers the viewport with `position: fixed`. Both paths set `.immersive`; only
+  the fallback adds `.faux`.
+  - **The CSS keys on a class, never `:fullscreen`.** An unknown pseudo-class
+    invalidates the *whole* selector list, so `.console:fullscreen,
+    .console.immersive { … }` would silently drop everything on a browser that
+    does not know `:fullscreen`.
+  - **`z-index` on the console cannot work, and this cost two rounds to see.**
+    Every `.wrap` is `position: relative; z-index: 1`, so each section opens a
+    stacking context and confines its descendants — the console's z-index only
+    orders it *within* `#explorer`. Outside, what competes is `#explorer`'s own
+    z-index of 1, which loses to the header (root, 30) and to every *later*
+    `.wrap` sibling by document order. The symptom is page text appearing
+    through the console, which reads exactly like a transparency bug and is not
+    one. `body.no-scroll #explorer { z-index: 70 }` is the fix.
+  - The fallback also needs an **opaque** background: the console is normally 92%
+    and relies on a solid page behind it.
 - **Fullscreen pins the panel height to the tallest panel** (`--panel-lock`, set
-  by `lockPanelHeight()`). Fullscreen is the one layout where panels sit below
+  by `lockPanelHeight()`), keyed on `.immersive` rather than
+  `document.fullscreenElement` so the fallback gets it too. Fullscreen is the one layout where panels sit below
   the canvas and the stage takes what is left, so switching from Bus to Memory
   resized the viewport and visibly jumped the die. Only fullscreen: elsewhere
   reserving the maximum would just add dead space.
