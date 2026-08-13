@@ -24,6 +24,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
+| Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
 
 Known gaps, all deliberate:
@@ -35,6 +36,9 @@ Known gaps, all deliberate:
   SwiftShader software rasterisation (~2–5 fps), which says nothing about a real
   device.
 - No CI. The tests and checks below are run by hand.
+- **The full Wayback drip is mid-run** (`archive/tools/drip.py`): 24,442 URLs,
+  ~2.5 GB, ~12h at the polite rate. Resumable and safe to leave. `--status` says
+  where it is.
 
 ## Commands
 
@@ -70,16 +74,25 @@ python3 tools/build-web.py web dist
 # Regenerate the PWA icons (only after changing the artwork)
 python3 tools/make-icons.py web/icons
 
+# Git metadata for the version footer. deploy.sh runs this; do it by hand when
+# serving web/ directly, or the footer stays empty.
+python3 tools/build-info.py web --kind simulator
+
 # Publish. Does all of the above, verifies it, and swaps the live symlink.
 sudo systemctl start 6502-deploy
 journalctl -u 6502-deploy -n 40
+
+# The preservation archive, deployed separately (see its own section below).
+python3 archive/tools/build-archive.py && bash deploy/archive-deploy.sh
 
 # Run the original for comparison
 python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
-`web/pkg/`, `web/layout.bin`, `dist/` and the golden trace are all generated and
-gitignored. Regenerate after any change to the Rust crates or the die data.
+`web/pkg/`, `web/layout.bin`, `web/build-info.json`, `dist/`, the golden trace
+and everything under `archive/` except `urls/` and `tools/` are generated or
+fetched, and gitignored. Regenerate after any change to the Rust crates or the
+die data.
 
 **Develop against `web/`, not `dist/`.** The hashed bundle exists for production
 caching; iterating through it means rebuilding for every edit, and a service
@@ -436,6 +449,34 @@ app should render fully with the server down.
 A `#hash` deep link needs re-applying after boot: the target does not exist while
 `#app` is hidden, so the browser's initial scroll goes nowhere.
 
+### The version footer
+
+`tools/build-info.py` stamps git metadata into `build-info.json`;
+`web/version-footer.js` renders `v0.14 @7e02172 · deployed 3m ago` into any
+`[data-version-footer]` element. Both the simulator and the archive carry it, and
+both stamp separately since they deploy separately. A dirty working tree gets a
+trailing `+`, so a deploy from uncommitted changes says so.
+
+- **The elapsed time is computed on the client, and that is the point.** This
+  site is served from content-hashed, long-cached files precisely so pages are
+  *not* regenerated; a relative time baked into HTML is wrong within the hour.
+  Only ISO timestamps are stamped. It re-ticks every 30s so a tab left open does
+  not keep claiming it shipped a minute ago.
+- **`build-info.json` bypasses `emit()` in `build-web.py`**, so it never enters
+  the service worker's precache. Everything else is immutable-by-hash and safe to
+  cache forever; this is the one file whose whole job is to reflect the deploy
+  that just happened, and a worker serving it cache-first would make the footer
+  lie.
+- **`import.meta.url` resolves `build-info.json`**, not a page-relative path. The
+  archive nests pages two deep and ships its own stamp, so the script has to be
+  self-locating.
+- **No inline script.** The CSP is `script-src 'self'` with no `'unsafe-inline'`.
+- Use a **literal `·`**, not `content:"\00b7"` — a short CSS escape is only
+  unambiguous when what follows cannot be read as another hex digit, and the
+  parser took the leading `\0` as NULL, rendering `␀b7`. The DOM check passed
+  clean: the text was right and the escape lived in a `::before` rule, so only a
+  screenshot could catch it.
+
 ### Geometry pipeline
 
 `build.rs` triangulates all 8233 polygons with earcut at build time (0 degenerate)
@@ -495,6 +536,13 @@ copy is the source of truth but is not read live.
   variable so every header is declared once at server level.
 - Assets are not content-hashed, so everything revalidates (`max-age=60,
   must-revalidate`; HTML `no-cache`). Deploys take effect immediately.
+- **`/archive/` is an `alias` beside `releases/`, not inside a release.** It is
+  ~2.5 GB that changes only when something new is recovered, so copying it on
+  every front-end deploy would be absurd. That location declares no `add_header`
+  either, for the reason above; its Cache-Control comes from the same `map`, with
+  a week for `/archive/(full|gallery/(thumb|view))/`. `autoindex` stays off: the
+  collection is meant to be browsed through pages that carry attribution, not a
+  bare directory listing. nginx follows the `full` symlink out of the alias root.
 
 ### DNS and TLS
 
@@ -551,8 +599,9 @@ Before pushing anything, two things worth keeping true:
 
 ## The preservation archive (`archive/`)
 
-A mirror of visual6502.org, which is decaying. Separate from the simulator and
-deployed separately; see `archive/README.md` for the full account.
+A mirror of visual6502.org, which is decaying. **Live at
+<https://6502.tinymachines.ai/archive/>.** Deployed separately from the
+simulator; see `archive/README.md` for the full account.
 
 What is wrong with the source site, as of August 2026:
 
@@ -570,14 +619,48 @@ listings are 403, so nothing on the open web points at it. The file list had to
 be reconstructed from the Wayback CDX index even though the bytes come from the
 live origin.
 
+What is recovered: **127 wiki pages** rebuilt from wikitext (42 more linked to
+Wayback), **83 wiki images**, **40 chips / 516 photographs / 2.2 GB**, and the
+live site's other 71 files.
+
 ```bash
 python3 archive/tools/wayback-index.py --refetch   # rebuild the URL manifests
 bash     archive/tools/mirror-live.sh              # crawl what the site links
 bash     archive/tools/harvest-site.sh             # the 2.3 GB nothing links to
 python3  archive/tools/harvest-wiki.py             # the wiki, out of Wayback
+python3  archive/tools/fill-gaps.py                # backfill what the origin lost
 python3  archive/tools/build-archive.py            # -> archive/public/
-sudo bash deploy/archive-deploy.sh                 # publish to /archive/
+bash     deploy/archive-deploy.sh                  # publish to /archive/
+
+# The completionist pass: the entire Wayback index for the domain.
+python3 archive/tools/drip.py --index              # 24,442 URLs into SQLite
+python3 archive/tools/drip.py --delay 1.5          # ~12h, resumable, Ctrl-C safe
+python3 archive/tools/drip.py --status             # progress, ETA, failures
 ```
+
+### The drip (`drip.py`) — currently mid-run
+
+The targeted harvest took what was known to be worth having. The drip takes the
+whole domain index — 24,442 URLs, ~2.5 GB, mostly MediaWiki navigation
+permutations and some spam pages from an old compromise — on the principle that
+the cheapest moment to collect something is before anyone has decided it matters.
+Sorting comes later; collection comes first.
+
+- State is **SQLite, one row per URL**, committed as it goes. A kill loses at
+  most the request in flight. Failures stay pending with their error and attempt
+  count, so a re-run retries only those.
+- **Digest hardlinking**: CDX carries a content digest, so a URL whose bytes we
+  already hold is linked rather than refetched. Only 2% here — these pages differ
+  in small ways — but it is free and would matter on a duplicated corpus.
+- **Query strings are kept in the on-disk path.** MediaWiki puts the entire page
+  identity in the query string; dropping it collapses thousands of pages onto one
+  file. Over-long names are truncated with a hash suffix.
+- **Do not raise the rate limits.** The Internet Archive is a charity preserving
+  this for everyone, and one request at a time with backoff on 429 is the deal.
+
+Pulls **one snapshot per URL**, not full version history — that is a much larger
+second pass. `blog.visual6502.org` is on Blogger and is not in this domain index;
+it needs its own run.
 
 ### What makes the recovery work
 
@@ -624,10 +707,22 @@ originally archived bytes — no Wayback toolbar, no link rewriting to undo late
   the licence compliance, not decoration.
 - **Full-size image links point at our own mirror, not at visual6502.org.** An
   archive that sources originals from the site it is archiving stops working the
-  moment that site does.
-- **`archive/public/full` is a relative symlink** to `../mirror/visual6502.org/images`,
-  so `mirror/` must be published as a *sibling* of `archive/`. `rsync -a`
-  preserves the symlink instead of copying 2.3 GB through it.
+  moment that site does. This is not theoretical: `fill-gaps.py` found two Atari
+  TIA scans that the origin now 404s and only the Archive still holds.
+- **`archive/public/full` is a relative symlink** to the *whole*
+  `../mirror/visual6502.org` tree, not just `images/`, so `mirror/` must be
+  published as a *sibling* of `archive/`. The site's own per-chip pages live at
+  `images/pages/*.html` and reference `../<chip>/photo.jpg` and `../../main.css`;
+  serving the tree intact makes every relative link resolve as it did originally,
+  with no rewriting to get wrong. `rsync -a` preserves the symlink rather than
+  copying 2.3 GB through it.
+- **Everything served must be reachable by clicking.** `File:` pages embed their
+  image (their wikitext is only the description — MediaWiki supplied the picture),
+  and `wiki/images.html` is a contact sheet of all 83 so the ones whose articles
+  survive only as renderings still have a home. Reachable only as a thumbnail is a
+  quieter version of not reachable at all.
+- **The simulator links to the archive** (header nav and credit section). It did
+  not at first, which reproduced the exact failure the archive exists to undo.
 - **Nothing fetched is committed** — only `archive/urls/` (the manifests, which
   are ours) and the tools. Same reasoning as the `extern/` submodule: this repo
   points at NC-SA data rather than redistributing it.
