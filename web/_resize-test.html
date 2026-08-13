@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+  Development harness, never shipped.
+
+  Resizes the real renderer and asks the only question that matters: after the
+  resize, is the die still on screen? "On screen" is measured by reading the
+  composited pixels back, not inferred from the camera numbers -- a camera can
+  be perfectly in range while the backing store is the wrong shape.
+
+  An earlier version of this drove index.html inside an iframe. That was
+  useless: headless throttles animation frames in an iframe to nearly zero, so
+  the canvas simply never redrew and every scenario looked broken. Here the
+  renderer is constructed at top level and render() is called synchronously, so
+  the test controls exactly how many frames happen.
+
+    http://localhost:8777/_resize-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>
+  body { margin: 0; background: #0b1120; color: #eaf2ff; font: 12px ui-monospace, monospace; }
+  #stage { width: 800px; height: 500px; background: #050912; }
+  #die { width: 100%; height: 100%; display: block; }
+  pre { padding: 1rem; white-space: pre-wrap; }
+  .f { color: #fb7185; }
+</style>
+</head><body>
+<div id="stage"><canvas id="die"></canvas></div>
+<script type="module">
+import { DieRenderer, parseLayout } from './renderer.js';
+
+const results = [];
+const ok = (name, cond, detail) =>
+  results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`);
+
+const stage = document.getElementById('stage');
+const canvas = document.getElementById('die');
+const layout = parseLayout(await (await fetch('layout.bin')).arrayBuffer());
+const r = new DieRenderer(canvas, layout, 1725);
+
+// Light every node so the die is unambiguously visible when drawn.
+const levels = new Uint8Array(1725).fill(255);
+r.setNodeLevels(levels);
+
+/** Resize the stage the way a window resize would, then draw. */
+function resizeTo(w, h) {
+  stage.style.width = w + 'px';
+  stage.style.height = h + 'px';
+  void canvas.clientWidth;        // force layout before the renderer measures
+  r.render();
+}
+
+/**
+ * Fraction of the canvas showing something other than background.
+ *
+ * Read straight after render() in the same task: the drawing buffer is only
+ * guaranteed valid until the task ends, since preserveDrawingBuffer is false.
+ */
+function inked() {
+  const gl = r.gl;
+  const w = canvas.width, h = canvas.height;
+  const px = new Uint8Array(w * h * 4);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  let n = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i] + px[i + 1] + px[i + 2] > 40) n++;
+  }
+  return n / (w * h);
+}
+
+const backingMatches = () => {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  return canvas.width === Math.max(1, Math.floor(canvas.clientWidth * dpr)) &&
+         canvas.height === Math.max(1, Math.floor(canvas.clientHeight * dpr));
+};
+
+const state = () =>
+  `backing=${canvas.width}x${canvas.height} client=${canvas.clientWidth}x${canvas.clientHeight} ` +
+  `scale=${r.camera.scale.toExponential(2)} framed=${r.userFramed} ink=${inked().toFixed(3)}`;
+
+// --- baseline -------------------------------------------------------------
+resizeTo(800, 500);
+ok('draws at all', inked() > 0.05, state());
+ok('backing store matches client', backingMatches(), state());
+
+// --- 1. resize while the view is automatic (never panned or zoomed) --------
+for (const [w, h] of [[520, 820], [1200, 300], [320, 900], [900, 600]]) {
+  resizeTo(w, h);
+  ok(`auto view survives ${w}x${h}`, inked() > 0.05 && backingMatches(), state());
+}
+
+// --- 2. resize after the user has framed their own view --------------------
+resizeTo(900, 600);
+r.zoomAt(450, 300, 6);            // sets userFramed
+r.render();
+ok('zoomed view draws', inked() > 0.05, state());
+for (const [w, h] of [[520, 820], [1200, 300], [320, 900], [1400, 900]]) {
+  resizeTo(w, h);
+  ok(`framed view survives ${w}x${h}`, inked() > 0.05 && backingMatches(), state());
+}
+
+// --- 3. the pathological one: shrink to nothing and come back --------------
+resizeTo(900, 600);
+r.zoomAt(450, 300, 20);
+r.render();
+resizeTo(1, 1);                   // a hidden or collapsed panel measures like this
+resizeTo(900, 600);
+ok('survives collapse to 1x1 and back', inked() > 0.05 && backingMatches(), state());
+
+// --- 4. reset view after a resize ------------------------------------------
+resizeTo(400, 1000);
+r.resetView();
+r.render();
+ok('resetView frames the die after a resize', inked() > 0.05 && backingMatches(), state());
+
+// --- 5. a burst of resizes, as dragging a window edge produces --------------
+for (let i = 0; i < 40; i++) {
+  const w = 300 + ((i * 137) % 1100);
+  const h = 200 + ((i * 91) % 700);
+  resizeTo(w, h);
+}
+ok('survives 40 rapid resizes', inked() > 0.05 && backingMatches(), state());
+
+// --- 6. a driver that cannot give us the size we asked for -----------------
+// Fullscreen on a large high-DPI display is the real case: the backing store
+// wanted exceeds what the GPU will allocate, and an unchecked framebuffer draws
+// nothing at all. Forcing maxTarget down simulates that on any machine.
+resizeTo(1200, 800);
+const realMax = r.maxTarget;
+r.maxTarget = 300;
+r.canvas.width = 0;                 // make the size check miss so it re-allocates
+r.render();
+ok('capped target still draws', inked() > 0.05,
+   `backing=${canvas.width}x${canvas.height} client=${canvas.clientWidth}x${canvas.clientHeight} ink=${inked().toFixed(3)}`);
+ok('capped target keeps the aspect ratio',
+   Math.abs((canvas.width / canvas.height) - (canvas.clientWidth / canvas.clientHeight)) < 0.02,
+   `${(canvas.width / canvas.height).toFixed(3)} vs ${(canvas.clientWidth / canvas.clientHeight).toFixed(3)}`);
+
+r.maxTarget = realMax;
+r.canvas.width = 0;
+r.render();
+ok('recovers at full size', inked() > 0.05 && backingMatches(), state());
+
+// --- 7. picking must not throw when a target is missing --------------------
+ok('pick survives', (() => {
+  try { r.pick(100, 100); return true; } catch { return false; }
+})());
+
+const failed = results.filter((x) => x.startsWith('FAIL'));
+document.title = failed.length ? `${failed.length} FAILURES` : 'ALL PASS';
+document.body.insertAdjacentHTML('beforeend',
+  `<pre id="rz" class="${failed.length ? 'f' : ''}">${results.join('\n')}</pre>`);
+</script>
+</body></html>

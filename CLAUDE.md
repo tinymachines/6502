@@ -162,10 +162,19 @@ end has no other test route and screenshots do not catch this class of bug.
 
 ```bash
 _camera-test.html      # zoom limits and pan clamping, asserted
+_resize-test.html      # resize the renderer, then read back pixels: is it drawn?
+_handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320   # what pushes the page wider than the viewport
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 ```
+
+**Do not test the running app inside an iframe.** Headless throttles animation
+frames in an iframe to nearly zero, so the canvas never redraws and *every*
+scenario looks broken — an entire investigation can be spent on that artifact.
+`_resize-test.html` therefore builds the renderer at top level and calls
+`render()` synchronously; `_handler-test.html` does use an iframe, but only
+dispatches events and watches for throws, which needs no frames at all.
 
 Read the title with `--dump-dom`: each reports `ALL PASS` or `PAGE OK`.
 `_lab-probe.html` is the one to run *before* writing anything about what the
@@ -406,6 +415,22 @@ result exists and is in no register. `?lab=adc&step=4` links to that moment.
   the die) and zoomed out (larger). Without it, panning is unbounded arithmetic
   and a hard drag leaves a black screen with no way back but the keyboard.
   Asserted in `_camera-test.html`.
+- **Render targets are size-capped and checked for completeness.** A framebuffer
+  whose storage could not be allocated does not throw and does not warn — it
+  silently draws nothing, so the failure arrives as a black canvas with no error
+  anywhere, and typically only on the machine with the big monitor. Everywhere
+  except fullscreen the canvas is bounded by the page's `max-width`; fullscreen
+  on a 4K display at `devicePixelRatio` 2 asks for **7680×4320**, past the 8192
+  limit here, past the 4096 limit on many GPUs, and over half a gigabyte once
+  multisampled. `resize()` scales both axes by one factor (preserving aspect),
+  drops MSAA above `MSAA_PIXEL_LIMIT` — an aliased chip beats no chip — and
+  retries smaller if allocation still fails. `_resize-test.html` forces
+  `maxTarget` down to exercise that path on any machine.
+- **A canvas measuring ≤1px is not a viewport**, it is an element that has not
+  been laid out yet (hidden panel, mid-transition into fullscreen). `resize()`
+  ignores it once real targets exist; acting on it rebuilt every target at 1×1
+  and clamped the camera into a 1×1 zoom range, silently discarding where the
+  user was looking.
 - **Disassembly comes from `lastFetchAddr`/`lastFetchOpcode`, not from IR.** IR
   holds the opcode, but PC has already advanced past its operands, so operands
   read relative to PC belong to the *next* instruction. The simulator latches each

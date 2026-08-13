@@ -1,0 +1,98 @@
+<!doctype html>
+<!--
+  Development harness, never shipped.
+
+  Drives the real app's event handlers and reports anything that throws.
+
+  This complements _resize-test.html, which exercises the renderer in isolation.
+  A handler that throws does not look like an error to the user: it looks like
+  the app freezing, and then -- the moment anything resizes the canvas, which
+  clears it -- like the picture vanishing. So the handlers are worth checking on
+  their own.
+
+  Animation frames are throttled to nearly nothing for an iframe in headless, so
+  nothing here depends on the app's render loop running. Events are dispatched
+  directly and handlers run synchronously.
+
+    http://localhost:8777/_handler-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>
+  body { margin: 0; background: #0b1120; color: #eaf2ff; font: 12px ui-monospace, monospace; }
+  iframe { width: 1100px; height: 800px; border: 0; }
+  pre { padding: 1rem; white-space: pre-wrap; }
+  .f { color: #fb7185; }
+</style></head><body>
+<iframe id="f" src="index.html"></iframe>
+<script type="module">
+const results = [];
+const errors = [];
+const ok = (name, cond, detail) =>
+  results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`);
+
+const f = document.getElementById('f');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+f.addEventListener('load', async () => {
+  const w = f.contentWindow;
+  const d = f.contentDocument;
+  w.addEventListener('error', (e) => errors.push(`${e.message} @ ${e.lineno}:${e.colno}`));
+  w.addEventListener('unhandledrejection', (e) => errors.push('rejection: ' + e.reason));
+
+  await wait(6000);
+  ok('app booted', !d.getElementById('app').hidden, `boot hidden=${d.getElementById('boot').hidden}`);
+
+  /** Run one interaction and report whether it threw. */
+  const step = async (name, fn) => {
+    const before = errors.length;
+    try {
+      fn();
+    } catch (e) {
+      errors.push(`${name}: ${e && e.message}`);
+    }
+    await wait(250);
+    ok(name, errors.length === before, errors.slice(before).join(' | '));
+  };
+
+  await step('window resize event', () => w.dispatchEvent(new w.Event('resize')));
+  await step('reset-view button', () => d.getElementById('btn-fit').click());
+  await step('wheel zoom in', () => d.getElementById('die').dispatchEvent(
+    new w.WheelEvent('wheel', { deltaY: 240, clientX: 400, clientY: 300, bubbles: true, cancelable: true })));
+  await step('wheel zoom out', () => d.getElementById('die').dispatchEvent(
+    new w.WheelEvent('wheel', { deltaY: -240, clientX: 400, clientY: 300, bubbles: true, cancelable: true })));
+  await step('resize again after zooming', () => w.dispatchEvent(new w.Event('resize')));
+  await step('speed to 0.1x', () => {
+    const s = d.getElementById('speed');
+    s.value = '0.1';
+    s.dispatchEvent(new w.Event('change'));
+  });
+  await step('invert zoom toggle', () => {
+    const c = d.getElementById('invert-zoom');
+    c.checked = true;
+    c.dispatchEvent(new w.Event('change'));
+  });
+  await step('lab tab', () => d.querySelector('.tab[data-tab="lab"]').click());
+  await step('lab start', () => d.querySelector('[data-lab-start]').click());
+  await step('lab next', () => d.getElementById('lab-next').click());
+  await step('lab pick adc', () => {
+    const s = d.getElementById('lab-pick');
+    s.value = 'adc';
+    s.dispatchEvent(new w.Event('change'));
+  });
+  await step('resize while lab is open', () => w.dispatchEvent(new w.Event('resize')));
+  await step('program select back', () => {
+    const s = d.getElementById('program-select');
+    s.value = '1';
+    s.dispatchEvent(new w.Event('change'));
+  });
+  await step('transport: step instruction', () => d.getElementById('btn-instr').click());
+  await step('fullscreen button', () => d.getElementById('btn-fullscreen').click());
+
+  const failed = results.filter((x) => x.startsWith('FAIL'));
+  document.title = failed.length ? `${failed.length} FAILURES` : 'ALL PASS';
+  document.body.insertAdjacentHTML('beforeend',
+    `<pre id="hz" class="${failed.length ? 'f' : ''}">${results.join('\n')}` +
+    `\n\nall errors seen:\n  ${errors.length ? errors.join('\n  ') : 'none'}</pre>`);
+});
+</script>
+</body></html>

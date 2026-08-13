@@ -42,6 +42,14 @@ const DRAW_ORDER = [
 // node count needs.
 const STATE_W = 512;
 
+// Ceilings on the drawing buffer, independent of what the GPU claims it can do.
+// The passes here cost roughly 13 bytes per pixel (4x multisampled colour, the
+// resolved scene, the pick buffer, two half-resolution bloom targets), so a
+// naive fullscreen canvas on a large high-DPI display runs to hundreds of
+// megabytes and may simply fail to allocate.
+const PIXEL_BUDGET = 8_300_000;      // ~4K worth of pixels
+const MSAA_PIXEL_LIMIT = 4_000_000;  // above this, aliasing costs less than the memory
+
 const VERT = `#version 300 es
 precision highp float;
 layout(location=0) in vec2  aPos;
@@ -258,6 +266,15 @@ export class DieRenderer {
     this.bloomThreshold = 0.55;
     this.layerVisible = LAYER_INFO.map(() => true);
 
+    // The largest square target this driver will accept. Checked once: it is a
+    // property of the context, and getParameter is a synchronous round trip.
+    this.maxTarget = Math.min(
+      gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+      ...gl.getParameter(gl.MAX_VIEWPORT_DIMS),
+    );
+    this._retrying = false;
+
     this.railNodes = [];
     this.camera = { cx: 0, cy: 0, scale: 1 };
     this.pickDirty = true;
@@ -412,6 +429,14 @@ export class DieRenderer {
 
   // -- framebuffers ---------------------------------------------------------
 
+  /**
+   * Allocate a render target, or return null if the driver could not.
+   *
+   * The completeness check is the point. A framebuffer whose storage could not
+   * be allocated does not throw and does not warn: it silently draws nothing, so
+   * the failure arrives as a black canvas with no error anywhere. That is very
+   * hard to attribute after the fact, and trivial to detect here.
+   */
   _makeTarget(w, h, samples) {
     const gl = this.gl;
     const fbo = gl.createFramebuffer();
@@ -433,7 +458,12 @@ export class DieRenderer {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     }
+    const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (!complete) {
+      this._dispose({ fbo, tex, rbo });
+      return null;
+    }
     return { fbo, tex, rbo, w, h };
   }
 
@@ -448,8 +478,29 @@ export class DieRenderer {
   resize() {
     const gl = this.gl;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.max(1, Math.floor(this.canvas.clientWidth * dpr));
-    const h = Math.max(1, Math.floor(this.canvas.clientHeight * dpr));
+    let w = Math.max(1, Math.floor(this.canvas.clientWidth * dpr));
+    let h = Math.max(1, Math.floor(this.canvas.clientHeight * dpr));
+
+    // A canvas measuring a pixel or less has not been laid out yet -- it is
+    // inside a hidden panel, or mid-transition into fullscreen. Acting on that
+    // would rebuild every target at 1x1 and clamp the camera into the zoom
+    // range of a 1x1 viewport, throwing away where the user was looking.
+    if (this.fb.scene && (this.canvas.clientWidth < 2 || this.canvas.clientHeight < 2)) return;
+
+    // Never ask the driver for a target it cannot allocate. Everywhere except
+    // fullscreen the canvas is bounded by the page's max-width, but fullscreen
+    // on a 4K display at devicePixelRatio 2 asks for 7680x4320 -- past the
+    // 8192 limit on this machine, past the 4096 limit on plenty of GPUs, and
+    // over half a gigabyte once multisampled. Scale both axes by the same
+    // factor so the aspect ratio is preserved and the browser simply samples a
+    // slightly smaller buffer up to the canvas.
+    const scale = Math.min(1, this.maxTarget / w, this.maxTarget / h,
+                           Math.sqrt(PIXEL_BUDGET / (w * h)));
+    if (scale < 1) {
+      w = Math.max(1, Math.floor(w * scale));
+      h = Math.max(1, Math.floor(h * scale));
+    }
+
     if (this.canvas.width === w && this.canvas.height === h && this.fb.scene) return;
     this.canvas.width = w;
     this.canvas.height = h;
@@ -457,9 +508,13 @@ export class DieRenderer {
     for (const k of ['msaa', 'scene', 'bloomA', 'bloomB', 'pick']) this._dispose(this.fb[k]);
 
     // 4x MSAA matters here: the die is full of one-pixel-wide traces that alias
-    // badly when zoomed out.
-    const maxSamples = gl.getParameter(gl.MAX_SAMPLES);
-    this.fb.msaa = this._makeTarget(w, h, Math.min(4, maxSamples));
+    // badly when zoomed out. It is also the single largest allocation, so it is
+    // the first thing to give up if the driver refuses -- an aliased chip is
+    // enormously better than no chip.
+    const samples = w * h > MSAA_PIXEL_LIMIT
+      ? 1
+      : Math.min(4, gl.getParameter(gl.MAX_SAMPLES));
+    this.fb.msaa = samples > 1 ? this._makeTarget(w, h, samples) : null;
     this.fb.scene = this._makeTarget(w, h, 1);
     const bw = Math.max(1, w >> 1);
     const bh = Math.max(1, h >> 1);
@@ -467,6 +522,21 @@ export class DieRenderer {
     this.fb.bloomB = this._makeTarget(bw, bh, 1);
     this.fb.pick = this._makeTarget(w, h, 1);
     this.pickDirty = true;
+
+    if (!this.fb.scene || !this.fb.bloomA || !this.fb.bloomB) {
+      // Nothing usable at this size. Halve and try once more rather than
+      // leaving a canvas that draws nothing at all.
+      if (w > 2 && h > 2 && !this._retrying) {
+        this._retrying = true;
+        this.maxTarget = Math.max(64, Math.floor(Math.max(w, h) / 2));
+        console.warn(`v6502: render targets failed at ${w}x${h}; retrying smaller`);
+        this.canvas.width = 0;   // force the size check below to miss
+        this.resize();
+        this._retrying = false;
+        return;
+      }
+      console.error('v6502: could not allocate render targets');
+    }
     if (!this.userFramed) {
       this.fitToDie();
     } else {
@@ -630,8 +700,11 @@ export class DieRenderer {
     const gl = this.gl;
     this.resize();
 
-    // --- scene into the multisampled target ---
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb.msaa.fbo);
+    if (!this.fb.scene) return;   // allocation failed; nothing to draw into
+
+    // --- scene into the multisampled target, or straight into the scene
+    //     texture when multisampling was unavailable at this size ---
+    gl.bindFramebuffer(gl.FRAMEBUFFER, (this.fb.msaa || this.fb.scene).fbo);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(0.026, 0.028, 0.039, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -651,14 +724,17 @@ export class DieRenderer {
     gl.uniform1i(this.progScene.u.uMark, 1);
     this._drawLayers(this.progScene, false);
 
-    // Resolve MSAA into a sampleable texture.
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.fb.msaa.fbo);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fb.scene.fbo);
-    gl.blitFramebuffer(
-      0, 0, this.canvas.width, this.canvas.height,
-      0, 0, this.canvas.width, this.canvas.height,
-      gl.COLOR_BUFFER_BIT, gl.NEAREST
-    );
+    // Resolve MSAA into a sampleable texture. Skipped when there is no
+    // multisampled target: the scene was drawn into the resolve target already.
+    if (this.fb.msaa) {
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.fb.msaa.fbo);
+      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.fb.scene.fbo);
+      gl.blitFramebuffer(
+        0, 0, this.canvas.width, this.canvas.height,
+        0, 0, this.canvas.width, this.canvas.height,
+        gl.COLOR_BUFFER_BIT, gl.NEAREST
+      );
+    }
 
     gl.disable(gl.BLEND);
     gl.bindVertexArray(this.emptyVao);
@@ -704,6 +780,7 @@ export class DieRenderer {
 
   _renderPickBuffer() {
     const gl = this.gl;
+    if (!this.fb.pick) return;
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb.pick.fbo);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(0, 0, 0, 0); // alpha 0 == nothing here
@@ -726,6 +803,7 @@ export class DieRenderer {
   pick(clientX, clientY) {
     const gl = this.gl;
     if (this.pickDirty) this._renderPickBuffer();
+    if (!this.fb.pick) return null;
     const { px, py } = this.screenToDie(clientX, clientY);
     const x = Math.floor(px);
     const y = Math.floor(this.canvas.height - py); // GL reads bottom-up
