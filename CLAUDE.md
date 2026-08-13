@@ -37,8 +37,10 @@ Known gaps, all deliberate:
   device.
 - No CI. The tests and checks below are run by hand.
 - **The full Wayback drip is mid-run** (`archive/tools/drip.py`): 24,442 URLs,
-  ~2.5 GB, ~12h at the polite rate. Resumable and safe to leave. `--status` says
-  where it is.
+  ~2.5 GB. Measured rate is **~15 URLs/min → ~27h** — the 1.5s delay is only half
+  of it, the request itself costs about as much again. Resumable and safe to
+  leave; it detaches from the session (PPID 1), so only a reboot stops it.
+  `--status` says where it is; re-running the fetch command resumes.
 
 ## Commands
 
@@ -634,7 +636,8 @@ bash     deploy/archive-deploy.sh                  # publish to /archive/
 
 # The completionist pass: the entire Wayback index for the domain.
 python3 archive/tools/drip.py --index              # 24,442 URLs into SQLite
-python3 archive/tools/drip.py --delay 1.5          # ~12h, resumable, Ctrl-C safe
+python3 archive/tools/drip.py --delay 1.5          # ~27h, resumable, Ctrl-C safe
+                                                   # (nohup it: survives the session)
 python3 archive/tools/drip.py --status             # progress, ETA, failures
 ```
 
