@@ -128,6 +128,43 @@ try {
   ok('filtering narrows the term list', shown > 0 && shown < data.rows.length,
      `${shown} of ${data.rows.length}`);
 
+  // --- term -> control line ------------------------------------------------
+  // Every shipped edge had to predict the measured runs, so the file must not
+  // contain one that did not.
+  const links = data.links || [];
+  ok('term-to-line edges are present', links.length > 0, `${links.length} lines fitted`);
+  ok('every shipped edge met the verification bar',
+     links.every((l) => l.explained >= 0.95),
+     `worst ${Math.min(...links.map((l) => l.explained)).toFixed(3)}`);
+  ok('edges name real terms and lines',
+     links.every((l) => l.terms.length > 0
+       && l.terms.every((t) => t >= 0 && t < data.rows.length)
+       && l.line >= 0 && l.line < data.outputs.length));
+  ok('both senses are represented',
+     links.some((l) => l.mode === 'drive') && links.some((l) => l.mode === 'override'),
+     `${links.filter((l) => l.mode === 'drive').length} drive, `
+     + `${links.filter((l) => l.mode === 'override').length} override`);
+  ok('unresolved lines are declared, not hidden',
+     Array.isArray(data.unresolvedLines)
+       && links.length + data.unresolvedLines.length === data.outputs.length,
+     `${data.unresolvedLines.length} unresolved`);
+
+  // The hold lines are the ones that must come out as overrides -- if PCLPCL
+  // ever reads as term-driven, the two senses have been confused.
+  const byLine = new Map(links.map((l) => [data.outputs[l.line].name, l]));
+  const holds = ['dpc39_PCLPCL', 'dpc7_SS'].filter((n) => byLine.has(n));
+  ok('the hold lines are overrides', holds.length > 0
+     && holds.every((n) => byLine.get(n).mode === 'override'),
+     holds.map((n) => `${n}=${byLine.get(n).mode}`).join(' '));
+
+  // And the selected term must show them. A term not already clicked, because
+  // pick() toggles -- selecting op-T0-lda a second time would deselect it.
+  filter.value = '';
+  filter.dispatchEvent(new Event('input'));
+  pick('op-T0-ldx/tax/tsx');
+  const td = document.getElementById('term-detail').textContent;
+  ok('the term detail lists its control lines', /Drives|Overrides/.test(td), td.slice(0, 90));
+
   ok('stats are stated', /product terms/.test(document.getElementById('decode-stats').textContent),
      document.getElementById('decode-stats').textContent);
 } catch (e) {

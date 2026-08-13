@@ -23,9 +23,42 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
+use v6502_netlist::blueprint::Blueprint;
 use v6502_netlist::pla::Pla;
 use v6502_netlist::Netlist;
 use v6502_sim::{bus::FlatMemory, cpu::Cpu};
+
+/// A control line is asserted either by a term firing, or by no term firing.
+///
+/// The second is not a curiosity, it is most of them. `dpc39_PCLPCL` means
+/// "PCL keeps its value" and `dpc7_SS` means "S keeps its value": the chip holds
+/// unless something tells it otherwise, so those lines are asserted by the
+/// *absence* of the terms that would override them. Fitting only the first sense
+/// explained 30% of assertions; allowing both explains 93%.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Mode {
+    /// A term in the set fires -> the line asserts.
+    Drive,
+    /// A term in the set fires -> the line stops asserting.
+    Override,
+}
+
+/// A fitted term-to-line relationship, kept only if it predicts the measurement.
+struct Link {
+    line: usize,
+    terms: Vec<usize>,
+    mode: Mode,
+    /// Half-cycles between the term firing and the line responding: the
+    /// pipeline latch. Measured per line, because the depth is not uniform.
+    lag: usize,
+    active_low: bool,
+    explained: f64,
+    unexplained: usize,
+}
+
+/// A fit must predict at least this share of a line's assertions to ship. The
+/// residue is reported rather than rounded away.
+const MIN_EXPLAINED: f64 = 0.95;
 
 /// Row and control-line indices high at one half-cycle.
 type Sample = (BTreeSet<usize>, BTreeSet<usize>);
@@ -91,6 +124,85 @@ fn main() -> std::io::Result<()> {
         records.push((opcode, timeline.unwrap(), any));
     }
 
+    // --- fit term -> control line ----------------------------------------
+    // The netlist proposes which terms can reach each line; the 768 runs above
+    // decide whether that set actually predicts it.
+    let blueprint = Blueprint::derive(&nl);
+    let blocked: Vec<u16> = blueprint
+        .units
+        .iter()
+        .flat_map(|u| u.bits.iter().flatten().copied())
+        .collect();
+    let candidates = pla.candidate_terms(&nl, &blocked);
+
+    // Polarity, measured rather than assumed: a line high in most samples is
+    // idling high and asserts low. Six of the 46 are like that.
+    let samples = records.len() * WINDOW;
+    let mut high_count = vec![0usize; pla.outputs.len()];
+    for (_, window, _) in &records {
+        for (_, outs) in window {
+            for o in outs {
+                high_count[*o] += 1;
+            }
+        }
+    }
+    let active_low: Vec<bool> =
+        high_count.iter().map(|c| *c * 2 > samples).collect();
+
+    let mut links: Vec<Link> = Vec::new();
+    let mut unresolved: Vec<usize> = Vec::new();
+    for (line, terms) in candidates.iter().enumerate() {
+        if terms.is_empty() {
+            unresolved.push(line);
+            continue;
+        }
+        let set: std::collections::BTreeSet<usize> = terms.iter().copied().collect();
+        let mut best: Option<Link> = None;
+        for mode in [Mode::Drive, Mode::Override] {
+            for lag in 0..=4usize {
+                let (mut ok, mut bad) = (0usize, 0usize);
+                for (_, window, _) in &records {
+                    for t in lag..window.len() {
+                        let asserted = window[t].1.contains(&line) != active_low[line];
+                        if !asserted {
+                            continue;
+                        }
+                        let hit = window[t - lag].0.iter().any(|r| set.contains(r));
+                        let good = if mode == Mode::Override { !hit } else { hit };
+                        if good { ok += 1 } else { bad += 1 }
+                    }
+                }
+                if ok == 0 {
+                    continue;
+                }
+                let explained = ok as f64 / (ok + bad) as f64;
+                if best.as_ref().is_none_or(|b| explained > b.explained) {
+                    best = Some(Link {
+                        line,
+                        terms: terms.clone(),
+                        mode,
+                        lag,
+                        active_low: active_low[line],
+                        explained,
+                        unexplained: bad,
+                    });
+                }
+            }
+        }
+        match best {
+            Some(l) if l.explained >= MIN_EXPLAINED => links.push(l),
+            _ => unresolved.push(line),
+        }
+    }
+    eprintln!(
+        "term -> line: {} of {} lines fitted ({} drive, {} override), {} unresolved",
+        links.len(),
+        pla.outputs.len(),
+        links.iter().filter(|l| l.mode == Mode::Drive).count(),
+        links.iter().filter(|l| l.mode == Mode::Override).count(),
+        unresolved.len()
+    );
+
     // --- serialise -------------------------------------------------------
     let mut s = String::with_capacity(1 << 20);
     s.push_str("{\n  \"rows\": [\n");
@@ -151,7 +263,28 @@ fn main() -> std::io::Result<()> {
             if n + 1 < records.len() { "," } else { "" }
         );
     }
-    s.push_str("  ]\n}\n");
+    s.push_str("  ],\n  \"links\": [\n");
+    for (i, l) in links.iter().enumerate() {
+        let _ = writeln!(
+            s,
+            "    {{\"line\":{},\"mode\":\"{}\",\"lag\":{},\"activeLow\":{},\
+             \"explained\":{:.4},\"unexplained\":{},\"terms\":[{}]}}{}",
+            l.line,
+            if l.mode == Mode::Override { "override" } else { "drive" },
+            l.lag,
+            l.active_low,
+            l.explained,
+            l.unexplained,
+            l.terms.iter().map(usize::to_string).collect::<Vec<_>>().join(","),
+            if i + 1 < links.len() { "," } else { "" }
+        );
+    }
+    let _ = writeln!(
+        s,
+        "  ],\n  \"unresolvedLines\": [{}]",
+        unresolved.iter().map(usize::to_string).collect::<Vec<_>>().join(",")
+    );
+    s.push_str("}\n");
 
     if let Some(parent) = std::path::Path::new(&path).parent() {
         std::fs::create_dir_all(parent)?;

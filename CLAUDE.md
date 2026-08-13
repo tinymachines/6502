@@ -20,12 +20,12 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 48 tests, bit-exact against the original. |
+| Simulation | Complete. 49 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
-| Decode | All 122 PLA product terms, **measured** by running all 256 opcodes. |
+| Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
@@ -61,7 +61,7 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 48 tests: netlist, functional, golden,
+cargo test --workspace              # 49 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
@@ -525,6 +525,32 @@ view could show at once.
 - Do not report "undocumented opcodes sharing a term with a documented one" as a
   statistic: the `irline3` generator fires for all 256, so it is trivially 105
   of 105 and says nothing.
+
+**Term → control line.** The path is
+`term → OR plane → a cclk pipeline latch → two or three inverters → the line`,
+which is why a pulldown-only walk finds nothing: it cannot cross the latch.
+`Pla::candidate_terms` follows pass transistors too, and refuses datapath wires
+as intermediates — without that the walk escapes along the special bus and comes
+back somewhere unrelated.
+
+- **The netlist proposes; the measurement disposes.** A backward walk always
+  finds *something*, and the number it finds is not evidence. Every edge must
+  predict the 768 recorded runs, and 14 of the 46 lines fail that and ship as
+  `unresolvedLines` rather than as guesses. `deploy.sh` enforces both the
+  threshold and the declaration.
+- **Two senses are needed, and the less obvious one is the more common.** A term
+  can *drive* a line or *override* a line that is asserted by default.
+  `dpc39_PCLPCL` ("PCL keeps its value") and `dpc7_SS` ("S keeps its value") are
+  asserted by the **absence** of any term — the chip holds unless told
+  otherwise. Fitting only the drive sense explained 30% of assertions; allowing
+  both explains 93%. 21 of the fitted lines drive, 11 override.
+- **Polarity is measured, not assumed.** Six lines idle high and assert low
+  (`dpc18_#DAA`, `dpc22_#DSA` and friends). An early check counted their idle
+  state as an assertion and reported a meaningless 17%; the aggregate was wrong,
+  not the edges.
+- **The lag is per line.** The pipeline latch puts one to two half-cycles between
+  a term and its line, but the depth is not uniform — fitting one global lag
+  understated the result. Fitted lags run 0–4, mostly 1.
 
 ### Renderer invariants — each of these was a real bug
 

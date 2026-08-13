@@ -20,6 +20,7 @@ const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
 const state = {
   data: null,
   firedBy: [],     // term index -> [opcodes]
+  linksOf: [],     // term index -> [{line, mode, lag}]
   opcode: null,
   term: null,
   filter: '',
@@ -173,6 +174,19 @@ function renderTermDetail(i) {
   }
   const gates = row.other.length ? row.other.join(', ') : 'none';
 
+  // Control lines this term was verified to explain, split by which way round.
+  const links = state.linksOf[i];
+  const short = (line) => state.data.outputs[line].name.replace(/^dpc-?\d*_?/, '');
+  const chips = (mode) => links.filter((l) => l.mode === mode)
+    .map((l) => `<span class="chip"><span class="chip-stage">+${l.lag}</span>${short(l.line)}</span>`)
+    .join(' ');
+  const drives = chips('drive');
+  const overrides = chips('override');
+  const lineRows =
+    (drives ? `<dt>Drives</dt><dd>${drives}</dd>` : '')
+    + (overrides ? `<dt>Overrides</dt><dd>${overrides}</dd>` : '')
+    + (links.length ? '' : '<dt>Control lines</dt><dd class="muted">none verified</dd>');
+
   el.innerHTML = `
     <h3>${row.name || 'unnamed term'}</h3>
     ${row.name ? '' : '<p class="muted">The die names every product term but this one. '
@@ -185,7 +199,13 @@ function renderTermDetail(i) {
       <dt>Fires for</dt><dd>${ops.length} opcodes${names.length ? ' — ' + names.join(', ') : ''}</dd>
       ${und.length ? `<dt>Undocumented</dt><dd class="undoc-list">${und.map((o) => '$' + hex2(o)).join(' ')}</dd>` : ''}
       <dt>Node</dt><dd class="mono">#${row.node}${row.irOnly ? '' : ' · has inputs beyond the IR'}</dd>
-    </dl>`;
+      ${lineRows}
+    </dl>
+    ${links.length ? '<p class="bp-detail-note">A term reaches a control line through '
+      + 'the OR plane and a <span class="mono">cclk</span> pipeline latch, so the line '
+      + 'responds a half-cycle or two later — the lag shown is measured, not assumed. '
+      + '<em>Overrides</em> means the line is asserted by default and this term takes it '
+      + 'away: that is how the hold lines work.</p>' : ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +223,13 @@ async function boot() {
     for (const rec of state.data.opcodes) {
       for (const t of rec.any) state.firedBy[t].push(rec.op);
     }
+    // ...and term -> the control lines it was verified to explain.
+    state.linksOf = state.data.rows.map(() => []);
+    for (const l of state.data.links || []) {
+      for (const t of l.terms) {
+        state.linksOf[t].push({ line: l.line, mode: l.mode, lag: l.lag });
+      }
+    }
 
     buildGrid();
     buildTermList();
@@ -213,9 +240,10 @@ async function boot() {
     // one": the irline3 generator fires for all 256, so that statistic is
     // trivially 105 of 105 and says nothing. Report what was measured instead.
     const undoc = [...Array(256).keys()].filter((o) => !documented(o)).length;
+    const fitted = (state.data.links || []).length;
     $('decode-stats').textContent =
-      `${state.data.rows.length} product terms · ${state.data.outputs.length} control lines · `
-      + `256 opcodes measured · ${undoc} of them undocumented`;
+      `${state.data.rows.length} product terms · ${state.data.outputs.length} control lines, `
+      + `${fitted} traced back to their terms · 256 opcodes measured · ${undoc} undocumented`;
 
     $('term-filter').oninput = (ev) => { state.filter = ev.target.value; buildTermList(); };
 

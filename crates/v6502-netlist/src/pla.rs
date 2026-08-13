@@ -200,3 +200,97 @@ fn dpc_index(name: &str) -> i32 {
         .map_or(rest.len(), |(i, _)| i);
     rest[..end].parse().unwrap_or(i32::MAX)
 }
+
+// ---------------------------------------------------------------------------
+// The OR plane: which product terms can reach which control line
+// ---------------------------------------------------------------------------
+
+/// How deep the backward walk from a control line goes.
+///
+/// Measured: the path is row -> OR plane -> a `cclk` pipeline latch -> two or
+/// three inverters -> the line, so the terms sit five to eight hops back. Ten
+/// covers every line that resolves at all; raising it further only adds paths
+/// that wander.
+const TRACE_DEPTH: usize = 10;
+
+impl Pla {
+    /// Product terms that can structurally reach each control line.
+    ///
+    /// **Candidates, not conclusions.** A backward walk can leave the control
+    /// path entirely -- out along a data bus and back in somewhere unrelated --
+    /// and the number of edges it finds is not evidence that they are right.
+    /// `export-decode` checks every one of these against 768 measured runs and
+    /// keeps only the sets that actually predict the line.
+    ///
+    /// Two kinds of hop are followed:
+    /// - the gate of a transistor pulling the node toward vss (a logic input);
+    /// - the far side of a pass transistor (the pipeline latches are pass
+    ///   transistors gated by `cclk`, so the path does not exist without this).
+    ///
+    /// Datapath wires are refused as intermediate nodes. A control path does not
+    /// run along the special bus; allowing it produces edges that verification
+    /// then has to throw away.
+    pub fn candidate_terms(&self, nl: &Netlist, blocked: &[NodeId]) -> Vec<Vec<usize>> {
+        let vss = nl.vss();
+        let mut pulldown: Vec<Vec<NodeId>> = vec![Vec::new(); nl.node_count()];
+        let mut passes: Vec<Vec<NodeId>> = vec![Vec::new(); nl.node_count()];
+        for t in 0..nl.transistor_count() as TransId {
+            let gate = nl.transistor_gate(t);
+            if nl.is_rail(gate) {
+                continue;
+            }
+            let (c1, c2) = (nl.transistor_c1(t), nl.transistor_c2(t));
+            if c2 == vss && c1 != vss {
+                pulldown[c1 as usize].push(gate);
+            } else if !nl.is_rail(c1) && !nl.is_rail(c2) {
+                passes[c1 as usize].push(c2);
+                passes[c2 as usize].push(c1);
+            }
+        }
+
+        let mut is_blocked = vec![false; nl.node_count()];
+        for n in blocked {
+            is_blocked[*n as usize] = true;
+        }
+        let mut term_at = vec![usize::MAX; nl.node_count()];
+        for (i, r) in self.rows.iter().enumerate() {
+            term_at[r.node as usize] = i;
+        }
+
+        self.outputs
+            .iter()
+            .map(|o| {
+                let mut seen = vec![false; nl.node_count()];
+                let mut queue = std::collections::VecDeque::new();
+                let mut hits = Vec::new();
+                seen[o.node as usize] = true;
+                queue.push_back((o.node, 0usize));
+                while let Some((n, d)) = queue.pop_front() {
+                    if d >= TRACE_DEPTH {
+                        continue;
+                    }
+                    let next = pulldown[n as usize]
+                        .iter()
+                        .chain(passes[n as usize].iter())
+                        .copied();
+                    for m in next {
+                        if seen[m as usize] || is_blocked[m as usize] {
+                            continue;
+                        }
+                        seen[m as usize] = true;
+                        // Stop at a term rather than walking through it: what
+                        // feeds a product term is the IR, not another line.
+                        if term_at[m as usize] != usize::MAX {
+                            hits.push(term_at[m as usize]);
+                        } else {
+                            queue.push_back((m, d + 1));
+                        }
+                    }
+                }
+                hits.sort_unstable();
+                hits.dedup();
+                hits
+            })
+            .collect()
+    }
+}

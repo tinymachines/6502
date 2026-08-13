@@ -128,3 +128,52 @@ fn control_lines_sort_the_way_they_read() {
     assert!(pos("dpc2_") < pos("dpc10_"), "dpc2 must precede dpc10");
     assert!(pos("dpc9_") < pos("dpc10_"), "dpc9 must precede dpc10");
 }
+
+/// The OR plane: a control line's candidate terms.
+///
+/// These are candidates only — `export-decode` throws away any set that fails to
+/// predict the measured runs, and 14 of the 46 lines do not survive that. What
+/// is asserted here is that the walk finds the *right* terms where the answer is
+/// independently obvious.
+#[test]
+fn the_trace_reaches_the_terms_that_make_sense() {
+    let nl = Netlist::mos6502();
+    let p = pla();
+    let bp = v6502_netlist::blueprint::Blueprint::derive(&nl);
+    let blocked: Vec<u16> =
+        bp.units.iter().flat_map(|u| u.bits.iter().flatten().copied()).collect();
+    let cands = p.candidate_terms(&nl, &blocked);
+
+    let named = |line: &str| -> Vec<&str> {
+        let i = p.outputs.iter().position(|o| o.name == line).expect(line);
+        let mut v: Vec<&str> =
+            cands[i].iter().filter_map(|t| p.rows[*t].name.as_deref()).collect();
+        v.sort();
+        v
+    };
+
+    // SBX puts the special bus into X, so the terms behind it should be exactly
+    // the operations that write X -- and they are.
+    assert_eq!(
+        named("dpc3_SBX"),
+        ["op-T+-dex", "op-T+-inx", "op-T0-ldx/tax/tsx"],
+        "the terms reaching SBX should be the ones that write X"
+    );
+
+    // SBAC writes the accumulator; every term reaching it should be an
+    // accumulator-writing operation.
+    let ac = named("dpc23_SBAC");
+    assert!(ac.contains(&"op-T0-lda"), "LDA writes A: {ac:?}");
+    assert!(ac.contains(&"op-T0-txa"), "TXA writes A: {ac:?}");
+    assert!(ac.len() >= 5 && ac.len() <= 12, "unexpected fan-in {}: {ac:?}", ac.len());
+
+    // Blocking the datapath matters: without it the walk escapes along the
+    // buses and drags in terms that have nothing to do with the line.
+    let loose = p.candidate_terms(&nl, &[]);
+    let tight: usize = cands.iter().map(Vec::len).sum();
+    let wide: usize = loose.iter().map(Vec::len).sum();
+    assert!(
+        wide > tight,
+        "blocking the datapath should narrow the candidate sets ({wide} vs {tight})"
+    );
+}

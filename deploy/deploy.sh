@@ -79,6 +79,19 @@ fired = {t for op in dec["opcodes"] for t in op["any"]}
 if len(fired) < len(dec["rows"]):
     sys.exit(f"deploy: only {len(fired)} of {len(dec['rows'])} product terms "
              f"were observed firing -- the measurement run is broken")
+
+# Term-to-line edges are fitted against the measurement and only kept above a
+# threshold. Every shipped edge must still clear it, and the lines that did not
+# fit must be declared rather than dropped.
+links, unresolved = dec["links"], dec["unresolvedLines"]
+if len(links) + len(unresolved) != len(dec["outputs"]):
+    sys.exit("deploy: control lines are neither fitted nor declared unresolved")
+weak = [l for l in links if l["explained"] < 0.95]
+if weak:
+    sys.exit(f"deploy: {len(weak)} term-to-line edges are below the "
+             f"verification threshold")
+if not any(l["mode"] == "override" for l in links):
+    sys.exit("deploy: no override edges -- the hold lines have been lost")
 PY
 
 # ---------------------------------------------------------------------------

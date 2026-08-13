@@ -153,16 +153,34 @@
     </p>
 
     <div class="sec-head">
-      <p class="eyebrow">What it leaves out</p>
-      <h2>Half of the decode.</h2>
+      <p class="eyebrow">From term to control line</p>
+      <h2>Drive, or get out of the way.</h2>
     </div>
     <p>
-      This is the AND plane: the terms and what fires them. What happens after —
-      how terms combine, through the random logic and the pipeline latches, into
-      the control lines the <a href="blueprint.html">Blueprint</a> draws — is not
-      a matrix and is not shown here. The control lines listed against each
-      half-cycle are measured the same way, but the path from term to line is
-      not drawn.
+      This is the AND plane, plus as much of the path onward as could be
+      verified. Selecting a term lists the control lines it was measured to
+      explain, and each one is reached the same way: through the OR plane, a
+      <span class="mono">cclk</span> pipeline latch, and a couple of inverters.
+      That latch is why a line responds a half-cycle or two after its term —
+      the lag shown is measured per line, not assumed.
+    </p>
+    <p>
+      Two senses turned out to be needed, and the second is the more common.
+      A term can <em>drive</em> a line, or it can <em>override</em> one that is
+      asserted by default. <span class="mono">PCLPCL</span> means “the program
+      counter low byte keeps its value” and <span class="mono">SS</span> means
+      “the stack pointer keeps its value”: the chip holds unless something says
+      otherwise, so those lines are asserted by the <em>absence</em> of any term.
+      Reading every line the first way explained 30% of what the chip did;
+      allowing both explains 93%.
+    </p>
+    <p>
+      <strong>32 of the 46 control lines have a term set that survives that
+      check</strong>, and the other 14 are listed as unresolved rather than
+      guessed at. A backward walk through the netlist will always find
+      <em>something</em>; the number it finds is not evidence that it is right,
+      which is why every edge here had to predict 768 measured runs before it
+      was allowed onto the page.
     </p>
     <p>
       Timing is the other half. Each term's name carries the T-state it belongs
