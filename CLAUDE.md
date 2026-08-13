@@ -23,6 +23,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Simulation | Complete. 25 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
+| Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
@@ -148,8 +149,27 @@ Expect ~2–5 fps: that is software rasterisation, not the renderer.
 
 ### Deep links
 
-`?program=N&run=1&speed=N&steps=N&find=SIGNAL` — mirrors the spirit of the
-original's query parameters, and is how the app is driven in headless checks.
+`?program=N&run=1&speed=N&steps=N&find=SIGNAL&panel=NAME&lab=ID&step=N` —
+mirrors the spirit of the original's query parameters, and is how the app is
+driven in headless checks. `?lab=adc&step=4` opens one moment of a walkthrough,
+which is the only practical way to point someone at a specific half-cycle.
+
+### Development harnesses in `web/`
+
+Four pages prefixed `_` that are **never shipped** — `build-web.py` copies only
+the files it names, so they cannot reach `dist/`. They exist because the front
+end has no other test route and screenshots do not catch this class of bug.
+
+```bash
+_camera-test.html      # zoom limits and pan clamping, asserted
+_overflow-test.html?w=320   # what pushes the page wider than the viewport
+_lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
+_lab-test.html         # every Lab claim, checked against the engine
+```
+
+Read the title with `--dump-dom`: each reports `ALL PASS` or `PAGE OK`.
+`_lab-probe.html` is the one to run *before* writing anything about what the
+chip does — see the Lab section below.
 
 ## Architecture
 
@@ -305,7 +325,9 @@ plus the transistor bounding boxes for hit-testing.
 ## The renderer (`web/`)
 
 Plain ES modules, no build step, no framework: `renderer.js` (WebGL2),
-`app.js` (glue + UI), `disasm.js`, `index.html`, `style.css`.
+`app.js` (glue + UI), `disasm.js`, `lab.js`, `index.html`, `style.css`, plus
+`site-nav.js` and `version-footer.js` which are **shared verbatim with the
+archive** (`build-archive.py` copies them). A second copy of either would drift.
 
 The design turns on one fact: **the layout never changes.** 83,227 triangles go
 to the GPU once. What changes per frame is a 1725-byte node-level array uploaded
@@ -320,6 +342,41 @@ into an RGBA8 framebuffer (id low byte in R, high byte in G, layer in B, alpha a
 "something is here") and `readPixels` reads one pixel. It is only re-rendered when
 the *camera* moves — node IDs are geometry, so a running chip does not invalidate
 it.
+
+### The Lab (`lab.js`)
+
+Follows one instruction from the opcode byte on the pins to the register it
+changes, framing the die on whichever part is working. Four walkthroughs: `lda`,
+`adc`, `inx`, `sta`.
+
+This is tractable only because the die data **names the entire pipeline**:
+`pd` (predecode), `ir`, 38 `dpc*` decode-PLA outputs, `idb`/`sb`/`adl`/`adh`,
+`alua`/`alub`/`alu`, and the registers. Each `dpc` name carries its own meaning —
+`dpc24_ACSB` gates the accumulator onto the special bus, `dpc17_SUMS` selects the
+adder's sum, `dpc3_SBX` writes the special bus into X. Resolving those names
+through `nodeId()` gives both a die region to frame and a live readout.
+
+- **The prose was written from measurements, not from the datasheet.**
+  `_lab-probe.html` dumps T-states, asserted control lines and every bus per
+  half-cycle; the narration was written against that dump, and `_lab-test.html`
+  then asserts each claim against the engine. Writing plausible prose about
+  silicon is easy and checking it afterwards is not, so **run the probe before
+  editing any Lab text.**
+- **Steps are offsets from the instruction's own opcode fetch**, found by
+  stepping until `sync && lastFetchAddr == at` — never hardcoded half-cycle
+  numbers, which would break the first time reset timing moved.
+- **The control lines shown are read live**, not stored beside the prose. If the
+  narration and the silicon ever disagree, the reader sees the silicon.
+- **The Lab never starts on its own.** It replaces the loaded program and
+  power-cycles the chip, and above the sidebar breakpoint every panel is visible
+  at once, so there is no "opening" it — an auto-start would silently reset a
+  running chip. It waits for an explicit button, or `?lab=`.
+- `onTakeOver` clears the node selection, because the per-frame highlight that
+  follows a selection would otherwise overwrite the Lab's every frame.
+
+What `adc` demonstrates is the thing the whole project exists to show: at +5
+half-cycles the adder holds `$42` and the accumulator still reads `$40`. The
+result exists and is in no register. `?lab=adc&step=4` links to that moment.
 
 ### Renderer invariants — each of these was a real bug
 
@@ -341,6 +398,14 @@ it.
 - **Frame the camera only after the canvas is visible.** It is created inside a
   hidden panel and measures 1×1 until then. `userFramed` makes this
   self-correcting rather than boot-order dependent.
+- **The camera is bounded, and the bounds are derived rather than stored.**
+  `minScale`/`maxScale` are getters over `fitScale()`, because a stored copy goes
+  stale on resize — which is exactly when a wrong minimum lets the die escape.
+  `_clampCamera()` states its rule in terms of the *view rectangle*, not the
+  camera centre, so one expression works both zoomed in (viewport smaller than
+  the die) and zoomed out (larger). Without it, panning is unbounded arithmetic
+  and a hard drag leaves a black screen with no way back but the keyboard.
+  Asserted in `_camera-test.html`.
 - **Disassembly comes from `lastFetchAddr`/`lastFetchOpcode`, not from IR.** IR
   holds the opcode, but PC has already advanced past its operands, so operands
   read relative to PC belong to the *next* instruction. The simulator latches each
@@ -390,7 +455,19 @@ Layout gotchas already paid for, in narrowing order of subtlety:
 - **`[hidden]` needs `!important`** here, because the UA rule is specificity
   (0,1,0) and `#boot`/`#app` declare `display`.
 - Test at **320px**, not just 390. Several things only break at the narrowest
-  common phone width.
+  common phone width. Two did: the header's wordmark, CTA and menu together want
+  ~330px against ~285px available, and the six transport buttons want 302px. The
+  header's overflow *escapes* (nothing clips it) and scrolls the whole page; the
+  transport's is clipped by `.console { overflow: hidden }`, so the last button
+  is simply cut off and looks like a missing feature. Below 24rem the CTA is
+  dropped and the transport tightened. `_overflow-test.html?w=320` names the
+  culprit, which is otherwise very hard to attribute — the element that
+  overflows is rarely the element at fault.
+- **Fullscreen pins the panel height to the tallest panel** (`--panel-lock`, set
+  by `lockPanelHeight()`). Fullscreen is the one layout where panels sit below
+  the canvas and the stage takes what is left, so switching from Bus to Memory
+  resized the viewport and visibly jumped the die. Only fullscreen: elsewhere
+  reserving the maximum would just add dead space.
 
 PWA: `manifest.webmanifest` plus icons generated by `tools/make-icons.py` (kept
 in the repo so they are reproducible, not mystery binaries). nginx has no
@@ -724,8 +801,24 @@ originally archived bytes — no Wayback toolbar, no link rewriting to undo late
   and `wiki/images.html` is a contact sheet of all 83 so the ones whose articles
   survive only as renderings still have a home. Reachable only as a thumbnail is a
   quieter version of not reachable at all.
-- **The simulator links to the archive** (header nav and credit section). It did
-  not at first, which reproduced the exact failure the archive exists to undo.
+- **The simulator links to the archive** (header nav and credit section), and the
+  archive carries the **same header back** (`archive/tools/shell.py`). It did not
+  at first, which reproduced the exact failure the archive exists to undo. The
+  three builders each emit their own stylesheet, so without a shared header they
+  grew three, and the archive read as three sites stapled together. The markup
+  matches `web/index.html` exactly so `web/site-nav.js` drives the disclosure
+  menu on both.
+  - **Import it by name, not as a module.** `build-wiki.py` and
+    `build-gallery.py` each define their own `shell()` function, which rebinds
+    the module-level name and turns `shell.header` into an `AttributeError` at
+    build time.
+  - The **mirrored original pages under `full/` deliberately keep no header** —
+    they are third-party archived content, and rewriting them would misrepresent
+    what was captured.
+- **`archive/public/` is not cleaned between builds.** A stale `site/` directory
+  survived there from before the `full/` symlink existed: 17 MB that nothing
+  linked to, which is precisely the orphaned-content failure being undone. Check
+  for top-level entries no builder writes.
 - **Nothing fetched is committed** — only `archive/urls/` (the manifests, which
   are ours) and the tools. Same reasoning as the `extern/` submodule: this repo
   points at NC-SA data rather than redistributing it.

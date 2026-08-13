@@ -1,0 +1,104 @@
+<!doctype html>
+<!--
+  Development harness, never shipped.
+
+  Dumps what the chip actually does, half-cycle by half-cycle, for the
+  instructions the Lab walks through: the T-state chain, which decode-PLA
+  control lines are asserted, and the value on each internal bus.
+
+  This exists so the Lab's narration can be written from measurements rather
+  than from what a datasheet implies. Prose about silicon is very easy to write
+  and very hard to check afterwards.
+
+    http://localhost:8777/_lab-probe.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>lab probe</title>
+<style>body{background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace;padding:1rem}
+pre{white-space:pre}</style></head><body>
+<script type="module">
+import init, { Machine } from './pkg/v6502_wasm.js';
+await init();
+const m = new Machine();
+
+const bus = (prefix, n) => {
+  const ids = [];
+  for (let i = 0; i < n; i++) ids.push(m.nodeId(`${prefix}${i}`));
+  return ids.every((v) => v >= 0) ? ids : null;
+};
+const read = (ids) => ids.reduce((v, id, i) => v | (m.isNodeHigh(id) ? 1 << i : 0), 0);
+const hex = (v, w) => v.toString(16).padStart(w, '0').toUpperCase();
+
+const BUSES = {
+  idb: bus('idb', 8), sb: bus('sb', 8), alu: bus('alu', 8),
+  alua: bus('alua', 8), alub: bus('alub', 8), dasb: bus('dasb', 8),
+  adl: bus('adl', 8), adh: bus('adh', 8), pd: bus('pd', 8), ir: bus('ir', 8),
+  a: bus('a', 8), x: bus('x', 8), y: bus('y', 8), s: bus('s', 8),
+  dor: bus('dor', 8),
+};
+
+// The decode PLA's outputs, as the die data names them. Each tail says what the
+// line does: dpc24_ACSB gates the accumulator onto the special bus, dpc17_SUMS
+// selects the adder's sum. Resolved through the netlist so a name that ever
+// stopped existing shows up as absent rather than as silently never asserted.
+const DPC_NAMES = [
+  'dpc0_YSB', 'dpc1_SBY', 'dpc2_XSB', 'dpc3_SBX', 'dpc4_SSB', 'dpc5_SADL',
+  'dpc6_SBS', 'dpc7_SS', 'dpc8_nDBADD', 'dpc9_DBADD', 'dpc10_ADLADD',
+  'dpc11_SBADD', 'dpc12_0ADD', 'dpc13_ORS', 'dpc14_SRS', 'dpc15_ANDS',
+  'dpc16_EORS', 'dpc17_SUMS', 'dpc19_ADDSB7', 'dpc20_ADDSB06', 'dpc21_ADDADL',
+  'dpc23_SBAC', 'dpc24_ACSB', 'dpc25_SBDB', 'dpc26_ACDB', 'dpc27_SBADH',
+  'dpc28_0ADH0', 'dpc29_0ADH17', 'dpc30_ADHPCH', 'dpc31_PCHPCH', 'dpc32_PCHADH',
+  'dpc33_PCHDB', 'dpc34_PCLC', 'dpc35_PCHC', 'dpc37_PCLDB', 'dpc38_PCLADL',
+  'dpc39_PCLPCL', 'dpc40_ADLPCL',
+];
+const CONTROL = [];
+const absent = [];
+for (const name of DPC_NAMES) {
+  const id = m.nodeId(name);
+  if (id >= 0) CONTROL.push([name, id]); else absent.push(name);
+}
+
+const PROGRAMS = [
+  { label: 'LDA #$42', at: 0x0200, bytes: [0xa9, 0x42, 0xea, 0xea, 0xea] },
+  { label: 'ADC #$02 (after LDA #$40, CLC)', at: 0x0203,
+    bytes: [0xa9, 0x40, 0x18, 0x69, 0x02, 0xea, 0xea, 0xea] },
+  { label: 'INX (after LDX #$05)', at: 0x0202,
+    bytes: [0xa2, 0x05, 0xe8, 0xea, 0xea, 0xea] },
+  { label: 'STA $10 (after LDA #$42)', at: 0x0202,
+    bytes: [0xa9, 0x42, 0x85, 0x10, 0xea, 0xea, 0xea] },
+];
+
+const out = [`${CONTROL.length}/${DPC_NAMES.length} control lines resolved` +
+             (absent.length ? `  ABSENT: ${absent.join(' ')}` : '')];
+for (const prog of PROGRAMS) {
+  m.load(0x0200, new Uint8Array(prog.bytes));
+  m.setResetVector(0x0200);
+  m.powerCycle();
+
+  // Advance to the opcode fetch of the instruction under study.
+  let guard = 0;
+  while (guard++ < 4000 && !(m.sync() && m.lastFetchAddr() === prog.at)) m.halfStep();
+  if (guard >= 4000) { out.push(`${prog.label}: NEVER REACHED`); continue; }
+
+  out.push(`\n=== ${prog.label}  (opcode fetch at $${hex(prog.at, 4)}) ===`);
+  out.push('  hc  ph T-states            AB   DB RW SY | ' +
+           Object.keys(BUSES).filter((k) => BUSES[k]).join('   '));
+  for (let i = 0; i < 12; i++) {
+    const vals = Object.entries(BUSES)
+      .filter(([, ids]) => ids)
+      .map(([, ids]) => hex(read(ids), 2)).join('    ');
+    const on = CONTROL.filter(([, id]) => m.isNodeHigh(id)).map(([n]) => n);
+    out.push(
+      `  ${String(m.halfCycle()).padStart(4)} ${m.phase()} ` +
+      `${m.timingFixedWidth().padEnd(20)} ${hex(m.addressBus(), 4)} ${hex(m.dataBus(), 2)} ` +
+      `${m.isRead() ? 'r' : 'W'}  ${m.sync() ? 'S' : '.'} | ${vals}`);
+    if (on.length) out.push(`         control: ${on.join(' ')}`);
+    out.push(`         A=${hex(m.a(), 2)} X=${hex(m.x(), 2)} Y=${hex(m.y(), 2)} ` +
+             `PC=${hex(m.pc(), 4)} P=${m.flagsString()}`);
+    m.halfStep();
+  }
+}
+
+document.title = 'DONE';
+document.body.insertAdjacentHTML('beforeend', '<pre id="probe">' + out.join('\n') + '</pre>');
+</script>
+</body></html>

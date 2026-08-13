@@ -1,0 +1,63 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  Finds elements that push the page wider than the viewport. A horizontal
+  scrollbar on a phone is easy to see in a screenshot and very hard to attribute,
+  because the culprit is usually an ancestor refusing to shrink rather than the
+  wide thing itself. This names it.
+
+    http://localhost:8777/_overflow-test.html?w=320
+
+  Elements inside a deliberately scrollable container (the panel tab strip) will
+  be listed too -- overflowing a scroller is not a bug. Compare docScrollWidth
+  against viewport: equal means the *page* is fine.
+-->
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>overflow test</title>
+<style>
+  body { margin: 0; font: 13px ui-monospace, monospace; background: #0b1120; color: #eaf2ff; }
+  pre { padding: 1rem; white-space: pre-wrap; }
+  iframe { border: 0; }
+  .bad { color: #fb7185; }
+</style>
+</head><body>
+<iframe id="f" src="index.html"></iframe>
+<script type="module">
+const width = Number(new URLSearchParams(location.search).get('w') || 320);
+const f = document.getElementById('f');
+f.style.width = width + 'px';
+f.style.height = '900px';
+
+f.addEventListener('load', () => setTimeout(() => {
+  const d = f.contentDocument;
+  const vw = d.documentElement.clientWidth;
+  const rows = [];
+  for (const el of d.querySelectorAll('*')) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) continue;
+    if (r.right > vw + 0.5 || r.left < -0.5) {
+      const cls = typeof el.className === 'string' && el.className.trim()
+        ? '.' + el.className.trim().split(/\s+/).join('.') : '';
+      rows.push(`  ${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${cls}` +
+                `  left=${r.left.toFixed(0)} right=${r.right.toFixed(0)} w=${r.width.toFixed(0)}`);
+    }
+  }
+  const scroll = d.documentElement.scrollWidth;
+  const clean = scroll <= vw + 0.5;
+  const out = [
+    `requested   ${width}`,
+    `viewport    ${vw}   (an iframe scrollbar accounts for the difference)`,
+    `scrollWidth ${scroll}   ${clean ? 'PAGE OK' : 'PAGE OVERFLOWS by ' + (scroll - vw)}`,
+    '',
+    rows.length ? 'elements past the viewport edge:' : 'nothing past the edge',
+    ...rows.slice(0, 40),
+  ];
+  document.title = clean ? 'PAGE OK' : 'PAGE OVERFLOWS';
+  document.body.insertAdjacentHTML(
+    'beforeend', `<pre id="ovf" class="${clean ? '' : 'bad'}">${out.join('\n')}</pre>`);
+}, 3000));
+</script>
+</body></html>

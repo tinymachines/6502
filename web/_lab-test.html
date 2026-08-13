@@ -1,0 +1,108 @@
+<!doctype html>
+<!--
+  Development harness, never shipped.
+
+  Walks every Lab lesson through every step and checks the claims the prose
+  makes against what the engine actually reports at that half-cycle: the
+  register values, the bus direction, and the named control lines. Narration
+  about silicon is easy to write and impossible to eyeball, so it is asserted
+  here instead.
+
+    http://localhost:8777/_lab-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace;padding:1rem}
+pre{white-space:pre-wrap}.f{color:#fb7185}</style></head><body>
+<script type="module">
+import init, { Machine } from './pkg/v6502_wasm.js';
+import { LESSONS, DPC_NAMES } from './lab.js';
+
+await init();
+const m = new Machine();
+const results = [];
+const ok = (name, cond, detail) =>
+  results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`);
+const hex = (v, n) => v.toString(16).padStart(n, '0').toUpperCase();
+
+const ctrl = DPC_NAMES.map((n) => ({ n, id: m.nodeId(n) }));
+ok('every decode line resolves', ctrl.every((c) => c.id >= 0),
+   ctrl.filter((c) => c.id < 0).map((c) => c.n).join(' ') || 'all 38');
+
+// Each assertion below is a fact the corresponding step's prose states.
+const CLAIMS = {
+  lda: {
+    0: (s) => s.sync && s.db === 0xa9,                       // opcode on the bus, SYNC high
+    2: (s) => s.ir === 0xa9 && s.db === 0x42,                // latched; operand follows
+    3: (s) => s.ir === 0xa9,                                 // decode is a function of IR
+    4: (s) => s.a === 0x42 && s.sync && s.on.includes('dpc23_SBAC'),
+  },
+  adc: {
+    0: (s) => s.sync && s.db === 0x69 && s.a === 0x40,
+    1: (s) => s.ir === 0x69 && s.db === 0x02,
+    2: (s) => s.on.includes('dpc24_ACSB') && s.a === 0x40,   // operands in, A unchanged
+    3: (s) => s.alu === 0x42 && s.a === 0x40,                // sum exists, A still old
+    4: (s) => s.a === 0x42 && s.on.includes('dpc23_SBAC'),
+  },
+  inx: {
+    0: (s) => s.sync && s.db === 0xe8 && s.x === 0x05,
+    1: (s) => s.ir === 0xe8,
+    2: (s) => s.on.includes('dpc2_XSB') && s.on.includes('dpc8_nDBADD') && s.x === 0x05,
+    3: (s) => s.alu === 0x06 && s.x === 0x05,
+    4: (s) => s.x === 0x06 && s.on.includes('dpc3_SBX'),
+  },
+  sta: {
+    0: (s) => s.sync && s.db === 0x85 && s.a === 0x42,
+    1: (s) => s.ir === 0x85 && s.db === 0x10,
+    2: (s) => s.on.includes('dpc28_0ADH0') && s.on.includes('dpc29_0ADH17'),
+    3: (s) => !s.read && s.ab === 0x0010 && s.on.includes('dpc26_ACDB'),
+    4: (s) => s.db === 0x42 && !s.read,
+  },
+};
+
+const aluBits = Array.from({ length: 8 }, (_, i) => m.nodeId(`alu${i}`));
+const readAlu = () => aluBits.reduce((v, id, i) => v | (m.isNodeHigh(id) ? 1 << i : 0), 0);
+
+for (const lesson of LESSONS) {
+  m.load(0x0200, new Uint8Array(lesson.bytes));
+  m.setResetVector(0x0200);
+  m.powerCycle();
+  let guard = 0;
+  while (guard++ < 4000 && !(m.sync() && m.lastFetchAddr() === lesson.at)) m.halfStep();
+  ok(`${lesson.id}: reaches its opcode fetch`, guard < 4000, `after ${guard} half-steps`);
+  const base = m.halfCycle();
+
+  lesson.steps.forEach((step, i) => {
+    const target = base + step.d;
+    const now = m.halfCycle();
+    if (target > now) m.runHalfCycles(target - now);
+    else if (target < now) m.rewindTo(target);
+
+    const s = {
+      sync: m.sync(), ir: m.ir(), a: m.a(), x: m.x(), db: m.dataBus(),
+      ab: m.addressBus(), read: m.isRead(), alu: readAlu(),
+      on: ctrl.filter((c) => m.isNodeHigh(c.id)).map((c) => c.n),
+    };
+    const claim = CLAIMS[lesson.id][i];
+    if (claim) {
+      ok(`${lesson.id} step ${i + 1} (${step.title})`, claim(s),
+         `A=${hex(s.a, 2)} X=${hex(s.x, 2)} IR=${hex(s.ir, 2)} AB=${hex(s.ab, 4)} ` +
+         `DB=${hex(s.db, 2)} ALU=${hex(s.alu, 2)} ${s.read ? 'r' : 'W'} ` +
+         `${s.sync ? 'SYNC' : ''}`);
+    }
+    // Rewinding to an earlier step must land on the same state, since the Lab
+    // lets the reader step backwards through the walkthrough.
+    if (i === lesson.steps.length - 1) {
+      const first = base + lesson.steps[0].d;
+      m.rewindTo(first);
+      ok(`${lesson.id}: rewind to step 1 restores it`,
+         m.halfCycle() === first && m.sync(), `hc=${m.halfCycle()} want=${first}`);
+    }
+  });
+}
+
+const failed = results.filter((r) => r.startsWith('FAIL'));
+document.title = failed.length ? `${failed.length} FAILURES` : 'ALL PASS';
+document.body.insertAdjacentHTML('beforeend',
+  `<pre id="lab" class="${failed.length ? 'f' : ''}">${results.join('\n')}</pre>`);
+</script>
+</body></html>

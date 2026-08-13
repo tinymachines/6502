@@ -3,6 +3,7 @@
 import init, { Machine, netlistInfo } from './pkg/v6502_wasm.js';
 import { DieRenderer, parseLayout, LAYER_INFO } from './renderer.js';
 import { disassemble } from './disasm.js';
+import { createLab } from './lab.js';
 
 const LOAD_ADDR = 0x0200;
 
@@ -65,6 +66,8 @@ const state = {
   renderer: null,
   running: false,
   speed: 16,
+  speedDebt: 0,      // fractional half-cycles carried between frames below 1x
+  invertZoom: false,
   selection: null,     // { node, group: number[] }
   traceGroup: true,
   mouse: { x: 0, y: 0, inside: false, moved: false },
@@ -199,6 +202,13 @@ function applyUrlParams() {
     runFind();
   }
 
+  // ?panel=lab, and ?lab=adc&step=4 to open one moment of a walkthrough. The
+  // Lab overrides the program above, so it is applied last.
+  if (p.has('panel')) focusPanel(p.get('panel'));
+  if (p.has('lab')) {
+    if (state.lab.open(p.get('lab'), Number(p.get('step') ?? 1))) focusPanel('lab');
+  }
+
   if (p.get('run') === '1') setRunning(true);
 }
 
@@ -214,6 +224,9 @@ function setupUI() {
   select.onchange = () => {
     setRunning(false);
     loadProgram(Number(select.value));
+    // The console just took the machine back; the Lab's step positions were
+    // measured against a program that is no longer loaded.
+    if (state.lab) state.lab.invalidate();
   };
 
   // -- layers --
@@ -238,6 +251,26 @@ function setupUI() {
 
   $('dim').oninput = (e) => { r.dim = Number(e.target.value) / 100; };
   $('bloom').oninput = (e) => { r.bloomAmount = Number(e.target.value) / 100; };
+  $('invert-zoom').onchange = (e) => { state.invertZoom = e.target.checked; };
+
+  buildKeyPanel();
+
+  // -- view --
+  $('btn-fit').onclick = () => r.resetView();
+
+  // -- lab --
+  state.lab = createLab({
+    machine: state.machine,
+    renderer: r,
+    els: {
+      pick: $('lab-pick'), asm: $('lab-asm'), body: $('lab-body'),
+      prev: $('lab-prev'), next: $('lab-next'),
+    },
+    // The Lab loads its own program and drives the clock, so it has to stop
+    // free-running and drop any node selection first -- the per-frame highlight
+    // that follows a selection would otherwise overwrite the Lab's every frame.
+    onTakeOver: () => { setRunning(false); clearSelection(); },
+  });
 
   // -- transport --
   $('btn-run').onclick = () => setRunning(!state.running);
@@ -246,7 +279,7 @@ function setupUI() {
   $('btn-instr').onclick = () => { setRunning(false); state.machine.stepInstruction(400); };
   $('btn-back').onclick = () => { setRunning(false); state.machine.stepBack(); };
   $('btn-reset').onclick = () => { setRunning(false); resetMachine(); };
-  $('speed').onchange = (e) => { state.speed = Number(e.target.value); };
+  $('speed').onchange = (e) => { state.speed = Number(e.target.value); state.speedDebt = 0; };
 
   // -- scrubber --
   const scrub = $('scrub');
@@ -268,30 +301,44 @@ function setupUI() {
   // -- memory --
   $('mem-addr').onchange = () => { $('mem-follow').checked = false; };
 
-  setupNavMenu();
   setupTabs();
   setupFullscreen();
   setupCanvasInput();
   setupKeyboard();
-  window.addEventListener('resize', () => r.resize());
+  window.addEventListener('resize', () => { lockPanelHeight(); r.resize(); });
 }
 
-/** Disclosure menu, matching the header behaviour on the rest of the site. */
-function setupNavMenu() {
-  const head = $('site-head');
-  const btn = head.querySelector('.menu-btn');
-  const close = () => {
-    head.classList.remove('open');
-    btn.setAttribute('aria-expanded', 'false');
-  };
-  btn.onclick = () => {
-    const open = head.classList.toggle('open');
-    btn.setAttribute('aria-expanded', String(open));
-  };
-  // Any navigation dismisses it; so does Escape and a click outside.
-  $('site-nav').addEventListener('click', (e) => { if (e.target.tagName === 'A') close(); });
-  document.addEventListener('click', (e) => { if (!head.contains(e.target)) close(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+/**
+ * What each mask layer physically is.
+ *
+ * Keyed by layer id and rendered against LAYER_INFO, so the swatch shown here is
+ * literally the colour the shader uses -- a hand-copied palette would drift the
+ * first time anyone retunes the renderer.
+ */
+const LAYER_NOTES = [
+  'Aluminium, on top of everything. Translucent here for the same reason it ' +
+  'looks that way on a die photograph — you see the silicon through it. Carries ' +
+  'power and the long-distance signals.',
+  'Doped silicon whose conductivity a gate can switch off: the source and drain ' +
+  'of a transistor. Where polysilicon crosses it, there is a switch.',
+  'Protection diodes where the outside world meets the chip, at the pads.',
+  'Diffusion tied permanently to ground. Muted in the state overlay: it is ' +
+  'always low, and its polygons cover most of the die.',
+  'Diffusion tied permanently to the supply. Muted for the same reason.',
+  'The second wiring layer, and the more interesting one. Where a polysilicon ' +
+  'trace passes over diffusion it forms a transistor gate, so this layer is ' +
+  'wiring and logic at once.',
+];
+
+function buildKeyPanel() {
+  const el = $('key-layers');
+  el.innerHTML = LAYER_INFO.map((info, i) => {
+    const rgb = info.color.map((c) => Math.round(c * 255)).join(',');
+    return `<div class="key-row">
+      <span class="layer-swatch" style="background:rgb(${rgb})"></span>
+      <div><b>${escapeHtml(info.name)}</b><p>${LAYER_NOTES[i]}</p></div>
+    </div>`;
+  }).join('');
 }
 
 /**
@@ -309,6 +356,10 @@ function setupTabs() {
       for (const t of panels.querySelectorAll('.tab')) {
         t.setAttribute('aria-selected', String(t === tab));
       }
+      // Above the breakpoint every panel is visible at once and there is no
+      // "opening" the Lab, so it starts on demand instead: from a click here,
+      // or from the first interaction with its own controls.
+      if (tab.dataset.tab === 'lab' && state.lab) state.lab.start();
     };
   }
 }
@@ -335,8 +386,46 @@ function setupFullscreen() {
   // The canvas backing store must follow the new viewport.
   document.addEventListener('fullscreenchange', () => {
     btn.textContent = document.fullscreenElement ? '⤡' : '⛶';
-    requestAnimationFrame(() => state.renderer.resize());
+    requestAnimationFrame(() => {
+      lockPanelHeight();
+      state.renderer.resize();
+    });
   });
+}
+
+/**
+ * Pin the control area to the height of its tallest panel, in fullscreen.
+ *
+ * Fullscreen is the one layout where the panels sit *below* the canvas and the
+ * canvas takes what is left, so a short panel like Bus and a tall one like
+ * Memory give the stage two different heights. Switching tabs then resized the
+ * viewport and the die visibly jumped. Measuring the tallest panel once and
+ * holding that height costs a little dead space under the short ones and buys a
+ * stage that never moves.
+ *
+ * Only fullscreen: in the normal page flow the console is not competing for a
+ * fixed amount of vertical space, and reserving the maximum there would just
+ * push the rest of the page down for no gain.
+ */
+function lockPanelHeight() {
+  const panels = $('panels');
+  panels.style.removeProperty('--panel-lock');
+  if (!document.fullscreenElement) return;
+
+  let tallest = 0;
+  for (const p of panels.querySelectorAll('.panel')) {
+    // The hidden panels have `display: none`, which measures as zero. Reveal
+    // each in turn rather than all at once, so they cannot stack and inflate
+    // one another's height.
+    const prev = p.style.display;
+    p.style.display = 'block';
+    tallest = Math.max(tallest, p.offsetHeight);
+    p.style.display = prev;
+  }
+  const tabs = panels.querySelector('.tabs');
+  if (tallest > 0) {
+    panels.style.setProperty('--panel-lock', `${tallest + (tabs ? tabs.offsetHeight : 0)}px`);
+  }
 }
 
 /**
@@ -452,7 +541,10 @@ function setupCanvasInput() {
     e.preventDefault();
     hideHint();
     // Exponential in the wheel delta so trackpads and mice both feel right.
-    r.zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0016));
+    // Scrolling down zooms in, matching the way the die "comes towards you" when
+    // you push the wheel away; the checkbox restores the other convention.
+    const dir = state.invertZoom ? -1 : 1;
+    r.zoomAt(e.clientX, e.clientY, Math.exp(dir * e.deltaY * 0.0016));
   }, { passive: false });
 
   canvas.addEventListener('dblclick', (e) => {
@@ -492,7 +584,7 @@ function setupKeyboard() {
       case 'i': setRunning(false); state.machine.stepInstruction(400); break;
       case 'r': setRunning(false); resetMachine(); break;
       case 'f': $('btn-fullscreen').click(); break;
-      case 'z': state.renderer.userFramed = false; state.renderer.fitToDie(); break;
+      case 'z': state.renderer.resetView(); break;
       case 'Escape': clearSelection(); break;
     }
   });
@@ -593,6 +685,16 @@ function frame(now) {
       // Time-budgeted: keep stepping until we would miss the frame.
       const deadline = performance.now() + 9;
       do { m.runHalfCycles(8); } while (performance.now() < deadline);
+    } else if (state.speed < 1) {
+      // Below one half-cycle per frame the chip has to idle through frames, so
+      // the shortfall is carried rather than dropped -- otherwise 0.1x and 0.5x
+      // would both round to "every frame" and look identical.
+      state.speedDebt += state.speed;
+      if (state.speedDebt >= 1) {
+        const n = Math.floor(state.speedDebt);
+        state.speedDebt -= n;
+        m.runHalfCycles(n);
+      }
     } else {
       m.runHalfCycles(state.speed);
     }

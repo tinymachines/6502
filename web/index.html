@@ -33,6 +33,7 @@
         <a class="mark" href="#top">Visual<span>6502</span></a>
         <div class="navlinks" id="site-nav">
           <a href="#explorer">Explorer</a>
+          <a href="#lab">Lab</a>
           <a href="#looking-at">What you see</a>
           <a href="#verification">Verification</a>
           <a href="#credit">Credit</a>
@@ -77,6 +78,7 @@
             <select id="program-select"></select>
           </label>
           <div class="bar-spacer"></div>
+          <button class="iconbtn" id="btn-fit" type="button" title="Reset view (Z)" aria-label="Reset view">⤢</button>
           <button class="iconbtn" id="btn-fullscreen" type="button" title="Fullscreen (F)" aria-label="Fullscreen">⛶</button>
         </div>
 
@@ -95,7 +97,9 @@
               <button class="tab" role="tab" data-tab="registers" aria-selected="true">CPU</button>
               <button class="tab" role="tab" data-tab="bus" aria-selected="false">Bus</button>
               <button class="tab" role="tab" data-tab="selection" aria-selected="false">Trace</button>
+              <button class="tab" role="tab" data-tab="lab" aria-selected="false">Lab</button>
               <button class="tab" role="tab" data-tab="layers" aria-selected="false">Layers</button>
+              <button class="tab" role="tab" data-tab="key" aria-selected="false">Key</button>
               <button class="tab" role="tab" data-tab="memory" aria-selected="false">Memory</button>
             </div>
 
@@ -144,6 +148,20 @@
               </label>
             </section>
 
+            <section class="panel" data-tab="lab">
+              <h2>Lab — one instruction, end to end</h2>
+              <label class="field lab-pick">
+                <span>Instruction</span>
+                <select id="lab-pick"></select>
+              </label>
+              <pre class="lab-asm" id="lab-asm"></pre>
+              <div id="lab-body"></div>
+              <div class="lab-nav">
+                <button class="btn btn-ghost btn-sm" id="lab-prev" type="button">← Back</button>
+                <button class="btn btn-ghost btn-sm" id="lab-next" type="button">Next →</button>
+              </div>
+            </section>
+
             <section class="panel" data-tab="layers">
               <h2>Layers</h2>
               <div id="layers"></div>
@@ -155,6 +173,49 @@
                 <span>Glow</span>
                 <input type="range" id="bloom" min="0" max="250" value="115">
               </label>
+              <label class="check">
+                <input type="checkbox" id="invert-zoom">
+                <span>Invert scroll zoom</span>
+              </label>
+            </section>
+
+            <section class="panel" data-tab="key">
+              <h2>Reading the die</h2>
+              <div class="key-state">
+                <div class="key-row">
+                  <span class="key-dot hot"></span>
+                  <div><b>Glowing</b><p>The node is logically high at this instant.
+                  Not an animation — 3,510 switches solved to a fixed point, twice
+                  per clock cycle, then painted.</p></div>
+                </div>
+                <div class="key-row">
+                  <span class="key-dot mark"></span>
+                  <div><b>White</b><p>Everything electrically connected to your
+                  selection <em>right now</em>. It changes as transistors open and
+                  close, because a wire is not a fixed thing.</p></div>
+                </div>
+                <div class="key-row">
+                  <span class="key-dot dim"></span>
+                  <div><b>Dim</b><p>Inactive, or one of the two power rails. vss and
+                  vcc blanket the die, so they are deliberately muted rather than
+                  drawn live — otherwise every trace would light the whole chip.</p></div>
+                </div>
+              </div>
+
+              <h2>Mask layers</h2>
+              <div id="key-layers"></div>
+
+              <h2>Transistors</h2>
+              <p class="key-note">There is no transistor layer to switch on. A
+              transistor <em>is</em> the crossing: polysilicon passing over
+              diffusion, 3,510 times. That is the whole of the logic — no gates, no
+              decoder, nothing above the switches.</p>
+
+              <h2>Pins</h2>
+              <p class="key-note"><code>SYNC</code> rises on an opcode fetch.
+              <code>CLK0</code> is the input clock; the chip does work on both of
+              its edges, which is why time is counted here in half-cycles.
+              <code>R/W</code> is the bus direction, high for a read.</p>
             </section>
 
             <section class="panel" data-tab="memory">
@@ -184,6 +245,9 @@
           <label class="field speed">
             <span>Speed</span>
             <select id="speed">
+              <option value="0.1">0.1×</option>
+              <option value="0.25">0.25×</option>
+              <option value="0.5">0.5×</option>
               <option value="1">1×</option>
               <option value="4">4×</option>
               <option value="16" selected>16×</option>
@@ -226,6 +290,37 @@
           the whole idea. A wire is not a fixed thing.</p>
         </article>
       </div>
+    </section>
+
+    <section class="wrap sec" id="lab">
+      <div class="sec-head">
+        <p class="eyebrow">The Lab</p>
+        <h2>Watch one instruction happen.</h2>
+      </div>
+      <p class="lede">
+        The 6502 has no instruction decoder in the sense a textbook means. An
+        opcode is a byte that lands in a latch; a PLA turns those eight bits into
+        about forty control lines; those lines open and close switches that
+        connect registers to buses. There is no microcode and nothing to step
+        through — the decode is combinational, a pure function of what is in the
+        instruction register right now.
+      </p>
+      <p class="lede">
+        The Lab follows a single instruction through that, a half-cycle at a
+        time, framing the die on whichever part is doing the work. The control
+        lines it lists are read out of the running chip at that instant, not
+        written down here — so you can check the story against the silicon.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="?lab=lda#explorer">LDA — a byte into a register</a>
+        <a class="btn btn-ghost" href="?lab=adc&amp;step=4#explorer">ADC — the accumulator lag</a>
+        <a class="btn btn-ghost" href="?lab=inx#explorer">INX — adding one, the hard way</a>
+        <a class="btn btn-ghost" href="?lab=sta#explorer">STA — out through the pins</a>
+      </div>
+      <p class="fineprint">
+        The ADC link opens on the step worth arguing about: the adder holds the
+        answer, and the accumulator does not have it yet.
+      </p>
     </section>
 
     <section class="wrap sec" id="try-this">
@@ -319,6 +414,7 @@
 </div>
 
 <script type="module" src="app.js"></script>
+<script type="module" src="site-nav.js"></script>
 <script type="module" src="version-footer.js"></script>
 </body>
 </html>

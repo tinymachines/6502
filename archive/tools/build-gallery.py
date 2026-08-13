@@ -31,6 +31,11 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Imported by name: this file defines its own shell(), which would rebind
+# the module-level name. See build-wiki.py for the same note.
+from shell import CSS as HEADER_CSS, LINKS as SITE_LINKS, header as site_header  # noqa: E402
+
 try:
     from PIL import Image, ImageFile
 except ImportError:
@@ -123,13 +128,6 @@ body{margin:0;color:var(--fg);font-family:var(--sans);line-height:1.6;
 background:radial-gradient(circle at 12% 6%,#22d3ee1f,transparent 30rem),
 linear-gradient(135deg,var(--space),#0e1830 56%,var(--subtle));background-attachment:fixed}
 .wrap{max-width:78rem;margin:0 auto;padding:0 1.25rem 5rem}
-header.top{position:sticky;top:0;z-index:5;background:#0b1120ee;backdrop-filter:blur(8px);
-border-bottom:2px solid var(--line)}
-header.top .wrap{display:flex;gap:1rem;align-items:center;justify-content:space-between;
-padding:.75rem 1.25rem}
-header.top a{color:var(--fg);text-decoration:none;font-weight:800}
-header.top nav a{color:var(--muted);font-weight:600;margin-left:1rem;font-size:.9rem}
-header.top nav a:hover{color:var(--accent)}
 .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;
 text-transform:uppercase;color:var(--accent)}
 h1{font-weight:900;font-size:clamp(1.7rem,4vw,2.6rem);line-height:1.1;margin:2rem 0 .5rem}
@@ -185,8 +183,9 @@ padding:.1rem .4rem;letter-spacing:.04em}
 """
 
 
-def shell(title: str, body: str, *, up_href: str, depth: int) -> str:
-    root = "../" * depth
+def shell(title: str, body: str, *, depth: int) -> str:
+    root = "../" * depth              # back to gallery/
+    archive = "../" * (depth + 1)     # back to the archive root
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -194,14 +193,7 @@ def shell(title: str, body: str, *, up_href: str, depth: int) -> str:
 <title>{html.escape(title)} — visual6502 die photography (archived)</title>
 <link rel="stylesheet" href="{root}gallery.css">
 </head><body>
-<header class="top"><div class="wrap">
-  <a href="{root}index.html">die photography <span class="eyebrow">archived</span></a>
-  <nav>
-    <a href="{up_href}">Back</a>
-    <a href="{root}../wiki/index.html">Wiki</a>
-    <a href="{root}../index.html">Archive</a>
-  </nav>
-</div></header>
+{site_header(archive, SITE_LINKS, active="Die photos")}
 <div class="wrap">
 {body}
 <footer>Images &copy; the {ATTRIB}, licensed
@@ -210,7 +202,8 @@ def shell(title: str, body: str, *, up_href: str, depth: int) -> str:
 preservation; not affiliated with the Visual6502 project.
 <span class="version-foot" data-version-footer></span></footer>
 </div>
-<script type="module" src="{root}../version-footer.js"></script>
+<script type="module" src="{archive}site-nav.js"></script>
+<script type="module" src="{archive}version-footer.js"></script>
 </body></html>
 """
 
@@ -262,7 +255,7 @@ def main() -> None:
                 print(f"  {i}/{len(jobs)}", flush=True)
 
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "gallery.css").write_text(CSS)
+    (OUT / "gallery.css").write_text(CSS + HEADER_CSS)
 
     # Per-chip pages.
     cards = []
@@ -311,7 +304,7 @@ def main() -> None:
                 + f'<ul class="grid">{"".join(items)}</ul>')
         (OUT / "chip").mkdir(parents=True, exist_ok=True)
         (OUT / "chip" / f"{chip}.html").write_text(
-            shell(chip, body, up_href="../index.html", depth=1))
+            shell(chip, body, depth=1))
 
         cover = files[0].relative_to(SRC)
         cards.append((total, chip, len(files),
@@ -331,7 +324,7 @@ def main() -> None:
             f'many of them the only public images of the part.</p>{BANNER}'
             f'<ul class="chips">{lis}</ul>')
     (OUT / "index.html").write_text(
-        shell("Die photography", body, up_href="../index.html", depth=0))
+        shell("Die photography", body, depth=0))
 
     (OUT / "gallery-manifest.json").write_text(json.dumps(
         {"chips": [{"chip": c, "images": n, "bytes": t} for t, c, n, _ in cards],

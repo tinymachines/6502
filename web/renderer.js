@@ -467,22 +467,79 @@ export class DieRenderer {
     this.fb.bloomB = this._makeTarget(bw, bh, 1);
     this.fb.pick = this._makeTarget(w, h, 1);
     this.pickDirty = true;
-    if (!this.userFramed) this.fitToDie();
+    if (!this.userFramed) {
+      this.fitToDie();
+    } else {
+      // A resize moves the fit scale, and with it both zoom limits, so a view
+      // that was legal a moment ago may not be. Re-apply them.
+      this.camera.scale = Math.min(this.maxScale, Math.max(this.minScale, this.camera.scale));
+      this._clampCamera();
+    }
   }
 
   // -- camera ---------------------------------------------------------------
 
+  /**
+   * The scale at which the whole die fits the current viewport.
+   *
+   * Derived rather than stored: the zoom limits hang off it, and a stored copy
+   * goes stale the moment the window is resized while the user has framed their
+   * own view -- which is exactly when a wrong minimum lets the die escape.
+   */
+  fitScale() {
+    const b = this.layout.bounds;
+    return Math.min(
+      this.canvas.width / (b.xmax - b.xmin),
+      this.canvas.height / (b.ymax - b.ymin)
+    ) * 0.94;
+  }
+
+  // Zooming out past the fit is briefly useful (it shows the die has an edge)
+  // but only just: beyond this the chip is a smudge in a field of black.
+  get minScale() { return this.fitScale() * 0.85; }
+  get maxScale() { return this.fitScale() * 260; }
+
   fitToDie() {
     const b = this.layout.bounds;
-    const w = b.xmax - b.xmin;
-    const h = b.ymax - b.ymin;
     this.camera.cx = (b.xmin + b.xmax) / 2;
     this.camera.cy = (b.ymin + b.ymax) / 2;
-    const fit = 0.94;
-    this.camera.scale = Math.min(this.canvas.width / w, this.canvas.height / h) * fit;
-    this.minScale = this.camera.scale * 0.6;
-    this.maxScale = this.camera.scale * 220;
+    this.camera.scale = this.fitScale();
     this.pickDirty = true;
+  }
+
+  /** Frame the whole die and hand framing back to the automatic behaviour. */
+  resetView() {
+    this.userFramed = false;
+    this.fitToDie();
+  }
+
+  /**
+   * Keep the die on screen.
+   *
+   * Panning is unbounded arithmetic on the camera centre, so without this a
+   * drag can carry the chip out of the viewport entirely and leave a black
+   * screen with no way back except the keyboard. The rule is stated in terms of
+   * the *view rectangle* rather than the centre, because that works in both
+   * regimes: zoomed in, where the viewport is smaller than the die, and zoomed
+   * out, where it is larger. At least this fraction of whichever is smaller
+   * must remain visible on each axis.
+   */
+  _clampCamera() {
+    const b = this.layout.bounds;
+    const keep = 0.35;
+    const axis = (centre, lo, hi, halfView) => {
+      const overlap = Math.min(hi - lo, 2 * halfView) * keep;
+      const min = lo + overlap - halfView;
+      const max = hi - overlap + halfView;
+      // Inverted when the die is small and mostly off-view; centre it instead
+      // of picking an arbitrary end of a negative range.
+      if (min > max) return (lo + hi) / 2;
+      return Math.min(max, Math.max(min, centre));
+    };
+    const halfW = this.canvas.width / 2 / this.camera.scale;
+    const halfH = this.canvas.height / 2 / this.camera.scale;
+    this.camera.cx = axis(this.camera.cx, b.xmin, b.xmax, halfW);
+    this.camera.cy = axis(this.camera.cy, b.ymin, b.ymax, halfH);
   }
 
   /** Canvas-relative CSS pixels -> die coordinates. */
@@ -504,6 +561,7 @@ export class DieRenderer {
     const dpr = this.canvas.width / this.canvas.getBoundingClientRect().width;
     this.camera.cx -= (dx * dpr) / this.camera.scale;
     this.camera.cy += (dy * dpr) / this.camera.scale;
+    this._clampCamera();
     this.pickDirty = true;
     this.userFramed = true;
   }
@@ -515,6 +573,7 @@ export class DieRenderer {
     const after = this.screenToDie(clientX, clientY);
     this.camera.cx += before.x - after.x;
     this.camera.cy += before.y - after.y;
+    this._clampCamera();
     this.pickDirty = true;
     this.userFramed = true;
   }
@@ -529,6 +588,7 @@ export class DieRenderer {
       this.maxScale,
       Math.max(this.minScale, Math.min(this.canvas.width / w, this.canvas.height / h) * 0.6)
     );
+    this._clampCamera();
     this.pickDirty = true;
     this.userFramed = true;
   }

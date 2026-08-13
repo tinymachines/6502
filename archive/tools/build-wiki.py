@@ -29,6 +29,12 @@ import urllib.parse as up
 from collections import defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Imported by name, not as a module: this file defines its own shell()
+# function, which would rebind the module-level name and turn shell.header
+# into an AttributeError at build time.
+from shell import CSS as HEADER_CSS, LINKS as SITE_LINKS, header as site_header  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "wiki-raw"
 OUT = ROOT / "public" / "wiki"
@@ -43,6 +49,10 @@ LICENCE = "https://creativecommons.org/licenses/by-nc-sa/3.0/"
 # Everything else stays escaped: this is archived third-party content and it is
 # not worth rendering arbitrary markup to save a few line breaks.
 SAFE_TAGS = ["br", "b", "i", "u", "s", "sub", "sup", "small", "tt", "code", "hr"]
+
+# The shared archive nav, plus the wiki's own image contact sheet. Inserted
+# after Wiki so the section a reader is already in keeps its sub-page adjacent.
+WIKI_LINKS = SITE_LINKS[:2] + (("Images", "wiki/images.html"),) + SITE_LINKS[2:]
 
 
 # --------------------------------------------------------------------------
@@ -320,13 +330,6 @@ background:radial-gradient(circle at 12% 6%,#22d3ee1f,transparent 30rem),
 radial-gradient(circle at 88% 10%,#7dd3fc16,transparent 28rem),
 linear-gradient(135deg,var(--space),#0e1830 56%,var(--subtle));background-attachment:fixed}
 .wrap{max-width:64rem;margin:0 auto;padding:0 1.25rem 5rem}
-header.top{position:sticky;top:0;z-index:5;background:#0b1120ee;
-backdrop-filter:blur(8px);border-bottom:2px solid var(--line)}
-header.top .wrap{display:flex;gap:1rem;align-items:center;justify-content:space-between;
-padding-top:.75rem;padding-bottom:.75rem}
-header.top a{color:var(--fg);text-decoration:none;font-weight:800}
-header.top nav a{color:var(--muted);font-weight:600;margin-left:1rem;font-size:.9rem}
-header.top nav a:hover{color:var(--accent)}
 .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;
 text-transform:uppercase;color:var(--accent)}
 h1{font-weight:900;font-size:clamp(1.7rem,4vw,2.6rem);line-height:1.1;margin:.4rem 0 1rem}
@@ -390,7 +393,6 @@ background:#0a1526;color:var(--muted);font-family:var(--mono);font-size:.75rem}
 font-size:.68rem;margin-top:.15rem}
 footer{margin-top:4rem;padding-top:1.5rem;border-top:2px solid var(--line);
 color:var(--muted);font-size:.85rem}
-@media(max-width:40rem){header.top nav a{margin-left:.6rem;font-size:.8rem}}
 
 .version-foot{display:inline-flex;align-items:center;gap:.5rem;
 font-family:var(--mono);font-size:.7rem;margin-left:.75rem}
@@ -514,8 +516,7 @@ def build_image_index(out: Path, images: dict, pages: set, known: dict) -> int:
     return total
 
 
-def shell(title: str, body: str, *, banner: str, home: str = "index.html",
-          desc: str = "") -> str:
+def shell(title: str, body: str, *, banner: str, desc: str = "") -> str:
     if "Archived copy" not in banner:
         # The banner carries the CC BY-NC-SA attribution. A page without it is a
         # licence violation, so this fails the build rather than shipping.
@@ -528,15 +529,7 @@ def shell(title: str, body: str, *, banner: str, home: str = "index.html",
 <meta name="description" content="{html.escape(desc)}">
 <link rel="stylesheet" href="wiki.css">
 </head><body>
-<header class="top"><div class="wrap">
-  <a href="{home}">visual6502 wiki <span class="eyebrow">archived</span></a>
-  <nav>
-    <a href="{home}">Index</a>
-    <a href="images.html">Images</a>
-    <a href="../gallery/index.html">Die photos</a>
-    <a href="../index.html">Archive</a>
-  </nav>
-</div></header>
+{site_header("../", WIKI_LINKS, active="Wiki")}
 <div class="wrap"><article>
 {banner}
 {body}
@@ -547,6 +540,7 @@ def shell(title: str, body: str, *, banner: str, home: str = "index.html",
   <span class="version-foot" data-version-footer></span>
 </footer>
 </article></div>
+<script type="module" src="../site-nav.js"></script>
 <script type="module" src="../version-footer.js"></script>
 </body></html>
 """
@@ -672,7 +666,7 @@ which therefore appear on no rebuilt page.</p>"""
         banner=banner_for("Main_Page", known.get("Main_Page"), "archived pages"),
         desc="Static reconstruction of the visual6502.org wiki."),
         encoding="utf-8")
-    (OUT / "wiki.css").write_text(CSS, encoding="utf-8")
+    (OUT / "wiki.css").write_text(CSS + HEADER_CSS, encoding="utf-8")
 
     n_img = build_image_index(OUT, images, set(pages), known)
     print(f"image index: {n_img} images")

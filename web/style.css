@@ -333,7 +333,9 @@ code {
   #panels[data-active="registers"] .panel[data-tab="registers"],
   #panels[data-active="bus"] .panel[data-tab="bus"],
   #panels[data-active="selection"] .panel[data-tab="selection"],
+  #panels[data-active="lab"] .panel[data-tab="lab"],
   #panels[data-active="layers"] .panel[data-tab="layers"],
+  #panels[data-active="key"] .panel[data-tab="key"],
   #panels[data-active="memory"] .panel[data-tab="memory"] { display: block; }
 }
 
@@ -441,6 +443,96 @@ input[type=text]:focus { outline: none; border-color: var(--accent); }
 .layer-swatch { width: .8rem; height: .8rem; border-radius: .2rem; flex: none; }
 .layer-row label { color: var(--muted); cursor: pointer; font-size: .85rem; }
 
+/* ---------- lab panel ---------- */
+
+.lab-pick { display: flex; gap: .45rem; align-items: center; min-width: 0; }
+.lab-pick select { flex: 1 1 0; min-width: 0; }
+/* The option text carries a long blurb; the closed select must not stretch the
+   panel to fit it. */
+.lab-pick select { max-width: 100%; text-overflow: ellipsis; }
+
+.lab-intro { color: var(--muted); font-size: .84rem; line-height: 1.55; margin-bottom: .7rem; }
+.lab-warn { color: color-mix(in srgb, var(--warn) 80%, var(--muted)); font-size: .78rem; }
+
+.lab-asm {
+  margin: .7rem 0; padding: .5rem .6rem; border-radius: .35rem;
+  background: color-mix(in srgb, var(--space) 70%, transparent);
+  border: 2px solid color-mix(in srgb, var(--line) 45%, transparent);
+  font-family: var(--font-mono); font-size: .76rem; line-height: 1.6;
+  color: var(--muted); overflow-x: auto;
+}
+.lab-asm:empty { display: none; }
+.lab-asm .on { color: var(--accent); font-weight: 700; }
+.lab-asm .on::before { content: "▸ "; }
+.lab-asm div:not(.on)::before { content: "  "; white-space: pre; }
+
+.lab-step { display: flex; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+.lab-count, .lab-when {
+  font-family: var(--font-mono); font-size: .62rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.lab-count { color: var(--gold); }
+.lab-title { margin: .3rem 0 .35rem; font-size: 1rem; color: var(--foreground); }
+.lab-text { color: var(--muted); font-size: .84rem; line-height: 1.6; }
+.lab-region {
+  margin-top: .6rem; font-family: var(--font-mono); font-size: .68rem;
+  color: var(--muted);
+}
+.lab-region b { color: var(--accent); }
+.lab-region em { color: var(--warn); font-style: normal; }
+
+.lab-live {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .3rem; margin-top: .7rem;
+}
+.lab-kv {
+  background: color-mix(in srgb, var(--subtle) 80%, transparent);
+  border: 2px solid color-mix(in srgb, var(--line) 45%, transparent);
+  border-radius: .3rem; padding: .3rem .4rem; min-width: 0;
+}
+.lab-kv label {
+  display: block; font-family: var(--font-mono); font-size: .56rem;
+  letter-spacing: .12em; color: var(--muted); text-transform: uppercase;
+}
+.lab-kv span {
+  font-family: var(--font-mono); font-size: .82rem; color: var(--hot);
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-ctrl-label {
+  margin-top: .8rem; font-family: var(--font-mono); font-size: .6rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--gold);
+}
+.lab-ctrl { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .35rem; }
+.lab-line {
+  font-family: var(--font-mono); font-size: .62rem; letter-spacing: .04em;
+  padding: .18rem .34rem; border-radius: .22rem;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--foreground);
+}
+.lab-none { font-family: var(--font-mono); font-size: .68rem; color: var(--muted); }
+
+.lab-nav { display: flex; gap: .4rem; margin-top: .9rem; }
+.lab-nav .btn { flex: 1 1 0; min-width: 0; }
+.lab-nav .btn:disabled { opacity: .4; cursor: default; }
+
+/* ---------- key panel ---------- */
+
+.key-row { display: flex; gap: .6rem; align-items: flex-start; padding: .45rem 0; }
+.key-row + .key-row { border-top: 1px solid color-mix(in srgb, var(--line) 25%, transparent); }
+.key-row b { color: var(--foreground); font-size: .85rem; }
+.key-row p { color: var(--muted); font-size: .8rem; line-height: 1.5; margin-top: .15rem; }
+.key-row .layer-swatch, .key-dot { margin-top: .3rem; }
+.key-dot { width: .8rem; height: .8rem; border-radius: .2rem; flex: none; }
+.key-dot.hot { background: var(--hot); box-shadow: 0 0 8px var(--hot); }
+.key-dot.mark { background: #fff; }
+.key-dot.dim { background: color-mix(in srgb, var(--line) 70%, transparent); }
+.key-state { margin-bottom: .3rem; }
+.key-note { color: var(--muted); font-size: .8rem; line-height: 1.55; }
+.panel[data-tab="key"] h2 + h2 { margin-top: 1rem; }
+.panel[data-tab="key"] h2:not(:first-child) { margin-top: 1.1rem; }
+
 .slider { display: block; margin-top: .8rem; }
 .slider span { display: block; color: var(--muted); font-size: .7rem; margin-bottom: .3rem; font-family: var(--font-mono); }
 .slider input { width: 100%; accent-color: var(--accent); }
@@ -483,9 +575,18 @@ select:focus { outline: none; border-color: var(--accent); }
 .console:fullscreen { border-radius: 0; border: 0; box-shadow: none; height: 100vh; }
 .console:fullscreen .console-body { flex: 1; min-height: 0; }
 .console:fullscreen #stage { height: auto; flex: 1; }
-.console:fullscreen #panels { max-height: 40vh; }
+/* Fixed height, not max-height: the panels sit below the canvas here, so a tab
+   change that resized them would resize the stage and jump the die. app.js
+   measures the tallest panel into --panel-lock; the cap keeps a long Memory
+   dump from eating the view, and the fallback covers the first frame. */
+.console:fullscreen #panels {
+  height: min(var(--panel-lock, 40vh), 45vh);
+  overflow-y: auto; overscroll-behavior: contain;
+}
 @media (min-width: 68rem) {
-  .console:fullscreen #panels { max-height: none; }
+  /* Above the breakpoint the panels are a side column and cannot affect the
+     stage's height at all, so the lock is unnecessary. */
+  .console:fullscreen #panels { height: auto; max-height: none; }
 }
 
 /* ---------- content sections ---------- */
@@ -549,5 +650,25 @@ select:focus { outline: none; border-color: var(--accent); }
   .console-bar .bar-spacer { display: none; }
   .console-bar .field.prog { order: 3; flex: 1 1 100%; min-width: 0; }
   .console-bar .field.prog select { flex: 1 1 0; min-width: 0; max-width: 100%; }
-  .console-bar #btn-fullscreen { margin-left: auto; }
+  .console-bar #btn-fit { margin-left: auto; }
+}
+
+/* At the narrowest common phone width the header's three items -- wordmark,
+   call to action, menu -- want ~330px and have ~285px, and the overflow escapes
+   the header (unlike the console, which clips). Drop the CTA: it duplicates the
+   Explorer link that the menu already contains. Likewise the six transport
+   buttons want 302px, so tighten them rather than let the console clip the last
+   one off. Both only bite below 384px. */
+/* The Lab's calls to action carry a whole phrase, and `.btn` is nowrap so short
+   buttons never break mid-label. On a narrow screen one of those phrases is
+   wider than the viewport, so here they stack and wrap instead. */
+@media (max-width: 30rem) {
+  #lab .cta-row { flex-direction: column; align-items: stretch; }
+  #lab .cta-row .btn { white-space: normal; }
+}
+
+@media (max-width: 24rem) {
+  .site-head .nav-cta { display: none; }
+  .transport { flex-wrap: wrap; }
+  .transport .iconbtn { min-width: 2.5rem; padding: .5rem .35rem; }
 }

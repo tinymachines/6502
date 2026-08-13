@@ -1,6 +1,7 @@
 /target
 /web/pkg
 node_modules
+__pycache__/
 
 # Generated oracle: 5 MB of reference trace, rebuilt on demand.
 # node tools/golden-trace/gen.js --steps 3000

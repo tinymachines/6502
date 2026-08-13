@@ -13,9 +13,11 @@ Hashing is done dependency-first, so a change to a leaf ripples all the way up:
 
     layout.bin ─┐
     *_bg.wasm ──┴─> v6502_wasm.js ─┐
-    renderer.js ────────────────── ┼─> app.js ─┐
-    disasm.js ──────────────────── ┘           ├─> index.html
-    style.css, icons ──> manifest.webmanifest ─┘
+    renderer.js ──┬─────────────── ┼─> app.js ─┐
+    disasm.js ────┤                ┘           ├─> index.html
+    lab.js ───────┘                            │
+    style.css, icons ──> manifest.webmanifest ─┤
+    site-nav.js, version-footer.js ────────────┘
 
 index.html and sw.js are deliberately NOT hashed: they are the entry points, and
 are served no-cache so a deploy takes effect immediately.
@@ -161,7 +163,9 @@ def main() -> None:
     b.copy_hashed("style.css")
     b.copy_hashed("renderer.js")
     b.copy_hashed("disasm.js")
+    b.copy_hashed("lab.js")
     b.copy_hashed("version-footer.js")
+    b.copy_hashed("site-nav.js")
     for icon in sorted((src / "icons").iterdir()):
         if icon.suffix in {".png", ".svg"}:
             b.copy_hashed(f"icons/{icon.name}")
@@ -183,6 +187,7 @@ def main() -> None:
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./renderer.js", "./" + b.ref("renderer.js")),
         ("./disasm.js", "./" + b.ref("disasm.js")),
+        ("./lab.js", "./" + b.ref("lab.js")),
     ]:
         app = replace_once(app, f"'{original}'", f"'{resolved}'", where="app.js")
     app = replace_once(app, "fetch('layout.bin')", f"fetch('{b.ref('layout.bin')}')", where="app.js")
@@ -196,7 +201,7 @@ def main() -> None:
 
     # 5. index.html: the unhashed entry point that points at everything else.
     html = b.read("index.html").decode()
-    for original in ["style.css", "app.js", "version-footer.js",
+    for original in ["style.css", "app.js", "version-footer.js", "site-nav.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         html = replace_once(html, f'"{original}"', f'"{b.ref(original)}"', where="index.html")

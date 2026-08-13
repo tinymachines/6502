@@ -11,8 +11,9 @@ Layout produced under archive/public/:
     index.html      what was lost, what was recovered, and the attribution
     wiki/           169 pages rebuilt from recovered wikitext
     gallery/        41 chips of die photography, browsable
-    full/           symlink to the mirrored full-resolution originals
-    site/           the live site as it still stands (JSSim, docs, /sim/)
+    full/           symlink to the whole mirrored tree -- the originals at
+                    full resolution, and the site's own pages (JSSim, docs,
+                    /sim/) with their relative links intact
 
 `full/` is a symlink rather than a copy: the originals are 2.3 GB and there is
 no reason to hold them twice. nginx follows symlinks by default, and the deploy
@@ -25,6 +26,9 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import shell  # noqa: E402  -- shared header, see shell.py
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parent
@@ -60,13 +64,6 @@ background-image:radial-gradient(circle,#eaf2ff7a 0 1.5px,transparent 2px),
 radial-gradient(circle,#22d3ee66 0 1px,transparent 1.5px);
 background-size:140px 128px,180px 176px;background-position:0 0,42px 58px}
 .wrap{position:relative;z-index:1;max-width:60rem;margin:0 auto;padding:0 1.25rem 6rem}
-header.top{position:sticky;top:0;z-index:5;background:#0b1120ee;backdrop-filter:blur(8px);
-border-bottom:2px solid var(--line)}
-header.top .wrap{display:flex;gap:1rem;align-items:center;justify-content:space-between;
-padding:.75rem 1.25rem}
-header.top a{color:var(--fg);text-decoration:none;font-weight:800}
-header.top nav a{color:var(--muted);font-weight:600;margin-left:1rem;font-size:.9rem}
-header.top nav a:hover{color:var(--accent)}
 .eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.16em;
 text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:.75rem;
 margin:3rem 0 .5rem}
@@ -130,6 +127,9 @@ def main() -> None:
     # deployed separately: its footer should report when the *archive* was last
     # rebuilt, which is rarely the same moment the front end was.
     shutil.copy2(REPO / "web" / "version-footer.js", PUBLIC / "version-footer.js")
+    # The header's disclosure menu, likewise shared verbatim rather than
+    # reimplemented. shell.py emits markup this file already knows how to drive.
+    shutil.copy2(REPO / "web" / "site-nav.js", PUBLIC / "site-nav.js")
     subprocess.run([sys.executable, str(REPO / "tools" / "build-info.py"),
                     str(PUBLIC), "--kind", "archive"], check=True)
 
@@ -250,15 +250,7 @@ wiki rebuilt from the Internet Archive, and {gb:.1f} GB of die photography made
 browsable again.">
 <link rel="stylesheet" href="archive.css">
 </head><body>
-<header class="top"><div class="wrap">
-  <a href="index.html">visual6502.org <span class="eyebrow"
-     style="margin:0;display:inline">archived</span></a>
-  <nav>
-    <a href="wiki/index.html">Wiki</a>
-    <a href="gallery/index.html">Die photos</a>
-    <a href="/">Simulator</a>
-  </nav>
-</div></header>
+{shell.header("", shell.LINKS, active="Overview")}
 <div class="wrap">{body}
 <footer>Mirrored for preservation by
 <a href="https://github.com/tinymachines/6502">tinymachines/6502</a>, which
@@ -270,10 +262,11 @@ its authors and want any of this changed or taken down, open an issue on the
 repository and it will be.
 <span class="version-foot" data-version-footer></span></footer>
 </div>
+<script type="module" src="site-nav.js"></script>
 <script type="module" src="version-footer.js"></script>
 </body></html>
 """, encoding="utf-8")
-    (PUBLIC / "archive.css").write_text(CSS)
+    (PUBLIC / "archive.css").write_text(CSS + shell.CSS)
 
     print(f"\n=== archive assembled ===")
     print(f"  wiki    {wiki_n} pages")

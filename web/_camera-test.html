@@ -1,0 +1,87 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>pending</title></head>
+<body style="margin:0">
+<canvas id="die" style="width:800px;height:500px;display:block"></canvas>
+<script type="module">
+import { DieRenderer, parseLayout } from './renderer.js';
+
+const results = [];
+const ok = (name, cond, detail) => results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`);
+
+try {
+  const layout = parseLayout(await (await fetch('layout.bin')).arrayBuffer());
+  const r = new DieRenderer(document.getElementById('die'), layout, 1725);
+  const b = layout.bounds;
+  const dieW = b.xmax - b.xmin, dieH = b.ymax - b.ymin;
+
+  // Fraction of the viewport covered by die geometry, per axis.
+  const cover = () => {
+    const halfW = r.canvas.width / 2 / r.camera.scale;
+    const halfH = r.canvas.height / 2 / r.camera.scale;
+    const ix = Math.max(0, Math.min(r.camera.cx + halfW, b.xmax) - Math.max(r.camera.cx - halfW, b.xmin));
+    const iy = Math.max(0, Math.min(r.camera.cy + halfH, b.ymax) - Math.max(r.camera.cy - halfH, b.ymin));
+    return { x: ix / Math.min(dieW, 2 * halfW), y: iy / Math.min(dieH, 2 * halfH) };
+  };
+
+  ok('fits on construction', Math.abs(r.camera.scale - r.fitScale()) < 1e-9,
+      `scale=${r.camera.scale} fit=${r.fitScale()}`);
+
+  // 1. Fling it: a thousand hard drags in one direction, zoomed in.
+  r.zoomAt(400, 250, 8);
+  for (let i = 0; i < 1000; i++) r.panByPixels(400, 300);
+  let c = cover();
+  ok('pan up-left stays on die', c.x > 0.3 && c.y > 0.3, `cover=${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+
+  for (let i = 0; i < 2000; i++) r.panByPixels(-400, -300);
+  c = cover();
+  ok('pan down-right stays on die', c.x > 0.3 && c.y > 0.3, `cover=${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+
+  // 2. Zoom out hard: should stop at the floor, not vanish.
+  for (let i = 0; i < 200; i++) r.zoomAt(400, 250, 0.5);
+  ok('zoom-out floor holds', r.camera.scale >= r.minScale - 1e-9,
+      `scale=${r.camera.scale} min=${r.minScale}`);
+  // Check the axis that actually binds: the die is near-square and the canvas
+  // is not, so the other axis is legitimately mostly margin.
+  const fill = Math.max((dieW * r.camera.scale) / r.canvas.width,
+                        (dieH * r.camera.scale) / r.canvas.height);
+  ok('die still fills most of view when zoomed out', fill > 0.75, `fill=${fill.toFixed(2)}`);
+
+  // 3. Zoom in hard: ceiling holds.
+  for (let i = 0; i < 200; i++) r.zoomAt(400, 250, 2);
+  ok('zoom-in ceiling holds', r.camera.scale <= r.maxScale + 1e-9,
+      `scale=${r.camera.scale} max=${r.maxScale}`);
+  c = cover();
+  ok('deep zoom still on die', c.x > 0.3 && c.y > 0.3, `cover=${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+
+  // 4. Pan at the zoom floor, where the viewport is bigger than the die --
+  //    the regime where a naive centre-clamp inverts and misbehaves.
+  r.resetView();
+  for (let i = 0; i < 50; i++) r.zoomAt(400, 250, 0.5);
+  for (let i = 0; i < 500; i++) r.panByPixels(500, 500);
+  c = cover();
+  ok('pan at zoom floor stays on die', c.x > 0.3 && c.y > 0.3, `cover=${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+
+  // 5. resetView re-frames and hands control back.
+  r.resetView();
+  ok('resetView refits', Math.abs(r.camera.scale - r.fitScale()) < 1e-9 && r.userFramed === false,
+      `scale=${r.camera.scale} userFramed=${r.userFramed}`);
+
+  // 6. A resize while the user has framed their own view must not leave the
+  //    camera outside limits that just moved.
+  r.zoomAt(400, 250, 40);
+  r.canvas.style.width = '300px';
+  r.canvas.style.height = '900px';
+  r.resize();
+  ok('resize keeps scale legal',
+      r.camera.scale >= r.minScale - 1e-9 && r.camera.scale <= r.maxScale + 1e-9,
+      `scale=${r.camera.scale} min=${r.minScale} max=${r.maxScale}`);
+  c = cover();
+  ok('resize keeps die on screen', c.x > 0.3 && c.y > 0.3, `cover=${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+} catch (e) {
+  results.push('FAIL threw :: ' + (e && e.message));
+}
+
+document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+</script>
+</body></html>
