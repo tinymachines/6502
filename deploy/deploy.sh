@@ -38,12 +38,16 @@ cargo run --quiet -p v6502-netlist --bin export-layout -- web/layout.bin
 log "deriving the blueprint"
 cargo run --quiet -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 
+log "measuring the decode PLA"
+cargo run --release --quiet -p v6502-sim --bin export-decode -- web/decode.json
+
 # ---------------------------------------------------------------------------
 # Sanity-check the build before it can replace a working site
 # ---------------------------------------------------------------------------
 
 for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/programs.js web/blueprint.html web/blueprint.js web/blueprint.json \
+         web/decode.html web/decode.js web/decode.json \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
   [ -s "$f" ] || { echo "deploy: missing or empty $f" >&2; exit 1; }
 done
@@ -63,6 +67,18 @@ if len(bp["units"]) < 12 or len(bp["links"]) < 16:
              f"{len(bp['links'])} links -- the extraction has broken")
 if bp["coverage"]["transistorsDrawn"] < 100:
     sys.exit("deploy: blueprint covers almost no transistors")
+
+# The decode table is measured by running the chip, so a broken run yields a
+# well-formed file full of empty results rather than an error. Insist that the
+# product terms were actually observed firing.
+dec = json.load(open("web/decode.json"))
+if len(dec["rows"]) < 100 or len(dec["opcodes"]) != 256:
+    sys.exit(f"deploy: decode table has {len(dec['rows'])} terms / "
+             f"{len(dec['opcodes'])} opcodes")
+fired = {t for op in dec["opcodes"] for t in op["any"]}
+if len(fired) < len(dec["rows"]):
+    sys.exit(f"deploy: only {len(fired)} of {len(dec['rows'])} product terms "
+             f"were observed firing -- the measurement run is broken")
 PY
 
 # ---------------------------------------------------------------------------

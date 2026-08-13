@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Decode — the 6502's PLA, measured</title>
+<meta name="description" content="All 122 product terms of the MOS 6502's decode PLA, located in the netlist and measured by running the chip against every one of the 256 opcodes.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav">
+        <a href="./#explorer">Explorer</a>
+        <a href="./#lab">Lab</a>
+        <a href="blueprint.html">Blueprint</a>
+        <a href="decode.html" aria-current="page">Decode</a>
+        <a href="./#credit">Credit</a>
+        <a href="archive/">Archive</a>
+      </div>
+      <a class="btn btn-primary nav-cta" href="./#explorer">Run it</a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Measured · not computed</p>
+    <h1>An opcode is<br><span class="hl">not a number.</span></h1>
+    <p class="lede">
+      There is no instruction decoder in the 6502 in the sense a textbook means,
+      and no microcode to step through. An opcode is eight bits sitting in a
+      latch, and a grid of transistors turns them into about forty control lines
+      combinationally — a pure function of what is in the instruction register
+      right now.
+    </p>
+    <p class="lede">
+      That grid has 122 product terms, and the die names 121 of them. This is
+      every one, together with the opcodes that actually fire it — found by
+      running the chip against all 256 opcodes rather than by reading the
+      transistors and reasoning.
+    </p>
+    <div class="statbar" id="decode-stats">…</div>
+  </section>
+
+  <section class="wrap" id="matrix">
+    <div class="console">
+      <div class="console-bar">
+        <span class="tag live">decode · measured</span>
+        <span class="bar-note">Click an opcode, or a term to light every opcode that fires it</span>
+        <div class="bar-spacer"></div>
+      </div>
+
+      <div id="decode-boot" class="bp-boot"><p id="decode-status">Loading the decode table…</p></div>
+
+      <div id="decode-main" hidden>
+        <div class="decode-cols">
+          <div class="decode-left">
+            <div class="grid-scroll"><div id="op-grid" class="op-grid"></div></div>
+            <div class="grid-key">
+              <span><i class="sw doc"></i> documented</span>
+              <span><i class="sw und"></i> undocumented</span>
+              <span><i class="sw lit"></i> fires the selected term</span>
+            </div>
+            <div class="panel-box" id="op-detail"></div>
+          </div>
+
+          <div class="decode-right" id="terms">
+            <div class="term-head">
+              <input id="term-filter" type="search" placeholder="Filter terms — try “lda”"
+                     aria-label="Filter product terms">
+              <span class="muted mono" id="term-shown"></span>
+            </div>
+            <div id="term-list" class="term-list"></div>
+            <div class="panel-box" id="term-detail"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">What the table shows</p>
+      <h2>Undocumented opcodes are not a mystery.</h2>
+    </div>
+    <p class="lede">
+      Filter the terms for <span class="mono">lda</span> and select
+      <span class="mono">op-T0-lda</span>. Sixteen opcodes light up: the eight
+      documented <span class="mono">LDA</span> forms, and eight more that no
+      datasheet lists. Those eight are <span class="mono">LAX</span>.
+    </p>
+    <p>
+      Nothing special happens for them. The PLA is a grid of switches, and the
+      row that means “load the accumulator now” does not test every opcode bit —
+      it tests the ones it needs. Opcodes it was never designed for satisfy the
+      same pattern, and the row fires, because there is nothing in the silicon
+      whose job is to say no. <span class="mono">LAX</span> loads both A and X
+      for the plainest possible reason: the <span class="mono">LDA</span> row and
+      the <span class="mono">LDX</span> row are both high at once.
+    </p>
+    <p>
+      The same thing explains <span class="mono">$CB</span> sitting alongside
+      <span class="mono">DEX</span>, and a great many other quirks people have
+      catalogued from the outside for forty years. Seen from the switches they
+      stop being trivia and become the obvious consequence of a grid that was
+      only ever built to answer 151 questions.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">Why measured</p>
+      <h2>The obvious method was wrong twice.</h2>
+    </div>
+    <p>
+      A product term looks like something you can just read off: it is pulled to
+      ground through one transistor per opcode bit it rejects, so the pattern is
+      right there. That was tried first, and checking it against the documented
+      instruction set found it wrong in two different ways.
+    </p>
+    <p>
+      <strong>It over-matched.</strong> <span class="mono">op-T0-jsr</span> came
+      out decoding four opcodes instead of one, because the low two bits are
+      constrained through <span class="mono">irline3</span> — a derived line, not
+      an IR bit. Following it means modelling the gate behind it, and the gate
+      behind that.
+    </p>
+    <p>
+      <strong>And where it looked wrong, it was right.</strong>
+      <span class="mono">op-T0-lda</span> matching sixteen opcodes is not an
+      error to be corrected. Trusting the datasheet over the silicon there would
+      have quietly deleted the most interesting thing on this page.
+    </p>
+    <p>
+      So the structure comes from the netlist and the behaviour comes from the
+      engine: every opcode was run, three times each, and the terms were read out
+      of the chip. All 122 fire — the last of them,
+      <span class="mono">op-branch-done</span>, only once the test crossed a page
+      boundary, which is itself the answer to what that term is for.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">What it leaves out</p>
+      <h2>Half of the decode.</h2>
+    </div>
+    <p>
+      This is the AND plane: the terms and what fires them. What happens after —
+      how terms combine, through the random logic and the pipeline latches, into
+      the control lines the <a href="blueprint.html">Blueprint</a> draws — is not
+      a matrix and is not shown here. The control lines listed against each
+      half-cycle are measured the same way, but the path from term to line is
+      not drawn.
+    </p>
+    <p>
+      Timing is the other half. Each term's name carries the T-state it belongs
+      to, and the half-cycle column shows when it actually went high, but the
+      chain that produces those T-states is its own piece of silicon.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="decode.js"></script>
+<script type="module" src="site-nav.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

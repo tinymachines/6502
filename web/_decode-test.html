@@ -1,0 +1,141 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>pending</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body style="margin:0">
+<!--
+  Drives the real decode page.
+
+  The load-bearing checks are the last few: they re-verify the measured decode
+  table against the documented instruction set, from the data the page actually
+  ships. The page's whole claim is "this is what the silicon does", and the only
+  way that stays true is if something keeps checking it against the other
+  oracle. A term firing for MORE opcodes than the datasheet lists is expected
+  and correct -- that is what the undocumented opcodes are. A term firing for
+  FEWER is a broken derivation.
+-->
+<div id="decode-boot"><p id="decode-status">…</p></div>
+<div id="decode-main" hidden>
+  <div id="op-grid" class="op-grid"></div>
+  <div id="terms">
+    <input id="term-filter" type="search">
+    <span id="term-shown"></span>
+    <div id="term-list" class="term-list"></div>
+    <div id="term-detail"></div>
+  </div>
+  <div id="op-detail"></div>
+</div>
+<div id="decode-stats"></div>
+
+<script type="module">
+import './decode.js';
+import { OPCODES } from './disasm.js';
+
+const results = [];
+const ok = (name, cond, detail) =>
+  results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+try {
+  for (let i = 0; i < 200 && document.getElementById('decode-main').hidden; i++) await sleep(50);
+  ok('page booted', !document.getElementById('decode-main').hidden,
+     document.getElementById('decode-status').textContent);
+
+  const data = await (await fetch('decode.json')).json();
+  const cells = [...document.querySelectorAll('.op-cell')];
+  ok('all 256 opcodes drawn', cells.length === 256, `${cells.length}`);
+  ok('every term is listed', document.querySelectorAll('.term').length === data.rows.length,
+     `${document.querySelectorAll('.term').length} of ${data.rows.length}`);
+
+  // term -> opcodes, computed here independently of the page's own inversion.
+  const firedBy = data.rows.map(() => new Set());
+  for (const rec of data.opcodes) for (const t of rec.any) firedBy[t].add(rec.op);
+
+  ok('every product term fires for something',
+     firedBy.every((s) => s.size > 0),
+     `${firedBy.filter((s) => s.size === 0).length} never fire`);
+
+  // --- selecting a term lights exactly the right cells ---------------------
+  const byName = new Map(data.rows.map((r, i) => [r.name || 'irline3', i]));
+  const pick = (name) => {
+    const i = byName.get(name);
+    document.querySelector(`.term[data-term="${i}"]`).click();
+    return i;
+  };
+  const iLda = pick('op-T0-lda');
+  const lit = cells.filter((c) => c.classList.contains('lit')).map((c) => Number(c.dataset.op));
+  ok('selecting a term lights its opcodes',
+     lit.length === firedBy[iLda].size && lit.every((o) => firedBy[iLda].has(o)),
+     `${lit.length} lit vs ${firedBy[iLda].size} expected`);
+  ok('the grid dims the rest', document.getElementById('op-grid').classList.contains('dimmed'));
+
+  // --- the cross-check against the documented ISA --------------------------
+  // Exact sets where the row is fully determined; superset-with-named-extras
+  // where undocumented opcodes share the row.
+  const EXACT = {
+    'op-T0-jsr': [0x20],
+    'op-T0-plp': [0x28],
+    'op-T0-pla': [0x68],
+    'op-T0-jmp': [0x4c, 0x6c],
+    'op-T0-clc/sec': [0x18, 0x38],
+    'op-T0-cli/sei': [0x58, 0x78],
+    'op-T0-cld/sed': [0xd8, 0xf8],
+    'op-T0-brk/rti': [0x00, 0x40],
+  };
+  let exactBad = [];
+  for (const [name, want] of Object.entries(EXACT)) {
+    const i = byName.get(name);
+    const got = [...firedBy[i]].sort((a, b) => a - b);
+    const same = got.length === want.length && got.every((v, k) => v === want.sort((a, b) => a - b)[k]);
+    if (!same) exactBad.push(`${name}: ${got.map((o) => o.toString(16))} != ${want.map((o) => o.toString(16))}`);
+  }
+  ok('terms with no undocumented siblings decode exactly', exactBad.length === 0, exactBad.join('; '));
+
+  // Every documented opcode of a mnemonic must fire that mnemonic's T0 term --
+  // missing one would mean the measurement lost a real instruction.
+  const SUPERSET = {
+    'op-T0-lda': [0xa9, 0xa5, 0xb5, 0xad, 0xbd, 0xb9, 0xa1, 0xb1],
+    'op-T0-dex': [0xca],
+    'op-T0-php/pha': [0x08, 0x48],
+  };
+  let missing = [];
+  for (const [name, want] of Object.entries(SUPERSET)) {
+    const s = firedBy[byName.get(name)];
+    for (const o of want) if (!s.has(o)) missing.push(`${name} missing $${o.toString(16)}`);
+  }
+  ok('no documented opcode is missing from its term', missing.length === 0, missing.join('; '));
+
+  // ...and the extras really are undocumented, not stray documented opcodes.
+  const ldaExtra = [...firedBy[byName.get('op-T0-lda')]]
+    .filter((o) => !SUPERSET['op-T0-lda'].includes(o));
+  ok('the extra opcodes on op-T0-lda are all undocumented',
+     ldaExtra.length > 0 && ldaExtra.every((o) => !(o in OPCODES)),
+     `${ldaExtra.length} extras: ${ldaExtra.map((o) => o.toString(16).toUpperCase()).join(' ')}`);
+
+  // --- opcode detail --------------------------------------------------------
+  cells[0xa9].click();
+  const det = document.getElementById('op-detail').textContent;
+  ok('opcode detail names the instruction', det.includes('A9') && det.includes('LDA'), det.slice(0, 60));
+  ok('opcode detail lists half-cycles',
+     document.querySelectorAll('#op-detail .hc').length > 0,
+     `${document.querySelectorAll('#op-detail .hc').length} rows`);
+
+  // --- filtering ------------------------------------------------------------
+  const filter = document.getElementById('term-filter');
+  filter.value = 'lda';
+  filter.dispatchEvent(new Event('input'));
+  const shown = document.querySelectorAll('.term').length;
+  ok('filtering narrows the term list', shown > 0 && shown < data.rows.length,
+     `${shown} of ${data.rows.length}`);
+
+  ok('stats are stated', /product terms/.test(document.getElementById('decode-stats').textContent),
+     document.getElementById('decode-stats').textContent);
+} catch (e) {
+  results.push('FAIL threw :: ' + (e && e.message));
+}
+
+document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+document.body.insertAdjacentHTML('beforeend',
+  '<pre id="out" style="color:#eaf2ff;padding:1rem">' + results.join('\n') + '</pre>');
+</script>
+</body></html>

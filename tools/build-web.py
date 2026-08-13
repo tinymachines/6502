@@ -177,6 +177,7 @@ def main() -> None:
     b.copy_hashed("site-nav.js")
     b.copy_hashed("programs.js")
     b.copy_hashed("blueprint.json")
+    b.copy_hashed("decode.json")
     for icon in sorted((src / "icons").iterdir()):
         if icon.suffix in {".png", ".svg"}:
             b.copy_hashed(f"icons/{icon.name}")
@@ -218,6 +219,14 @@ def main() -> None:
                       f"fetch('{b.ref('blueprint.json')}')", where="blueprint.js")
     b.emit("blueprint.js", bp.encode())
 
+    # 3c. decode.js: no wasm at all -- the page is a measured table, so it needs
+    #     only the mnemonics and its own data.
+    dec = b.read("decode.js").decode()
+    dec = replace_once(dec, "'./disasm.js'", f"'./{b.ref('disasm.js')}'", where="decode.js")
+    dec = replace_once(dec, "fetch('decode.json')",
+                       f"fetch('{b.ref('decode.json')}')", where="decode.js")
+    b.emit("decode.js", dec.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -242,6 +251,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         bph = replace_once(bph, f'"{original}"', f'"{b.ref(original)}"', where="blueprint.html")
     b.emit("blueprint.html", bph.encode(), hashed=False)
+
+    dech = b.read("decode.html").decode()
+    for original in ["style.css", "decode.js", "version-footer.js", "site-nav.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        dech = replace_once(dech, f'"{original}"', f'"{b.ref(original)}"', where="decode.html")
+    b.emit("decode.html", dech.encode(), hashed=False)
 
     # 6. build-info.json: copied unhashed, and deliberately NOT routed through
     #    emit(), so it never enters the precache list. Everything else here is

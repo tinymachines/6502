@@ -20,11 +20,12 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 38 tests, bit-exact against the original. |
+| Simulation | Complete. 48 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
+| Decode | All 122 PLA product terms, **measured** by running all 256 opcodes. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
@@ -60,7 +61,8 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 38 tests: netlist, functional, golden, rewind, blueprint
+cargo test --workspace              # 48 tests: netlist, functional, golden,
+                                    # rewind, blueprint, pla, decode
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
 cargo clippy --workspace --all-targets
@@ -76,6 +78,7 @@ node tools/golden-trace/gen.js --steps 3000
 wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
 cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json
+cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 python3 -m http.server 8777 --directory web        # http://localhost:8777/
 
 # Web app, production shape: content-hashed bundle + service worker into dist/
@@ -99,7 +102,8 @@ python3 archive/tools/build-archive.py && bash deploy/archive-deploy.sh
 python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
-`web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/build-info.json`, `dist/`, the golden trace
+`web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/decode.json`,
+`web/build-info.json`, `dist/`, the golden trace
 and everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
 die data.
@@ -178,6 +182,7 @@ _overflow-test.html?w=320   # what pushes the page wider than the viewport
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _blueprint-test.html   # the block diagram: drawn, bound, and no label collisions
+_decode-test.html      # the decode table, re-checked against the documented ISA
 ```
 
 **Do not test the running app inside an iframe.** Headless throttles animation
@@ -346,7 +351,8 @@ plus the transistor bounding boxes for hit-testing.
 
 Plain ES modules, no build step, no framework: `renderer.js` (WebGL2),
 `app.js` (glue + UI), `disasm.js`, `lab.js`, `programs.js` (shared program list),
-`blueprint.js` (a second page, see below), `index.html`, `style.css`, plus
+`blueprint.js` and `decode.js` (two further pages, see below), `index.html`,
+`style.css`, plus
 `site-nav.js` and `version-footer.js` which are **shared verbatim with the
 archive** (`build-archive.py` copies them). A second copy of either would drift.
 
@@ -478,6 +484,47 @@ small slice of a chip that is 76% pass transistors, and the static gates, the
 decode PLA, the timing chain and the pads are all outside what a bus diagram can
 honestly show. An idealised view that hides how much it idealised is the same
 failure as an archive that hides its gaps, so the number is on the page.
+
+### The Decode table (`decode.html`, `decode.js`, `pla.rs`, `export-decode.rs`)
+
+All 122 product terms of the decode PLA, with the opcodes that fire each one.
+The structure comes from the netlist; **the firing is measured by running the
+chip against all 256 opcodes**, three scenarios each.
+
+The page runs no simulation — it is the result of 768 runs, which no single live
+view could show at once.
+
+- **Computing a term's opcode set from its gates is wrong, and was tried first.**
+  Two independent reasons, both found by checking against the documented ISA:
+  - **`irline3` is a derived line, not an IR bit.** `op-T0-jsr` constrains bits
+    7..2 directly and leaves bits 1 and 0 to `irline3`, so a gate-reading model
+    reports four opcodes where the chip decodes one. Following it means
+    modelling the gate behind it, and the gate behind that.
+  - **A term legitimately fires for undocumented opcodes.** `op-T0-lda` is high
+    for sixteen: the eight documented `LDA` forms and the eight `LAX`/`LAS`
+    ones. That is not over-matching — it is *why* `LAX` loads both A and X, the
+    `LDA` row and the `LDX` row being high together. "Correcting" it against the
+    datasheet would have deleted the most interesting thing on the page.
+- **The die names 121 of the 122 terms**, and the names carry both the T-state
+  and the instructions served (`op-T0-lda`, `op-T+-adc/sbc`). This is the single
+  fact the page rests on, the same way the wiki rebuild rests on `action=edit`
+  captures. 88 name a T-state; 33 are stage-independent (`op-implied`, `op-jsr`).
+- **The one unnamed term is the `irline3` generator** — it tests IR bits 0 and 1,
+  both low. Identified rather than left as an anonymous node.
+- **An unfired term is a gap in the *experiment*, not a fact about the chip.**
+  One run from power-on left `op-branch-done` never firing; a second scenario
+  setting C and N was not enough either. It needs a taken branch that *also*
+  crosses a page, because the term ends the page-crossing fixup — which is the
+  answer to what it is for. Three scenarios now reach 122 of 122, and
+  `deploy.sh` refuses to publish if any term goes unobserved, because a broken
+  measurement run yields a well-formed file full of empty results.
+- **The ISA cross-check is asymmetric, deliberately.** A term firing for *more*
+  opcodes than the datasheet lists is expected and correct. Firing for *fewer*
+  means a real instruction has been lost. `tests/decode.rs` asserts both
+  directions; `_decode-test.html` re-checks it against the shipped JSON.
+- Do not report "undocumented opcodes sharing a term with a documented one" as a
+  statistic: the `irline3` generator fires for all 256, so it is trivially 105
+  of 105 and says nothing.
 
 ### Renderer invariants — each of these was a real bug
 
