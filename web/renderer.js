@@ -597,6 +597,17 @@ export class DieRenderer {
   _clampCamera() {
     const b = this.layout.bounds;
     const keep = 0.35;
+
+    // A non-finite camera is unrecoverable without this: NaN survives every
+    // comparison below (Math.max(lo, NaN) is NaN), so one bad delta blanks the
+    // view permanently rather than for a frame. A pinch that seeded its state
+    // in the wrong shape did exactly that. Clamping is the choke point every
+    // camera change passes through, so it is the right place to refuse one.
+    if (!Number.isFinite(this.camera.cx) || !Number.isFinite(this.camera.cy) ||
+        !Number.isFinite(this.camera.scale) || this.camera.scale <= 0) {
+      this.fitToDie();
+      return;
+    }
     const axis = (centre, lo, hi, halfView) => {
       const overlap = Math.min(hi - lo, 2 * halfView) * keep;
       const min = lo + overlap - halfView;

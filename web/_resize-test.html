@@ -141,7 +141,28 @@ r.canvas.width = 0;
 r.render();
 ok('recovers at full size', inked() > 0.05 && backingMatches(), state());
 
-// --- 7. picking must not throw when a target is missing --------------------
+// --- 7. a poisoned camera must not be permanent ----------------------------
+// NaN survives every comparison, so before the guard one bad delta blanked the
+// view for good rather than for a frame.
+resizeTo(900, 600);
+r.zoomAt(450, 300, 4);
+r.panByPixels(NaN, NaN);
+r.render();
+ok('NaN pan recovers', inked() > 0.05 && Number.isFinite(r.camera.cx),
+   `cx=${r.camera.cx} scale=${r.camera.scale} ink=${inked().toFixed(3)}`);
+
+r.zoomAt(NaN, NaN, NaN);
+r.render();
+ok('NaN zoom recovers', inked() > 0.05 && Number.isFinite(r.camera.scale),
+   `cx=${r.camera.cx} scale=${r.camera.scale} ink=${inked().toFixed(3)}`);
+
+r.camera.scale = 0;
+r.panByPixels(1, 1);
+r.render();
+ok('zero scale recovers', inked() > 0.05 && r.camera.scale > 0,
+   `scale=${r.camera.scale} ink=${inked().toFixed(3)}`);
+
+// --- 8. picking must not throw when a target is missing --------------------
 ok('pick survives', (() => {
   try { r.pick(100, 100); return true; } catch { return false; }
 })());

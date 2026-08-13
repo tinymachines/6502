@@ -30,9 +30,10 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 Known gaps, all deliberate:
 
-- **Touch gestures are unverified on real hardware.** Pinch/pan/tap are
-  implemented and the plumbing is right, but headless Chrome cannot synthesise a
-  two-finger pinch. Needs a phone.
+- **Touch gestures are only partly verified on real hardware.** Pinch was tested
+  on a device and was broken — see the pinch NaN under "Touch-specific
+  behaviour"; it is fixed and now has a regression test. Pan and tap slop still
+  need a phone.
 - **Mobile GPU performance unmeasured.** Every headless number here is
   SwiftShader software rasterisation (~2–5 fps), which says nothing about a real
   device.
@@ -459,6 +460,19 @@ Touch-specific behaviour that is easy to break:
 - Pointer Events unify mouse/pen/touch, but touch adds a *second* contact, so
   live pointers are tracked in a `Map`: one pointer pans, two pinch-zoom about
   the midpoint and pan by the midpoint's movement.
+- **Pinch state has exactly one constructor (`pinchOf`), and that matters.** It
+  had two, spelled differently: seeding spread `midpoint()` in as `{x, y}` while
+  the move handler read `.cx`/`.cy`. So the first move after a second finger
+  landed computed `mid.x - undefined`, and NaN went into the camera — where it
+  *stuck*, because NaN survives every comparison (`Math.max(lo, NaN)` is NaN).
+  The die vanished permanently on the first pinch. This survived the whole
+  project because two-finger gestures are the one path headless cannot
+  synthesise; it took real hardware. `_handler-test.html` now drives a synthetic
+  pinch through the real handlers and also asserts the invariant statically.
+- **`_clampCamera` rejects a non-finite camera** rather than propagating it. It
+  is the choke point every camera change passes through, so it is the right
+  place to refuse one, and it turns a class of permanent blank screen into a
+  single dropped frame.
 - Tap slop is larger for touch (12px vs 4px) — a finger always moves a little,
   and a tap that registers as a drag never selects anything.
 - The hover card is suppressed under `(hover: none)`; otherwise it sticks where

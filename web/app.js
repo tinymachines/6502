@@ -455,6 +455,21 @@ function setupCanvasInput() {
   });
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
+  /**
+   * The whole state a pinch needs, built in one place.
+   *
+   * This used to be constructed twice, and the two spellings disagreed: seeding
+   * spread `midpoint()` in as `{x, y}` while the move handler read `.cx`/`.cy`.
+   * The first move after a second finger landed therefore computed
+   * `mid.x - undefined`, and NaN went straight into the camera — where it stuck,
+   * because every clamp propagates NaN rather than rejecting it. The die
+   * vanished for good. One constructor means the shapes cannot drift again.
+   */
+  const pinchOf = (pts) => {
+    const mid = midpoint(pts);
+    return { dist: distance(pts[0], pts[1]), cx: mid.x, cy: mid.y };
+  };
+
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -465,8 +480,7 @@ function setupCanvasInput() {
       hideHint();
     } else {
       // A second finger starts a pinch; seed it so the first move is a delta.
-      const pts = positions();
-      lastPinch = { dist: distance(pts[0], pts[1]), ...midpoint(pts) };
+      lastPinch = pinchOf(positions());
     }
   });
 
@@ -486,13 +500,12 @@ function setupCanvasInput() {
 
     const pts = positions();
     if (pts.length >= 2) {
-      const dist = distance(pts[0], pts[1]);
-      const mid = midpoint(pts);
+      const pinch = pinchOf(pts);
       if (lastPinch && lastPinch.dist > 0) {
-        r.zoomAt(mid.x, mid.y, dist / lastPinch.dist);
-        r.panByPixels(mid.x - lastPinch.cx, mid.y - lastPinch.cy);
+        r.zoomAt(pinch.cx, pinch.cy, pinch.dist / lastPinch.dist);
+        r.panByPixels(pinch.cx - lastPinch.cx, pinch.cy - lastPinch.cy);
       }
-      lastPinch = { dist, cx: mid.x, cy: mid.y };
+      lastPinch = pinch;
       movedDuring += 99; // a pinch is never a tap
     } else {
       const dx = e.clientX - prev.x;

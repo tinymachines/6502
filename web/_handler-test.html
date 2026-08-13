@@ -88,6 +88,47 @@ f.addEventListener('load', async () => {
   await step('transport: step instruction', () => d.getElementById('btn-instr').click());
   await step('fullscreen button', () => d.getElementById('btn-fullscreen').click());
 
+  // --- two-finger pinch ---------------------------------------------------
+  // The one gesture headless cannot produce on its own, and the one that hid a
+  // NaN for the whole life of the project. Synthesised here from raw pointer
+  // events. Pointer capture is stubbed out because setPointerCapture rejects an
+  // id that never belonged to a real pointer; nothing else is faked.
+  const die = d.getElementById('die');
+  die.setPointerCapture = () => {};
+  die.releasePointerCapture = () => {};
+  const touch = (type, id, x, y) => die.dispatchEvent(new w.PointerEvent(type, {
+    pointerId: id, pointerType: 'touch', clientX: x, clientY: y,
+    bubbles: true, cancelable: true,
+  }));
+
+  await step('pinch: two fingers down, then spread', () => {
+    touch('pointerdown', 1, 400, 300);
+    touch('pointerdown', 2, 500, 300);      // seeds the pinch
+    touch('pointermove', 2, 560, 320);      // the move that used to poison it
+    touch('pointermove', 1, 340, 280);
+    touch('pointermove', 2, 620, 360);
+    touch('pointerup', 1, 340, 280);
+    touch('pointerup', 2, 620, 360);
+  });
+
+  await wait(400);
+  const c = d.getElementById('die');
+  ok('pinch left the canvas alive', c.width > 0 && c.height > 0,
+     `backing=${c.width}x${c.height}`);
+
+  // The camera is not observable from in here, so assert the invariant that
+  // made the bug possible instead: pinch state must have exactly one
+  // constructor. It previously had two, spelled differently ({x,y} versus
+  // {cx,cy}), and the mismatch fed NaN straight into the camera.
+  const src = await (await fetch('app.js')).text();
+  const assigns = [...src.matchAll(/lastPinch\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
+  ok('pinch state is never an inline literal',
+     assigns.length > 0 && assigns.every((a) => a === 'null' || !a.includes('{')),
+     assigns.join(' | ') || 'no assignments found');
+  ok('pinch reads match what pinchOf builds',
+     !/lastPinch\.(?!dist|cx|cy)\w+/.test(src),
+     (src.match(/lastPinch\.\w+/g) || []).join(' '));
+
   const failed = results.filter((x) => x.startsWith('FAIL'));
   document.title = failed.length ? `${failed.length} FAILURES` : 'ALL PASS';
   document.body.insertAdjacentHTML('beforeend',
