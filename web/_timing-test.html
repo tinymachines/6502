@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>pending</title>
+<link rel="stylesheet" href="style.css"></head>
+<body style="margin:0">
+<!--
+  Drives the timing page and re-checks the measured cycle counts against the
+  published ones, from the data the page actually ships.
+
+  The counts come from watching `sync`, with no instruction table anywhere in
+  the path, so they are free to be wrong -- which is what makes checking them
+  worth doing rather than decorative.
+-->
+<div id="boot"><p id="status">…</p></div>
+<div id="main-panel" hidden>
+  <div id="op-grid" class="op-grid"></div>
+  <div id="histogram"></div>
+  <div id="detail"></div>
+</div>
+<div id="stats"></div>
+
+<script type="module">
+import './timing.js';
+import { OPCODES } from './disasm.js';
+
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+try {
+  for (let i = 0; i < 200 && document.getElementById('main-panel').hidden; i++) await sleep(50);
+  ok('page booted', !document.getElementById('main-panel').hidden,
+     document.getElementById('status').textContent);
+
+  const data = await (await fetch('timing.json')).json();
+  const by = [];
+  for (const r of data.opcodes) by[r.op] = r;
+  ok('all 256 opcodes timed or marked', data.opcodes.length === 256, `${data.opcodes.length}`);
+  ok('all 256 cells drawn', document.querySelectorAll('.op-cell').length === 256);
+
+  // The cross-check. Same list as the Rust test, from the published tables.
+  const EXPECT = {
+    0xa9: 2, 0xa5: 3, 0xb5: 4, 0xad: 4, 0xbd: 4, 0xb9: 4, 0xa1: 6, 0xb1: 5,
+    0x20: 6, 0x60: 6, 0x40: 6, 0x00: 7, 0x48: 3, 0x68: 4, 0x08: 3, 0x28: 4,
+    0x4c: 3, 0x6c: 5, 0xea: 2, 0xe8: 2, 0x18: 2, 0x85: 3, 0x8d: 4, 0x9d: 5,
+    0x99: 5, 0x81: 6, 0x91: 6, 0x06: 5, 0x0e: 6, 0x1e: 7, 0xe6: 5, 0xee: 6, 0xfe: 7,
+  };
+  const wrong = Object.entries(EXPECT)
+    .filter(([op, c]) => by[op].cycles !== c)
+    .map(([op, c]) => `$${(+op).toString(16)}: ${by[op].cycles}!=${c}`);
+  ok('measured lengths match the published ones', wrong.length === 0,
+     `${Object.keys(EXPECT).length} checked; ${wrong.join(' ')}`);
+
+  const jams = data.opcodes.filter((r) => r.jam).map((r) => r.op);
+  ok('exactly the twelve JAM opcodes never finish',
+     jams.length === 12 && jams.every((o) => (o & 0x0f) === 0x02),
+     jams.map((o) => o.toString(16).toUpperCase()).join(' '));
+  ok('the jams are all undocumented', jams.every((o) => !(o in OPCODES)));
+
+  const eight = data.opcodes.filter((r) => r.cycles === 8).map((r) => r.op);
+  ok('twelve opcodes run longer than any documented instruction',
+     eight.length === 12 && eight.every((o) => !(o in OPCODES)),
+     `${eight.length}: ${eight.map((o) => o.toString(16).toUpperCase()).join(' ')}`);
+
+  // A timed instruction must report one timing state per cycle.
+  const mismatched = data.opcodes.filter((r) => !r.jam && r.states.length !== r.cycles);
+  ok('every cycle has a timing state', mismatched.length === 0,
+     `${mismatched.length} mismatched`);
+
+  // JSR is the worked example in the prose; it must stay true.
+  ok('JSR walks the chain end to end',
+     by[0x20].states.join(' ') === 'T1 T2 T3 T4 T5 T0',
+     by[0x20].states.join(' '));
+
+  // Selecting an opcode shows its chain.
+  document.querySelector('.op-cell[data-op="32"]').click();
+  const det = document.getElementById('detail').textContent;
+  ok('picking an opcode shows its cycles', /cycle 0/.test(det) && /20|JSR/.test(det),
+     det.slice(0, 60));
+
+  ok('the histogram is drawn', document.querySelectorAll('#histogram .bar-row').length >= 5,
+     `${document.querySelectorAll('#histogram .bar-row').length} bars`);
+  ok('stats are stated', /instructions timed/.test(document.getElementById('stats').textContent),
+     document.getElementById('stats').textContent);
+} catch (e) {
+  results.push('FAIL threw :: ' + (e && e.message));
+}
+document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+document.body.insertAdjacentHTML('beforeend',
+  '<pre id="out" style="color:#eaf2ff;padding:1rem">' + results.join('\n') + '</pre>');
+</script>
+</body></html>

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Timing — the 6502 counts nothing</title>
+<meta name="description" content="Every 6502 instruction's length, measured from sync to sync with no instruction table involved. The chip has no cycle counter; the counts are emergent.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav">
+        <a href="./#explorer">Explorer</a>
+        <a href="./#lab">Lab</a>
+        <a href="blueprint.html">Blueprint</a>
+        <a href="decode.html">Decode</a>
+        <a href="timing.html" aria-current="page">Timing</a>
+        <a href="archive/">Archive</a>
+      </div>
+      <a class="btn btn-primary nav-cta" href="./#explorer">Run it</a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Emergent · not stored</p>
+    <h1>The chip<br><span class="hl">counts nothing.</span></h1>
+    <p class="lede">
+      Ask what makes <span class="mono">JSR</span> take six cycles and there is
+      no satisfying place to point. No counter holds a six. No table stores it.
+      What exists is a chain of timing nodes that advances one stage per cycle,
+      and a decode PLA that, at some point, sends it back to the start.
+    </p>
+    <p class="lede">
+      The length of an instruction is however many cycles went by before that
+      happened. Every number below was taken from the running chip, from one
+      <span class="mono">sync</span> to the next, with no instruction table
+      involved.
+    </p>
+    <div class="statbar" id="stats">…</div>
+  </section>
+
+  <section class="wrap" id="grid-section">
+    <div class="console">
+      <div class="console-bar">
+        <span class="tag live">timing · measured</span>
+        <span class="bar-note">Every opcode, coloured by how many cycles it took</span>
+        <div class="bar-spacer"></div>
+      </div>
+
+      <div id="boot" class="bp-boot"><p id="status">Loading the timing table…</p></div>
+
+      <div id="main-panel" hidden>
+        <div class="decode-cols">
+          <div class="decode-left">
+            <div class="grid-scroll"><div id="op-grid" class="op-grid"></div></div>
+            <div class="grid-key" id="histogram"></div>
+          </div>
+          <div class="decode-right">
+            <div class="panel-box" id="detail"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">What the chain is</p>
+      <h2>A shift register with an off switch.</h2>
+    </div>
+    <p class="lede">
+      The timing nodes are stages of a shift register clocked by the same
+      two-phase clock as everything else, and each stage is a latch built from a
+      pass transistor and an inverter — structurally identical to the pipeline
+      latches that carry the decode PLA's output to the control lines.
+    </p>
+    <p>
+      They are <em>active low</em> on the die, which is worth knowing before
+      reading any of it: a state is selected when its node is pulled down, not
+      when it goes high. The same convention caught out the control-line
+      analysis on the <a href="decode.html">Decode</a> page.
+    </p>
+    <p>
+      What ends an instruction is a product term. The chain would happily keep
+      advancing; the terms named <span class="mono">op-T0-…</span> are the ones
+      that fire in the final cycle and reset it. This is why cycle counts are
+      not a design parameter so much as a consequence — change which term fires
+      and you change the instruction's length, with nothing else to update.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The cross-check</p>
+      <h2>Thirty-three numbers nobody typed in.</h2>
+    </div>
+    <p>
+      A measurement that agrees with the datasheet is only interesting if it
+      could have disagreed. Nothing here consults an instruction table, so the
+      counts are free to be wrong: they come from watching the
+      <span class="mono">sync</span> pin. Thirty-three documented opcodes were
+      checked against their published cycle counts, covering every addressing
+      mode and the stack, jump and read-modify-write forms. All thirty-three
+      match.
+    </p>
+    <p>
+      The undocumented opcodes are where it gets more interesting, because there
+      is no published answer to agree with. Twelve of them run for
+      <strong>eight</strong> cycles — one longer than any documented
+      instruction — and they are exactly the twelve read-modify-write forms
+      using indexed indirect addressing. Nothing special was built for them;
+      they take eight cycles because that is how long it takes the chain to get
+      to a term that stops it.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The twelve that never stop</p>
+      <h2>∞ is a measurement too.</h2>
+    </div>
+    <p>
+      Twelve opcodes never reach another <span class="mono">sync</span>. They
+      are marked <span class="mono">∞</span> in the grid, and they are not a
+      failure of the simulation or a timeout — the chain simply stops advancing
+      and the chip sits there. These are the opcodes usually called
+      <span class="mono">JAM</span> or <span class="mono">KIL</span>, and the
+      list falls straight out of the measurement:
+      <span class="mono">$02 $12 $22 $32 $42 $52 $62 $72 $92 $B2 $D2 $F2</span>.
+    </p>
+    <p>
+      They needed a decision in the exporter rather than a fix. A run that never
+      terminates has to be recorded as such: the alternative is a timeout
+      quietly reported as a cycle count, which would put a plausible number next
+      to twelve opcodes that do not have one.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="timing.js"></script>
+<script type="module" src="site-nav.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

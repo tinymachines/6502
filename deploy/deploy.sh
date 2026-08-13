@@ -41,6 +41,9 @@ cargo run --quiet -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 log "measuring the decode PLA"
 cargo run --release --quiet -p v6502-sim --bin export-decode -- web/decode.json
 
+log "timing every instruction"
+cargo run --release --quiet -p v6502-sim --bin export-timing -- web/timing.json
+
 # ---------------------------------------------------------------------------
 # Sanity-check the build before it can replace a working site
 # ---------------------------------------------------------------------------
@@ -48,6 +51,7 @@ cargo run --release --quiet -p v6502-sim --bin export-decode -- web/decode.json
 for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/programs.js web/blueprint.html web/blueprint.js web/blueprint.json \
          web/decode.html web/decode.js web/decode.json \
+         web/timing.html web/timing.js web/timing.json \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
   [ -s "$f" ] || { echo "deploy: missing or empty $f" >&2; exit 1; }
 done
@@ -92,6 +96,18 @@ if weak:
              f"verification threshold")
 if not any(l["mode"] == "override" for l in links):
     sys.exit("deploy: no override edges -- the hold lines have been lost")
+
+# Timing: the cycle counts are measured, so a broken run shows up as everything
+# jamming or as a suspiciously uniform table rather than as an error.
+tim = json.load(open("web/timing.json"))
+jams = [o for o in tim["opcodes"] if o["jam"]]
+timed = [o for o in tim["opcodes"] if not o["jam"]]
+if len(tim["opcodes"]) != 256 or len(timed) < 200:
+    sys.exit(f"deploy: only {len(timed)} of 256 opcodes were timed")
+if len(jams) != 12:
+    sys.exit(f"deploy: {len(jams)} opcodes never finish; the 6502 has exactly 12")
+if {o["cycles"] for o in timed} < {2, 3, 4, 5, 6, 7}:
+    sys.exit("deploy: the measured cycle counts do not span the expected range")
 PY
 
 # ---------------------------------------------------------------------------

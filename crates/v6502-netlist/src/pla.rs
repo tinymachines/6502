@@ -231,6 +231,19 @@ impl Pla {
     /// run along the special bus; allowing it produces edges that verification
     /// then has to throw away.
     pub fn candidate_terms(&self, nl: &Netlist, blocked: &[NodeId]) -> Vec<Vec<usize>> {
+        let targets: Vec<NodeId> = self.outputs.iter().map(|o| o.node).collect();
+        self.trace_terms(nl, &targets, blocked)
+    }
+
+    /// The same backward walk, from any nodes. The timing chain's stages are
+    /// reached exactly the way the control lines are -- through clocked latches
+    /// -- so they use this directly rather than a second implementation.
+    pub fn trace_terms(
+        &self,
+        nl: &Netlist,
+        targets: &[NodeId],
+        blocked: &[NodeId],
+    ) -> Vec<Vec<usize>> {
         let vss = nl.vss();
         let mut pulldown: Vec<Vec<NodeId>> = vec![Vec::new(); nl.node_count()];
         let mut passes: Vec<Vec<NodeId>> = vec![Vec::new(); nl.node_count()];
@@ -257,14 +270,14 @@ impl Pla {
             term_at[r.node as usize] = i;
         }
 
-        self.outputs
+        targets
             .iter()
-            .map(|o| {
+            .map(|target| {
                 let mut seen = vec![false; nl.node_count()];
                 let mut queue = std::collections::VecDeque::new();
                 let mut hits = Vec::new();
-                seen[o.node as usize] = true;
-                queue.push_back((o.node, 0usize));
+                seen[*target as usize] = true;
+                queue.push_back((*target, 0usize));
                 while let Some((n, d)) = queue.pop_front() {
                     if d >= TRACE_DEPTH {
                         continue;

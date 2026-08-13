@@ -900,3 +900,31 @@ body.no-scroll #explorer { z-index: 70; }
 }
 .chip:hover { border-color: var(--accent); }
 .chip-stage { color: var(--gold); margin-right: .3rem; }
+
+/* ---------- the timing table (timing.html) ---------- */
+
+/* One step per cycle count. Not a rainbow: a single ramp, so "longer" reads as
+   "further along" rather than as an unordered set of categories. */
+.op-cell.cyc-2 { background: color-mix(in srgb, var(--accent) 10%, var(--subtle)); }
+.op-cell.cyc-3 { background: color-mix(in srgb, var(--accent) 20%, var(--subtle)); }
+.op-cell.cyc-4 { background: color-mix(in srgb, var(--accent) 30%, var(--subtle)); }
+.op-cell.cyc-5 { background: color-mix(in srgb, var(--accent) 42%, var(--subtle)); }
+.op-cell.cyc-6 { background: color-mix(in srgb, var(--accent) 54%, var(--subtle)); }
+.op-cell.cyc-7 { background: color-mix(in srgb, var(--hot) 46%, var(--subtle)); }
+.op-cell.cyc-8 { background: color-mix(in srgb, var(--pink) 46%, var(--subtle)); }
+.op-cell.jam { background: color-mix(in srgb, var(--warn) 34%, var(--subtle)); border-style: dotted; }
+.op-cell.jam .op-mn { color: var(--foreground); }
+
+.bar-row { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) 2.2rem; gap: .5rem; align-items: center; width: 100%; }
+.bar-label { color: var(--muted); font-size: .66rem; }
+.bar { display: block; height: .55rem; background: color-mix(in srgb, var(--line) 30%, transparent); border-radius: 2px; }
+.bar i { display: block; height: 100%; border-radius: 2px; }
+.bar i.cyc-2 { background: color-mix(in srgb, var(--accent) 30%, var(--subtle)); }
+.bar i.cyc-3 { background: color-mix(in srgb, var(--accent) 45%, var(--subtle)); }
+.bar i.cyc-4 { background: color-mix(in srgb, var(--accent) 60%, var(--subtle)); }
+.bar i.cyc-5 { background: color-mix(in srgb, var(--accent) 75%, var(--subtle)); }
+.bar i.cyc-6 { background: var(--accent); }
+.bar i.cyc-7 { background: var(--hot); }
+.bar i.cyc-8 { background: var(--pink); }
+.bar-n { color: var(--muted); font-size: .66rem; text-align: right; }
+#histogram { display: flex; flex-direction: column; gap: .25rem; align-items: stretch; }

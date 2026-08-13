@@ -20,12 +20,13 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 49 tests, bit-exact against the original. |
+| Simulation | Complete. 52 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
+| Timing | Every instruction's length, **measured** sync to sync. No counter exists. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
@@ -61,7 +62,7 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 49 tests: netlist, functional, golden,
+cargo test --workspace              # 52 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
@@ -79,6 +80,7 @@ wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
 cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
+cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
 python3 -m http.server 8777 --directory web        # http://localhost:8777/
 
 # Web app, production shape: content-hashed bundle + service worker into dist/
@@ -102,7 +104,7 @@ python3 archive/tools/build-archive.py && bash deploy/archive-deploy.sh
 python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
-`web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/decode.json`,
+`web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/decode.json`, `web/timing.json`,
 `web/build-info.json`, `dist/`, the golden trace
 and everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
@@ -183,6 +185,7 @@ _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _blueprint-test.html   # the block diagram: drawn, bound, and no label collisions
 _decode-test.html      # the decode table, re-checked against the documented ISA
+_timing-test.html      # cycle counts, re-checked against the published ones
 ```
 
 **Do not test the running app inside an iframe.** Headless throttles animation
@@ -351,7 +354,8 @@ plus the transistor bounding boxes for hit-testing.
 
 Plain ES modules, no build step, no framework: `renderer.js` (WebGL2),
 `app.js` (glue + UI), `disasm.js`, `lab.js`, `programs.js` (shared program list),
-`blueprint.js` and `decode.js` (two further pages, see below), `index.html`,
+`blueprint.js`, `decode.js` and `timing.js` (three further pages, see below),
+`index.html`,
 `style.css`, plus
 `site-nav.js` and `version-footer.js` which are **shared verbatim with the
 archive** (`build-archive.py` copies them). A second copy of either would drift.
@@ -551,6 +555,36 @@ back somewhere unrelated.
 - **The lag is per line.** The pipeline latch puts one to two half-cycles between
   a term and its line, but the depth is not uniform — fitting one global lag
   understated the result. Fitted lags run 0–4, mostly 1.
+
+### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
+
+Every instruction's length, measured from one `sync` to the next. **Nothing in
+the path consults an instruction table**, which is the whole point: the counts
+are free to be wrong, so agreeing with the datasheet is evidence rather than
+tautology. 33 documented opcodes are checked in `tests/timing.rs` and in
+`_timing-test.html`; all 33 match.
+
+The chain is a shift register of clocked latches — structurally the same stage
+as the decode pipeline — and it is **active low**, like the control lines. An
+instruction ends when a product term resets it, so a cycle count is not stored
+anywhere; it is however many cycles elapsed before that happened.
+
+Three results fell out of the measurement rather than being looked up:
+
+- **Twelve opcodes never finish.** `$02 $12 $22 $32 $42 $52 $62 $72 $92 $B2 $D2
+  $F2` — the JAM/KIL opcodes. The chain stops advancing and no further fetch
+  happens. **They are recorded as unterminated, not timed out**: a timeout
+  reported as a cycle count would put a plausible number beside twelve opcodes
+  that do not have one.
+- **Twelve undocumented opcodes take eight cycles**, one longer than anything
+  documented, and they are exactly the indexed-indirect read-modify-write forms.
+  Nothing was built for them; the chain takes that long to reach a term that
+  stops it.
+- Cycle counts span 2–8 over 244 terminating opcodes.
+
+`deploy.sh` checks all of this: 256 opcodes present, at least 200 timed, exactly
+12 jams, and the full 2–7 range represented. A broken measurement run produces a
+well-formed file of plausible numbers, so the guard has to be specific.
 
 ### Renderer invariants — each of these was a real bug
 

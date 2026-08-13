@@ -178,6 +178,7 @@ def main() -> None:
     b.copy_hashed("programs.js")
     b.copy_hashed("blueprint.json")
     b.copy_hashed("decode.json")
+    b.copy_hashed("timing.json")
     for icon in sorted((src / "icons").iterdir()):
         if icon.suffix in {".png", ".svg"}:
             b.copy_hashed(f"icons/{icon.name}")
@@ -227,6 +228,13 @@ def main() -> None:
                        f"fetch('{b.ref('decode.json')}')", where="decode.js")
     b.emit("decode.js", dec.encode())
 
+    # 3d. timing.js: same shape as decode.js -- a measured table, no wasm.
+    tim = b.read("timing.js").decode()
+    tim = replace_once(tim, "'./disasm.js'", f"'./{b.ref('disasm.js')}'", where="timing.js")
+    tim = replace_once(tim, "fetch('timing.json')",
+                       f"fetch('{b.ref('timing.json')}')", where="timing.js")
+    b.emit("timing.js", tim.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -258,6 +266,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         dech = replace_once(dech, f'"{original}"', f'"{b.ref(original)}"', where="decode.html")
     b.emit("decode.html", dech.encode(), hashed=False)
+
+    timh = b.read("timing.html").decode()
+    for original in ["style.css", "timing.js", "version-footer.js", "site-nav.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        timh = replace_once(timh, f'"{original}"', f'"{b.ref(original)}"', where="timing.html")
+    b.emit("timing.html", timh.encode(), hashed=False)
 
     # 6. build-info.json: copied unhashed, and deliberately NOT routed through
     #    emit(), so it never enters the precache list. Everything else here is
