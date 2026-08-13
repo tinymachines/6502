@@ -30,19 +30,23 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 Known gaps, all deliberate:
 
-- **Touch gestures are only partly verified on real hardware.** Pinch was tested
-  on a device and was broken — see the pinch NaN under "Touch-specific
-  behaviour"; it is fixed and now has a regression test. Pan and tap slop still
-  need a phone.
+- **Touch: pinch and pan verified on a device; tap slop is not.** Both of the
+  verified ones were broken, and neither could have been caught here — see the
+  pinch NaN and the `screenToDie` axis inversion under "Touch-specific
+  behaviour" and "Renderer invariants". Both now have regression tests. The
+  lesson is worth more than the fixes: **a headless check cannot reach a second
+  contact point, and cannot tell you a direction feels wrong.** Ask for a device
+  before believing touch works.
 - **Mobile GPU performance unmeasured.** Every headless number here is
   SwiftShader software rasterisation (~2–5 fps), which says nothing about a real
   device.
 - No CI. The tests and checks below are run by hand.
 - **The full Wayback drip is mid-run** (`archive/tools/drip.py`): 24,442 URLs,
-  ~2.5 GB. Measured rate is **~15 URLs/min → ~27h** — the 1.5s delay is only half
-  of it, the request itself costs about as much again. Resumable and safe to
-  leave; it detaches from the session (PPID 1), so only a reboot stops it.
-  `--status` says where it is; re-running the fetch command resumes.
+  ~2.5 GB, roughly 7,200 fetched as of this checkpoint. Measured rate is **~15
+  URLs/min → ~27h** — the 1.5s delay is only half of it, the request itself
+  costs about as much again. Resumable and safe to leave; it detaches from the
+  session (PPID 1), so only a reboot stops it. `--status` says where it is;
+  re-running the fetch command resumes, retrying only what failed.
 
 ## Commands
 
