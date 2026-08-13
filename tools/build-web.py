@@ -25,7 +25,6 @@ are served no-cache so a deploy takes effect immediately.
 
 import hashlib
 import json
-import re
 import shutil
 import sys
 from pathlib import Path
@@ -181,7 +180,7 @@ def main() -> None:
     )
     b.emit("pkg/v6502_wasm.js", glue.encode())
 
-    # 3. app.js: three module imports plus one runtime fetch.
+    # 3. app.js: four module imports plus one runtime fetch.
     app = b.read("app.js").decode()
     for original, resolved in [
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),

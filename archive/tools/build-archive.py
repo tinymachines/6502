@@ -20,7 +20,6 @@ no reason to hold them twice. nginx follows symlinks by default, and the deploy
 resolves it.
 """
 
-import html
 import json
 import shutil
 import subprocess
@@ -268,7 +267,7 @@ repository and it will be.
 """, encoding="utf-8")
     (PUBLIC / "archive.css").write_text(CSS + shell.CSS)
 
-    print(f"\n=== archive assembled ===")
+    print("\n=== archive assembled ===")
     print(f"  wiki    {wiki_n} pages")
     print(f"  gallery {n_chips} chips, {n_imgs} images, {gb:.2f} GB")
     print(f"  site    {site_n} files")
