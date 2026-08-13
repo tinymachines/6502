@@ -77,6 +77,39 @@ try {
   ok('picking an opcode shows its cycles', /cycle 0/.test(det) && /20|JSR/.test(det),
      det.slice(0, 60));
 
+  // --- which terms end an instruction --------------------------------------
+  ok('term names travel with the file',
+     Array.isArray(data.terms) && data.terms.length > 100, `${(data.terms || []).length}`);
+  ok('arrived is a subset of ending',
+     data.opcodes.every((r) => r.arrived.every((i) => r.ending.includes(i))));
+
+  const nm = (i) => data.terms[i];
+  ok('JSR ends on its own T0 term',
+     by[0x20].arrived.map(nm).join(' ') === 'op-T0-jsr',
+     by[0x20].arrived.map(nm).join(' '));
+  ok('PHA ends on the push term',
+     by[0x48].arrived.map(nm).includes('op-T0-php/pha'),
+     by[0x48].arrived.map(nm).join(' '));
+
+  const timedOps = data.opcodes.filter((r) => !r.jam);
+  const t0 = timedOps.filter((r) => r.arrived.some((i) => (nm(i) || '').startsWith('op-T0-')));
+  ok('most instructions end on a T0 term', t0.length > 150 && t0.length < timedOps.length,
+     `${t0.length} of ${timedOps.length}`);
+  // The ones with nothing arriving must be reported, not hidden: the page says
+  // 83 and the claim has to keep matching the data.
+  const none = timedOps.filter((r) => r.arrived.length === 0);
+  ok('instructions with nothing arriving are a real minority',
+     none.length > 0 && none.length < timedOps.length / 2,
+     `${none.length} of ${timedOps.length}`);
+  ok('a jammed opcode claims no ending term',
+     data.opcodes.filter((r) => r.jam).every((r) => r.arrived.length === 0));
+
+  document.querySelector('.op-cell[data-op="32"]').click();
+  const links = [...document.querySelectorAll('#detail a.chip')];
+  ok('ending terms link through to Decode',
+     links.length > 0 && links.every((a) => a.getAttribute('href').startsWith('decode.html?term=')),
+     `${links.length} links`);
+
   ok('the histogram is drawn', document.querySelectorAll('#histogram .bar-row').length >= 5,
      `${document.querySelectorAll('#histogram .bar-row').length} bars`);
   ok('stats are stated', /instructions timed/.test(document.getElementById('stats').textContent),

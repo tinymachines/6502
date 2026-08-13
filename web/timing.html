@@ -99,10 +99,35 @@
     </p>
     <p>
       What ends an instruction is a product term. The chain would happily keep
-      advancing; the terms named <span class="mono">op-T0-…</span> are the ones
-      that fire in the final cycle and reset it. This is why cycle counts are
-      not a design parameter so much as a consequence — change which term fires
-      and you change the instruction's length, with nothing else to update.
+      advancing; something has to stop it. Pick any opcode above and the panel
+      lists the terms that <em>arrive</em> in its final cycle — high then, and
+      not before. For 161 of the 244 instructions that is the instruction's own
+      <span class="mono">op-T0-…</span> term, named for the state it ends:
+      <span class="mono">$20</span> ends on <span class="mono">op-T0-jsr</span>,
+      <span class="mono">$48</span> on <span class="mono">op-T0-php/pha</span>.
+      Each links through to the <a href="decode.html">Decode</a> page, where you
+      can see every opcode that fires it.
+    </p>
+    <p>
+      <strong>Arriving is coincidence in time, not proof of cause</strong>, and
+      it is worth being clear about the difference. What is shown is that a term
+      went high in the cycle the chain reset and had not been high before. The
+      naming agrees, and the pattern holds across two thirds of the instruction
+      set, but this page does not trace the wire from that term to the chain.
+      It was tried: a backward walk from the timing nodes, the same one that
+      resolved 32 control lines on the Decode page, reaches only four product
+      terms here and none of them are the ones observed arriving. That trace is
+      too weak to corroborate anything, so it is not shown rather than dressed
+      up.
+    </p>
+    <p>
+      The remaining 83 split two ways. For 62 of them nothing new arrives at
+      all — every term high in the last cycle was already high earlier.
+      Read-modify-write instructions like <span class="mono">$FE</span> and
+      returns like <span class="mono">$60</span> are in this group, and whatever
+      ends them is not a term that appears at the end. The other 21 do have
+      something arriving, but not a <span class="mono">T0</span> term. Neither
+      group is explained here.
     </p>
 
     <div class="sec-head">

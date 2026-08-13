@@ -94,3 +94,71 @@ fn twelve_undocumented_opcodes_run_longer_than_any_documented_one() {
         }
     }
 }
+
+/// Which term arrives in the final cycle.
+///
+/// "Arrives" means high in the last cycle and not high in any earlier one --
+/// listing everything high at the end instead sweeps in the terms describing
+/// the instruction's class, which were high throughout and end nothing.
+///
+/// This is coincidence in time, not a traced wire. It is asserted because the
+/// page makes the claim, and because the naming agreeing with the measurement
+/// across two thirds of the instruction set is worth not losing quietly.
+#[test]
+fn instructions_end_on_the_term_named_for_them() {
+    let nl = Arc::new(Netlist::mos6502());
+    let pla = v6502_netlist::pla::Pla::derive(&nl);
+    for (opcode, want) in [
+        (0x20u8, "op-T0-jsr"),
+        (0x00, "op-T0-brk/rti"),
+        (0x4c, "op-T0-jmp"),
+        (0x48, "op-T0-php/pha"),
+        (0xa9, "op-T0-lda"),
+    ] {
+        let arrived = arriving_terms(&nl, &pla, opcode);
+        assert!(
+            arrived.iter().any(|n| n == want),
+            "${opcode:02X} should end on {want}, got {arrived:?}"
+        );
+    }
+}
+
+/// Terms high in the final cycle that were not high earlier.
+fn arriving_terms(
+    nl: &Arc<Netlist>,
+    pla: &v6502_netlist::pla::Pla,
+    opcode: u8,
+) -> Vec<String> {
+    use std::collections::BTreeSet;
+    let mut mem = FlatMemory::new();
+    mem.load(BASE, &[opcode, 0x00, 0x00, 0x00]);
+    mem.set_reset_vector(BASE);
+    let mut cpu = Cpu::new(nl.clone(), mem).unwrap();
+    cpu.power_cycle();
+    for _ in 0..60 {
+        if cpu.sync() && cpu.last_fetch().map(|f| f.addr) == Some(BASE) {
+            break;
+        }
+        cpu.half_step();
+    }
+    let mut earlier: BTreeSet<usize> = BTreeSet::new();
+    let mut n = 0;
+    loop {
+        let now: BTreeSet<usize> = pla
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| cpu.engine().is_high(r.node))
+            .map(|(i, _)| i)
+            .collect();
+        cpu.step_cycle();
+        n += 1;
+        if cpu.sync() || n >= 20 {
+            return now
+                .difference(&earlier)
+                .filter_map(|i| pla.rows[*i].name.clone())
+                .collect();
+        }
+        earlier.extend(now);
+    }
+}

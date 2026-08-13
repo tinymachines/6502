@@ -16,6 +16,10 @@ const mnemonic = (op) => (documented(op) ? OPCODES[op][0] : '—');
 
 const state = { data: null, byOp: [], opcode: null };
 
+// `op-T0-cpx/cpy/inx/iny` -> the readable half. Matches the Decode page.
+const termLabel = (name) => (name || 'irline3').replace(/^op-(T[0-9+]+)-/, '');
+const isT0 = (name) => !!name && name.startsWith('op-T0-');
+
 // Cycle count -> a step on the accent ramp. Jams get their own.
 function cellClass(rec) {
   if (rec.jam) return 'op-cell jam';
@@ -46,8 +50,18 @@ function select(op) {
     c.classList.toggle('picked', Number(c.dataset.op) === op);
   }
   const rec = state.byOp[op];
+  const last = rec.states.length - 1;
   const steps = rec.states.map((s, i) =>
-    `<tr><td class="hc">cycle ${i}</td><td class="mono">${s || '—'}</td></tr>`).join('');
+    `<tr class="${i === last && !rec.jam ? 'final' : ''}">`
+    + `<td class="hc">cycle ${i}</td><td class="mono">${s || '—'}</td></tr>`).join('');
+
+  const name = (i) => state.data.terms[i];
+  const chip = (i) => `<a class="chip" href="decode.html?term=`
+    + `${encodeURIComponent(name(i) || 'irline3')}"><span class="chip-stage">`
+    + `${isT0(name(i)) ? 'T0' : '·'}</span>${termLabel(name(i))}</a>`;
+  const arrived = rec.arrived.map(chip).join(' ');
+  const alsoHigh = rec.ending.filter((i) => !rec.arrived.includes(i)).map(chip).join(' ');
+
   $('detail').innerHTML = `
     <h3>$${hex2(op)} <span class="mn">${mnemonic(op)}</span></h3>
     <p class="muted">${rec.jam
@@ -56,7 +70,14 @@ function select(op) {
       : `${rec.cycles} cycles, measured from this opcode's fetch to the next one.`}</p>
     <div class="table-scroll"><table class="hc-table">
       <thead><tr><th>Cycle</th><th>Timing chain</th></tr></thead>
-      <tbody>${steps}</tbody></table></div>`;
+      <tbody>${steps}</tbody></table></div>
+    ${rec.jam ? '' : `
+    <dl class="ends">
+      <dt>Arrives in the last cycle</dt>
+      <dd>${arrived || '<span class="muted">nothing new — every term that is '
+        + 'high at the end was already high earlier</span>'}</dd>
+      ${alsoHigh ? `<dt>Also high</dt><dd>${alsoHigh}</dd>` : ''}
+    </dl>`}`;
   history.replaceState(null, '', `?op=${hex2(op)}`);
 }
 
@@ -75,9 +96,10 @@ async function boot() {
     const counts = {};
     for (const r of timed) counts[r.cycles] = (counts[r.cycles] || 0) + 1;
     const range = Object.keys(counts).map(Number).sort((a, b) => a - b);
+    const withT0 = timed.filter((r) => r.arrived.some((i) => isT0(state.data.terms[i])));
     $('stats').textContent =
       `${timed.length} instructions timed · ${range[0]}–${range[range.length - 1]} cycles · `
-      + `${jams} that never finish`;
+      + `${jams} that never finish · ${withT0.length} end on a T0 term`;
 
     $('histogram').innerHTML = range.map((c) => {
       const n = counts[c];

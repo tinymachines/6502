@@ -108,6 +108,13 @@ if len(jams) != 12:
     sys.exit(f"deploy: {len(jams)} opcodes never finish; the 6502 has exactly 12")
 if {o["cycles"] for o in timed} < {2, 3, 4, 5, 6, 7}:
     sys.exit("deploy: the measured cycle counts do not span the expected range")
+if len(tim.get("terms", [])) < 100:
+    sys.exit("deploy: timing.json carries no term names")
+ends = [o for o in timed
+        if any((tim["terms"][i] or "").startswith("op-T0-") for i in o["arrived"])]
+if len(ends) < 120:
+    sys.exit(f"deploy: only {len(ends)} instructions end on a T0 term -- "
+             f"the arriving-term measurement has broken")
 PY
 
 # ---------------------------------------------------------------------------

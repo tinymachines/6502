@@ -49,7 +49,19 @@ fn main() -> std::io::Result<()> {
     }
 
     let mut s = String::with_capacity(1 << 18);
-    s.push_str("{\n  \"stages\": [\n");
+    // Term names travel with the file. Both this and decode.json index the same
+    // `Pla::rows` order, but coupling two published files by index alone is the
+    // kind of thing that silently mislabels everything the day the order moves.
+    s.push_str("{\n  \"terms\": [\n");
+    for (i, r) in pla.rows.iter().enumerate() {
+        let _ = writeln!(
+            s,
+            "    {}{}",
+            r.name.as_ref().map_or("null".into(), |n| format!("\"{n}\"")),
+            if i + 1 < pla.rows.len() { "," } else { "" }
+        );
+    }
+    s.push_str("  ],\n  \"stages\": [\n");
     for (i, (name, node)) in stages.iter().enumerate() {
         let terms: Vec<String> = reach[i].iter().map(usize::to_string).collect();
         let _ = writeln!(
@@ -65,13 +77,16 @@ fn main() -> std::io::Result<()> {
     for (i, r) in records.iter().enumerate() {
         let seq: Vec<String> = r.states.iter().map(|s| format!("\"{s}\"")).collect();
         let ending: Vec<String> = r.ending.iter().map(usize::to_string).collect();
+        let arrived: Vec<String> = r.arrived.iter().map(usize::to_string).collect();
         let _ = writeln!(
             s,
-            "    {{\"op\":{},\"cycles\":{},\"states\":[{}],\"ending\":[{}],\"jam\":{}}}{}",
+            "    {{\"op\":{},\"cycles\":{},\"states\":[{}],\"ending\":[{}],\
+             \"arrived\":[{}],\"jam\":{}}}{}",
             r.opcode,
             r.cycles,
             seq.join(","),
             ending.join(","),
+            arrived.join(","),
             r.jam,
             if i + 1 < records.len() { "," } else { "" }
         );
@@ -104,9 +119,15 @@ struct Timed {
     cycles: u64,
     /// The timing state at each cycle, as the chain reports it.
     states: Vec<String>,
-    /// Product terms high during the final cycle -- the ones present when the
-    /// chain goes back to the start.
+    /// Product terms high during the final cycle.
     ending: BTreeSet<usize>,
+    /// Terms high in the final cycle that were **not** high in any earlier one.
+    ///
+    /// This is the set worth showing. Simply listing what is high at the end
+    /// includes every term describing the instruction's *class* --
+    /// `op-implied`, `op-store`, `op-shift` -- which were high the whole time
+    /// and end nothing. What arrived in the last cycle is what stopped it.
+    arrived: BTreeSet<usize>,
     /// True for the opcodes that never reach another fetch. These are real:
     /// the undocumented JAM/KIL opcodes hang the chip, and the timing chain
     /// simply stops advancing.
@@ -130,7 +151,14 @@ fn trace(nl: &Arc<Netlist>, pla: &Pla, opcode: u8) -> Timed {
         cpu.half_step();
     }
     if !found {
-        return Timed { opcode, cycles: 0, states: Vec::new(), ending: BTreeSet::new(), jam: true };
+        return Timed {
+            opcode,
+            cycles: 0,
+            states: Vec::new(),
+            ending: BTreeSet::new(),
+            arrived: BTreeSet::new(),
+            jam: true,
+        };
     }
 
     let mut states = Vec::new();
@@ -138,6 +166,7 @@ fn trace(nl: &Arc<Netlist>, pla: &Pla, opcode: u8) -> Timed {
     let mut jam = true;
     // `loop` breaks with the value, so nothing has to be pre-seeded with a
     // placeholder that is never read.
+    let mut seen_earlier: BTreeSet<usize> = BTreeSet::new();
     let ending = loop {
         states.push(cpu.timing().active());
         let terms: BTreeSet<usize> = pla
@@ -158,6 +187,9 @@ fn trace(nl: &Arc<Netlist>, pla: &Pla, opcode: u8) -> Timed {
         if half >= LIMIT {
             break terms;
         }
+        // Only reached when this was not the last cycle.
+        seen_earlier.extend(terms);
     };
-    Timed { opcode, cycles: half / 2, states, ending, jam }
+    let arrived: BTreeSet<usize> = ending.difference(&seen_earlier).copied().collect();
+    Timed { opcode, cycles: half / 2, states, ending, arrived, jam }
 }

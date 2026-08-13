@@ -20,13 +20,13 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 52 tests, bit-exact against the original. |
+| Simulation | Complete. 53 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
-| Timing | Every instruction's length, **measured** sync to sync. No counter exists. |
+| Timing | Every instruction's length, measured sync to sync, and what ends it. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
@@ -62,7 +62,7 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 52 tests: netlist, functional, golden,
+cargo test --workspace              # 53 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
@@ -585,6 +585,25 @@ Three results fell out of the measurement rather than being looked up:
 `deploy.sh` checks all of this: 256 opcodes present, at least 200 timed, exactly
 12 jams, and the full 2–7 range represented. A broken measurement run produces a
 well-formed file of plausible numbers, so the guard has to be specific.
+
+**Which term ends an instruction** is reported as *arriving*: high in the final
+cycle and **not high in any earlier one**. Listing everything high at the end
+instead sweeps in the terms describing the instruction's class (`op-implied`,
+`op-store`, `op-shift`), which were high throughout and end nothing.
+
+- 161 of 244 end on their own `op-T0-…` term — `$20` on `op-T0-jsr`, `$48` on
+  `op-T0-php/pha`. 62 have nothing arriving at all (RMW forms, `RTS`); another
+  21 have something arriving that is not a T0 term. All three counts are on the
+  page, because two thirds is the honest figure and "the terms that end
+  instructions" would not be.
+- **This is coincidence in time, not a traced wire, and the page says so.** The
+  structural walk that resolved 32 control lines reaches only *four* product
+  terms from the timing nodes, `clock2` gets zero, and none of the four are the
+  ones observed arriving. That trace is too weak to corroborate anything, so it
+  stays in the data and off the page rather than being dressed up as support.
+- Term names are emitted into `timing.json` rather than shared by index with
+  `decode.json`. Both index the same `Pla::rows` order, but coupling two
+  published files by index alone mislabels everything the day that order moves.
 
 ### Renderer invariants — each of these was a real bug
 
