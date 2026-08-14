@@ -176,6 +176,8 @@ def main() -> None:
     b.copy_hashed("version-footer.js")
     b.copy_hashed("site-nav.js")
     b.copy_hashed("programs.js")
+    b.copy_hashed("exploded-gl.js")
+    b.copy_hashed("blocks.json")
     b.copy_hashed("blueprint.json")
     b.copy_hashed("decode.json")
     b.copy_hashed("timing.json")
@@ -220,6 +222,24 @@ def main() -> None:
                       f"fetch('{b.ref('blueprint.json')}')", where="blueprint.js")
     b.emit("blueprint.js", bp.encode())
 
+    # 3b-ii. exploded.js: four module imports and two runtime fetches. It shares
+    #        renderer.js with the die view for `parseLayout` -- the blob format is
+    #        parsed in exactly one place, so a change to the header cannot leave
+    #        one page reading it the old way.
+    exp = b.read("exploded.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./renderer.js", "./" + b.ref("renderer.js")),
+        ("./exploded-gl.js", "./" + b.ref("exploded-gl.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+    ]:
+        exp = replace_once(exp, f"'{original}'", f"'{resolved}'", where="exploded.js")
+    exp = replace_once(exp, "fetch('layout.bin')",
+                       f"fetch('{b.ref('layout.bin')}')", where="exploded.js")
+    exp = replace_once(exp, "fetch('blocks.json')",
+                       f"fetch('{b.ref('blocks.json')}')", where="exploded.js")
+    b.emit("exploded.js", exp.encode())
+
     # 3c. decode.js: no wasm at all -- the page is a measured table, so it needs
     #     only the mnemonics and its own data.
     dec = b.read("decode.js").decode()
@@ -259,6 +279,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         bph = replace_once(bph, f'"{original}"', f'"{b.ref(original)}"', where="blueprint.html")
     b.emit("blueprint.html", bph.encode(), hashed=False)
+
+    exph = b.read("exploded.html").decode()
+    for original in ["style.css", "exploded.js", "version-footer.js", "site-nav.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        exph = replace_once(exph, f'"{original}"', f'"{b.ref(original)}"', where="exploded.html")
+    b.emit("exploded.html", exph.encode(), hashed=False)
 
     dech = b.read("decode.html").decode()
     for original in ["style.css", "decode.js", "version-footer.js", "site-nav.js",

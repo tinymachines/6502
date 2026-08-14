@@ -189,7 +189,7 @@ pub struct Blueprint {
 
 /// Split `sb0` into `("sb", 0)`. Rejects anything whose stem is not plain
 /// letters/underscore, which keeps `dpc3_SBX` and friends out.
-fn split_bit(name: &str) -> Option<(&str, usize)> {
+pub(crate) fn split_bit(name: &str) -> Option<(&str, usize)> {
     let digits = name.len() - name.trim_end_matches(|c: char| c.is_ascii_digit()).len();
     if digits == 0 || digits == name.len() {
         return None;

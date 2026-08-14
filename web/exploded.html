@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exploded — the 6502, taken apart</title>
+<meta name="description" content="The MOS 6502's own polygons, pulled apart along two axes: the three physical layers of the die, and the functional blocks derived from its wiring.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav">
+        <a href="./#explorer">Explorer</a>
+        <a href="./#lab">Lab</a>
+        <a href="exploded.html" aria-current="page">Exploded</a>
+        <a href="blueprint.html">Blueprint</a>
+        <a href="decode.html">Decode</a>
+        <a href="timing.html">Timing</a>
+        <a href="./#credit">Credit</a>
+        <a href="archive/">Archive</a>
+      </div>
+      <a class="btn btn-primary nav-cta" href="./#explorer">Run it</a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Same polygons · moved, not redrawn</p>
+    <h1>A transistor is<br><span class="hl">a crossing.</span></h1>
+    <p class="lede">
+      The 6502 is three layers of material. Diffusion is doped silicon that
+      conducts. Polysilicon is a second conducting layer laid on top, separated
+      by a whisker of oxide. Metal is the aluminium wiring above both — and
+      there is only one layer of it, which is why the die looks hand-packed.
+    </p>
+    <p class="lede">
+      Where poly crosses diffusion, and only there, the two form a switch. All
+      3510 of them are that. Lift the layers apart and every one becomes a
+      filament joining the gate above to the channel below.
+    </p>
+    <div class="statbar" id="ex-stats">…</div>
+  </section>
+
+  <section class="wrap" id="view">
+    <div class="console">
+      <div class="console-bar">
+        <span class="tag live">exploded · live</span>
+        <span class="bar-note">Drag to orbit · scroll to zoom</span>
+        <div class="bar-spacer"></div>
+        <select id="ex-program" class="mono" aria-label="Program"></select>
+        <button id="ex-run" class="btn btn-primary" type="button">Run</button>
+        <button id="ex-step" class="btn" type="button">Step</button>
+        <button id="ex-reset" class="btn" type="button">Reset</button>
+      </div>
+
+      <div id="ex-boot" class="bp-boot"><p id="ex-status">Loading…</p></div>
+
+      <div id="ex-main" hidden>
+        <div class="ex-stage">
+          <canvas id="ex-canvas" aria-label="The 6502 die, exploded"></canvas>
+          <div class="ex-controls">
+            <label class="ex-slider">
+              <span class="ex-s-name">Layers</span>
+              <input id="ex-layer" type="range" min="0" max="100" value="0">
+              <span class="ex-s-val mono" id="ex-layer-val">flat</span>
+            </label>
+            <label class="ex-slider">
+              <span class="ex-s-name">Blocks</span>
+              <input id="ex-block" type="range" min="0" max="100" value="0">
+              <span class="ex-s-val mono" id="ex-block-val">assembled</span>
+            </label>
+            <label class="ex-slider">
+              <span class="ex-s-name">Filaments</span>
+              <input id="ex-stalks" type="range" min="0" max="100" value="100">
+              <span class="ex-s-val mono" id="ex-stalks-val">100%</span>
+            </label>
+            <div class="ex-layer-togs" id="ex-layers"></div>
+          </div>
+        </div>
+
+        <div class="ex-legend-wrap">
+          <p class="ex-legend-head">
+            Functional blocks — click one to isolate it.
+            <span class="muted">Derived from the names on the die and grown along the wiring.</span>
+          </p>
+          <div id="ex-legend" class="ex-legend"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">The vertical axis</p>
+      <h2>Three layers, not six.</h2>
+    </div>
+    <p class="lede">
+      The die data distinguishes six kinds of polygon, but three of them —
+      switched, grounded and powered diffusion — are the same physical layer,
+      coloured by what it happens to be tied to. Green is ground, red is power,
+      amber is everything doing work. So the layer slider lifts three heights
+      apart, not six.
+    </p>
+    <p>
+      Poly crossing metal does nothing; they are insulated and simply pass over
+      each other. Diffusion crossing metal does nothing either, unless somebody
+      placed a contact. Poly crossing <em>diffusion</em> is the exception, and
+      the exception is the entire computer: put a voltage on the poly and its
+      field reaches through the oxide to pull the silicon beneath it into
+      conducting, joining the diffusion on either side. Take it away and the
+      channel closes.
+    </p>
+    <p>
+      That is why the filaments are drawn where they are. Each one stands at a
+      transistor's own bounding box, running from the diffusion it switches to
+      the poly that gates it, and brightens when that gate goes high. Run the
+      chip with the layers lifted and you are watching the switches switch.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The horizontal axis</p>
+      <h2>The parts, and the part that has no name.</h2>
+    </div>
+    <p>
+      The second slider slides the functional blocks apart. Each keeps its real
+      polygons and its real place — they move outward from the middle of the die
+      in the direction they already lie, then nudge each other until they stop
+      overlapping, so the arrangement stays recognisable as the chip.
+    </p>
+    <p>
+      Which node belongs to which block is <strong>derived, not drawn</strong>.
+      It rests on the same fact the decode table does: the die names itself.
+      The adder's carry chain is named bit by bit, its intermediate products are
+      named as the logic they compute, the program counter's precharge nodes are
+      named, and every product term of the decode PLA is named after the
+      instructions it serves. Those names are the seeds; anything unnamed is
+      grown in from what it is wired to.
+    </p>
+    <p>
+      Growth follows the wiring, never the gates. A node gated by a decode line
+      is being <em>told what to do</em> by the decoder, which is the opposite of
+      belonging to it — follow gates and the PLA swallows the chip in three
+      rounds.
+    </p>
+    <p>
+      <strong>2424 of 3510 transistors reach a block. The other 1086 do not</strong>,
+      and they stay where they are, fading, while everything else pulls away.
+      What is left hanging in the middle at full explode is precisely the part of
+      the chip this page cannot account for. Nodes the die named outright are
+      drawn brighter than nodes inferred from their neighbours, because those are
+      different strengths of claim and the picture should say which it is making.
+    </p>
+    <p>
+      It is worth being plain about what this is not: nobody has MOS's original
+      floorplan, and this is an inference from a photograph of a chip. A boundary
+      here is where the names and the wiring say one part stops — not where a
+      draughtsman drew a line in 1975.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="exploded.js"></script>
+<script type="module" src="site-nav.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

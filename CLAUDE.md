@@ -20,10 +20,11 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 53 tests, bit-exact against the original. |
+| Simulation | Complete. 66 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
+| Exploded | The die pulled apart: 3 physical layers, 12 functional blocks. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
@@ -64,8 +65,8 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 53 tests: netlist, functional, golden,
-                                    # rewind, blueprint, pla, decode
+cargo test --workspace              # 66 tests: netlist, functional, golden,
+                                    # rewind, blueprint, pla, decode, blocks
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
 cargo clippy --workspace --all-targets
@@ -81,6 +82,7 @@ node tools/golden-trace/gen.js --steps 3000
 wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
 cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json
+cargo run -p v6502-netlist --bin export-blocks -- web/blocks.json
 cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
 python3 -m http.server 8777 --directory web        # http://localhost:8777/
@@ -106,7 +108,8 @@ python3 archive/tools/build-archive.py && bash deploy/archive-deploy.sh
 python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
-`web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/decode.json`, `web/timing.json`,
+`web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/blocks.json`,
+`web/decode.json`, `web/timing.json`,
 `web/build-info.json`, `dist/`, the golden trace
 and everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
@@ -185,6 +188,7 @@ _handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320   # what pushes the page wider than the viewport
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
+_exploded-test.html    # the exploded view: do the sliders actually move geometry?
 _blueprint-test.html   # the block diagram: drawn, bound, and no label collisions
 _decode-test.html      # the decode table, re-checked against the documented ISA
 _timing-test.html      # cycle counts, re-checked against the published ones
@@ -410,6 +414,92 @@ through `nodeId()` gives both a die region to frame and a live readout.
 What `adc` demonstrates is the thing the whole project exists to show: at +5
 half-cycles the adder holds `$42` and the accumulator still reads `$40`. The
 result exists and is in no register. `?lab=adc&step=4` links to that moment.
+
+### The Exploded view (`exploded.html`, `exploded-gl.js`, `blocks.rs`)
+
+The same 83,227 triangles as the die view, **moved rather than redrawn**, along
+two independent axes. The die view shows the chip as it is and is nearly
+unreadable; the blueprint throws the geometry away entirely. This is the step
+between, and it is the page to reach for when explaining what the chip *is*.
+
+- **Z — the physical layers.** Diffusion, polysilicon, metal. Note it is
+  **three heights, not six**: `segdefs` distinguishes switched, grounded and
+  powered diffusion, but those are one physical layer coloured by what it is
+  tied to, so `LAYER_HEIGHT` collapses 6 segdef layers onto 3. Getting this
+  wrong would draw the power rails floating above the signal wiring.
+- **XY — the functional blocks**, derived in `crates/v6502-netlist/src/blocks.rs`.
+- **One filament per transistor**, from the diffusion it switches to the poly
+  that gates it, lit when its gate is high. This is the whole point of the page:
+  a transistor is a place where poly crosses diffusion, and separating the
+  layers is what makes all 3510 of them visible as objects.
+
+**`Z_GAP` is a legibility choice and is documented as one.** The real oxide is
+submicron; any honest value is invisible. The first attempt used 2600 die units
+against a die ~9000 across, which turned the filaments into an opaque wall two
+thirds the width of the chip. It is now 850 — the smallest value at which the
+three layers read as separate.
+
+- **The block explode must recolour.** Without it the pieces fly apart still
+  wearing their layer colours and are impossible to tell apart, which defeats
+  the only thing that axis does. Luminance carries over from the layer colour so
+  the material still reads through the block hue. `BLOCK_COLOR` is presentation,
+  but the *order* is not arbitrary: control blocks warm, datapath cool.
+- **The camera must back off by less than the scene grows.** Matching the growth
+  exactly holds the die at a constant size and makes the slider look dead;
+  overshooting shrinks the chip as it comes apart. `0.72 ×` explode, found by
+  looking.
+- **Pitch is clamped above the plane** (`0.14..1.53` rad). Metal is translucent
+  and is drawn last with depth writes off, which is only correct while it is the
+  near face — from underneath it sorts wrongly and the wiring vanishes behind
+  the silicon.
+- **The pads move radially, not by translation.** They are a ring around the die
+  edge, so their centroid is the middle of the chip and translating by it would
+  move them nowhere. `the_pads_are_a_ring_not_a_blob` pins this, and pins it over
+  the **seeded** pads only — growth reaches inward along the drivers, so
+  asserting it over the whole block would be testing the growth rule while
+  appearing to test the ring.
+- **Layers are kept fractionally apart even at zero** (`Z_BASELINE`), or the
+  coplanar polygons z-fight and the die crawls with speckle at rest — which
+  reads exactly like a corrupted upload.
+
+#### The blocks (`blocks.rs`)
+
+Seeded from the names on the die, grown along the wiring, and **honest about the
+remainder**: 2424 of 3510 transistors reach a block, 1086 do not.
+
+- **The seeds are a name table written from a dump of every name the trace
+  carries**, not from what a 6502 is supposed to contain. This works because the
+  die names entire structures rather than a few interesting signals: the adder's
+  carry chain bit by bit (`#C01`..`~C78`), its intermediate products as the logic
+  they compute (`A+B3`, `#(AxB)4`, `#A.B7`), the PC's precharge nodes, and every
+  decode term after the instructions it serves.
+- **Growth follows terminals, never gates.** A node gated by a decode line is
+  being *told what to do* by the decoder, which is the opposite of belonging to
+  it; following gates lets the PLA swallow the chip in three rounds.
+  `growth_does_not_let_the_decoder_swallow_the_chip` pins it.
+- **A switch is filed by its channel, not its gate.** The gate is the control
+  line reaching in from the decoder. Filing by gate would put all 159 datapath
+  pass transistors under `Control pipeline` and empty the datapath of the
+  switches that are the point of it.
+- **Stems are matched exactly, never by prefix.** `a0` is the accumulator and
+  `abl0` is the low address latch; a prefix match merges them.
+- **Decoration is stripped, and the adder depends on it.** `#`, `~`, `x-`, `xx-`,
+  `.phi1`, `.delay` mark phases and duplicate copies of the same structure. Half
+  the ALU is only reachable once they are off.
+- **Seeded and grown are published separately** (`was_seeded`, bit 7 of
+  `nodeBlock`) and drawn at different brightness, because they are different
+  strengths of claim. Decode PLA is 95% named; Status register is 40%.
+- **The unclassified block does not move and does not vanish.** It stays put and
+  fades while everything else pulls away, so what hangs in the middle at full
+  explode is exactly what the page cannot account for. `deploy.sh` fails if it
+  ever empties — a run that classified everything would mean the honesty check
+  now shows an empty set.
+- The blocks are checked for **spatial coherence** rather than taken on trust: a
+  block whose nodes scattered across the die would explode into confetti. All
+  except the pad ring have RMS spread < 0.25 of the die diagonal.
+- **This is not a floorplan.** Nobody has MOS's original; it is an inference from
+  a photograph, and the page says so. A boundary here is where the names and the
+  wiring say one part stops.
 
 ### The Blueprint (`blueprint.html`, `blueprint.js`, `blueprint.rs`)
 

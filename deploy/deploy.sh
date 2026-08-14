@@ -38,6 +38,9 @@ cargo run --quiet -p v6502-netlist --bin export-layout -- web/layout.bin
 log "deriving the blueprint"
 cargo run --quiet -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 
+log "deriving the functional blocks"
+cargo run --quiet -p v6502-netlist --bin export-blocks -- web/blocks.json
+
 log "measuring the decode PLA"
 cargo run --release --quiet -p v6502-sim --bin export-decode -- web/decode.json
 
@@ -50,6 +53,7 @@ cargo run --release --quiet -p v6502-sim --bin export-timing -- web/timing.json
 
 for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/programs.js web/blueprint.html web/blueprint.js web/blueprint.json \
+         web/exploded.html web/exploded.js web/exploded-gl.js web/blocks.json \
          web/decode.html web/decode.js web/decode.json \
          web/timing.html web/timing.js web/timing.json \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
@@ -71,6 +75,35 @@ if len(bp["units"]) < 12 or len(bp["links"]) < 16:
              f"{len(bp['links'])} links -- the extraction has broken")
 if bp["coverage"]["transistorsDrawn"] < 100:
     sys.exit("deploy: blueprint covers almost no transistors")
+
+# The blocks are derived too, and the failure mode is the same shape: a rule
+# table that stops matching still produces a well-formed file, in which every
+# node has quietly fallen into "unclassified" and the exploded view has nothing
+# to pull apart. Insist the seeds still land.
+blk = json.load(open("web/blocks.json"))
+if len(blk["blocks"]) < 10:
+    sys.exit(f"deploy: only {len(blk['blocks'])} functional blocks derived")
+if len(blk["nodeBlock"]) != 1725 or len(blk["transistorBlock"]) != 3510:
+    sys.exit("deploy: blocks.json tables are the wrong length for this die")
+if len(blk["transistorGate"]) != 3510:
+    sys.exit("deploy: blocks.json is missing a gate for every transistor")
+cov = blk["coverage"]
+if cov["transistorsPlaced"] < 2000:
+    sys.exit(f"deploy: blocks place only {cov['transistorsPlaced']} of "
+             f"{cov['transistors']} transistors -- the name rules have drifted")
+# Most of what is placed must be *named* rather than inferred. If growth ever
+# starts carrying the result, the picture is no longer the die describing itself.
+if cov["nodesNamed"] * 2 < cov["nodesPlaced"]:
+    sys.exit(f"deploy: only {cov['nodesNamed']} of {cov['nodesPlaced']} placed "
+             "nodes are named; growth is doing the work")
+# ...and the gap must still be declared. A run that classified everything would
+# mean the unclassified block had silently vanished from the page.
+if blk["blocks"][0]["transistors"] < 1:
+    sys.exit("deploy: nothing is unclassified, which means the honesty check "
+             "on the exploded page now shows an empty set")
+if any(b["nodes"] == 0 for b in blk["blocks"][1:]):
+    empty = [b["name"] for b in blk["blocks"][1:] if b["nodes"] == 0]
+    sys.exit(f"deploy: these blocks came out empty: {empty}")
 
 # The decode table is measured by running the chip, so a broken run yields a
 # well-formed file full of empty results rather than an error. Insist that the

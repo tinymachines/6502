@@ -17,6 +17,7 @@
 
 use std::collections::HashMap;
 
+pub mod blocks;
 pub mod blueprint;
 pub mod pla;
 

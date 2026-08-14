@@ -1,0 +1,228 @@
+<!doctype html>
+<!--
+  Development harness, never shipped.
+
+  The exploded view's whole claim is that two sliders MOVE the geometry. A
+  slider that is wired to nothing renders a perfectly good picture of a chip,
+  which is precisely the class of failure a screenshot cannot catch -- the same
+  lesson as the node levels uploaded as 1 instead of 255. So every movement
+  assertion here is made by reading the composited pixels back and comparing,
+  never by trusting the uniform that was set.
+
+  The renderer is constructed at top level and render() is called synchronously,
+  for the reason _resize-test.html spells out: headless throttles animation
+  frames inside an iframe to nearly zero, and every scenario then looks broken.
+
+    http://localhost:8777/_exploded-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>
+  body { margin: 0; background: #0b1120; color: #eaf2ff; font: 12px ui-monospace, monospace; }
+  #stage { width: 760px; height: 520px; background: #050912; }
+  #die { width: 100%; height: 100%; display: block; }
+  pre { padding: 1rem; white-space: pre-wrap; }
+</style>
+</head><body>
+<div id="stage"><canvas id="die"></canvas></div>
+<script type="module">
+import { parseLayout } from './renderer.js';
+import { ExplodedRenderer, computeOffsets, BLOCK_COLOR, LAYER_HEIGHT } from './exploded-gl.js';
+
+const results = [];
+const ok = (name, cond, detail) =>
+  results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`);
+
+try {
+  const [layoutBuf, bj] = await Promise.all([
+    fetch('layout.bin').then((r) => r.arrayBuffer()),
+    fetch('blocks.json').then((r) => r.json()),
+  ]);
+  const layout = parseLayout(layoutBuf);
+  const blocks = {
+    blocks: bj.blocks,
+    coverage: bj.coverage,
+    nodeBlock: new Uint8Array(bj.nodeBlock),
+    transistorBlock: new Uint16Array(bj.transistorBlock),
+    transistorGate: new Uint16Array(bj.transistorGate),
+  };
+
+  // --- the data itself ------------------------------------------------------
+  ok('blocks.json has a block per id, contiguous from 0',
+     bj.blocks.every((b, i) => b.id === i), `${bj.blocks.length} blocks`);
+  ok('block 0 is the unclassified one', bj.blocks[0].id === 0 && /unclass/i.test(bj.blocks[0].name),
+     bj.blocks[0].name);
+  ok('every named block has transistors',
+     bj.blocks.slice(1).every((b) => b.transistors > 0 && b.nodes > 0));
+  ok('there is a colour for every block',
+     bj.blocks.every((b) => Array.isArray(BLOCK_COLOR[b.id]) && BLOCK_COLOR[b.id].length === 3));
+
+  const sumT = bj.blocks.reduce((a, b) => a + b.transistors, 0);
+  const sumN = bj.blocks.reduce((a, b) => a + b.nodes, 0);
+  ok('block transistor counts sum to the whole chip', sumT === 3510, `${sumT}`);
+  ok('coverage agrees with the per-block counts',
+     bj.coverage.transistors === sumT && bj.coverage.nodes === sumN
+     && bj.coverage.transistorsPlaced === sumT - bj.blocks[0].transistors,
+     JSON.stringify(bj.coverage));
+  ok('the gap is declared rather than hidden',
+     bj.blocks[0].transistors > 0 && bj.blocks[0].transistors < sumT / 2,
+     `${bj.blocks[0].transistors} unclassified`);
+
+  ok('one block id and one seeded flag per node', blocks.nodeBlock.length === 1725);
+  ok('one block and one gate per transistor',
+     blocks.transistorBlock.length === 3510 && blocks.transistorGate.length === 3510);
+  ok('gates are real node ids', blocks.transistorGate.every((g) => g < 1725));
+  ok('block ids in the node table are all defined',
+     blocks.nodeBlock.every((v) => (v & 0x7f) < bj.blocks.length));
+
+  // The high bit carries "the die named this node". If the packing ever breaks,
+  // every node reads as inferred and the brightness split silently vanishes.
+  const namedCount = [...blocks.nodeBlock].filter((v) => v & 0x80).length;
+  ok('the seeded flag round-trips through bit 7', namedCount === bj.coverage.nodesNamed,
+     `${namedCount} vs ${bj.coverage.nodesNamed}`);
+  ok('nothing unclassified is flagged as named',
+     [...blocks.nodeBlock].every((v) => !((v & 0x80) && (v & 0x7f) === 0)));
+
+  // --- block placement ------------------------------------------------------
+  const { offset, radial } = computeOffsets(bj.blocks, layout.bounds);
+  ok('the unclassified block does not move',
+     offset[0] === 0 && offset[1] === 0 && radial[0] === 0);
+  const pads = bj.blocks.find((b) => b.half === 'io');
+  ok('the pad ring expands radially instead of translating',
+     radial[pads.id] === 1 && offset[pads.id * 2] === 0 && offset[pads.id * 2 + 1] === 0,
+     pads.name);
+  const movers = bj.blocks.filter((b) => b.id !== 0 && b.half !== 'io');
+  ok('every other block is given somewhere to go',
+     movers.every((b) => Math.hypot(offset[b.id * 2], offset[b.id * 2 + 1]) > 1),
+     `${movers.length} movable`);
+
+  // Separation is the point of the relaxation pass: if boxes still overlap, the
+  // blocks land on top of each other and the axis shows nothing.
+  let overlaps = [];
+  for (let i = 0; i < movers.length; i++) {
+    for (let j = i + 1; j < movers.length; j++) {
+      const a = movers[i], b = movers[j];
+      const ac = [a.die[0] + offset[a.id * 2], a.die[1] + offset[a.id * 2 + 1]];
+      const bc = [b.die[0] + offset[b.id * 2], b.die[1] + offset[b.id * 2 + 1]];
+      const needX = ((a.bounds[1] - a.bounds[0]) + (b.bounds[1] - b.bounds[0])) / 2;
+      const needY = ((a.bounds[3] - a.bounds[2]) + (b.bounds[3] - b.bounds[2])) / 2;
+      if (Math.abs(bc[0] - ac[0]) < needX && Math.abs(bc[1] - ac[1]) < needY) {
+        overlaps.push(`${a.name}/${b.name}`);
+      }
+    }
+  }
+  ok('separated blocks do not overlap', overlaps.length === 0, overlaps.join(', '));
+
+  // Relative arrangement must survive, or the exploded chip stops being
+  // recognisable as the chip.
+  const keptAbove = movers.filter((a) => movers.some((b) =>
+    a !== b && Math.sign(a.die[1] - b.die[1])
+      === Math.sign((a.die[1] + offset[a.id * 2 + 1]) - (b.die[1] + offset[b.id * 2 + 1]))));
+  ok('the arrangement is preserved, not repacked', keptAbove.length === movers.length,
+     `${keptAbove.length} of ${movers.length} kept their vertical order`);
+
+  // --- the renderer really moves things -------------------------------------
+  const canvas = document.getElementById('die');
+  const r = new ExplodedRenderer(canvas, layout, blocks, 1725);
+  r.setNodeLevels(new Uint8Array(1725).fill(255));
+
+  ok('there is one filament per transistor, two vertices each',
+     r.stalkCount === 3510 * 2, `${r.stalkCount}`);
+  ok('the six segdef layers collapse onto three heights',
+     new Set(LAYER_HEIGHT).size === 3 && LAYER_HEIGHT.length === 6,
+     LAYER_HEIGHT.join(','));
+
+  const gl = r.gl;
+  const shot = () => {
+    r.render();
+    const px = new Uint8Array(canvas.width * canvas.height * 4);
+    gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    return px;
+  };
+  const differ = (a, b) => {
+    let n = 0;
+    for (let i = 0; i < a.length; i += 4) {
+      if (Math.abs(a[i] - b[i]) > 6 || Math.abs(a[i + 1] - b[i + 1]) > 6
+          || Math.abs(a[i + 2] - b[i + 2]) > 6) n++;
+    }
+    return n / (a.length / 4);
+  };
+  // "Lit" means "differs from the cleared background", measured against the
+  // renderer's actual clear colour. A plain brightness threshold does not work
+  // here: the background is rgb(11,14,23), so any cutoff low enough to catch
+  // dim geometry also catches every empty pixel and reports 100% forever --
+  // which is a test that passes whatever happens.
+  const CLEAR = [11, 14, 23];
+  const lit = (px) => {
+    let n = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      const d = Math.abs(px[i] - CLEAR[0]) + Math.abs(px[i + 1] - CLEAR[1])
+        + Math.abs(px[i + 2] - CLEAR[2]);
+      if (d > 24) n++;
+    }
+    return n / (px.length / 4);
+  };
+
+  r.explodeZ = 0; r.explodeXY = 0;
+  const flat = shot();
+  ok('the die is actually drawn', lit(flat) > 0.02, `${(lit(flat) * 100).toFixed(1)}% lit`);
+
+  r.explodeZ = 1;
+  const lifted = shot();
+  ok('the layer slider moves the geometry', differ(flat, lifted) > 0.05,
+     `${(differ(flat, lifted) * 100).toFixed(1)}% of pixels changed`);
+
+  r.explodeZ = 0; r.explodeXY = 1;
+  const spread = shot();
+  ok('the block slider moves the geometry', differ(flat, spread) > 0.05,
+     `${(differ(flat, spread) * 100).toFixed(1)}% of pixels changed`);
+  ok('the two axes are independent', differ(lifted, spread) > 0.05,
+     `${(differ(lifted, spread) * 100).toFixed(1)}%`);
+
+  // Nothing should survive a full explode still sitting at the origin except
+  // the unclassified ghost, so the two views must not be near-identical.
+  ok('exploding does not merely rescale the picture',
+     Math.abs(lit(flat) - lit(spread)) > 0.001 || differ(flat, spread) > 0.2,
+     `lit ${(lit(flat) * 100).toFixed(1)}% -> ${(lit(spread) * 100).toFixed(1)}%`);
+
+  // --- focus ----------------------------------------------------------------
+  r.explodeXY = 1;
+  const all = shot();
+  r.focus = bj.blocks.find((b) => b.name === 'Decode PLA').id;
+  const one = shot();
+  ok('isolating a block dims the others', lit(one) < lit(all) * 0.85,
+     `${(lit(all) * 100).toFixed(1)}% -> ${(lit(one) * 100).toFixed(1)}%`);
+  ok('the isolated block is still drawn', lit(one) > 0.002);
+  r.focus = -1;
+
+  // --- the unclassified ghost ------------------------------------------------
+  // It must stay put while everything else leaves, since that is what makes the
+  // gap visible rather than merely stated.
+  ok('the unclassified block has no offset to move by',
+     offset[0] === 0 && offset[1] === 0);
+
+  // --- camera ---------------------------------------------------------------
+  r.explodeXY = 0; r.explodeZ = 0;
+  const before = shot();
+  r.yaw += 0.6;
+  const turned = shot();
+  ok('the camera orbits', differ(before, turned) > 0.05,
+     `${(differ(before, turned) * 100).toFixed(1)}%`);
+  r.yaw -= 0.6;
+  r.zoom = 2.5;
+  ok('zoom changes the view', differ(before, shot()) > 0.05);
+  r.zoom = 1;
+
+  const vp = r.viewProjection();
+  ok('the view-projection is finite', [...vp].every(Number.isFinite));
+  // Pitch is clamped above the plane because translucent metal is drawn last
+  // without depth writes; from below it would sort wrongly.
+  ok('a non-finite camera cannot be produced by the sliders',
+     [...r.viewProjection()].every(Number.isFinite));
+} catch (e) {
+  results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
+}
+
+document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+document.body.insertAdjacentHTML('beforeend', '<pre>' + results.join('\n') + '</pre>');
+</script>
+</body></html>
