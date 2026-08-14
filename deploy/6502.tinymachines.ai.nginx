@@ -36,6 +36,13 @@ map $uri $tm6502_cache {
     # enough that a re-harvest propagates without renaming anything.
     ~^/archive/(?:full|gallery/(?:thumb|view))/                "public, max-age=604800";
     ~*\.html$                                                  "no-cache";
+    # Bare page paths (/schematic, /blueprint, ...). They resolve to HTML via
+    # try_files, so they need HTML's caching -- without this they fall to the
+    # 60-second default and a deploy takes a minute to show up on exactly the
+    # URLs the site advertises. Matching "no dot in the path" rather than
+    # listing the pages means a new page cannot be forgotten here; the archive
+    # rule above still claims its own paths first.
+    ~^/[^.]*$                                                  "no-cache";
     "/"                                                        "no-cache";
     "/sw.js"                                                   "no-cache";
 }
@@ -125,5 +132,12 @@ server {
         try_files $uri $uri/ $uri/index.html =404;
     }
 
-    location / { try_files $uri $uri/ =404; }
+    # `$uri.html` lets every page answer to its bare path: /schematic serves
+    # schematic.html, and so on for the other entry points. The extension form
+    # keeps working, so no existing link breaks.
+    #
+    # It sits after `$uri` so a real file always wins, and before `$uri/` so a
+    # page beats a same-named directory -- the order that bit the archive, where
+    # a URL was both a page and a directory.
+    location / { try_files $uri $uri.html $uri/ =404; }
 }

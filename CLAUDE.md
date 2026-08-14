@@ -1155,6 +1155,22 @@ listing.
   segment is required: `build-info.json` has none and keeps the short cache,
   which is the entire point of it. Matching on extension alone would make the
   version footer report whatever it said an hour ago.
+- **Every page answers to its bare path** (`/schematic`, `/blueprint`, ...) via
+  `try_files $uri $uri.html $uri/`. `$uri` first so a real file always wins;
+  `$uri.html` before `$uri/` so a page beats a same-named directory, which is
+  the ordering that already bit the archive. The `.html` form keeps working, so
+  nothing that links to it breaks.
+  - **Two other things must change with it, and both fail silently.** The
+    Cache-Control map keys on `\.html$`, so a bare path would fall to the
+    60-second default and a deploy would take a minute to appear on exactly the
+    URLs the site advertises — hence the `~^/[^.]*$` rule, which matches "no dot
+    in the path" rather than listing pages, so a new page cannot be forgotten.
+  - **And the service worker caches by file, not by route.** `/schematic` is not
+    in the precache list (`/schematic.html` is), so offline the first lookup
+    misses and the navigation fallback would serve `SHELL` — the *explorer*,
+    under the schematic's URL. The fallback now tries `<path>.html` before the
+    shell. Verified by loading with a warm profile against a dead IP: the
+    schematic and the blueprint each come back as themselves.
 - **`/archive/` is an `alias` beside `releases/`, not inside a release.** It is
   ~2.5 GB that changes only when something new is recovered, so copying it on
   every front-end deploy would be absurd. That location declares no `add_header`

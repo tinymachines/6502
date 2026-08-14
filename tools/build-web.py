@@ -81,7 +81,16 @@ self.addEventListener('fetch', (event) => {
         const url = new URL(req.url);
         url.hash = '';
         url.search = '';
+        // Bare paths resolve to HTML on the server (/schematic -> schematic.html),
+        // but the cache is keyed by the file that was precached. Without the
+        // second lookup, /schematic offline misses, falls through to SHELL, and
+        // serves the *explorer* under the schematic's URL -- a wrong page that
+        // renders perfectly, which is the failure this fallback exists to stop.
+        const asPage = url.pathname.endsWith('/') || url.pathname.includes('.')
+          ? null
+          : url.href + '.html';
         return (await caches.match(url.href))
+          || (asPage && await caches.match(asPage))
           || (await caches.match(SHELL))
           || Response.error();
       }
