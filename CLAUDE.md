@@ -626,6 +626,20 @@ series chain three deep).
   five of them — a convincing circuit with pieces missing.
   `_schematic-test.html` compares the caption against the DOM for exactly this.
 
+**A shader that compiles headlessly can still be invalid.** `packed` is a
+reserved word in GLSL ES. SwiftShader accepted it, so the exploded view's vertex
+shader shipped and failed on real hardware with *"illegal use of a reserved
+word"* — every headless check green, the page blank on a real GPU. This is the
+same shape as the pinch NaN: a class of bug the software rasteriser cannot
+report. `_exploded-test.html` now scans every `#version 300 es` string in
+`exploded-gl.js` and `renderer.js` for reserved words, because a driver cannot
+be relied on to do it here. Verified by reintroducing the bug and watching that
+one assertion go red.
+
+Related trap, hit while fixing it: **a shader lives inside a JS template
+literal, so a backtick in a GLSL comment ends the string.** Writing `` `packed` ``
+in the explanatory comment broke the module outright.
+
 - **Every drawn thing has a box, and placement asks whether the box is free.**
   The first version spaced columns by a constant and put each element at the
   mean of its inputs' rows, which piles a dozen switches on one spot whenever

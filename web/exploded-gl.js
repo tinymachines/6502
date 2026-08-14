@@ -67,9 +67,14 @@ void main() {
   ivec2 texel = ivec2(n % ${STATE_W}, n / ${STATE_W});
   vState = texelFetch(uState, texel, 0).r;
 
-  float packed = floor(texelFetch(uBlock, texel, 0).r * 255.0 + 0.5);
-  vNamed = packed >= 128.0 ? 1.0 : 0.0;
-  int b = int(packed - vNamed * 128.0);
+  // Deliberately not named "packed": that is a reserved word in GLSL ES and a
+  // conforming driver rejects the shader outright. SwiftShader accepts it, so
+  // it shipped -- every headless check passed and the page failed on real
+  // hardware. (Backticks are also avoided here: this comment lives inside a JS
+  // template literal, and one would end the string.)
+  float blockBits = floor(texelFetch(uBlock, texel, 0).r * 255.0 + 0.5);
+  vNamed = blockBits >= 128.0 ? 1.0 : 0.0;
+  int b = int(blockBits - vNamed * 128.0);
   vBlock = b;
 
   // The pads are a ring, not a blob: their centroid is the middle of the die,

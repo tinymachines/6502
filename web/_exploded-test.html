@@ -242,6 +242,35 @@ try {
   ok('zoom changes the view', differ(before, shot()) > 0.05);
   r.zoom = 1;
 
+  // --- shader source hygiene ------------------------------------------------
+  //
+  // SwiftShader compiles things a conforming driver refuses. `packed` is a
+  // reserved word in GLSL ES; it shipped in the vertex shader, every headless
+  // check passed, and the page failed on real hardware with "illegal use of a
+  // reserved word". A driver cannot be relied on to report this here, so the
+  // source is scanned instead -- the same trick _handler-test uses to pin an
+  // invariant that only a real device could otherwise catch.
+  const RESERVED = new Set(('common partition active asm class union enum typedef '
+    + 'template this packed goto inline noinline public static extern external '
+    + 'interface long short double half fixed unsigned superp input output '
+    + 'hvec2 hvec3 hvec4 fvec2 fvec3 fvec4 filter sizeof cast namespace using '
+    + 'row_major resource subroutine patch sample precise coherent volatile '
+    + 'restrict readonly writeonly').split(' '));
+  const offenders = [];
+  for (const file of ['exploded-gl.js', 'renderer.js']) {
+    const src = await (await fetch(file)).text();
+    for (const m of src.matchAll(/`(#version 300 es[\s\S]*?)`/g)) {
+      for (const line of m[1].split('\n')) {
+        const code = line.replace(/\/\/.*/, '');
+        for (const w of code.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) || []) {
+          if (RESERVED.has(w)) offenders.push(`${file}: ${w}`);
+        }
+      }
+    }
+  }
+  ok('no GLSL reserved word appears in any shader', offenders.length === 0,
+     [...new Set(offenders)].join(', '));
+
   // --- zoom -----------------------------------------------------------------
   // applyZoom is the single choke point, so the clamping and the NaN refusal
   // are asserted on it directly rather than through a gesture.
