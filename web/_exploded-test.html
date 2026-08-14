@@ -26,7 +26,8 @@
 <div id="stage"><canvas id="die"></canvas></div>
 <script type="module">
 import { parseLayout } from './renderer.js';
-import { ExplodedRenderer, computeOffsets, BLOCK_COLOR, LAYER_HEIGHT } from './exploded-gl.js';
+import { ExplodedRenderer, computeOffsets, BLOCK_COLOR, LAYER_HEIGHT,
+         applyZoom, wireOrbit, ZOOM_MIN, ZOOM_MAX } from './exploded-gl.js';
 
 const results = [];
 const ok = (name, cond, detail) =>
@@ -50,8 +51,11 @@ try {
   // --- the data itself ------------------------------------------------------
   ok('blocks.json has a block per id, contiguous from 0',
      bj.blocks.every((b, i) => b.id === i), `${bj.blocks.length} blocks`);
-  ok('block 0 is the unclassified one', bj.blocks[0].id === 0 && /unclass/i.test(bj.blocks[0].name),
-     bj.blocks[0].name);
+  // Block 0 is the catch-all, whatever it is called. Keyed on `half` rather
+  // than on the name: the name describes today's contents and may change, the
+  // role must not.
+  ok('block 0 is the catch-all', bj.blocks[0].id === 0 && bj.blocks[0].half === 'unknown',
+     `${bj.blocks[0].name} (${bj.blocks[0].half})`);
   ok('every named block has transistors',
      bj.blocks.slice(1).every((b) => b.transistors > 0 && b.nodes > 0));
   ok('there is a colour for every block',
@@ -73,7 +77,7 @@ try {
   ok('no name rule claims to have named the static logic', logic.seeded === 0,
      `${logic.seeded} seeded`);
   ok('a residue is still declared, not absorbed',
-     bj.blocks[0].nodes > 0 && bj.blocks[0].nodes < 200,
+     bj.blocks[0].nodes > 0 && bj.blocks[0].nodes < 40,
      `${bj.blocks[0].nodes} nodes / ${bj.blocks[0].transistors} transistors unaccounted`);
 
   ok('one block id and one seeded flag per node', blocks.nodeBlock.length === 1725);
@@ -236,6 +240,55 @@ try {
   r.yaw -= 0.6;
   r.zoom = 2.5;
   ok('zoom changes the view', differ(before, shot()) > 0.05);
+  r.zoom = 1;
+
+  // --- zoom -----------------------------------------------------------------
+  // applyZoom is the single choke point, so the clamping and the NaN refusal
+  // are asserted on it directly rather than through a gesture.
+  r.zoom = 1;
+  applyZoom(r, 1000);
+  ok('zoom clamps at the top', r.zoom === ZOOM_MAX, `${r.zoom}`);
+  applyZoom(r, 1e-6);
+  ok('zoom clamps at the bottom', r.zoom === ZOOM_MIN, `${r.zoom}`);
+  r.zoom = 2;
+  applyZoom(r, NaN);
+  ok('a NaN zoom is refused, not propagated', r.zoom === 2, `${r.zoom}`);
+  applyZoom(r, Infinity);
+  ok('an infinite zoom is refused too', Number.isFinite(r.zoom) && r.zoom <= ZOOM_MAX, `${r.zoom}`);
+  r.zoom = 1;
+
+  // A synthetic two-finger pinch through the real handlers. This is the one
+  // gesture headless cannot produce on its own, and it is exactly where the
+  // flat renderer put NaN into the camera and blanked the die permanently --
+  // so it is driven here rather than assumed.
+  const pt = (id, x, y, type) => canvas.dispatchEvent(Object.assign(
+    new Event(type, { bubbles: true }), { pointerId: id, clientX: x, clientY: y }));
+  canvas.setPointerCapture = () => {};
+  canvas.releasePointerCapture = () => {};
+  canvas.hasPointerCapture = () => false;
+  // Attach the real handlers. The first version of this test dispatched at a
+  // canvas nobody was listening to -- every gesture assertion "passed" because
+  // nothing happened at all, which is the same shape of false pass as a slider
+  // wired to nothing.
+  wireOrbit(canvas, r);
+
+  const beforePinch = r.zoom;
+  pt(1, 300, 250, 'pointerdown');
+  pt(2, 400, 250, 'pointerdown');       // 100px apart
+  pt(2, 500, 250, 'pointermove');       // spread to 200px
+  ok('a two-finger pinch zooms', r.zoom > beforePinch * 1.5,
+     `${beforePinch} -> ${r.zoom.toFixed(2)}`);
+  ok('the camera stays finite through a pinch',
+     Number.isFinite(r.zoom) && [...r.viewProjection()].every(Number.isFinite));
+  pt(2, 500, 250, 'pointerup');
+  pt(1, 300, 250, 'pointerup');
+
+  // ...and lifting a finger must not leave the one-pointer path jumping.
+  const afterPinch = r.zoom;
+  pt(1, 300, 250, 'pointerdown');
+  pt(1, 305, 250, 'pointermove');
+  ok('zoom is untouched by a one-finger drag', r.zoom === afterPinch, `${r.zoom}`);
+  pt(1, 305, 250, 'pointerup');
   r.zoom = 1;
 
   const vp = r.viewProjection();

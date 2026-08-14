@@ -61,8 +61,14 @@
     <div class="console">
       <div class="console-bar">
         <span class="tag live">exploded · live</span>
-        <span class="bar-note">Drag to orbit · scroll to zoom</span>
+        <span class="bar-note">Drag to orbit · scroll or pinch to zoom</span>
         <div class="bar-spacer"></div>
+        <div class="ex-zoom" role="group" aria-label="Zoom">
+          <button id="ex-zoom-out" class="btn btn-icon" type="button" aria-label="Zoom out">&minus;</button>
+          <span class="ex-zoom-val mono" id="ex-zoom-val">1.0&times;</span>
+          <button id="ex-zoom-in" class="btn btn-icon" type="button" aria-label="Zoom in">+</button>
+          <button id="ex-zoom-reset" class="btn" type="button">Reset view</button>
+        </div>
         <select id="ex-program" class="mono" aria-label="Program"></select>
         <button id="ex-run" class="btn btn-primary" type="button">Run</button>
         <button id="ex-step" class="btn" type="button">Step</button>
@@ -201,10 +207,26 @@
       gates they were embedded in.
     </p>
     <p>
-      After all that, <strong>2 transistors and 91 nodes remain genuinely
-      unaccounted for</strong>. They are still on the page, still fading in the
-      middle, because the number that matters is the one nobody has an
-      explanation for.
+      After all that, <strong>two transistors and four nodes are left</strong> —
+      and they are the most interesting thing here, because they do nothing at
+      all.
+    </p>
+    <p>
+      They form two isolated structures near the top edge of the die. The first
+      is a transistor whose gate connects to nothing else on the chip: no wire
+      can drive it, so it can never switch, and its channel ties a dead-end node
+      to +5V. The second is a real transistor, gated by the pipeline clock, that
+      genuinely opens and closes every cycle — joining two nodes that connect to
+      nothing and gate nothing.
+    </p>
+    <p>
+      A node influences this chip in exactly one way: by gating a transistor.
+      Every node in both structures either gates nothing, or has no connection
+      through which anything could drive it. So they are not
+      <em>unclassified</em> so much as <strong>inert</strong> — present in the
+      photograph, absent from the computer. They are still drawn, still fading in
+      the middle at full explode, because a thing that cannot be explained is
+      worth more on the page than off it.
     </p>
     <p>
       It is worth being plain about what this is not: nobody has MOS's original

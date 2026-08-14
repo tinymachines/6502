@@ -113,8 +113,13 @@ if cov["nodesNamed"] * 2 < cov["nodesPlaced"] - logic["nodes"]:
 # ...and a residue must still be declared. A run that accounted for everything
 # would mean the honesty check on the page now shows an empty set.
 if blk["blocks"][0]["nodes"] < 1:
-    sys.exit("deploy: nothing is unclassified, which means the page's honesty "
+    sys.exit("deploy: nothing is unaccounted for, which means the page's honesty "
              "check now shows an empty set")
+# The residue is understood -- two inert structures -- and the page says so by
+# name. If it grows, something else has fallen in and that prose is now wrong.
+if blk["blocks"][0]["nodes"] > 20:
+    sys.exit(f"deploy: {blk['blocks'][0]['nodes']} nodes are unaccounted for, but the "
+             "page describes the residue as two inert structures")
 if any(b["nodes"] == 0 for b in blk["blocks"][1:]):
     empty = [b["name"] for b in blk["blocks"][1:] if b["nodes"] == 0]
     sys.exit(f"deploy: these blocks came out empty: {empty}")

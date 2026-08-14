@@ -20,7 +20,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 69 tests, bit-exact against the original. |
+| Simulation | Complete. 70 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
@@ -65,7 +65,7 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 69 tests: netlist, functional, golden,
+cargo test --workspace              # 70 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode, blocks
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
@@ -448,6 +448,16 @@ three layers read as separate.
   exactly holds the die at a constant size and makes the slider look dead;
   overshooting shrinks the chip as it comes apart. `0.72 ×` explode, found by
   looking.
+- **Camera input lives in `exploded-gl.js`, not the page glue**, so a harness can
+  attach the real handlers without booting the page. It was in `exploded.js`
+  first, and the pinch test then dispatched events at a canvas nobody was
+  listening to — every gesture assertion "passed" because nothing happened,
+  which is the same false pass as a slider wired to nothing.
+- **`applyZoom` is the only place zoom changes**, and it refuses a non-finite
+  result. Pinch state has one constructor and reads the ratio against the
+  gesture's own start rather than accumulating per event, which drifts. Zoom is
+  read back out of the renderer for the readout instead of being tracked beside
+  it, so wheel, pinch, keyboard and buttons cannot disagree.
 - **Pitch is clamped above the plane** (`0.14..1.53` rad). Metal is translucent
   and is drawn last with depth writes off, which is only correct while it is the
   near face — from underneath it sorts wrongly and the wiring vanishes behind
@@ -467,6 +477,17 @@ three layers read as separate.
 Seeded from the names on the die, grown along the wiring, then the remainder
 identified electrically: **2448 transistors in 12 functional blocks, 1060 in
 static logic, 2 unaccounted for.**
+
+**The final 2 transistors are inert, and that is the answer rather than a gap.**
+They form two isolated structures at the top edge of the die. One is a transistor
+whose gate node has *no terminals at all* — nothing in the chip can drive it, so
+it can never switch — tying a dead-end node to vcc. The other is gated by `cclk`
+and really does switch every cycle, joining two nodes that connect to nothing and
+gate nothing. A node influences the chip only by gating a transistor, so a node
+that gates nothing is provably unobservable; `the_residue_is_two_inert_structures`
+asserts exactly that rather than sampling a run. The block keeps the catch-all
+name `Unaccounted` even so, because it is where anything a broken rule stops
+matching will land — naming it after today's contents would make it lie.
 
 **The remainder was not a ragged edge — it was one thing.** The 1086 transistors
 that reached no functional block are the chip's *static gates*: the inverters and
@@ -515,6 +536,16 @@ pullup, or a terminal on vss), not by name — the die names none of them, and
   in the datapath. Affiliation is not location, so `nodeDrives` is exported as a
   separate array and `deploy.sh` refuses to publish if any non-logic node carries
   one. Moving a gate to the block it drives would be inventing a floorplan.
+- **Growth runs twice, and the second pass is narrower.** The first ran before
+  the static logic existed as a block, so 89 nodes whose only neighbour was a
+  gate output saw nothing classified and stopped — the far side of pass
+  transistors tapping a gate. The second pass joins a node only if *every*
+  classified neighbour is static logic: a majority vote there would let the logic
+  out-vote the functional blocks on sheer count and hollow them out.
+- **Static-logic membership has two tiers and the test says so.** 587 nodes carry
+  the signature (a pullup, or a terminal on vss); the other 87 joined by touching
+  one that does. Asserting the signature over the whole block would claim more
+  than is true.
 - **Two name-rule bugs found by asking what was left over**, which is the reason
   to ask: only 12 of 690 leftovers had names at all, and all 12 were real misses.
   `pd0.clearIR`..`pd7.clearIR` needed the general "strip any dotted suffix" rule

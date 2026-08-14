@@ -370,6 +370,104 @@ export function computeOffsets(blocks, bounds, opts = {}) {
   return { offset, radial };
 }
 
+export const ZOOM_MIN = 0.35;
+export const ZOOM_MAX = 8;
+
+/** Multiply the zoom, clamped. The single place zoom is allowed to change. */
+export function applyZoom(r, factor) {
+  // One choke point, and it refuses a non-finite result rather than propagating
+  // it. NaN survives every comparison -- `Math.max(lo, NaN)` is NaN -- so once
+  // it reaches the camera the view is permanently blank with no way back. That
+  // is exactly how the flat renderer's pinch bug behaved.
+  const next = r.zoom * factor;
+  if (!Number.isFinite(next)) return r.zoom;
+  r.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+  return r.zoom;
+}
+
+/**
+ * Drag to orbit, wheel or pinch to zoom.
+ *
+ * Two contacts are tracked in a Map rather than a single `last`, because touch
+ * adds a second pointer and the one-pointer path would otherwise average the
+ * two into a jitter. Pinch state has exactly one constructor for the same
+ * reason the flat renderer's does: it previously had two, spelled differently,
+ * and the first move after a second finger landed put NaN into the camera.
+ */
+export function wireOrbit(canvas, r) {
+  const live = new Map();
+  let pinch = null;
+  canvas.style.touchAction = 'none';
+
+  const spread = () => {
+    const [a, b] = [...live.values()];
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+  };
+
+  canvas.addEventListener('pointerdown', (ev) => {
+    live.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    canvas.setPointerCapture(ev.pointerId);
+    if (live.size === 2) pinch = { ...spread(), zoom: r.zoom };
+  });
+
+  canvas.addEventListener('pointermove', (ev) => {
+    const prev = live.get(ev.pointerId);
+    if (!prev) return;
+    live.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+
+    if (live.size >= 2) {
+      if (!pinch) return;
+      const now = spread();
+      // Zoom is set from the ratio against the gesture's own start, not
+      // accumulated per event: accumulating drifts and never returns to where
+      // it began when the fingers do.
+      const want = pinch.zoom * (now.dist / pinch.dist);
+      applyZoom(r, want / r.zoom);
+      // ...and the midpoint moving orbits, so a two-finger drag still turns.
+      r.yaw += (now.cx - pinch.cx) * 0.004;
+      r.pitch = Math.max(0.14, Math.min(1.53, r.pitch + (now.cy - pinch.cy) * 0.004));
+      pinch.cx = now.cx;
+      pinch.cy = now.cy;
+      return;
+    }
+
+    r.yaw += (ev.clientX - prev.x) * 0.006;
+    // Clamped above the horizon on purpose. Metal is translucent and is drawn
+    // last without depth writes, which is only correct while it is the near
+    // face; letting the camera go underneath would sort it wrongly and the
+    // wiring would vanish behind the silicon.
+    r.pitch = Math.max(0.14, Math.min(1.53, r.pitch + (ev.clientY - prev.y) * 0.006));
+  });
+
+  const end = (ev) => {
+    live.delete(ev.pointerId);
+    if (live.size < 2) pinch = null;
+    if (canvas.hasPointerCapture?.(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+
+  canvas.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    applyZoom(r, Math.exp(-ev.deltaY * 0.0015));
+  }, { passive: false });
+
+  // Keyboard, so the view is reachable without a pointer at all.
+  canvas.tabIndex = 0;
+  canvas.addEventListener('keydown', (ev) => {
+    const step = { '+': 1.2, '=': 1.2, '-': 1 / 1.2, _: 1 / 1.2 }[ev.key];
+    if (step) { applyZoom(r, step); ev.preventDefault(); return; }
+    if (ev.key === '0') { r.zoom = 1; r.yaw = -0.42; r.pitch = 0.62; ev.preventDefault(); return; }
+    const turn = { ArrowLeft: -0.12, ArrowRight: 0.12 }[ev.key];
+    if (turn !== undefined) { r.yaw += turn; ev.preventDefault(); return; }
+    const tilt = { ArrowUp: -0.08, ArrowDown: 0.08 }[ev.key];
+    if (tilt !== undefined) {
+      r.pitch = Math.max(0.14, Math.min(1.53, r.pitch + tilt));
+      ev.preventDefault();
+    }
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Renderer
 // ---------------------------------------------------------------------------

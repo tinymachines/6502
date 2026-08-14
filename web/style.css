@@ -999,3 +999,8 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 .ex-b-drives .muted { font-size: .66rem; }
 .ex-block.logic { border-style: dashed; grid-column: span 2; }
 @media (max-width: 40rem) { .ex-block.logic { grid-column: span 1; } }
+
+.ex-zoom { display: flex; align-items: center; gap: .3rem; }
+.ex-zoom .btn-icon { min-width: 2rem; padding: .3rem .45rem; font-weight: 700; line-height: 1; }
+.ex-zoom-val { font-size: .7rem; color: var(--accent); min-width: 3.2em; text-align: center; }
+#ex-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

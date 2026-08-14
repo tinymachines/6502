@@ -37,6 +37,12 @@ use crate::{NodeId, Netlist, TransId};
 
 /// Nodes no rule reached. Deliberately id 0 so an unwritten byte reads as
 /// "unknown" rather than as a confident answer.
+///
+/// It currently holds four nodes and two transistors, and they are understood:
+/// see `the_residue_is_two_inert_structures` in `tests/blocks.rs`. The block
+/// keeps its catch-all name and its catch-all meaning even so, because it is
+/// where anything a broken rule stops matching will land -- naming it after
+/// today's contents would make it lie the first time something else fell in.
 pub const UNCLASSIFIED: u8 = 0;
 
 /// Rounds of connectivity growth. Each round can only reach one transistor
@@ -167,7 +173,11 @@ impl Blocks {
 /// `(name, half, blurb)`, in id order. Index into this *is* the block id, so
 /// inserting in the middle renumbers everything -- append instead.
 const DEFS: &[(&str, Half, &str)] = &[
-    ("Unclassified", Half::Unknown, "Reached by no name rule and by no growth from one."),
+    (
+        "Unaccounted",
+        Half::Unknown,
+        "Two isolated structures that cannot affect the chip at all.",
+    ),
     ("Pads & I/O", Half::Io, "The pins, and the drivers between them and the chip."),
     (
         "Instruction register",
@@ -510,6 +520,46 @@ impl Blocks {
             let pulls_down = nl.terminals_of(node).iter().any(|t| t.other == nl.vss());
             if has_pullup || pulls_down {
                 of_node[node as usize] = STATIC;
+            }
+        }
+
+        // --- growth, once more, now that the gates are seeds --------------------
+        //
+        // Growth ran before the static logic existed as a block, so a node whose
+        // only neighbour was a gate output saw nothing classified and stopped.
+        // Once the gates are identified those nodes have a seed beside them, and
+        // 89 of them turn out to be sitting on one -- the far side of a pass
+        // transistor tapping a gate output.
+        //
+        // Deliberately narrower than the first pass: a node joins only if *every*
+        // classified neighbour it has is static logic. A majority vote here would
+        // let the logic compete with the functional blocks for genuinely
+        // ambiguous nodes, and the logic would win on sheer count -- which would
+        // quietly hollow out the blocks this whole derivation exists to find.
+        for _ in 0..GROW_ROUNDS {
+            let mut changed = false;
+            let snapshot = of_node.clone();
+            for node in 0..n_nodes as NodeId {
+                if snapshot[node as usize] != UNCLASSIFIED || !nl.exists(node) || nl.is_rail(node)
+                {
+                    continue;
+                }
+                let mut saw_logic = false;
+                let mut saw_other = false;
+                for t in nl.terminals_of(node) {
+                    match snapshot[t.other as usize] {
+                        UNCLASSIFIED => {}
+                        STATIC => saw_logic = true,
+                        _ => saw_other = true,
+                    }
+                }
+                if saw_logic && !saw_other {
+                    of_node[node as usize] = STATIC;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
             }
         }
 

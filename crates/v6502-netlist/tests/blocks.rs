@@ -314,15 +314,60 @@ fn the_seeded_flag_agrees_with_the_per_block_counts() {
     assert_eq!(logic.seeded, 0, "a name rule should never place static logic");
 }
 
+/// What is left over, and *why* it is left over.
+///
+/// The residue is two structures, four nodes and two transistors, and neither
+/// structure can influence the chip. A node affects the simulation only by
+/// gating a transistor; a transistor matters only if something downstream of its
+/// channel is gated by something. Every node here fails one of those tests
+/// outright, so this is a proof rather than a sample.
+#[test]
+fn the_residue_is_two_inert_structures() {
+    let (nl, b) = setup();
+    let residue = &b.blocks[UNCLASSIFIED as usize];
+    assert_eq!(residue.nodes.len(), 4, "residue nodes");
+    assert_eq!(residue.transistors.len(), 2, "residue transistors");
+
+    for &n in &residue.nodes {
+        let gates = nl.gates_of(n).len();
+        let terms = nl.terminals_of(n).len();
+        assert!(
+            gates == 0 || terms == 0,
+            "node {n} gates {gates} transistors through {terms} terminals, so it is \
+             not obviously inert and this test is now claiming more than it checks"
+        );
+    }
+
+    // A transistor here can only move charge between nodes that gate nothing, so
+    // switching it is unobservable.
+    for &t in &residue.transistors {
+        for c in [nl.transistor_c1(t), nl.transistor_c2(t)] {
+            assert!(
+                nl.is_rail(c) || nl.gates_of(c).is_empty(),
+                "transistor {t} reaches node {c}, which gates something"
+            );
+        }
+    }
+
+    // One of the two cannot even switch: its gate has no terminals, so nothing
+    // in the chip is able to drive it.
+    let dead_gate = residue
+        .transistors
+        .iter()
+        .filter(|&&t| nl.terminals_of(nl.transistor_gate(t)).is_empty())
+        .count();
+    assert_eq!(dead_gate, 1, "expected exactly one transistor with an undriveable gate");
+}
+
 /// Coverage, stated rather than implied.
 #[test]
 fn coverage_is_what_was_measured() {
     let (nl, b) = setup();
     assert_eq!(b.unclassified_transistors(), 2, "unclassified transistors");
-    assert_eq!(b.unclassified_nodes(), 91, "unclassified nodes");
+    assert_eq!(b.unclassified_nodes(), 4, "unclassified nodes");
 
     let logic = b.block("Static logic").unwrap();
-    assert_eq!(logic.nodes.len(), 587, "static logic nodes");
+    assert_eq!(logic.nodes.len(), 674, "static logic nodes");
     assert_eq!(logic.transistors.len(), 1060, "static logic transistors");
 
     // The pass-transistor / static-gate split the die is known for. `CLAUDE.md`
@@ -341,14 +386,32 @@ fn the_static_logic_is_gates_wired_to_the_rails() {
     let logic = b.block("Static logic").unwrap();
     let pu = nl.pullups();
 
+    // Membership has two tiers, and conflating them would overstate the claim.
+    // Most nodes carry the signature outright. The rest joined by sitting on the
+    // far side of a pass transistor tapping one that does -- so the weaker tier
+    // must still touch the stronger one, never merely touch each other.
+    let members: HashSet<NodeId> = logic.nodes.iter().copied().collect();
+    let signature = |n: NodeId| {
+        pu.get(n as usize) || nl.terminals_of(n).iter().any(|t| t.other == nl.vss())
+    };
+
+    let mut by_signature = 0;
     for &n in &logic.nodes {
-        let has_pullup = pu.get(n as usize);
-        let pulls_down = nl.terminals_of(n).iter().any(|t| t.other == nl.vss());
+        if signature(n) {
+            by_signature += 1;
+            continue;
+        }
         assert!(
-            has_pullup || pulls_down,
-            "node {n} is in the static logic with neither a pullup nor a path to vss"
+            nl.terminals_of(n).iter().any(|t| members.contains(&t.other) && signature(t.other)),
+            "node {n} is in the static logic without the signature and without \
+             touching anything that has it"
         );
     }
+    assert_eq!(by_signature, 587, "nodes carrying the gate signature outright");
+    assert!(
+        by_signature * 2 > logic.nodes.len(),
+        "the block is now mostly adjacency rather than signature"
+    );
 
     // Most of its transistors are pulldowns -- that is what the block is made of.
     let pulldowns = logic

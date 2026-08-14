@@ -10,7 +10,8 @@
 
 import init, { Machine } from './pkg/v6502_wasm.js';
 import { parseLayout } from './renderer.js';
-import { ExplodedRenderer, HEIGHT_NAMES, BLOCK_COLOR } from './exploded-gl.js';
+import { ExplodedRenderer, HEIGHT_NAMES, BLOCK_COLOR, applyZoom, wireOrbit }
+  from './exploded-gl.js';
 import { PROGRAMS, LOAD_ADDR } from './programs.js';
 
 const $ = (id) => document.getElementById(id);
@@ -231,38 +232,21 @@ function wireControls() {
     toggles.append(b);
   });
 
+  // Zoom buttons. The readout is refreshed from the renderer rather than kept
+  // beside it, so wheel and pinch move the same number the buttons do -- a
+  // second copy of the zoom level would drift the moment a gesture changed it.
+  const zoomOut = () => applyZoom(r, 1 / 1.35);
+  const zoomIn = () => applyZoom(r, 1.35);
+  $('ex-zoom-in').addEventListener('click', zoomIn);
+  $('ex-zoom-out').addEventListener('click', zoomOut);
+  $('ex-zoom-reset').addEventListener('click', () => {
+    r.zoom = 1;
+    r.yaw = -0.42;
+    r.pitch = 0.62;
+  });
+
   wireOrbit($('ex-canvas'), r);
   window.addEventListener('resize', () => r.resize());
-}
-
-/** Drag to orbit, wheel to zoom. Pitch stays above the plane -- see below. */
-function wireOrbit(canvas, r) {
-  let last = null;
-  canvas.style.touchAction = 'none';
-  canvas.addEventListener('pointerdown', (ev) => {
-    last = { x: ev.clientX, y: ev.clientY };
-    canvas.setPointerCapture(ev.pointerId);
-  });
-  canvas.addEventListener('pointermove', (ev) => {
-    if (!last) return;
-    r.yaw += (ev.clientX - last.x) * 0.006;
-    // Clamped above the horizon on purpose. Metal is translucent and is drawn
-    // last without depth writes, which is only correct while it is the near
-    // face; letting the camera go underneath would sort it wrongly and the
-    // wiring would vanish behind the silicon.
-    r.pitch = Math.max(0.14, Math.min(1.53, r.pitch + (ev.clientY - last.y) * 0.006));
-    last = { x: ev.clientX, y: ev.clientY };
-  });
-  const end = (ev) => {
-    last = null;
-    if (canvas.hasPointerCapture?.(ev.pointerId)) canvas.releasePointerCapture(ev.pointerId);
-  };
-  canvas.addEventListener('pointerup', end);
-  canvas.addEventListener('pointercancel', end);
-  canvas.addEventListener('wheel', (ev) => {
-    ev.preventDefault();
-    r.zoom = Math.max(0.35, Math.min(6, r.zoom * Math.exp(-ev.deltaY * 0.0015)));
-  }, { passive: false });
 }
 
 function applyQuery() {
@@ -294,6 +278,13 @@ function tick() {
   }
   renderer.setNodeLevels(machine.nodeLevels());
   renderer.render();
+
+  // Read the zoom back out of the renderer rather than tracking it separately,
+  // so wheel, pinch, keyboard and the buttons all report the same number.
+  const z = renderer.zoom.toFixed(1) + '\u00d7';
+  const out = $('ex-zoom-val');
+  if (out.textContent !== z) out.textContent = z;
+
   state.raf = requestAnimationFrame(tick);
 }
 
