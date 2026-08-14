@@ -101,12 +101,22 @@ function diff(a, b) {
 // Drawing
 // ---------------------------------------------------------------------------
 
-const COL = 168;      // horizontal distance between a signal column and the next
-const ROW = 34;       // vertical pitch within a column
-// Room above the topmost row for the control-line labels, which sit 26px over
-// their element. Without it they render at negative y and are clipped away by
-// the viewBox -- the label is drawn, and simply not visible.
-const PAD = 46;
+// Geometry. Every drawn thing has a box, and nothing is placed without asking
+// whether that box is free -- the first version spaced columns by a constant and
+// stacked elements at the mean of their inputs, which piles a dozen switches on
+// one another whenever their inputs happen to share a row.
+const NODE_H = 22;          // pill height
+const ROW = NODE_H + 12;    // vertical pitch of signals within a column
+const EL_W = 44;            // element symbol box
+const EL_H = 32;
+const EL_LABEL = 14;        // the control name sits above its element
+const EL_V = EL_H + EL_LABEL + 6;   // minimum vertical pitch between elements
+const GAP_X = 30;           // horizontal breathing room either side of a column
+// Stub length for an input that is a power rail. Kept shorter than GAP_X so the
+// stub and its label stay inside the gap between columns instead of reaching
+// into the node pills beside them.
+const RAIL_LEAD = 22;
+const PAD = 20;
 
 function el(tag, attrs, parent) {
   const e = document.createElementNS(SVGNS, tag);
@@ -115,27 +125,99 @@ function el(tag, attrs, parent) {
   return e;
 }
 
-function draw(c) {
-  const svg = $('sch-svg');
-  svg.replaceChildren();
+/** Width of a signal's pill, from its label. */
+function boxWidth(node) {
+  return Math.max(46, nameOf(node).length * 6.6 + 14);
+}
 
-  // Columns alternate signal / element, root on the right.
-  const cols = c.levels.length;
-  const width = PAD * 2 + (cols - 1) * COL * 2 + 160;
-  const place = new Map();          // node -> {x, y}
-  let maxY = 0;
+/**
+ * Work out where everything goes, before anything is drawn.
+ *
+ * Columns are as wide as their widest label rather than a fixed constant, so a
+ * long name like `op-T0-cpx/cpy/inx/iny` pushes its neighbours over instead of
+ * running through them. Elements are then pushed apart vertically until their
+ * boxes stop touching.
+ */
+function layout(c) {
+  const place = new Map();
+  const colW = c.levels.map((nodes) => Math.max(...nodes.map(boxWidth), 46));
 
+  // Right to left: level 0 holds the root. Coordinates start at 0 and go
+  // negative; the whole thing is shifted into view once its extent is known.
+  const nodeRight = [0];
+  const elX = [];
+  for (let li = 0; li < c.levels.length; li++) {
+    elX.push(nodeRight[li] - colW[li] - GAP_X - EL_W / 2);
+    nodeRight.push(elX[li] - EL_W / 2 - GAP_X);
+  }
+
+  const tallest = Math.max(...c.levels.map((l) => (l.length - 1) * ROW), 0);
   c.levels.forEach((nodes, li) => {
-    const x = width - PAD - 80 - li * COL * 2;
-    const h = (nodes.length - 1) * ROW;
+    const top = (tallest - (nodes.length - 1) * ROW) / 2;
     nodes.forEach((n, i) => {
-      const y = PAD + Math.max(0, (maxYOf(c) - h) / 2) + i * ROW;
-      place.set(n, { x, y });
-      maxY = Math.max(maxY, y);
+      place.set(n, { x: nodeRight[li], y: top + i * ROW, w: boxWidth(n) });
     });
   });
 
-  const height = maxY + PAD * 2;
+  // Elements: start at the mean of the inputs that have a position, then
+  // separate. An element whose inputs are all rails has nothing to average, so
+  // it takes its output's row -- and several of those on one output would land
+  // on exactly the same spot without the pass below.
+  const items = [];
+  for (const e of c.elements) {
+    const out = place.get(e.out);
+    if (!out) continue;
+    const ins = e.inputs.map((n) => place.get(n)).filter(Boolean);
+    const y = ins.length ? ins.reduce((s, p) => s + p.y, 0) / ins.length : out.y;
+    items.push({ e, out, x: elX[e.level], y });
+  }
+
+  // Separate within each column. Sorting first makes one sweep enough, and
+  // re-centring afterwards stops the whole column drifting downward.
+  const byCol = new Map();
+  for (const it of items) {
+    if (!byCol.has(it.x)) byCol.set(it.x, []);
+    byCol.get(it.x).push(it);
+  }
+  for (const group of byCol.values()) {
+    group.sort((a, b) => a.y - b.y);
+    const before = group.reduce((s, g) => s + g.y, 0) / group.length;
+    for (let i = 1; i < group.length; i++) {
+      if (group[i].y - group[i - 1].y < EL_V) group[i].y = group[i - 1].y + EL_V;
+    }
+    const after = group.reduce((s, g) => s + g.y, 0) / group.length;
+    for (const g of group) g.y -= after - before;
+  }
+
+  // Everything's extent, so the drawing can be shifted into positive space with
+  // the offset baked into the coordinates rather than applied as a transform --
+  // a wrapper transform would leave the raw values negative, and the harness
+  // checks those to catch labels drawn outside the viewBox.
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const see = (x0, y0, x1, y1) => {
+    minX = Math.min(minX, x0); maxX = Math.max(maxX, x1);
+    minY = Math.min(minY, y0); maxY = Math.max(maxY, y1);
+  };
+  for (const p of place.values()) see(p.x - p.w, p.y - NODE_H / 2, p.x, p.y + NODE_H / 2);
+  for (const it of items) {
+    const railward = it.e.inputs.some((n) => !place.has(n)) ? RAIL_LEAD + 4 : 0;
+    see(it.x - EL_W / 2 - railward, it.y - EL_H / 2 - EL_LABEL - 6,
+        it.x + EL_W / 2, it.y + EL_H / 2);
+  }
+  if (!Number.isFinite(minX)) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
+
+  const dx = PAD - minX;
+  const dy = PAD - minY;
+  for (const p of place.values()) { p.x += dx; p.y += dy; }
+  for (const it of items) { it.x += dx; it.y += dy; }
+  return { place, items, width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 };
+}
+
+function draw(c) {
+  const svg = $('sch-svg');
+  svg.replaceChildren();
+  const { place, items, width, height } = layout(c);
+
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('width', width);
   svg.setAttribute('height', height);
@@ -143,55 +225,43 @@ function draw(c) {
   const wires = el('g', { class: 'sch-wires' }, svg);
   const parts = el('g', { class: 'sch-parts' }, svg);
   const labels = el('g', { class: 'sch-labels' }, svg);
-
-  // Elements sit between their inputs and their output.
   const { vss, vcc } = state.data;
-  for (const e of c.elements) {
-    const out = place.get(e.out);
-    if (!out) continue;
-    const ex = out.x - COL;
 
+  for (const { e, out, x: ex, y: ey } of items) {
     // Inputs that are rails have no pill of their own -- they are not signals
     // and do not belong in a level. They still have to be drawn: a precharge
     // transistor to Vcc is most of what a dynamic gate *is*, and dropping it
     // left the caption claiming five switches while none appeared.
-    const placed = e.inputs.map((n) => ({ node: n, pos: place.get(n) }));
-    const real = placed.filter((p) => p.pos);
-    const ey = real.length
-      ? real.reduce((s, p) => s + p.pos.y, 0) / real.length
-      : out.y;
-    for (const p of placed) {
-      if (!p.pos) p.pos = { x: ex - 54, y: ey, rail: true };
-    }
-    const ins = placed.map((p) => p.pos);
-
-    for (const p of placed) {
-      el('path', {
-        d: `M ${p.pos.x - (p.pos.rail ? 0 : 4)} ${p.pos.y} H ${ex - 26} L ${ex - 18} ${ey}`,
-        class: 'sch-wire',
-        'data-from': p.node,
-      }, wires);
-      if (p.pos.rail) {
-        const rail = p.node === vss ? 'Vss' : p.node === vcc ? 'Vcc' : '?';
-        el('line', {
-          x1: p.pos.x, y1: p.pos.y - 8, x2: p.pos.x, y2: p.pos.y + 8, class: 'sch-rail',
+    for (const n of e.inputs) {
+      const p = place.get(n);
+      if (p) {
+        el('path', {
+          d: `M ${p.x - 4} ${p.y} H ${ex - EL_W / 2 - 10} L ${ex - EL_W / 2 + 4} ${ey}`,
+          class: 'sch-wire', 'data-from': n,
         }, wires);
-        const t = el('text', { x: p.pos.x - 6, y: p.pos.y + 4, class: 'sch-rail-label' }, labels);
-        t.textContent = rail;
+      } else {
+        const rx = ex - EL_W / 2 - RAIL_LEAD;
+        el('path', { d: `M ${rx} ${ey} H ${ex - EL_W / 2 + 4}`, class: 'sch-wire' }, wires);
+        el('line', { x1: rx, y1: ey - 8, x2: rx, y2: ey + 8, class: 'sch-rail' }, wires);
+        // Below the stub rather than beside it: the space under a rail tap is
+        // always free, whereas the space to its left is the next column.
+        const t = el('text', { x: rx, y: ey + 16, class: 'sch-rail-label' }, labels);
+        t.textContent = n === vss ? 'Vss' : n === vcc ? 'Vcc' : '?';
       }
     }
-    el('path', { d: `M ${ex + 18} ${ey} H ${out.x - 62}`, class: 'sch-wire' }, wires);
+    el('path', { d: `M ${ex + EL_W / 2 - 4} ${ey} H ${out.x - out.w - 2} `
+      + `M ${out.x - out.w - 2} ${ey} V ${out.y} H ${out.x - out.w}`, class: 'sch-wire' }, wires);
 
     if (e.kind === 'switch') {
-      // A switch is drawn as a break in the wire with its control above it —
-      // which is what a pass transistor is: a gap that a control line closes.
+      // A pass transistor is a gap that a control line closes, so it is drawn
+      // as a break in the wire with its control above it.
       const g = el('g', { class: 'sch-el sch-switch', 'data-control': e.control }, parts);
       el('line', { x1: ex - 14, y1: ey, x2: ex - 4, y2: ey, class: 'sch-sw-lead' }, g);
       el('line', { x1: ex + 4, y1: ey, x2: ex + 14, y2: ey, class: 'sch-sw-lead' }, g);
       el('line', { x1: ex - 4, y1: ey - 9, x2: ex - 4, y2: ey + 9, class: 'sch-sw-plate' }, g);
       el('line', { x1: ex + 4, y1: ey - 9, x2: ex + 4, y2: ey + 9, class: 'sch-sw-plate' }, g);
-      el('line', { x1: ex, y1: ey - 22, x2: ex, y2: ey - 9, class: 'sch-sw-gate' }, g);
-      const t = el('text', { x: ex, y: ey - 26, class: 'sch-ctrl' }, labels);
+      el('line', { x1: ex, y1: ey - 20, x2: ex, y2: ey - 9, class: 'sch-sw-gate' }, g);
+      const t = el('text', { x: ex, y: ey - 24, class: 'sch-ctrl' }, labels);
       t.textContent = nameOf(e.control).replace(/^dpc-?\d*_?/, '');
       t.dataset.node = e.control;
     } else {
@@ -219,11 +289,9 @@ function draw(c) {
       'data-node': node,
       transform: `translate(${p.x},${p.y})`,
     }, parts);
-    const label = nameOf(node);
-    const w = Math.max(46, label.length * 6.6 + 14);
-    el('rect', { x: -w, y: -11, width: w, height: 22, rx: 3, class: 'sch-pill' }, g);
-    const t = el('text', { x: -w / 2, y: 4, class: 'sch-name' }, g);
-    t.textContent = label;
+    el('rect', { x: -p.w, y: -NODE_H / 2, width: p.w, height: NODE_H, rx: 3, class: 'sch-pill' }, g);
+    const t = el('text', { x: -p.w / 2, y: 4, class: 'sch-name' }, g);
+    t.textContent = nameOf(node);
     g.addEventListener('click', () => setRoot(node));
   }
 
@@ -232,10 +300,6 @@ function draw(c) {
     t.style.cursor = 'pointer';
     t.addEventListener('click', () => setRoot(Number(t.dataset.node)));
   });
-}
-
-function maxYOf(c) {
-  return Math.max(...c.levels.map((l) => (l.length - 1) * ROW), 0);
 }
 
 /** Colour the drawing from the running chip. */

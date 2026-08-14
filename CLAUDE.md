@@ -626,6 +626,23 @@ series chain three deep).
   five of them — a convincing circuit with pieces missing.
   `_schematic-test.html` compares the caption against the DOM for exactly this.
 
+- **Every drawn thing has a box, and placement asks whether the box is free.**
+  The first version spaced columns by a constant and put each element at the
+  mean of its inputs' rows, which piles a dozen switches on one spot whenever
+  their inputs share a row -- `sb0` has forty switches on it. Columns are now as
+  wide as their widest label, and elements are pushed apart within their column
+  and re-centred so the group does not drift. `_schematic-test.html` measures
+  the rendered boxes with `getBBox` and asserts no two intersect, on a compact
+  cone and on a dense one.
+- **The shift into positive space is baked into the coordinates**, not applied
+  as a wrapper `transform`. A transform would leave the raw `y` values negative
+  while looking correct, and the harness checks those to catch labels drawn
+  outside the viewBox.
+- **The archive's nav links out to `/schematic`.** `shell.header()` prefixes
+  every href with the caller's `root` (`../` from a wiki page), so absolute
+  hrefs are exempted -- otherwise the link resolves differently depending on how
+  deep the page is.
+
 #### The bit slice is a lie
 
 The expected win was collapsing eight identical bit slices into one. It does not

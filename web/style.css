@@ -1051,4 +1051,4 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 #sch-compare-out code { font-size: .68rem; background: var(--panel-2);
   border: 1px solid var(--line); border-radius: 2px; padding: .05rem .3rem; }
 .sch-rail { stroke: #6b7a99; stroke-width: 2.4; }
-.sch-rail-label { fill: #6b7a99; font: 500 8.5px var(--font-mono); text-anchor: end; }
+.sch-rail-label { fill: #6b7a99; font: 500 8.5px var(--font-mono); text-anchor: middle; }

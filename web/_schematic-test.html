@@ -120,6 +120,58 @@ try {
   }
   ok('no label is clipped above the viewBox', above === 0, `${above} above`);
 
+  // --- nothing overlaps -----------------------------------------------------
+  //
+  // The layout gives every drawn thing a box and separates on it. Measured from
+  // the rendered SVG rather than from the layout's own numbers, because the
+  // question is whether the picture is legible, not whether the arithmetic
+  // agrees with itself. getBBox is safe here: the stage is visible, and in a
+  // hidden container it would quietly return zeros and pass everything.
+  const boxes = [...svg.querySelectorAll('.sch-node, .sch-el')].map((g) => {
+    const b = g.getBBox();
+    const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') || '');
+    const dx = m ? Number(m[1]) : 0, dy = m ? Number(m[2]) : 0;
+    return { el: g, x0: b.x + dx, y0: b.y + dy, x1: b.x + b.width + dx, y1: b.y + b.height + dy };
+  });
+  ok('every drawn part has a real box', boxes.length > 0
+     && boxes.every((b) => b.x1 > b.x0 && b.y1 > b.y0), `${boxes.length} boxes`);
+
+  const hits = [];
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], b = boxes[j];
+      // A 1px tolerance: touching edges are fine, overlapping ink is not.
+      if (a.x0 < b.x1 - 1 && b.x0 < a.x1 - 1 && a.y0 < b.y1 - 1 && b.y0 < a.y1 - 1) {
+        hits.push(`${a.el.getAttribute('class')} / ${b.el.getAttribute('class')}`);
+      }
+    }
+  }
+  ok('no two parts overlap', hits.length === 0, `${hits.length}: ${hits.slice(0, 3).join(' | ')}`);
+
+  // A dense signal is the case that used to pile a dozen switches on one spot.
+  const busy = new URL(location.href);
+  document.getElementById('sch-signal').value =
+    String([...new Map(data.names.map((n, i) => [n, i])).entries()].find(([n]) => n === 'a0')[1]);
+  document.getElementById('sch-signal').dispatchEvent(new Event('change'));
+  await sleep(400);
+  const dense = [...svg.querySelectorAll('.sch-el')].map((g) => g.getBBox());
+  ok('a dense cone still draws every element', dense.length > 20, `${dense.length} elements`);
+  const denseBoxes = [...svg.querySelectorAll('.sch-node, .sch-el')].map((g) => {
+    const b = g.getBBox();
+    const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') || '');
+    const dx = m ? Number(m[1]) : 0, dy = m ? Number(m[2]) : 0;
+    return { x0: b.x + dx, y0: b.y + dy, x1: b.x + b.width + dx, y1: b.y + b.height + dy };
+  });
+  let denseHits = 0;
+  for (let i = 0; i < denseBoxes.length; i++) {
+    for (let j = i + 1; j < denseBoxes.length; j++) {
+      const a = denseBoxes[i], b = denseBoxes[j];
+      if (a.x0 < b.x1 - 1 && b.x0 < a.x1 - 1 && a.y0 < b.y1 - 1 && b.y0 < a.y1 - 1) denseHits++;
+    }
+  }
+  ok('and nothing overlaps there either', denseHits === 0, `${denseHits} overlaps`);
+  void busy;
+
   // --- depth actually deepens ----------------------------------------------
   const depth = $('sch-depth');
   depth.value = '1'; depth.dispatchEvent(new Event('input'));

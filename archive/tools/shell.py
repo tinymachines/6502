@@ -103,9 +103,18 @@ def header(root: str, links: Sequence[tuple[str, str]], active: str = "") -> str
     # quotes, and a backslash inside an f-string expression is a syntax error
     # before Python 3.12.
     current = ' aria-current="page"'
+    # An href starting with "/" or a scheme is already absolute and must not be
+    # prefixed: the archive nests two deep, so "../" in front of "/schematic"
+    # would point at a page that does not exist. Only archive-internal links are
+    # relative to `root`.
     items = "\n        ".join(
         '<a href="%s%s"%s>%s</a>'
-        % (root, href, current if label == active else "", html.escape(label))
+        % (
+            "" if href.startswith(("/", "http://", "https://")) else root,
+            href,
+            current if label == active else "",
+            html.escape(label),
+        )
         for label, href in links
     )
     return f"""<header class="site-head">
@@ -133,4 +142,7 @@ LINKS: tuple[tuple[str, str], ...] = (
     ("Wiki", "wiki/index.html"),
     ("Die photos", "gallery/index.html"),
     ("Original site", "full/index.html"),
+    # Out to the simulator. Absolute, because the archive nests two deep and a
+    # relative path would resolve differently on a wiki page than on the index.
+    ("Schematic", "/schematic"),
 )
