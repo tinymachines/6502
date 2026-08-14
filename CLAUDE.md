@@ -30,7 +30,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
-| Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. |
+| Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. Full Wayback sweep complete: 24,429 URLs, 3.01 GB. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
 
 Known gaps, all deliberate:
@@ -46,14 +46,15 @@ Known gaps, all deliberate:
   SwiftShader software rasterisation (~2–5 fps), which says nothing about a real
   device.
 - No CI. The tests and checks below are run by hand.
-- **The full Wayback drip is mid-run** (`archive/tools/drip.py`): 24,442 URLs,
-  **18,405 done / 6,024 pending / 13 failed, 2.90 GB on disk** as of this
-  checkpoint (9 of the failures are 404s and 4 are 500s — they stay pending
-  with their error and are retried on resume). Measured rate is **~15
-  URLs/min → ~27h** — the 1.5s delay is only half of it, the request itself
-  costs about as much again. Resumable and safe to leave; it detaches from the
-  session (PPID 1), so only a reboot stops it. `--status` says where it is;
-  re-running the fetch command resumes, retrying only what failed.
+- **The full Wayback drip is complete** (`archive/tools/drip.py`): 24,442 URLs
+  indexed, **24,429 fetched, 13 permanently failed, 3.01 GB on disk** across
+  23,958 distinct content blobs (471 URLs deduplicated by digest). The 13 are
+  9 × HTTP 404 and 4 × HTTP 500 — server-side and not retryable; re-running the
+  fetch retries them and they fail the same way. Measured rate held at ~15
+  URLs/min over the whole run.
+  - What it does **not** cover, and would each need their own pass: full version
+    history per URL (this took one snapshot each), and `blog.visual6502.org`,
+    which is on Blogger and therefore outside this domain index.
 
 ## Commands
 
@@ -1307,25 +1308,30 @@ bash     deploy/archive-deploy.sh                  # publish to /archive/
 
 # The completionist pass: the entire Wayback index for the domain.
 python3 archive/tools/drip.py --index              # 24,442 URLs into SQLite
-python3 archive/tools/drip.py --delay 1.5          # ~27h, resumable, Ctrl-C safe
+python3 archive/tools/drip.py --delay 1.5          # done: 24,429 of 24,442
                                                    # (nohup it: survives the session)
 python3 archive/tools/drip.py --status             # progress, ETA, failures
 ```
 
-### The drip (`drip.py`) — currently mid-run
+### The drip (`drip.py`) — complete
 
-The targeted harvest took what was known to be worth having. The drip takes the
-whole domain index — 24,442 URLs, ~2.5 GB, mostly MediaWiki navigation
-permutations and some spam pages from an old compromise — on the principle that
-the cheapest moment to collect something is before anyone has decided it matters.
-Sorting comes later; collection comes first.
+The targeted harvest took what was known to be worth having. The drip took the
+whole domain index — 24,442 URLs, mostly MediaWiki navigation permutations and
+some spam pages from an old compromise — on the principle that the cheapest
+moment to collect something is before anyone has decided it matters. Sorting
+comes later; collection comes first.
+
+It finished: **24,429 fetched, 13 permanently failed, 3.01 GB** (the estimate
+beforehand was ~2.5 GB). The 13 are 9 × 404 and 4 × 500, server-side, and a
+re-run fails on them identically.
 
 - State is **SQLite, one row per URL**, committed as it goes. A kill loses at
   most the request in flight. Failures stay pending with their error and attempt
   count, so a re-run retries only those.
 - **Digest hardlinking**: CDX carries a content digest, so a URL whose bytes we
-  already hold is linked rather than refetched. Only 2% here — these pages differ
-  in small ways — but it is free and would matter on a duplicated corpus.
+  already hold is linked rather than refetched. It deduplicated 471 of 24,442
+  (~2%) — these pages differ in small ways — but it is free and would matter on
+  a duplicated corpus.
 - **Query strings are kept in the on-disk path.** MediaWiki puts the entire page
   identity in the query string; dropping it collapses thousands of pages onto one
   file. Over-long names are truncated with a hash suffix.
