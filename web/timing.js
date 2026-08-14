@@ -56,7 +56,7 @@ function select(op) {
     + `<td class="hc">cycle ${i}</td><td class="mono">${s || '—'}</td></tr>`).join('');
 
   const name = (i) => state.data.terms[i];
-  const chip = (i) => `<a class="chip" href="decode.html?term=`
+  const chip = (i) => `<a class="chip" href="decode?term=`
     + `${encodeURIComponent(name(i) || 'irline3')}"><span class="chip-stage">`
     + `${isT0(name(i)) ? 'T0' : '·'}</span>${termLabel(name(i))}</a>`;
   const arrived = rec.arrived.map(chip).join(' ');

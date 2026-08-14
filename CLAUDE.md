@@ -87,7 +87,7 @@ cargo run -p v6502-netlist --bin export-blocks -- web/blocks.json
 cargo run -p v6502-netlist --bin export-schematic -- web/schematic.json
 cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
-python3 -m http.server 8777 --directory web        # http://localhost:8777/
+python3 tools/serve.py web 8777                    # http://localhost:8777/
 
 # Web app, production shape: content-hashed bundle + service worker into dist/
 python3 tools/build-web.py web dist
@@ -116,6 +116,13 @@ python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 and everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
 die data.
+
+**Serve `web/` with `tools/serve.py`, not `python3 -m http.server`.** The nav
+links point at bare paths (`/schematic`), which nginx resolves with
+`try_files $uri $uri.html $uri/`. The stock server does not, so every nav link
+404s and the site looks broken while every page is still present. `serve.py`
+mirrors the same three-step lookup in the same order — file, then `.html`, then
+directory — because a page has to beat a same-named directory.
 
 **Develop against `web/`, not `dist/`.** The hashed bundle exists for production
 caching; iterating through it means rebuilding for every edit, and a service

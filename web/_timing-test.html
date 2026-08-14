@@ -107,7 +107,10 @@ try {
   document.querySelector('.op-cell[data-op="32"]').click();
   const links = [...document.querySelectorAll('#detail a.chip')];
   ok('ending terms link through to Decode',
-     links.length > 0 && links.every((a) => a.getAttribute('href').startsWith('decode.html?term=')),
+     // Bare path: the pages are linked as /decode now, which nginx and
+     // tools/serve.py both resolve. Asserting the .html form here would pass
+     // while the shipped link pointed somewhere the nav no longer uses.
+     links.length > 0 && links.every((a) => a.getAttribute('href').startsWith('decode?term=')),
      `${links.length} links`);
 
   ok('the histogram is drawn', document.querySelectorAll('#histogram .bar-row').length >= 5,
