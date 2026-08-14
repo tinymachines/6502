@@ -178,6 +178,7 @@ def main() -> None:
     b.copy_hashed("programs.js")
     b.copy_hashed("exploded-gl.js")
     b.copy_hashed("blocks.json")
+    b.copy_hashed("schematic.json")
     b.copy_hashed("blueprint.json")
     b.copy_hashed("decode.json")
     b.copy_hashed("timing.json")
@@ -255,6 +256,18 @@ def main() -> None:
                        f"fetch('{b.ref('timing.json')}')", where="timing.js")
     b.emit("timing.js", tim.encode())
 
+    # 3e. schematic.js: wasm for the live state, programs for the reset vector,
+    #     and its own derived circuit.
+    sch = b.read("schematic.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+    ]:
+        sch = replace_once(sch, f"'{original}'", f"'{resolved}'", where="schematic.js")
+    sch = replace_once(sch, "fetch('schematic.json')",
+                       f"fetch('{b.ref('schematic.json')}')", where="schematic.js")
+    b.emit("schematic.js", sch.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -286,6 +299,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         exph = replace_once(exph, f'"{original}"', f'"{b.ref(original)}"', where="exploded.html")
     b.emit("exploded.html", exph.encode(), hashed=False)
+
+    schh = b.read("schematic.html").decode()
+    for original in ["style.css", "schematic.js", "version-footer.js", "site-nav.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        schh = replace_once(schh, f'"{original}"', f'"{b.ref(original)}"', where="schematic.html")
+    b.emit("schematic.html", schh.encode(), hashed=False)
 
     dech = b.read("decode.html").decode()
     for original in ["style.css", "decode.js", "version-footer.js", "site-nav.js",

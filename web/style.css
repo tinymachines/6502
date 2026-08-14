@@ -1004,3 +1004,51 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 .ex-zoom .btn-icon { min-width: 2rem; padding: .3rem .45rem; font-weight: 700; line-height: 1; }
 .ex-zoom-val { font-size: .7rem; color: var(--accent); min-width: 3.2em; text-align: center; }
 #ex-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* --- The schematic ------------------------------------------------------- */
+
+.sch-controls { display: grid; gap: .6rem .9rem; padding: .8rem 1rem;
+  border-bottom: 2px solid var(--line); background: var(--panel); }
+@media (min-width: 46rem) { .sch-controls { grid-template-columns: 1fr 1fr 1fr; align-items: end; } }
+.sch-controls .field { min-width: 0; }
+.sch-controls select, .sch-controls input[type=search] { width: 100%; min-width: 0; font-size: 16px; }
+.sch-controls input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.sch-stage { overflow: auto; background: #080c15; padding: .5rem; max-height: 68vh; }
+#sch-svg { display: block; min-width: 100%; }
+.sch-caption { margin: 0; padding: .5rem 1rem; font-size: .7rem; color: var(--muted);
+  border-top: 2px solid var(--line); }
+
+.sch-wire { stroke: #43506b; stroke-width: 1.6; fill: none; }
+.sch-body { fill: #17203a; stroke: var(--accent); stroke-width: 1.6; }
+.sch-bubble { fill: #080c15; stroke: var(--accent); stroke-width: 1.6; }
+.sch-kind { fill: #cfe3ff; font: 600 9px var(--font-mono); text-anchor: middle; }
+.sch-dynamic .sch-body { stroke: #f0a500; }
+.sch-dynamic .sch-bubble { stroke: #f0a500; }
+.sch-sw-lead { stroke: #43506b; stroke-width: 1.6; }
+.sch-sw-plate { stroke: #7f8db0; stroke-width: 2; }
+.sch-sw-gate { stroke: #7f8db0; stroke-width: 1.4; stroke-dasharray: 2 2; }
+.sch-switch.open .sch-sw-plate, .sch-switch.open .sch-sw-gate { stroke: var(--accent); }
+.sch-ctrl { fill: #8fa3c8; font: 500 8.5px var(--font-mono); text-anchor: middle; }
+.sch-ctrl:hover { fill: var(--accent); }
+
+.sch-pill { fill: #101829; stroke: #2c3a55; stroke-width: 1.4; }
+.sch-node { cursor: pointer; }
+.sch-node:hover .sch-pill { stroke: var(--accent); }
+.sch-node.root .sch-pill { stroke: var(--accent); stroke-width: 2.2; fill: #14243c; }
+.sch-node.anon .sch-pill { stroke-dasharray: 3 2; }
+.sch-node.hot .sch-pill { fill: #1d3b57; stroke: #6fd3ff; }
+.sch-name { fill: #dce9ff; font: 500 10px var(--font-mono); text-anchor: middle; }
+.sch-node.anon .sch-name { fill: #7e8db0; }
+
+.sch-compare { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center;
+  padding: .8rem 1rem; border-top: 2px solid var(--line); font-size: .8rem; }
+.sch-cmp-label { color: var(--muted); }
+.sch-compare select { font-size: 16px; }
+.sch-differ { color: #ffd166; }
+.sch-same { color: #6ee7a8; }
+#sch-compare-out { margin: 0 1rem 1rem; }
+#sch-compare-out code { font-size: .68rem; background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 2px; padding: .05rem .3rem; }
+.sch-rail { stroke: #6b7a99; stroke-width: 2.4; }
+.sch-rail-label { fill: #6b7a99; font: 500 8.5px var(--font-mono); text-anchor: end; }

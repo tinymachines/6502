@@ -41,6 +41,9 @@ cargo run --quiet -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 log "deriving the functional blocks"
 cargo run --quiet -p v6502-netlist --bin export-blocks -- web/blocks.json
 
+log "recognising the gate-level schematic"
+cargo run --quiet -p v6502-netlist --bin export-schematic -- web/schematic.json
+
 log "measuring the decode PLA"
 cargo run --release --quiet -p v6502-sim --bin export-decode -- web/decode.json
 
@@ -54,6 +57,7 @@ cargo run --release --quiet -p v6502-sim --bin export-timing -- web/timing.json
 for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/programs.js web/blueprint.html web/blueprint.js web/blueprint.json \
          web/exploded.html web/exploded.js web/exploded-gl.js web/blocks.json \
+         web/schematic.html web/schematic.js web/schematic.json \
          web/decode.html web/decode.js web/decode.json \
          web/timing.html web/timing.js web/timing.json \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
@@ -130,6 +134,26 @@ nodeblk = blk["nodeBlock"]
 stray = [n for n, d in enumerate(drives) if d and (nodeblk[n] & 0x7f) != logic["id"]]
 if stray:
     sys.exit(f"deploy: {len(stray)} non-logic nodes carry a drives attribution")
+
+# The schematic is recognised, not drawn, and the failure mode is a recogniser
+# that stops matching: it still emits a well-formed file, with every gate quietly
+# missing and every signal a dead end.
+sch = json.load(open("web/schematic.json"))
+sc = sch["counts"]
+if sc["absorbed"] + sc["switches"] != sc["transistors"]:
+    sys.exit(f"deploy: schematic accounts for {sc['absorbed']}+{sc['switches']} of "
+             f"{sc['transistors']} transistors")
+if sc["gates"] < 1000 or len(sch["gates"]) != sc["gates"]:
+    sys.exit(f"deploy: {sc['gates']} gates recognised -- the reduction has broken")
+# The precharged family holds every control line. Losing it turns the most
+# interesting signals on the chip back into dead ends, and the page says so.
+if sc["dynamic"] < 100:
+    sys.exit(f"deploy: only {sc['dynamic']} precharged gates; the control lines "
+             "will render as dead ends")
+if sc["unresolved"] > 5:
+    sys.exit(f"deploy: {sc['unresolved']} nodes failed to resolve")
+if len(sch["names"]) != 1725:
+    sys.exit("deploy: schematic.json name table is the wrong length for this die")
 
 # The decode table is measured by running the chip, so a broken run yields a
 # well-formed file full of empty results rather than an error. Insist that the

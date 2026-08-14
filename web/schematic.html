@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Schematic — the 6502 as a circuit</title>
+<meta name="description" content="Every static gate on the MOS 6502, recognised from the switch network rather than drawn: pick a signal and see the circuit that makes it.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav">
+        <a href="./#explorer">Explorer</a>
+        <a href="./#lab">Lab</a>
+        <a href="exploded.html">Exploded</a>
+        <a href="schematic.html" aria-current="page">Schematic</a>
+        <a href="blueprint.html">Blueprint</a>
+        <a href="decode.html">Decode</a>
+        <a href="timing.html">Timing</a>
+        <a href="./#credit">Credit</a>
+        <a href="archive/">Archive</a>
+      </div>
+      <a class="btn btn-primary nav-cta" href="./#explorer">Run it</a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Recognised · not drawn</p>
+    <h1>There is only<br><span class="hl">one gate.</span></h1>
+    <p class="lede">
+      NMOS builds logic exactly one way. A weak pullup holds a wire high, and a
+      network of transistors to ground can beat it. So the output goes
+      <em>low</em> when the network conducts — and every static gate on this die
+      is therefore an inverted sum of products. Transistors in parallel are the
+      ORs; transistors in series are the ANDs.
+    </p>
+    <p class="lede">
+      There is no AND gate on the 6502, and no OR. The inversion is not a
+      choice anyone made; it is what happens when a pulldown fights a pullup.
+      That single rule is enough to recognise every gate on the chip.
+    </p>
+    <div class="statbar" id="sch-stats">…</div>
+  </section>
+
+  <section class="wrap" id="view">
+    <div class="console">
+      <div class="console-bar">
+        <span class="tag live">schematic · live</span>
+        <span class="bar-note">Click any signal to follow it back</span>
+        <div class="bar-spacer"></div>
+        <button id="sch-run" class="btn btn-primary" type="button">Run</button>
+        <button id="sch-step" class="btn" type="button">Step</button>
+      </div>
+
+      <div id="sch-boot" class="bp-boot"><p id="sch-status">Loading the circuit…</p></div>
+
+      <div id="sch-main" hidden>
+        <div class="sch-controls">
+          <label class="field">
+            <span>Signal</span>
+            <input id="sch-filter" type="search" placeholder="filter — try “dpc”"
+                   aria-label="Filter signals">
+          </label>
+          <label class="field">
+            <span class="muted mono" id="sch-shown"></span>
+            <select id="sch-signal" size="1" aria-label="Signal"></select>
+          </label>
+          <label class="field">
+            <span>Depth <b class="mono" id="sch-depth-val">3</b></span>
+            <input id="sch-depth" type="range" min="1" max="6" value="3">
+          </label>
+        </div>
+
+        <div class="sch-stage">
+          <svg id="sch-svg" role="img" aria-label="Gate-level schematic"></svg>
+        </div>
+        <p class="sch-caption mono" id="sch-caption"></p>
+
+        <div class="sch-compare">
+          <span class="sch-cmp-label">Compare two bits of</span>
+          <select id="sch-bus" aria-label="Bus"></select>
+          <select id="sch-bit-a" aria-label="First bit">
+            <option>0</option><option>1</option><option>2</option><option>3</option>
+            <option>4</option><option>5</option><option>6</option><option>7</option>
+          </select>
+          <span class="muted">and</span>
+          <select id="sch-bit-b" aria-label="Second bit">
+            <option>0</option><option>1</option><option>2</option><option>3</option>
+            <option>4</option><option>5</option><option>6</option>
+            <option selected>7</option>
+          </select>
+          <button id="sch-compare" class="btn" type="button">Compare</button>
+        </div>
+        <div class="panel-box" id="sch-compare-out" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">What a symbol is</p>
+      <h2>Nothing here was drawn by hand.</h2>
+    </div>
+    <p class="lede">
+      Every gate on this page was found by looking at what a node is wired to.
+      A pullup with one transistor to ground is an inverter. With several in
+      parallel, a NOR. With several in series, a NAND. With both, and-or-invert —
+      which NMOS builds as easily as the simple cases, and which is why the
+      decode PLA is so compact.
+    </p>
+    <p>
+      That rule resolves every pullup node on the die but one, and the one it
+      does not is reported rather than smoothed over: a series chain three deep,
+      past what this recognises.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The half with no pullup</p>
+      <h2>The interesting signals are not held up at all.</h2>
+    </div>
+    <p>
+      Keyed on pullups alone, the most interesting signals on the chip come back
+      empty. <span class="mono">dpc3_SBX</span>,
+      <span class="mono">dpc23_SBAC</span> and <span class="mono">sync</span>
+      have no pullup, and the first version of this page showed them as dead
+      ends — a control line with nothing behind it.
+    </p>
+    <p>
+      They are <strong>precharged</strong>. A clocked transistor pulls the node
+      up, and the pulldown network either discharges it or leaves it holding its
+      charge for the rest of the cycle. Same sum-of-products shape, different way
+      of being held high, and <strong>150 nodes work this way</strong> — including
+      every control line the datapath obeys. It is the same dynamic storage the
+      simulator models as a charged node, and the reason this chip has a
+      <em>minimum</em> clock speed as well as a maximum: stop it too long and the
+      charge, which is the state, leaks away.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The thing we expected and did not find</p>
+      <h2>The bit slice is a lie.</h2>
+    </div>
+    <p class="lede">
+      A datapath is supposed to be eight copies of one circuit. This one looks
+      like it: the Blueprint shows bit index running cleanly down the die with
+      each unit holding its column. The obvious next step is to draw one bit and
+      write “×8”.
+    </p>
+    <p>
+      It does not survive contact with the wiring. Running structural refinement
+      over the whole netlist — pure graph shape, no names — puts
+      <strong>every bit of every bus in its own class</strong>. Not one bus
+      collapses. Compare any two bits above and the differences have names:
+      bit 7 of the special bus is opened by <span class="mono">ADDSB7</span>
+      while bits 0–6 share <span class="mono">ADDSB06</span>, because bit 7 is
+      where the shifter is. <span class="mono">adh</span> carries constant
+      generators on two bits and not the others. The carry chain links each bit
+      to its neighbour, so no bit sees the same thing as any other.
+    </p>
+    <p>
+      <strong>The datapath is geometrically regular and electrically
+      irregular.</strong> The regularity is in the layout, which is what made it
+      buildable by hand; the irregularity is the design. Collapsing the picture
+      to one slice would have hidden exactly the parts that make the chip work.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">Coverage</p>
+      <h2>What this accounts for.</h2>
+    </div>
+    <p>
+      <strong>1168 symbols absorb 2684 of 3510 transistors</strong>; the
+      remaining 826 stay as switches, because that is what they are — the die
+      uses them to steer signals, not to compute with them. The two numbers add
+      to exactly 3510, which is checked rather than assumed: an earlier version
+      summed the per-gate lists and reported 3517, having double-counted twelve
+      pulldowns that genuinely belong to two gates at once.
+    </p>
+    <p>
+      A switch's control line is drawn as a label rather than followed. Expanding
+      it would be honest and useless: <span class="mono">cclk</span> alone gates
+      273 transistors, so following controls pulls the entire clock tree into
+      view within two levels and buries the signal you asked about. Click a
+      control line to make it the subject instead.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="schematic.js"></script>
+<script type="module" src="site-nav.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!doctype html>
+<!--
+  Development harness, never shipped.
+
+  The schematic's claim is that every symbol on it is a real structure on the
+  die. A drawing routine that quietly skips something it cannot place still
+  produces a convincing circuit -- which is exactly what happened here: switches
+  whose far side was a power rail were dropped, and the caption went on
+  reporting five of them while none appeared. So the checks below compare what
+  the caption *says* against what is actually in the DOM, and re-derive the
+  cone independently of the page's own walk.
+
+    http://localhost:8777/_schematic-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<link rel="stylesheet" href="style.css">
+</head><body style="margin:0">
+
+<div id="sch-boot"><p id="sch-status">…</p></div>
+<div id="sch-main" hidden>
+  <div class="sch-controls">
+    <input id="sch-filter" type="search"><span id="sch-shown"></span>
+    <select id="sch-signal"></select>
+    <input id="sch-depth" type="range" min="1" max="6" value="3"><b id="sch-depth-val"></b>
+  </div>
+  <div class="sch-stage"><svg id="sch-svg"></svg></div>
+  <p id="sch-caption"></p>
+  <div class="sch-compare">
+    <select id="sch-bus"></select>
+    <select id="sch-bit-a"><option>0</option><option>7</option></select>
+    <select id="sch-bit-b"><option>0</option><option selected>7</option></select>
+    <button id="sch-compare" type="button">Compare</button>
+  </div>
+  <div id="sch-compare-out" hidden></div>
+  <button id="sch-run" type="button">Run</button>
+  <button id="sch-step" type="button">Step</button>
+</div>
+<div id="sch-stats"></div>
+
+<script type="module">
+import './schematic.js';
+
+const results = [];
+const ok = (name, cond, detail) =>
+  results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const $ = (id) => document.getElementById(id);
+
+try {
+  for (let i = 0; i < 300 && $('sch-main').hidden; i++) await sleep(50);
+  ok('page booted', !$('sch-main').hidden, $('sch-status').textContent);
+
+  const data = await (await fetch('schematic.json')).json();
+  const c = data.counts;
+
+  // --- the derivation, as shipped ------------------------------------------
+  ok('gate counts sum to the gate total',
+     c.inverter + c.nor + c.nand + c.aoi + c.dynamic === c.gates,
+     `${c.gates} gates`);
+  ok('gates and switches account for every transistor',
+     c.absorbed + c.switches === c.transistors,
+     `${c.absorbed} + ${c.switches} = ${c.absorbed + c.switches} vs ${c.transistors}`);
+  ok('the file carries as many gates as it claims', data.gates.length === c.gates);
+  ok('and as many switches', data.switches.length === c.switches);
+  ok('a name slot per node', data.names.length === 1725);
+  ok('what did not resolve is declared',
+     Array.isArray(data.unresolved) && data.unresolved.length === c.unresolved,
+     `${c.unresolved} unresolved`);
+
+  // Every gate must have at least one term, and every literal must be a real
+  // node -- a gate with no inputs would draw as a symbol fed by nothing.
+  const badTerms = data.gates.filter(([, , , terms]) =>
+    !terms.length || terms.some((t) => !t.length || t.some((n) => n < 0 || n >= 1725)));
+  ok('every gate has real inputs', badTerms.length === 0, `${badTerms.length} bad`);
+
+  // The dynamic family is the one a pullup-keyed reading misses, and it holds
+  // the control lines. If it ever empties, they become dead ends again.
+  const dynIdx = data.kinds.indexOf('dynamic');
+  ok('the precharged family is present and populated', c.dynamic > 100, `${c.dynamic}`);
+  ok('every dynamic gate names its precharge clock',
+     data.gates.filter(([, k]) => k === dynIdx).every(([, , pre]) => pre >= 0));
+  const byName = new Map(data.names.map((n, i) => [n, i]).filter(([n]) => n));
+  const gateKind = new Map(data.gates.map(([out, k]) => [out, data.kinds[k]]));
+  for (const sig of ['dpc3_SBX', 'dpc23_SBAC', 'sync']) {
+    ok(`${sig} resolves to a precharged gate`, gateKind.get(byName.get(sig)) === 'dynamic',
+       String(gateKind.get(byName.get(sig))));
+  }
+
+  // --- the drawing matches the caption -------------------------------------
+  const svg = $('sch-svg');
+  const caption = () => $('sch-caption').textContent;
+  const parse = () => {
+    const m = /(\d+) signals, (\d+) gates, (\d+) switches/.exec(caption());
+    return m ? { signals: +m[1], gates: +m[2], switches: +m[3] } : null;
+  };
+  const drawn = () => ({
+    signals: svg.querySelectorAll('.sch-node').length,
+    gates: svg.querySelectorAll('.sch-gate').length,
+    switches: svg.querySelectorAll('.sch-switch').length,
+  });
+
+  await sleep(200);
+  let said = parse(), has = drawn();
+  ok('the caption parses', !!said, caption());
+  ok('every signal the caption counts is drawn', said.signals === has.signals,
+     `said ${said.signals}, drew ${has.signals}`);
+  ok('every gate the caption counts is drawn', said.gates === has.gates,
+     `said ${said.gates}, drew ${has.gates}`);
+  // The one that was silently false: switches to a power rail were skipped.
+  ok('every switch the caption counts is drawn', said.switches === has.switches,
+     `said ${said.switches}, drew ${has.switches}`);
+  ok('something is actually on the canvas', has.signals > 1 && has.gates + has.switches > 0);
+
+  // Nothing may be drawn off the top: the control labels sit above their
+  // element, and too little padding clips them out of the viewBox entirely.
+  const vb = svg.getAttribute('viewBox').split(/\s+/).map(Number);
+  let above = 0;
+  for (const t of svg.querySelectorAll('text')) {
+    if (Number(t.getAttribute('y')) < vb[1]) above++;
+  }
+  ok('no label is clipped above the viewBox', above === 0, `${above} above`);
+
+  // --- depth actually deepens ----------------------------------------------
+  const depth = $('sch-depth');
+  depth.value = '1'; depth.dispatchEvent(new Event('input'));
+  await sleep(120);
+  const shallow = drawn();
+  depth.value = '5'; depth.dispatchEvent(new Event('input'));
+  await sleep(220);
+  const deep = drawn();
+  ok('a deeper cone draws more', deep.signals > shallow.signals,
+     `${shallow.signals} -> ${deep.signals}`);
+  depth.value = '3'; depth.dispatchEvent(new Event('input'));
+  await sleep(150);
+
+  // --- re-rooting -----------------------------------------------------------
+  const before = caption();
+  const target = [...svg.querySelectorAll('.sch-node')].find((n) => !n.classList.contains('root'));
+  target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await sleep(200);
+  ok('clicking a signal re-roots the drawing', caption() !== before,
+     `${before} -> ${caption()}`);
+  ok('the new root is marked', svg.querySelectorAll('.sch-node.root').length === 1);
+
+  // --- the bit comparison, which is the page's central claim ---------------
+  $('sch-bus').value = 'sb';
+  $('sch-bit-a').value = '0';
+  $('sch-bit-b').value = '7';
+  $('sch-compare').click();
+  await sleep(250);
+  const out = $('sch-compare-out');
+  ok('comparing two bits reports something', !out.hidden && out.textContent.length > 20);
+  ok('sb0 and sb7 are reported as different circuits',
+     /Different circuits/.test(out.textContent), out.textContent.slice(0, 90));
+  ok('and the difference names the shifter',
+     /ADDSB7|ADDSB06/.test(out.textContent),
+     (out.textContent.match(/ADDSB\d+/g) || []).join(' ') || 'no ADDSB mentioned');
+
+  ok('stats are stated', /gates/.test($('sch-stats').textContent),
+     $('sch-stats').textContent.slice(0, 80));
+} catch (e) {
+  results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
+}
+
+document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+document.body.insertAdjacentHTML('beforeend',
+  '<pre id="out" style="color:#eaf2ff;padding:1rem;white-space:pre-wrap">'
+  + results.join('\n') + '</pre>');
+</script>
+</body></html>

@@ -20,6 +20,7 @@ use std::collections::HashMap;
 pub mod blocks;
 pub mod blueprint;
 pub mod pla;
+pub mod schematic;
 
 /// Index of a node (a set of electrically-joined polygons on the die).
 pub type NodeId = u16;

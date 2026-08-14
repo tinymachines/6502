@@ -20,11 +20,12 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 70 tests, bit-exact against the original. |
+| Simulation | Complete. 79 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
+| Schematic | Every gate recognised from the switch network. Pick a signal, see its circuit. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
@@ -65,7 +66,7 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 70 tests: netlist, functional, golden,
+cargo test --workspace              # 79 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode, blocks
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
@@ -83,6 +84,7 @@ wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
 cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 cargo run -p v6502-netlist --bin export-blocks -- web/blocks.json
+cargo run -p v6502-netlist --bin export-schematic -- web/schematic.json
 cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
 python3 -m http.server 8777 --directory web        # http://localhost:8777/
@@ -109,7 +111,7 @@ python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
 `web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/blocks.json`,
-`web/decode.json`, `web/timing.json`,
+`web/schematic.json`, `web/decode.json`, `web/timing.json`,
 `web/build-info.json`, `dist/`, the golden trace
 and everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
@@ -188,6 +190,7 @@ _handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320   # what pushes the page wider than the viewport
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
+_schematic-test.html   # does the drawing contain everything the caption claims?
 _exploded-test.html    # the exploded view: do the sliders actually move geometry?
 _blueprint-test.html   # the block diagram: drawn, bound, and no label collisions
 _decode-test.html      # the decode table, re-checked against the documented ISA
@@ -582,6 +585,55 @@ pullup, or a terminal on vss), not by name — the die names none of them, and
   a photograph, and the page says so. A boundary here is where the names and the
   wiring say one part stops.
 
+### The Schematic (`schematic.html`, `schematic.js`, `schematic.rs`)
+
+The chip as a circuit. Pick any named signal, see the gates that make it, walk
+backwards. Every symbol is recognised from the switch network; nothing is drawn
+by hand.
+
+**NMOS builds logic exactly one way, and that is the whole recognition rule.** A
+pullup holds a node high, a pulldown network to vss can beat it, so the output
+is low when the network conducts — every static gate is an inverted sum of
+products. Parallel transistors are the ORs, series are the ANDs. There is no AND
+gate and no OR gate anywhere on this die. Result: 515 inverters, 354 NORs (2–9
+inputs), 39 NANDs, 110 AOI, and **exactly one node that fails to resolve** (a
+series chain three deep).
+
+- **Keying on pullups alone misses the interesting half.** `dpc3_SBX`,
+  `dpc23_SBAC` and `sync` have no pullup flag, so the first version rendered
+  every control line as a dead end. They are **precharged**: a clocked
+  transistor pulls them to vcc and the pulldown network discharges them or
+  leaves them holding charge. 150 nodes work this way — the same dynamic storage
+  the engine models as `ChargedHigh`, and the reason the 6502 has a *minimum*
+  clock. The PLA's product terms, by contrast, really are static.
+- **A switch's control line rides on the edge and is never expanded.** `cclk`
+  gates 273 transistors; following controls pulls the whole clock tree in within
+  two levels and buries the signal that was asked about. A gate's *inputs* are
+  expanded, and must be — they are the circuit. A test asserting "no control
+  line is ever a node" conflates the two and fails on correct behaviour.
+- **Count absorbed transistors as a set.** Summing the per-gate lists gives 3517
+  against a die of 3510, because twelve pulldowns genuinely belong to two gates
+  at once. A total larger than the chip is how that was noticed.
+- **The drawing must contain everything the caption counts.** Switches whose far
+  side is a power rail were silently skipped while the caption went on reporting
+  five of them — a convincing circuit with pieces missing.
+  `_schematic-test.html` compares the caption against the DOM for exactly this.
+
+#### The bit slice is a lie
+
+The expected win was collapsing eight identical bit slices into one. It does not
+exist. Iterative structural refinement over the whole netlist — pure graph shape,
+no names — **diverges**: 787 nodes share a class after one round, 29 after six,
+and every bit of every bus lands in its own class. Comparing cones says the same
+thing with names attached: `sb7` is opened by `dpc19_ADDSB7` where `sb0..6`
+share `dpc20_ADDSB06`, because bit 7 is the shifter; `adh` carries constant
+generators on two bits only; the carry chain links each bit to its neighbour.
+
+**The datapath is geometrically regular and electrically irregular.** Blueprint
+measures the geometric regularity (bit index runs down the die); this measures
+the electrical irregularity. Drawing one slice and writing "×8" would have
+hidden precisely the parts that make the chip work.
+
 ### The Blueprint (`blueprint.html`, `blueprint.js`, `blueprint.rs`)
 
 An idealised block diagram of the datapath, on its own page. The die view shows
@@ -657,7 +709,9 @@ drawn switch through the netlist instead of taking the blueprint's word for it �
 that is what makes the picture a derivation rather than an illustration.
 
 **It states its own coverage: 159 of 3510 transistors.** The bus fabric is a
-small slice of a chip that is 76% pass transistors, and the static gates, the
+small slice of a chip that is **71% pulldowns and only 22% pass transistors**
+(measured: 2493 / 783 / 234 vcc-connected, and an earlier version of this file
+claimed 76% pass, which is close to the reverse), and the static gates, the
 decode PLA, the timing chain and the pads are all outside what a bus diagram can
 honestly show. An idealised view that hides how much it idealised is the same
 failure as an archive that hides its gaps, so the number is on the page.

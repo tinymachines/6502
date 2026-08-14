@@ -14,6 +14,9 @@ __pycache__/
 # cargo run -p v6502-netlist --bin export-blocks -- web/blocks.json
 /web/blocks.json
 
+# cargo run -p v6502-netlist --bin export-schematic -- web/schematic.json
+/web/schematic.json
+
 # cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 /web/decode.json
 
