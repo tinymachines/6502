@@ -45,7 +45,9 @@ Known gaps, all deliberate:
   device.
 - No CI. The tests and checks below are run by hand.
 - **The full Wayback drip is mid-run** (`archive/tools/drip.py`): 24,442 URLs,
-  ~2.5 GB, roughly 7,200 fetched as of this checkpoint. Measured rate is **~15
+  **18,405 done / 6,024 pending / 13 failed, 2.90 GB on disk** as of this
+  checkpoint (9 of the failures are 404s and 4 are 500s — they stay pending
+  with their error and are retried on resume). Measured rate is **~15
   URLs/min → ~27h** — the 1.5s delay is only half of it, the request itself
   costs about as much again. Resumable and safe to leave; it detaches from the
   session (PPID 1), so only a reboot stops it. `--status` says where it is;
