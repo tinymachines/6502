@@ -50,6 +50,7 @@ async function boot() {
       blocks: blocksJson.blocks,
       coverage: blocksJson.coverage,
       nodeBlock: new Uint8Array(blocksJson.nodeBlock),
+      nodeDrives: new Uint8Array(blocksJson.nodeDrives),
       transistorBlock: new Uint16Array(blocksJson.transistorBlock),
       transistorGate: new Uint16Array(blocksJson.transistorGate),
     };
@@ -98,21 +99,50 @@ function loadProgram(index) {
 function buildLegend(blocks) {
   const el = $('ex-legend');
   el.replaceChildren();
+
+  // For the static logic, what its gates feed. This is the answer to "what is
+  // all the rest of it", so it belongs on the card rather than buried.
+  const drivenTally = new Map();
+  let unattributed = 0;
+  const logic = blocks.blocks.find((b) => b.half === 'logic');
+  if (logic) {
+    for (let n = 0; n < blocks.nodeBlock.length; n++) {
+      if ((blocks.nodeBlock[n] & 0x7f) !== logic.id) continue;
+      const d = blocks.nodeDrives[n];
+      if (d) drivenTally.set(d, (drivenTally.get(d) || 0) + 1);
+      else unattributed++;
+    }
+  }
+
   for (const b of blocks.blocks) {
     const row = document.createElement('button');
     row.type = 'button';
-    row.className = 'ex-block' + (b.id === 0 ? ' ghost' : '');
+    row.className = 'ex-block'
+      + (b.id === 0 ? ' ghost' : '')
+      + (b.half === 'logic' ? ' logic' : '');
     row.dataset.block = String(b.id);
     row.dataset.half = b.half;
     const named = b.nodes ? Math.round((100 * b.seeded) / b.nodes) : 0;
     const c = BLOCK_COLOR[b.id] || [0.5, 0.5, 0.5];
     const swatch = `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
     row.style.setProperty('--block-color', swatch);
+
+    let extra = '';
+    if (b.half === 'logic') {
+      const top = [...drivenTally.entries()]
+        .sort((x, y) => y[1] - x[1])
+        .slice(0, 4)
+        .map(([id, n]) => `${blocks.blocks[id].name} ${n}`)
+        .join(' · ');
+      extra = `<span class="ex-b-drives">Drives: ${top}`
+        + `<br><span class="muted">${unattributed} feed no single block</span></span>`;
+    }
+
     row.innerHTML =
       `<span class="ex-b-name"><i class="ex-sw"></i>${b.name}</span>`
       + `<span class="ex-b-meta">${b.transistors} transistors`
-      + (b.id === 0 ? '' : ` · ${named}% named`) + `</span>`
-      + `<span class="ex-b-blurb">${b.blurb}</span>`;
+      + (b.id === 0 || b.half === 'logic' ? '' : ` · ${named}% named`) + `</span>`
+      + `<span class="ex-b-blurb">${b.blurb}</span>` + extra;
     row.onclick = () => setFocus(state.focus === b.id ? -1 : b.id);
     el.append(row);
   }
@@ -120,9 +150,13 @@ function buildLegend(blocks) {
 
 function buildStats(blocks) {
   const c = blocks.coverage;
+  const logic = blocks.blocks.find((b) => b.half === 'logic');
+  const functional = c.transistorsPlaced - (logic ? logic.transistors : 0);
   $('ex-stats').textContent =
-    `${blocks.blocks.length - 1} blocks · ${c.transistorsPlaced} of ${c.transistors} transistors placed `
-    + `· ${c.nodesNamed} nodes named by the die · ${c.transistors - c.transistorsPlaced} unclassified`;
+    `${functional} transistors in 12 functional blocks · `
+    + `${logic ? logic.transistors : 0} in static logic · `
+    + `${c.transistors - c.transistorsPlaced} unaccounted · `
+    + `${c.nodesNamed} nodes named by the die`;
 }
 
 function setFocus(id) {

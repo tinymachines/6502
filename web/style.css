@@ -994,3 +994,8 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
   background: var(--block-color, var(--muted)); box-shadow: 0 0 0 1px rgba(0,0,0,.5) inset; }
 .ex-b-meta { font-family: var(--font-mono); font-size: .64rem; color: var(--accent); }
 .ex-b-blurb { font-size: .72rem; color: var(--muted); }
+.ex-b-drives { font-size: .7rem; color: var(--fg); margin-top: .3rem;
+  border-top: 1px dashed var(--line); padding-top: .3rem; }
+.ex-b-drives .muted { font-size: .66rem; }
+.ex-block.logic { border-style: dashed; grid-column: span 2; }
+@media (max-width: 40rem) { .ex-block.logic { grid-column: span 1; } }

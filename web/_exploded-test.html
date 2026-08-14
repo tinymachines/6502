@@ -42,6 +42,7 @@ try {
     blocks: bj.blocks,
     coverage: bj.coverage,
     nodeBlock: new Uint8Array(bj.nodeBlock),
+    nodeDrives: new Uint8Array(bj.nodeDrives),
     transistorBlock: new Uint16Array(bj.transistorBlock),
     transistorGate: new Uint16Array(bj.transistorGate),
   };
@@ -63,9 +64,17 @@ try {
      bj.coverage.transistors === sumT && bj.coverage.nodes === sumN
      && bj.coverage.transistorsPlaced === sumT - bj.blocks[0].transistors,
      JSON.stringify(bj.coverage));
-  ok('the gap is declared rather than hidden',
-     bj.blocks[0].transistors > 0 && bj.blocks[0].transistors < sumT / 2,
-     `${bj.blocks[0].transistors} unclassified`);
+  // The remainder is now named -- it is the static logic -- but the residue
+  // after that must still be visible, or the page has quietly stopped saying
+  // what it cannot explain.
+  const logic = bj.blocks.find((b) => b.half === 'logic');
+  ok('the static logic is identified as its own block', !!logic && logic.transistors > 500,
+     logic ? `${logic.transistors} transistors` : 'MISSING');
+  ok('no name rule claims to have named the static logic', logic.seeded === 0,
+     `${logic.seeded} seeded`);
+  ok('a residue is still declared, not absorbed',
+     bj.blocks[0].nodes > 0 && bj.blocks[0].nodes < 200,
+     `${bj.blocks[0].nodes} nodes / ${bj.blocks[0].transistors} transistors unaccounted`);
 
   ok('one block id and one seeded flag per node', blocks.nodeBlock.length === 1725);
   ok('one block and one gate per transistor',
@@ -82,6 +91,19 @@ try {
   ok('nothing unclassified is flagged as named',
      [...blocks.nodeBlock].every((v) => !((v & 0x80) && (v & 0x7f) === 0)));
 
+  // --- what the gates drive -------------------------------------------------
+  // Recorded, but it must never be able to position anything: a quarter of
+  // these attributions point at a block the gate does not sit near.
+  ok('a drives-attribution exists per node', blocks.nodeDrives.length === 1725);
+  const attributed = [...blocks.nodeDrives].filter(Boolean).length;
+  ok('most static logic is attributed to what it feeds',
+     attributed > 300 && attributed < logic.nodes, `${attributed} of ${logic.nodes}`);
+  ok('only static logic carries an attribution',
+     [...blocks.nodeDrives].every((d, n) =>
+       !d || (blocks.nodeBlock[n] & 0x7f) === logic.id));
+  ok('an attribution never points at the logic block itself',
+     [...blocks.nodeDrives].every((d) => !d || bj.blocks[d].half !== 'logic'));
+
   // --- block placement ------------------------------------------------------
   const { offset, radial } = computeOffsets(bj.blocks, layout.bounds);
   ok('the unclassified block does not move',
@@ -90,7 +112,11 @@ try {
   ok('the pad ring expands radially instead of translating',
      radial[pads.id] === 1 && offset[pads.id * 2] === 0 && offset[pads.id * 2 + 1] === 0,
      pads.name);
-  const movers = bj.blocks.filter((b) => b.id !== 0 && b.half !== 'io');
+  ok('the static logic stays put like the unclassified remainder',
+     offset[logic.id * 2] === 0 && offset[logic.id * 2 + 1] === 0
+     && radial[logic.id] === 0,
+     `offset ${offset[logic.id * 2]},${offset[logic.id * 2 + 1]}`);
+  const movers = bj.blocks.filter((b) => b.id !== 0 && b.half !== 'io' && b.half !== 'logic');
   ok('every other block is given somewhere to go',
      movers.every((b) => Math.hypot(offset[b.id * 2], offset[b.id * 2 + 1]) > 1),
      `${movers.length} movable`);

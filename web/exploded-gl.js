@@ -36,9 +36,10 @@ const Z_BASELINE = 1.0;
 // which the three layers read as separate.
 const Z_GAP = 850.0;
 
-// Maximum blocks the shader's uniform arrays hold. `blocks.rs` emits 13
-// including the unclassified one; the ceiling is here so a mismatch fails loudly
-// at load rather than silently indexing past the end.
+// Maximum blocks the shader's uniform arrays hold. `blocks.rs` emits 14 --
+// twelve functional ones, the static logic, and the unclassified remainder.
+// The ceiling is here so a mismatch fails loudly at load rather than silently
+// indexing past the end of a uniform array.
 const MAX_BLOCKS = 16;
 
 const VERT = `#version 300 es
@@ -101,6 +102,8 @@ uniform float uDim;
 uniform vec3  uHot;
 uniform int   uFocus;        // -1 = none, else the only block drawn bright
 uniform float uGhost;        // how far the unclassified block has faded out
+uniform float uGhostLogic;   // ...and the static logic, which fades less
+uniform int   uStaticId;     // id of the static-logic block, or -1
 uniform vec3  uBlockColor[${MAX_BLOCKS}];
 uniform float uTint;         // how far to recolour by block rather than by layer
 
@@ -125,10 +128,16 @@ void main() {
   // Drawing it slightly duller is the honest rendering of a weaker claim.
   col *= mix(0.72, 1.0, vNamed);
 
-  // Block 0 is everything no rule reached. It stays where it is while the rest
-  // pulls away, and fades -- so what is left in the middle at full explode is
-  // exactly the part of the chip this page cannot account for.
+  // Two blocks stay behind while the rest pulls away, and they mean different
+  // things, so they fade by different amounts.
+  //
+  // Block 0 is what no rule reached: it fades hardest, because what is left
+  // hanging in the middle at full explode is exactly what cannot be accounted
+  // for. The static logic is identified rather than unknown, so it stays
+  // clearly visible -- it is the web of gates the functional blocks were
+  // embedded in, and seeing it left behind is the point.
   if (vBlock == 0) { a *= uGhost; col *= 0.8; }
+  else if (vBlock == uStaticId) { a *= uGhostLogic; }
 
   if (uFocus >= 0 && vBlock != uFocus) { a *= 0.14; col *= 0.5; }
 
@@ -298,13 +307,19 @@ export function computeOffsets(blocks, bounds, opts = {}) {
     const [x0, x1, y0, y1] = b.bounds;
     const w = Math.max(x1 - x0, 1);
     const h = Math.max(y1 - y0, 1);
-    // Block 0 (unclassified) and the pad ring do not translate.
-    const fixed = b.id === 0 || b.half === 'io';
+    // Three kinds of block do not translate: the unclassified remainder, the
+    // pad ring (which expands instead), and the static logic. The logic is
+    // hundreds of individual gates distributed through the whole die, so moving
+    // it as one body would carry gates to a place that has none -- and a quarter
+    // of it sits far from the block it drives, so there is no honest direction
+    // to move it in anyway.
+    const fixed = b.id === 0 || b.half === 'io' || b.half === 'logic';
     return {
       id: b.id,
       fixed,
       w,
       h,
+      radial: b.half === 'io',
       home: [b.die[0], b.die[1]],
       pos: fixed
         ? [b.die[0], b.die[1]]
@@ -348,7 +363,9 @@ export function computeOffsets(blocks, bounds, opts = {}) {
     if (it.id >= MAX_BLOCKS) continue;
     offset[it.id * 2] = it.pos[0] - it.home[0];
     offset[it.id * 2 + 1] = it.pos[1] - it.home[1];
-    radial[it.id] = it.fixed && it.id !== 0 ? 1 : 0;
+    // Only the pad ring expands. The other fixed blocks simply stay put --
+    // expanding the static logic radially would be inventing a motion for it.
+    radial[it.id] = it.radial ? 1 : 0;
   }
   return { offset, radial };
 }
@@ -374,6 +391,9 @@ export class ExplodedRenderer {
     this.explodeZ = 0;
     this.stalkAmount = 1;
     this.focus = -1;
+    // Resolved by name: the shader treats this block specially, and hardcoding
+    // an id would silently mistint some other block if the table were reordered.
+    this.staticId = blocks.blocks.findIndex((x) => x.half === 'logic');
     this.yaw = -0.42;
     this.pitch = 0.62;
     this.zoom = 1;
@@ -556,6 +576,8 @@ export class ExplodedRenderer {
     gl.uniform1f(p.u.uRadialAmount, this.radialAmount);
     gl.uniform1i(p.u.uFocus, this.focus);
     gl.uniform1f(p.u.uGhost, ghost);
+    gl.uniform1f(p.u.uGhostLogic, 1 - 0.42 * Math.max(this.explodeXY, this.explodeZ));
+    gl.uniform1i(p.u.uStaticId, this.staticId);
     gl.uniform3fv(p.u.uBlockColor, this.blockColor);
     // Recolouring is tied to the block slider, so the layer colours own the
     // picture until the moment the blocks start to separate and need naming.
@@ -634,6 +656,9 @@ export const BLOCK_COLOR = [
   [0.75, 0.95, 0.45], // 10 status register
   [0.35, 0.62, 0.92], // 11 address latches
   [0.40, 0.92, 0.85], // 12 data bus
+  [0.58, 0.55, 0.70], // 13 static logic -- deliberately muted: it is the
+                      //    background the functional blocks sit in, and a
+                      //    loud colour here would fight all twelve of them
 ];
 
 const LAYER_STYLE = [

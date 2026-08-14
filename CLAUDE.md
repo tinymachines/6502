@@ -20,11 +20,11 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 66 tests, bit-exact against the original. |
+| Simulation | Complete. 69 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
-| Exploded | The die pulled apart: 3 physical layers, 12 functional blocks. |
+| Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
@@ -65,7 +65,7 @@ export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
 ```bash
-cargo test --workspace              # 66 tests: netlist, functional, golden,
+cargo test --workspace              # 69 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode, blocks
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
@@ -464,8 +464,20 @@ three layers read as separate.
 
 #### The blocks (`blocks.rs`)
 
-Seeded from the names on the die, grown along the wiring, and **honest about the
-remainder**: 2424 of 3510 transistors reach a block, 1086 do not.
+Seeded from the names on the die, grown along the wiring, then the remainder
+identified electrically: **2448 transistors in 12 functional blocks, 1060 in
+static logic, 2 unaccounted for.**
+
+**The remainder was not a ragged edge — it was one thing.** The 1086 transistors
+that reached no functional block are the chip's *static gates*: the inverters and
+NORs that are not pass transistors. They survive growth for a structural reason,
+not by accident. A static gate's output touches nothing but its pullup to vcc and
+its pulldown to vss, and growth refuses to cross a rail — so no path exists from
+a named wire to a gate output however close together they sit. Measured: **511
+islands, the largest holding three nodes, 447 of them a single node**, and 856 of
+their 1060 transistors are pulldowns. They are identified by that signature (a
+pullup, or a terminal on vss), not by name — the die names none of them, and
+`deploy.sh` fails if a name rule ever starts matching one.
 
 - **The seeds are a name table written from a dump of every name the trace
   carries**, not from what a 6502 is supposed to contain. This works because the
@@ -489,11 +501,26 @@ remainder**: 2424 of 3510 transistors reach a block, 1086 do not.
 - **Seeded and grown are published separately** (`was_seeded`, bit 7 of
   `nodeBlock`) and drawn at different brightness, because they are different
   strengths of claim. Decode PLA is 95% named; Status register is 40%.
-- **The unclassified block does not move and does not vanish.** It stays put and
-  fades while everything else pulls away, so what hangs in the middle at full
-  explode is exactly what the page cannot account for. `deploy.sh` fails if it
-  ever empties — a run that classified everything would mean the honesty check
-  now shows an empty set.
+- **Neither the static logic nor the unclassified residue translates**, and they
+  fade by different amounts: the residue hardest (it is unknown), the logic less
+  (it is identified). What lifts away at full explode is the functional blocks;
+  what stays is the web of gates they were embedded in. `deploy.sh` fails if the
+  residue ever empties — a run that accounted for everything would mean the
+  honesty check now shows an empty set.
+- **A gate is attributed to the block it drives, and that never positions it.**
+  351 of the 587 logic nodes have ≥75% of their fan-out in one block (iterated,
+  converging in five rounds); the other 236 feed no single block. But **a quarter
+  of the attributions sit more than 3000 die units from what they drive** —
+  correctly, since control signals are generated beside the decoder and consumed
+  in the datapath. Affiliation is not location, so `nodeDrives` is exported as a
+  separate array and `deploy.sh` refuses to publish if any non-logic node carries
+  one. Moving a gate to the block it drives would be inventing a floorplan.
+- **Two name-rule bugs found by asking what was left over**, which is the reason
+  to ask: only 12 of 690 leftovers had names at all, and all 12 were real misses.
+  `pd0.clearIR`..`pd7.clearIR` needed the general "strip any dotted suffix" rule
+  rather than an enumerated list of known suffixes, and the adder's per-bit carry
+  terms are `(AxB1).C01` — the bit index is *inside* the parentheses, so a rule
+  reading `(AxB)` missed the four nodes carrying between bit pairs.
 - The blocks are checked for **spatial coherence** rather than taken on trust: a
   block whose nodes scattered across the die would explode into confetti. All
   except the pad ring have RMS spread < 0.25 of the die diagonal.

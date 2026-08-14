@@ -81,29 +81,50 @@ if bp["coverage"]["transistorsDrawn"] < 100:
 # node has quietly fallen into "unclassified" and the exploded view has nothing
 # to pull apart. Insist the seeds still land.
 blk = json.load(open("web/blocks.json"))
-if len(blk["blocks"]) < 10:
+if len(blk["blocks"]) < 12:
     sys.exit(f"deploy: only {len(blk['blocks'])} functional blocks derived")
-if len(blk["nodeBlock"]) != 1725 or len(blk["transistorBlock"]) != 3510:
-    sys.exit("deploy: blocks.json tables are the wrong length for this die")
-if len(blk["transistorGate"]) != 3510:
-    sys.exit("deploy: blocks.json is missing a gate for every transistor")
+for arr, want in [("nodeBlock", 1725), ("nodeDrives", 1725),
+                  ("transistorBlock", 3510), ("transistorGate", 3510)]:
+    if len(blk[arr]) != want:
+        sys.exit(f"deploy: blocks.json {arr} has {len(blk[arr])} entries, expected {want}")
 cov = blk["coverage"]
-if cov["transistorsPlaced"] < 2000:
-    sys.exit(f"deploy: blocks place only {cov['transistorsPlaced']} of "
-             f"{cov['transistors']} transistors -- the name rules have drifted")
-# Most of what is placed must be *named* rather than inferred. If growth ever
-# starts carrying the result, the picture is no longer the die describing itself.
-if cov["nodesNamed"] * 2 < cov["nodesPlaced"]:
-    sys.exit(f"deploy: only {cov['nodesNamed']} of {cov['nodesPlaced']} placed "
-             "nodes are named; growth is doing the work")
-# ...and the gap must still be declared. A run that classified everything would
-# mean the unclassified block had silently vanished from the page.
-if blk["blocks"][0]["transistors"] < 1:
-    sys.exit("deploy: nothing is unclassified, which means the honesty check "
-             "on the exploded page now shows an empty set")
+logic = next((b for b in blk["blocks"] if b["half"] == "logic"), None)
+if logic is None:
+    sys.exit("deploy: the static logic block is missing from blocks.json")
+functional = cov["transistorsPlaced"] - logic["transistors"]
+if functional < 2000:
+    sys.exit(f"deploy: only {functional} transistors reach a functional block -- "
+             "the name rules have drifted")
+# The static logic is identified by an electrical signature, not by name, so it
+# must never be seeded. If it ever is, a name rule has started matching gates.
+if logic["seeded"] != 0:
+    sys.exit(f"deploy: {logic['seeded']} static-logic nodes were name-seeded")
+# It should be roughly the non-pass-transistor share of the chip. A collapse here
+# means the pullup/vss signature stopped matching and the block emptied out.
+if not (0.20 <= logic["transistors"] / cov["transistors"] <= 0.40):
+    sys.exit(f"deploy: static logic is {logic['transistors']} of {cov['transistors']} "
+             "transistors, which is outside the plausible range for static gates")
+# Most of what lands in a functional block must be *named* rather than inferred.
+# Static logic is excluded: the die names none of it, by design.
+if cov["nodesNamed"] * 2 < cov["nodesPlaced"] - logic["nodes"]:
+    sys.exit(f"deploy: only {cov['nodesNamed']} named of "
+             f"{cov['nodesPlaced'] - logic['nodes']} in functional blocks; "
+             "growth is doing the work")
+# ...and a residue must still be declared. A run that accounted for everything
+# would mean the honesty check on the page now shows an empty set.
+if blk["blocks"][0]["nodes"] < 1:
+    sys.exit("deploy: nothing is unclassified, which means the page's honesty "
+             "check now shows an empty set")
 if any(b["nodes"] == 0 for b in blk["blocks"][1:]):
     empty = [b["name"] for b in blk["blocks"][1:] if b["nodes"] == 0]
     sys.exit(f"deploy: these blocks came out empty: {empty}")
+# The drives attribution must never be able to position anything, so it may only
+# ever be set on static logic.
+drives = blk["nodeDrives"]
+nodeblk = blk["nodeBlock"]
+stray = [n for n, d in enumerate(drives) if d and (nodeblk[n] & 0x7f) != logic["id"]]
+if stray:
+    sys.exit(f"deploy: {len(stray)} non-logic nodes carry a drives attribution")
 
 # The decode table is measured by running the chip, so a broken run yields a
 # well-formed file full of empty results rather than an error. Insist that the

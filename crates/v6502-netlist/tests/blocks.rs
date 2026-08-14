@@ -12,7 +12,7 @@
 
 use std::collections::HashSet;
 
-use v6502_netlist::blocks::{classify_name, Blocks, Half, UNCLASSIFIED};
+use v6502_netlist::blocks::{classify_name, Block, Blocks, Half, UNCLASSIFIED};
 use v6502_netlist::blueprint::{centroid, Blueprint};
 use v6502_netlist::{NodeId, Netlist};
 
@@ -220,7 +220,9 @@ fn growth_does_not_let_the_decoder_swallow_the_chip() {
 fn blocks_are_places_on_the_die() {
     let (_, b) = setup();
     for blk in &b.blocks {
-        if blk.id == UNCLASSIFIED || blk.name == "Pads & I/O" || blk.nodes.is_empty() {
+        if blk.id == UNCLASSIFIED || blk.name == "Pads & I/O" || blk.nodes.is_empty()
+            || blk.half == Half::Logic
+        {
             continue;
         }
         let s = spread(blk);
@@ -290,45 +292,160 @@ fn the_seeded_flag_agrees_with_the_per_block_counts() {
     for n in &b.blocks[UNCLASSIFIED as usize].nodes {
         assert!(!b.was_seeded(*n), "node {n} is seeded but unclassified");
     }
-    // Overall, most of what is placed is named rather than inferred.
-    let placed: usize = b.blocks.iter().skip(1).map(|x| x.nodes.len()).sum();
-    let named: usize = b.blocks.iter().skip(1).map(|x| x.seeded).sum();
+    // Most of what lands in a *functional* block is named rather than inferred.
+    //
+    // Static logic is excluded from this ratio deliberately. The die names none
+    // of it -- a gate output is not a signal anybody had reason to label -- and
+    // it is identified by an electrical signature rather than by growth, so
+    // counting it here would make an honest identification look like the growth
+    // rule running away.
+    let functional = |x: &&Block| x.id != UNCLASSIFIED && x.half != Half::Logic;
+    let placed: usize = b.blocks.iter().filter(functional).map(|x| x.nodes.len()).sum();
+    let named: usize = b.blocks.iter().filter(functional).map(|x| x.seeded).sum();
     assert!(
         named * 2 > placed,
-        "only {named} of {placed} placed nodes are named; growth is doing too much"
+        "only {named} of {placed} nodes in functional blocks are named; \
+         growth is doing too much"
     );
+
+    // The static logic is not named at all, and that is the expected result
+    // rather than a shortfall.
+    let logic = b.block("Static logic").unwrap();
+    assert_eq!(logic.seeded, 0, "a name rule should never place static logic");
 }
 
 /// Coverage, stated rather than implied.
-///
-/// 31% of the chip reaches no block. That is not a defect to be tuned away: the
-/// unclassified nodes are speckled through both halves of the die, and folding
-/// them into whichever labelled block happens to be nearest would turn an
-/// honest gap into a confident wrong answer.
 #[test]
 fn coverage_is_what_was_measured() {
     let (nl, b) = setup();
-    let unc_t = b.unclassified_transistors();
-    let unc_n = b.unclassified_nodes();
-    assert_eq!(unc_t, 1086, "unclassified transistors");
-    assert_eq!(unc_n, 690, "unclassified nodes");
+    assert_eq!(b.unclassified_transistors(), 2, "unclassified transistors");
+    assert_eq!(b.unclassified_nodes(), 91, "unclassified nodes");
 
-    let frac = unc_t as f64 / nl.transistor_count() as f64;
-    assert!((0.30..0.32).contains(&frac), "unclassified fraction {frac:.3}");
+    let logic = b.block("Static logic").unwrap();
+    assert_eq!(logic.nodes.len(), 587, "static logic nodes");
+    assert_eq!(logic.transistors.len(), 1060, "static logic transistors");
 
-    // And it is spread through the whole chip rather than sitting in one
-    // corner, which is why it is drawn as a block in its own right.
-    let (mut lo, mut hi) = (0, 0);
-    for n in &b.blocks[UNCLASSIFIED as usize].nodes {
-        if let Some((_, y)) = centroid(*n) {
-            if y < 6000 {
-                lo += 1
-            } else {
-                hi += 1
+    // The pass-transistor / static-gate split the die is known for. `CLAUDE.md`
+    // puts the chip at roughly 76% pass transistors; the static logic found here
+    // is the other side of that, and landing in the right neighbourhood is a
+    // check on the electrical signature rather than a coincidence.
+    let frac = logic.transistors.len() as f64 / nl.transistor_count() as f64;
+    assert!((0.25..0.35).contains(&frac), "static logic is {frac:.3} of the chip");
+}
+
+/// What the static logic *is*, asserted from the electrical signature that
+/// defines it rather than from where it happened to end up.
+#[test]
+fn the_static_logic_is_gates_wired_to_the_rails() {
+    let (nl, b) = setup();
+    let logic = b.block("Static logic").unwrap();
+    let pu = nl.pullups();
+
+    for &n in &logic.nodes {
+        let has_pullup = pu.get(n as usize);
+        let pulls_down = nl.terminals_of(n).iter().any(|t| t.other == nl.vss());
+        assert!(
+            has_pullup || pulls_down,
+            "node {n} is in the static logic with neither a pullup nor a path to vss"
+        );
+    }
+
+    // Most of its transistors are pulldowns -- that is what the block is made of.
+    let pulldowns = logic
+        .transistors
+        .iter()
+        .filter(|&&t| nl.transistor_c1(t) == nl.vss() || nl.transistor_c2(t) == nl.vss())
+        .count();
+    assert!(
+        pulldowns * 10 >= logic.transistors.len() * 7,
+        "only {pulldowns} of {} static-logic transistors reach vss",
+        logic.transistors.len()
+    );
+}
+
+/// Why the static logic survives growth at all, which is the whole reason it
+/// needed identifying separately: a gate output touches nothing but its pullup
+/// and its pulldown, and growth refuses to cross a rail. So the logic is not a
+/// region that was missed -- it is hundreds of islands surrounded by power.
+#[test]
+fn the_static_logic_is_islands_not_a_region() {
+    let (nl, b) = setup();
+    let logic = b.block("Static logic").unwrap();
+    let members: HashSet<NodeId> = logic.nodes.iter().copied().collect();
+
+    let mut seen: HashSet<NodeId> = HashSet::new();
+    let mut sizes = Vec::new();
+    for &start in &logic.nodes {
+        if !seen.insert(start) {
+            continue;
+        }
+        let mut stack = vec![start];
+        let mut size = 0;
+        while let Some(n) = stack.pop() {
+            size += 1;
+            for t in nl.terminals_of(n) {
+                if members.contains(&t.other) && seen.insert(t.other) {
+                    stack.push(t.other);
+                }
             }
         }
+        sizes.push(size);
     }
-    assert!(lo > 300 && hi > 200, "unclassified should span both halves, got {lo}/{hi}");
+    sizes.sort_unstable_by(|a, c| c.cmp(a));
+    assert!(sizes.len() > 300, "expected many islands, got {}", sizes.len());
+    assert!(sizes[0] <= 12, "largest island has {} nodes -- this is a region, not gates", sizes[0]);
+
+    // ...and therefore it is scattered, which is why it does not translate when
+    // the view explodes. Moving it as one body would put gates where there are
+    // none. This is the same reasoning that exempts it from
+    // `blocks_are_places_on_the_die`.
+    assert!(spread(logic) > 0.20, "static logic is unexpectedly compact");
+}
+
+/// A gate's output feeds a functional block, and that is recorded -- but it is
+/// never used to place anything, because affiliation is not location.
+#[test]
+fn what_a_gate_drives_is_recorded_but_never_positions_it() {
+    let (_, b) = setup();
+    let logic = b.block("Static logic").unwrap();
+
+    let attributed = logic.nodes.iter().filter(|n| b.drives(**n) != UNCLASSIFIED).count();
+    assert!(attributed > 300, "only {attributed} gates could be attributed");
+
+    // Only static logic gets an attribution: a node already in a functional
+    // block does not need one, and giving it one would invite double-counting.
+    for blk in &b.blocks {
+        if blk.name == "Static logic" {
+            continue;
+        }
+        for &n in &blk.nodes {
+            assert_eq!(b.drives(n), UNCLASSIFIED, "{} node {n} was attributed", blk.name);
+        }
+    }
+
+    // An attribution never points at the static block or at nothing.
+    for &n in &logic.nodes {
+        let d = b.drives(n);
+        if d != UNCLASSIFIED {
+            assert_ne!(b.blocks[d as usize].half, Half::Logic);
+            assert_ne!(d, UNCLASSIFIED);
+        }
+    }
+
+    // A quarter of attributed gates sit a long way from what they drive, which
+    // is real -- control signals are made by the decoder and consumed in the
+    // datapath. It is also exactly why `Half::Logic` does not translate.
+    let far = logic
+        .nodes
+        .iter()
+        .filter(|n| b.drives(**n) != UNCLASSIFIED)
+        .filter_map(|n| centroid(*n).map(|c| (c, b.drives(*n))))
+        .filter(|((x, y), d)| {
+            let t = b.blocks[*d as usize].die;
+            (*x as f64 - t.0).hypot(*y as f64 - t.1) > 3000.0
+        })
+        .count();
+    assert!(far > 20, "expected some gates to sit far from what they drive, got {far}");
 }
 
 /// The two halves the transistor distribution already shows: a datapath below

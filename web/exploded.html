@@ -159,12 +159,52 @@
       rounds.
     </p>
     <p>
-      <strong>2424 of 3510 transistors reach a block. The other 1086 do not</strong>,
-      and they stay where they are, fading, while everything else pulls away.
-      What is left hanging in the middle at full explode is precisely the part of
-      the chip this page cannot account for. Nodes the die named outright are
-      drawn brighter than nodes inferred from their neighbours, because those are
-      different strengths of claim and the picture should say which it is making.
+      Nodes the die named outright are drawn brighter than nodes inferred from
+      their neighbours, because those are different strengths of claim and the
+      picture should say which one it is making.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The remainder</p>
+      <h2>The rest is the logic.</h2>
+    </div>
+    <p class="lede">
+      Twelve functional blocks account for 2448 transistors. The other 1060 are
+      not a ragged edge that resisted classification — they are one thing, and
+      the chip is built out of them: <strong>the static gates</strong>. Inverters
+      and NORs, the part of the 6502 that is not pass transistors.
+    </p>
+    <p>
+      They stayed outside the blocks for a structural reason rather than by
+      accident. A static gate's output touches nothing but its pullup to +5V and
+      its pulldown to ground, and the growth rule refuses to cross a power rail —
+      a rail touches hundreds of transistors, and crossing one would merge the
+      whole chip into a single block. So no path exists from a named wire to a
+      gate output, however close together they sit. The bus fabric is connected
+      and reachable; the logic is <strong>511 islands surrounded by power</strong>,
+      the largest holding three nodes and 447 of them a single node.
+    </p>
+    <p>
+      Which is what a logic gate looks like. They are identified here by the
+      electrical signature that defines one — a pullup, or a terminal on ground —
+      and 856 of their 1060 transistors are pulldowns, which is the other half of
+      the same fact.
+    </p>
+    <p>
+      <strong>They do not move when the blocks explode.</strong> A gate can be
+      attributed to the block it feeds, and 351 of them are, but attribution is
+      not location: a quarter of those sit more than 3000 die units from what
+      they drive, because control signals are generated beside the decoder and
+      consumed in the datapath. Moving a gate to the block it drives would be
+      inventing a floorplan. So the logic stays exactly where it is, and what you
+      see at full explode is the functional blocks lifting away from the web of
+      gates they were embedded in.
+    </p>
+    <p>
+      After all that, <strong>2 transistors and 91 nodes remain genuinely
+      unaccounted for</strong>. They are still on the page, still fading in the
+      middle, because the number that matters is the one nobody has an
+      explanation for.
     </p>
     <p>
       It is worth being plain about what this is not: nobody has MOS's original

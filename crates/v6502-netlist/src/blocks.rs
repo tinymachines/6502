@@ -44,6 +44,10 @@ pub const UNCLASSIFIED: u8 = 0;
 /// cap; it is a bound on runtime, not a tuning parameter.
 const GROW_ROUNDS: usize = 12;
 
+/// Rounds of "which block does this gate feed". Converges in five; the cap is a
+/// bound on runtime rather than a tuning parameter.
+const ATTRIBUTION_ROUNDS: usize = 8;
+
 /// Which half of the chip a block belongs to. The die really is two machines
 /// stacked -- transistors cluster below y≈5000 and above y≈7000 with a near
 /// empty band between -- so this is measured, not editorial.
@@ -56,6 +60,11 @@ pub enum Half {
     Control,
     /// The pads and the wiring out to them.
     Io,
+    /// Static gates, which sit everywhere rather than anywhere. Like
+    /// [`Half::Unknown`], these do not translate when the view explodes -- they
+    /// are distributed through both halves of the chip, so moving them as one
+    /// body would scatter them across a place they do not occupy.
+    Logic,
     /// Only [`UNCLASSIFIED`].
     Unknown,
 }
@@ -95,6 +104,7 @@ pub struct Blocks {
     of_node: Box<[u8]>,
     of_trans: Box<[u8]>,
     seeded: Box<[bool]>,
+    drives: Box<[u8]>,
 }
 
 impl Blocks {
@@ -116,6 +126,17 @@ impl Blocks {
     }
     pub fn seeded_table(&self) -> &[bool] {
         &self.seeded
+    }
+
+    /// For a static-logic node, the functional block its output feeds, or
+    /// [`UNCLASSIFIED`] if its fan-out has no clear majority.
+    ///
+    /// This says what a gate is *for*, not where it is. The two genuinely differ
+    /// here -- a control signal is generated beside the decoder and consumed in
+    /// the datapath -- so nothing should be positioned by this.
+    #[inline]
+    pub fn drives(&self, n: NodeId) -> u8 {
+        self.drives.get(n as usize).copied().unwrap_or(UNCLASSIFIED)
     }
     #[inline]
     pub fn of_transistor(&self, t: TransId) -> u8 {
@@ -163,6 +184,11 @@ const DEFS: &[(&str, Half, &str)] = &[
     ("Status register", Half::Datapath, "The flags, and the logic that sets them."),
     ("Address latches", Half::Datapath, "Assembles the address before it reaches the pads."),
     ("Data bus", Half::Datapath, "Moves bytes between the pads, the registers and the ALU."),
+    (
+        "Static logic",
+        Half::Logic,
+        "Inverters and NOR gates, wired only to the power rails.",
+    ),
 ];
 
 const PADS: u8 = 1;
@@ -177,6 +203,7 @@ const REGS: u8 = 9;
 const STATUS: u8 = 10;
 const ADDR: u8 = 11;
 const DATA: u8 = 12;
+const STATIC: u8 = 13;
 
 /// Names that decompose into `stem` + bit index. Matched on the stem, exactly:
 /// prefix matching would put `abl0` in the same place as `a0`, which is the
@@ -296,10 +323,13 @@ const PREFIX_RULES: &[(&str, u8)] = &[
     ("short-circuit-branch", INTERRUPT),
     ("short-circuit-idx", ALU),
     // The adder's intermediate logic, all named as the functions they compute.
+    // Matched on the opening bracket rather than the closed form: the carry
+    // network names its per-bit terms `(AxB1).C01`, with the bit index *inside*
+    // the parentheses, so a rule reading `(AxB)` misses the four nodes that
+    // actually carry between bit pairs.
     ("A+B", ALU),
-    ("(A+B)", ALU),
-    ("(AxB)", ALU),
-    ("(AxBxC)", ALU),
+    ("(A+B", ALU),
+    ("(AxB", ALU),
     ("A.B", ALU),
     ("DA-", ALU),
     ("aluresult", ALU),
@@ -329,15 +359,46 @@ fn undecorate(name: &str) -> &str {
     }
 }
 
+/// Where a switch sits: decided by its channel, never by its gate.
+///
+/// The gate is the control line reaching in from the decoder; `c1`/`c2` are the
+/// wires it actually joins. Filing by gate would put every datapath pass
+/// transistor under `Control pipeline` and empty the datapath of the switches
+/// that are the point of it.
+fn of_trans_block(nl: &Netlist, of_node: &[u8], t: TransId) -> u8 {
+    let (c1, c2) = (nl.transistor_c1(t), nl.transistor_c2(t));
+    let (b1, b2) = (of_node[c1 as usize], of_node[c2 as usize]);
+    match (b1, b2) {
+        (UNCLASSIFIED, b) | (b, UNCLASSIFIED) => b,
+        (a, b) if a == b => a,
+        (a, b) => {
+            // Spanning two blocks: prefer the gate's block if it is one of them,
+            // else the lower id, so the choice is stable across runs.
+            let g = of_node[nl.transistor_gate(t) as usize];
+            if g == a || g == b {
+                g
+            } else {
+                a.min(b)
+            }
+        }
+    }
+}
+
 /// Which block a name belongs to, or `None` if no rule reaches it.
 pub fn classify_name(name: &str) -> Option<u8> {
     // Try the raw name first, then the undecorated one. `#DBE` and `DBE` both
     // land on the pads; `#C01` only matches once the `#` is gone.
     for candidate in [name, undecorate(name)] {
-        // A trailing `.phi1`/`.phi2`/`.delay` marks *when* a copy is valid, not
-        // what it is: strip it and the underlying structure is named.
-        let base = candidate.split_once(".phi").map_or(candidate, |(a, _)| a);
-        let base = base.strip_suffix(".delay").unwrap_or(base);
+        // A dotted suffix qualifies a node rather than naming it: `.phi1` and
+        // `.phi2` say *when* a copy is valid, `.delay` says it is the delayed
+        // one, and `.clearIR` says which predecode line clears the instruction
+        // register. In every case the structure is named by what comes before
+        // the dot, so the general rule is to try the stem as well.
+        //
+        // Enumerating the known suffixes instead missed `pd0.clearIR`..`pd7`,
+        // which left eight predecode nodes unplaced -- they are `pd`, and the
+        // die says so.
+        let base = candidate.split_once('.').map_or(candidate, |(a, _)| a);
 
         for probe in [candidate, base] {
             if let Some(&(_, id)) = EXACT_RULES.iter().find(|(n, _)| *n == probe) {
@@ -425,6 +486,92 @@ impl Blocks {
             }
         }
 
+        // --- the static logic ------------------------------------------------
+        //
+        // What is left after growth is overwhelmingly one thing, and it is not a
+        // ragged edge: 526 islands, the largest holding four nodes, 405 of them
+        // single nodes. Those are individual logic gates.
+        //
+        // They survive growth for a structural reason rather than by accident.
+        // A static NMOS gate's output touches nothing but its pullup to vcc and
+        // its pulldown to vss, and growth refuses to cross a rail -- so no path
+        // exists from a named wire to a gate output, however close together they
+        // sit. The bus fabric is connected and reachable; the logic is 526
+        // islands surrounded by power.
+        //
+        // So this is not "the part that failed to classify". It is the 24% of
+        // the chip that is not pass transistors, identified by the electrical
+        // signature that defines it: a pullup, or a terminal on vss.
+        for node in 0..n_nodes as NodeId {
+            if of_node[node as usize] != UNCLASSIFIED || !nl.exists(node) || nl.is_rail(node) {
+                continue;
+            }
+            let has_pullup = nl.pullups().get(node as usize);
+            let pulls_down = nl.terminals_of(node).iter().any(|t| t.other == nl.vss());
+            if has_pullup || pulls_down {
+                of_node[node as usize] = STATIC;
+            }
+        }
+
+        // --- what each gate drives --------------------------------------------
+        //
+        // A gate output is not *in* a functional block, but it feeds one, and
+        // that is worth recording: it is the difference between "some logic" and
+        // "the logic that drives the program counter".
+        //
+        // Deliberately kept apart from `of_node`, and deliberately **not** used
+        // to place anything. A quarter of these attributions land more than 3000
+        // die units from the block they feed -- which is correct, since control
+        // signals are generated in the control section and consumed in the
+        // datapath, but it means affiliation is not location. Moving a gate to
+        // the block it drives would invent a floorplan.
+        let mut drives = vec![UNCLASSIFIED; n_nodes];
+        for _ in 0..ATTRIBUTION_ROUNDS {
+            let mut changed = false;
+            for node in 0..n_nodes as NodeId {
+                if of_node[node as usize] != STATIC || drives[node as usize] != UNCLASSIFIED {
+                    continue;
+                }
+                let mut tally = [0u16; 256];
+                for &t in nl.gates_of(node) {
+                    // Where the driven transistor sits, or -- once known -- what
+                    // the gate on the far side of it goes on to drive.
+                    let mut b = of_trans_block(nl, &of_node, t);
+                    if b == STATIC || b == UNCLASSIFIED {
+                        for c in [nl.transistor_c1(t), nl.transistor_c2(t)] {
+                            if drives[c as usize] != UNCLASSIFIED {
+                                b = drives[c as usize];
+                                break;
+                            }
+                        }
+                    }
+                    if b != UNCLASSIFIED && b != STATIC {
+                        tally[b as usize] += 1;
+                    }
+                }
+                let total: u16 = tally.iter().sum();
+                if total == 0 {
+                    continue;
+                }
+                let (best, count) = tally
+                    .iter()
+                    .enumerate()
+                    .skip(1)
+                    .max_by_key(|(id, &c)| (c, std::cmp::Reverse(*id)))
+                    .map(|(id, &c)| (id as u8, c))
+                    .unwrap();
+                // A clear majority only. A gate feeding three blocks equally is
+                // shared logic, and naming one of them would be a guess.
+                if count * 4 >= total * 3 {
+                    drives[node as usize] = best;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+
         // --- transistors ----------------------------------------------------
         //
         // A switch belongs where its *channel* is, not where its gate is. The
@@ -434,22 +581,7 @@ impl Blocks {
         // the switches that are the point of it.
         let mut of_trans = vec![UNCLASSIFIED; nl.transistor_count()];
         for t in 0..nl.transistor_count() as TransId {
-            let (c1, c2) = (nl.transistor_c1(t), nl.transistor_c2(t));
-            let (b1, b2) = (of_node[c1 as usize], of_node[c2 as usize]);
-            of_trans[t as usize] = match (b1, b2) {
-                (UNCLASSIFIED, b) | (b, UNCLASSIFIED) => b,
-                // Spanning two blocks: file it with the gate's block if that is
-                // one of them, else the lower id, so the choice is stable.
-                (a, b) if a == b => a,
-                (a, b) => {
-                    let g = of_node[nl.transistor_gate(t) as usize];
-                    if g == a || g == b {
-                        g
-                    } else {
-                        a.min(b)
-                    }
-                }
-            };
+            of_trans[t as usize] = of_trans_block(nl, &of_node, t);
         }
 
         // --- assemble --------------------------------------------------------
@@ -503,6 +635,7 @@ impl Blocks {
             of_node: of_node.into_boxed_slice(),
             of_trans: of_trans.into_boxed_slice(),
             seeded: seeded_flags.into_boxed_slice(),
+            drives: drives.into_boxed_slice(),
         }
     }
 
@@ -530,6 +663,7 @@ impl Blocks {
                 Half::Datapath => "datapath",
                 Half::Control => "control",
                 Half::Io => "io",
+                Half::Logic => "logic",
                 Half::Unknown => "unknown",
             };
             let _ = writeln!(
@@ -577,6 +711,17 @@ impl Blocks {
             let id = self.of_node(n as NodeId);
             let flag = if self.was_seeded(n as NodeId) { 0x80 } else { 0 };
             let _ = write!(s, "{}", id | flag);
+        }
+        // For each static-logic node, the block its output feeds. Kept as its
+        // own array rather than folded into `nodeBlock`, because it answers a
+        // different question -- what a gate is for, not where it is -- and the
+        // page must not be able to position anything by it.
+        s.push_str("],\n  \"nodeDrives\": [");
+        for n in 0..nl.node_count() {
+            if n > 0 {
+                s.push(',');
+            }
+            let _ = write!(s, "{}", self.drives(n as NodeId));
         }
         s.push_str("],\n  \"transistorBlock\": [");
         for t in 0..nl.transistor_count() {
