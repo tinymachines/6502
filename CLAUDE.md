@@ -194,6 +194,29 @@ _decode-test.html      # the decode table, re-checked against the documented ISA
 _timing-test.html      # cycle counts, re-checked against the published ones
 ```
 
+**A harness that samples state still in flight tests nothing.** `_handler-test`
+failed about one run in twenty, and the cause was not slowness: the section
+before it clicks fullscreen while `requestFullscreen` still exists, and that
+request can take arbitrarily long to be refused when there is no user
+activation. Its `setFaux(true)` then landed *after* the next "start from a known
+state" check had already read the class list, so every click from there on did
+the opposite of what it looked like and the whole section ran inverted. The fix
+is `settle()` — poll until the classes stop changing — before establishing a
+known state. Found by writing a throwaway instrumented copy that logged every
+class mutation with a timestamp; the inversion was obvious in one trace and
+invisible in the pass/fail line.
+
+Two lessons that generalise, both of which cost a round here:
+
+- **`settle()` is the wrong tool for asserting that something must *not* happen.**
+  It returns as soon as nothing is currently changing, so an assertion about a
+  commit that lands 400ms later runs before it and passes either way. Wait past
+  the event instead.
+- **A fix is not justified until the test fails without it.** The `settle()`
+  change alone cured the flake; the app-side guard was verified separately by
+  reverting it and watching the new assertion go red. Two earlier versions of
+  that assertion passed with and without the fix and were therefore worthless.
+
 **Do not test the running app inside an iframe.** Headless throttles animation
 frames in an iframe to nearly zero, so the canvas never redraws and *every*
 scenario looks broken — an entire investigation can be spent on that artifact.
@@ -772,6 +795,14 @@ instead sweeps in the terms describing the instruction's class (`op-implied`,
   canvas sized itself to the overflow (1280×1280 in a 913px window).
 - **`[hidden]` needs `!important`** here: the UA rule is specificity (0,1,0) and
   the `#boot`/`#app` rules declare `display`, so hiding them silently did nothing.
+- **Anything decided before an `await` must be rechecked after it.** The
+  fullscreen handler awaits `requestFullscreen` and then a 120ms verification
+  before committing the fallback. Without a guard that commit lands whatever the
+  reader has done in the meantime — press Escape during a slow refusal and the
+  console drags you into a fullscreen you just cancelled. `setupFullscreen` now
+  carries a `generation` counter that every committing path re-checks, and
+  Escape bumps it. Pinned by "Escape cancels a fullscreen request still in
+  flight", which fails without the guard.
 - **Frame the camera only after the canvas is visible.** It is created inside a
   hidden panel and measures 1×1 until then. `userFramed` makes this
   self-correcting rather than boot-order dependent.

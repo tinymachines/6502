@@ -368,7 +368,20 @@ function setupFullscreen() {
     paint();
   };
 
+  // Every path that can commit a state change carries the generation it was
+  // started in, and abandons if a later one has begun.
+  //
+  // This handler awaits, and anything decided before an await has to be
+  // re-checked after it. `requestFullscreen` can take arbitrarily long to
+  // settle -- in a headless browser with no user activation it may reject only
+  // after a second or more -- and the fallback then used to switch the console
+  // to faux-fullscreen long after the reader had clicked away or pressed
+  // Escape, silently reversing whatever they did next. Nothing about that is
+  // specific to headless; it is just easier to provoke there.
+  let generation = 0;
+
   btn.onclick = async () => {
+    const mine = ++generation;
     if (consoleEl.classList.contains('faux')) { setFaux(false); return; }
     if (nativeEl()) {
       const off = exit();
@@ -381,8 +394,9 @@ function setupFullscreen() {
       // resolved await proves nothing. Check whether it actually took.
       try { await on.call(consoleEl, { navigationUI: 'hide' }); } catch { /* fall through */ }
       await new Promise((r) => setTimeout(r, 120));
-      if (nativeEl()) return;
+      if (mine !== generation || nativeEl()) return;
     }
+    if (mine !== generation) return;
     setFaux(true);
   };
 
@@ -394,8 +408,13 @@ function setupFullscreen() {
   }
 
   // Real fullscreen exits itself on Escape; the fallback has to be told.
+  //
+  // Escape also bumps the generation, so a request still in flight cannot land
+  // afterwards and put the reader back into a fullscreen they just left.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && consoleEl.classList.contains('faux')) setFaux(false);
+    if (e.key !== 'Escape') return;
+    generation++;
+    if (consoleEl.classList.contains('faux')) setFaux(false);
   });
 }
 

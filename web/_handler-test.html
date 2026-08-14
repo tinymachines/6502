@@ -126,8 +126,34 @@ f.addEventListener('load', async () => {
   // exactly; the button must still fill the viewport rather than do nothing.
   const con = d.getElementById('console');
   const fsBtn = d.getElementById('btn-fullscreen');
-  if (con.classList.contains('immersive')) fsBtn.click();   // start from a known state
-  await wait(300);
+
+  /**
+   * Wait until the console's classes stop changing.
+   *
+   * The earlier `fullscreen button` step went down the native path, and
+   * `requestFullscreen` can take arbitrarily long to reject when there is no
+   * user activation -- far longer than step()'s 250ms. Reading the class list
+   * before that settles does not establish a known state, it samples one in
+   * flight: the pending commit then lands a moment later and every click from
+   * here on does the opposite of what it looks like. That inverted the whole
+   * section and failed this file about one run in twenty.
+   */
+  const settle = async () => {
+    let last = null;
+    for (let i = 0; i < 80; i++) {
+      const now = con.className + '|' + d.body.className;
+      if (now === last) return true;
+      last = now;
+      await wait(50);
+    }
+    return false;
+  };
+
+  ok('fullscreen state settles before the fallback test', await settle(),
+     `console="${con.className}"`);
+  if (con.classList.contains('immersive')) { fsBtn.click(); await settle(); }
+  ok('a known state was reached', !con.classList.contains('immersive'),
+     `console="${con.className}" body="${d.body.className}"`);
 
   delete w.Element.prototype.requestFullscreen;
   delete w.Element.prototype.webkitRequestFullscreen;
@@ -155,13 +181,44 @@ f.addEventListener('load', async () => {
   // this assertion failed roughly one run in four for exactly that reason,
   // which is worse than useless: an intermittent red that is not a bug.
   for (let i = 0; i < 60; i++) {
-    if (!con.classList.contains('immersive') && !d.body.classList.contains('no-scroll')) break;
+    // Watches exactly what the assertion below checks -- `faux` included. A
+    // poll that ignores one of them can break early and fail on it.
+    if (!con.classList.contains('immersive') && !con.classList.contains('faux')
+        && !d.body.classList.contains('no-scroll')) break;
     await wait(50);
   }
   ok('fallback exits cleanly',
      !con.classList.contains('immersive') && !con.classList.contains('faux') &&
      !d.body.classList.contains('no-scroll'),
      `console="${con.className}" body="${d.body.className}"`);
+
+  // --- a commit must not land after the reader has moved on -----------------
+  //
+  // The handler awaits, and anything decided before an await has to be
+  // rechecked after it. A slow `requestFullscreen` -- one that is eventually
+  // refused, as it is when a permissions policy forbids fullscreen -- leaves
+  // the fallback commit hanging for as long as the browser takes to answer. If
+  // the reader gives up and presses Escape in the meantime, that stale commit
+  // must not then drag them into a fullscreen they just cancelled.
+  //
+  // Restores a deliberately slow request to reach that path at all; the earlier
+  // section deleted it to imitate an iPhone.
+  con.requestFullscreen = () => new Promise((r) => setTimeout(r, 400));
+  fsBtn.click();
+  await wait(60);
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  // A fixed wait, deliberately, and NOT settle(): the whole point is a commit
+  // that has not happened yet. settle() returns as soon as nothing is currently
+  // changing -- about 100ms here -- and would run the assertion a clear 400ms
+  // before the stale commit it is supposed to catch, passing either way. The
+  // stub resolves at 400ms and the handler adds its own 120ms, so this waits
+  // past both.
+  await wait(900);
+  ok('Escape cancels a fullscreen request still in flight',
+     !con.classList.contains('immersive') && !d.body.classList.contains('no-scroll'),
+     `console="${con.className}" body="${d.body.className}"`);
+  con.requestFullscreen = undefined;
+  if (con.classList.contains('immersive')) { fsBtn.click(); await settle(); }
 
   const src = await (await fetch('app.js')).text();
   const assigns = [...src.matchAll(/lastPinch\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
