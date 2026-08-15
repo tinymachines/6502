@@ -25,7 +25,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
-| Schematic | Every gate recognised from the switch network. Pick a signal, see its circuit. |
+| Schematic | 1160 gates recognised from the switch network. Walk a signal both ways. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
@@ -46,6 +46,14 @@ Known gaps, all deliberate:
   SwiftShader software rasterisation (~2–5 fps), which says nothing about a real
   device.
 - No CI. The tests and checks below are run by hand.
+- **The schematic's walk has no history.** You can re-root by clicking, change
+  depth, and flip direction — but there is no way back to where you just were,
+  which now matters more because there are two directions to get lost in. The
+  next thing to build. Shape it is likely to take: a stack of
+  `{root, dir, depth}`, a back affordance in both the page controls and the
+  study view, `←`/`→` already taken by the clock so probably `[` `]` or
+  Backspace, and the deep link already carries the whole state (`?signal=&dir=&depth=`)
+  so an entry is just that triple.
 - **The full Wayback drip is complete** (`archive/tools/drip.py`): 24,442 URLs
   indexed, **24,429 fetched, 13 permanently failed, 3.01 GB on disk** across
   23,958 distinct content blobs (471 URLs deduplicated by digest). The 13 are
