@@ -25,6 +25,8 @@ const state = {
   depth: 3,
   compare: null,          // [nodeA, nodeB] when comparing two signals
   diffControls: null,     // control names that differ, ringed in the drawing
+  solo: false,            // fullscreen: one level, centred, nothing else
+  depthBeforeSolo: 3,
   running: false,
   raf: 0,
 };
@@ -493,6 +495,18 @@ function buildLegend() {
 // UI
 // ---------------------------------------------------------------------------
 
+/** The only place depth changes, so the slider and solo mode cannot disagree. */
+function setDepth(n) {
+  state.depth = Math.max(1, Math.min(6, n));
+  const el = $('sch-depth');
+  if (el) {
+    el.value = String(state.depth);
+    const out = $('sch-depth-val');
+    if (out) out.textContent = String(state.depth);
+  }
+  render();
+}
+
 function setRoot(node) {
   state.root = node;
   renderSignal(node);
@@ -653,16 +667,13 @@ async function boot() {
     buildPicker();
     $('sch-filter').addEventListener('input', buildPicker);
     $('sch-signal').addEventListener('change', (e) => setRoot(Number(e.target.value)));
-    $('sch-depth').addEventListener('input', (e) => {
-      state.depth = Number(e.target.value);
-      $('sch-depth-val').textContent = String(state.depth);
-      render();
-    });
+    $('sch-depth').addEventListener('input', (e) => setDepth(Number(e.target.value)));
     $('sch-run').addEventListener('click', () => {
       state.running = !state.running;
       $('sch-run').textContent = state.running ? 'Pause' : 'Run';
     });
     $('sch-step').addEventListener('click', () => state.machine.halfStep());
+    $('sch-solo-exit').addEventListener('click', () => $('sch-fullscreen').click());
 
     // The bit comparison. Populated from the buses the die actually names.
     const busSel = $('sch-bus');
@@ -703,9 +714,21 @@ async function boot() {
     $('sch-compare-any').addEventListener('click', () =>
       runCompare(Number($('sch-any-a').value), Number($('sch-any-b').value)));
 
-    setupFullscreen(document.querySelector('.console'), $('sch-fullscreen'), () => {
-      // The stage's height is bound to the viewport, so a re-render is what
-      // makes the drawing use the space it just gained.
+    // Fullscreen is not "the page without its chrome". It is a different way of
+    // looking: one level behind the selected signal, centred on an empty
+    // screen, with everything else out of the way. Clicking a signal re-roots
+    // and stays there, which is how a reader walks the islands.
+    const console_ = document.querySelector('.console');
+    setupFullscreen(console_, $('sch-fullscreen'), () => {
+      const on = console_.classList.contains('immersive');
+      if (on && !state.solo) {
+        state.depthBeforeSolo = state.depth;
+        setDepth(1);
+      } else if (!on && state.solo) {
+        setDepth(state.depthBeforeSolo);
+      }
+      state.solo = on;
+      console_.classList.toggle('solo', on);
       if (state.root != null) render();
     });
 

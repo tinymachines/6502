@@ -1154,3 +1154,53 @@ body.no-scroll #view { z-index: 70; }
    invisible until the background token was corrected -- the declaration named a
    token that does not exist, so there was no background at all. */
 .console.faux { background: var(--surface); }
+
+/* --- Schematic: the study view --------------------------------------------
+   Fullscreen is not the page with its chrome hidden. It is one level behind the
+   selected signal, centred on an empty screen, so the shape of a single island
+   is the only thing there is to look at. */
+
+.sch-solo-exit, .sch-solo-hint { display: none; }
+
+.console.solo { background: #05070d; }
+.console.solo > .console-bar,
+.console.solo .sch-controls,
+.console.solo .sch-caption,
+.console.solo #sch-signal-info,
+.console.solo .sch-keybox,
+.console.solo .sch-compare,
+.console.solo #sch-compare-out { display: none; }
+
+/* The stage is two levels down (.console > #sch-main > .sch-stage), so growing
+   it needs the middle element to grow too. Without this the stage collapses to
+   its content and the drawing sits at the top of an empty screen -- which looked
+   centred on a desktop only because the drawing happened to fill the width. */
+.console.solo #sch-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.console.solo .sch-stage {
+  flex: 1; min-height: 0;
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; max-height: none; padding: clamp(1rem, 4vw, 3rem);
+  background: #05070d; overflow: hidden;
+}
+/* viewBox plus 100% sizing means the browser centres and scales it for us --
+   preserveAspectRatio does the work, so nothing here measures anything. */
+.console.solo #sch-svg { width: 100%; height: 100%; }
+
+.console.solo .sch-solo-exit {
+  display: block; position: absolute; top: .75rem; right: .75rem;
+  font: 700 .7rem/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); background: transparent; cursor: pointer;
+  border: 2px solid var(--line); border-radius: .3rem; padding: .4rem .6rem;
+}
+.console.solo .sch-solo-exit:hover { color: var(--accent); border-color: var(--accent); }
+.console.solo .sch-solo-hint {
+  display: block; position: absolute; left: 0; right: 0; bottom: .8rem;
+  margin: 0; text-align: center; font-size: .68rem; color: #4a5a78;
+  pointer-events: none;
+}
+@media (max-width: 46rem) {
+  .console.solo .sch-stage { padding: .75rem; }
+  .console.solo .sch-solo-hint { font-size: .6rem; }
+}

@@ -199,6 +199,7 @@ _overflow-test.html?w=320   # what pushes the page wider than the viewport
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _schematic-test.html   # does the drawing contain everything the caption claims?
+_solo-test.html        # the study view, driven against the REAL page in an iframe
 _exploded-test.html    # the exploded view: do the sliders actually move geometry?
 _blueprint-test.html   # the block diagram: drawn, bound, and no label collisions
 _decode-test.html      # the decode table, re-checked against the documented ISA
@@ -657,6 +658,30 @@ in the explanatory comment broke the module outright.
   every href with the caller's `root` (`../` from a wiki page), so absolute
   hrefs are exempted -- otherwise the link resolves differently depending on how
   deep the page is.
+
+#### Fullscreen is the study view
+
+Fullscreen on this page is **not the page with its chrome hidden**. It is one
+level behind the selected signal, centred on an empty screen, with everything
+else gone — the shape of a single island and nothing to distract from it.
+Clicking a signal re-roots and stays there, which is how the islands get walked.
+
+- Entering stores the reader's depth and drops to 1; leaving restores it.
+  `setDepth()` is the only place depth changes, so the slider and the mode
+  cannot disagree about it.
+- **Centring is `viewBox` plus `width/height: 100%`** and nothing else —
+  `preserveAspectRatio` scales and centres for free. No code measures anything.
+- **The stage is two levels down** (`.console > #sch-main > .sch-stage`), so
+  growing it needs the middle element to grow too. Without that the stage
+  collapses to its content and the drawing sits at the top of an empty screen —
+  which looked centred on a desktop only because the drawing filled the width,
+  and was obvious the moment it was seen on a phone.
+- **`_solo-test.html` drives the real page in an iframe**, deliberately. A
+  hand-written stub was tried first and failed on its own inaccuracy: it nested
+  `.console-bar` inside `#sch-main`, where the page has it as a direct child, so
+  a `>` selector that works in production did not match in the test. The
+  iframe rule is about animation frames, and nothing here depends on one.
+  `_schematic-test.html`'s stub has now drifted from the page three times.
 
 #### Explaining it to a reader
 

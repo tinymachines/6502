@@ -1,0 +1,95 @@
+<!doctype html>
+<!--
+  Development harness, never shipped.
+
+  Drives the REAL schematic page in an iframe, because this is about what the
+  shipped markup and stylesheet do together. A hand-written stub was tried first
+  and failed on its own inaccuracy: it nested .console-bar inside #sch-main,
+  where the real page has it as a direct child, so a `>` selector that works in
+  production did not match in the test.
+
+  An iframe is safe for this one. The rule against it exists because headless
+  throttles animation frames to nearly zero inside a frame, so anything that
+  depends on rAF looks broken -- but nothing here does. render() is synchronous;
+  only the live-state repaint uses rAF, and this asserts nothing about that.
+
+    http://localhost:8777/_solo-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1100px;height:760px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="schematic?signal=dpc3_SBX&depth=3"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+f.addEventListener('load', async () => {
+  const w = f.contentWindow, d = f.contentDocument;
+  const $ = (id) => d.getElementById(id);
+  const vis = (el) => !!el && w.getComputedStyle(el).display !== 'none';
+  try {
+    for (let i = 0; i < 300 && $('sch-main').hidden; i++) await sleep(50);
+    ok('the real page booted', !$('sch-main').hidden, $('sch-status').textContent);
+
+    const con = d.querySelector('.console');
+    const svg = $('sch-svg');
+    // Force the fallback path: the API is unavailable in an iframe anyway, and
+    // removing it makes that explicit rather than incidental.
+    delete w.Element.prototype.requestFullscreen;
+    delete w.Element.prototype.webkitRequestFullscreen;
+    con.requestFullscreen = undefined;
+    con.webkitRequestFullscreen = undefined;
+
+    const depthBefore = $('sch-depth').value;
+    ok('starts at the depth the URL asked for', depthBefore === '3', depthBefore);
+
+    $('sch-fullscreen').click();
+    for (let i = 0; i < 60 && !con.classList.contains('solo'); i++) await sleep(50);
+    ok('fullscreen enters the study view', con.classList.contains('solo'), con.className);
+    ok('it drops to a single level', $('sch-depth').value === '1', $('sch-depth').value);
+
+    // The point of the mode: nothing on screen but the circuit.
+    const hidden = ['.console-bar', '.sch-controls', '.sch-caption',
+                    '#sch-signal-info', '.sch-keybox', '.sch-compare'];
+    const showing = hidden.filter((sel) => vis(d.querySelector(sel)));
+    ok('everything except the circuit is out of the way', showing.length === 0,
+       showing.join(', '));
+
+    ok('the circuit is still drawn', svg.querySelectorAll('.sch-node').length > 0,
+       `${svg.querySelectorAll('.sch-node').length} signals`);
+    // viewBox + 100% sizing is what centres it; nothing measures anything.
+    const cs = w.getComputedStyle(svg);
+    ok('the drawing is sized to its stage, so it centres',
+       parseFloat(cs.width) > 200 && parseFloat(cs.height) > 100,
+       `${cs.width} x ${cs.height}`);
+    ok('there is a way out', vis($('sch-solo-exit')));
+
+    // Walking the islands: click a signal, stay in the mode, stay at one level.
+    const next = [...svg.querySelectorAll('.sch-node')]
+      .find((n) => !n.classList.contains('root'));
+    const want = next.dataset.node;
+    next.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(250);
+    ok('clicking a signal re-roots without leaving the mode',
+       con.classList.contains('solo')
+       && svg.querySelector('.sch-node.root').dataset.node === want,
+       con.className);
+    ok('and it is still a single level', $('sch-depth').value === '1');
+
+    $('sch-solo-exit').click();
+    for (let i = 0; i < 60 && con.classList.contains('solo'); i++) await sleep(50);
+    ok('leaving restores the page', !con.classList.contains('solo')
+       && vis(d.querySelector('.sch-caption')));
+    ok('and restores the depth it had', $('sch-depth').value === depthBefore,
+       `${$('sch-depth').value} vs ${depthBefore}`);
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
+  }
+  document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+});
+</script>
+</body></html>
