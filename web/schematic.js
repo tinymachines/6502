@@ -39,7 +39,20 @@ const state = {
   depthBeforeSolo: 3,
   running: false,
   raf: 0,
+  // Where you have been. An entry is `{root, dir, depth}` -- which is exactly
+  // what the deep link carries, so a history entry *is* a URL you could have
+  // typed. `suppress` is raised while a change is not a navigation (restoring
+  // an entry, or fullscreen forcing depth to 1), because those must not be
+  // recorded as somewhere you chose to go.
+  past: [],
+  future: [],
+  lastKind: null,
+  suppress: 0,
+  camG: null,
+  dragged: false,
 };
+
+const HISTORY_MAX = 200;
 
 const nameOf = (n) => state.data.names[n] ?? `#${n}`;
 const isNamed = (n) => state.data.names[n] != null;
@@ -152,6 +165,142 @@ function diff(a, b) {
     else onlyB.push(s);
   }
   return { shared: shared.sort(), onlyA: onlyA.sort(), onlyB: onlyB.sort() };
+}
+
+// ---------------------------------------------------------------------------
+// The camera — pinch, drag and wheel over the drawing
+// ---------------------------------------------------------------------------
+//
+// Live in the study view only. On the page proper the drawing sits in a
+// scrolling stage, and claiming the touch stream there would stop a phone
+// scrolling the page -- so `touch-action: none` is scoped to `.solo` in the
+// stylesheet and every handler below asks `state.solo` before acting.
+//
+// Zoom is applied as a transform on one wrapper group rather than by rewriting
+// the viewBox, so `getScreenCTM()` still maps the screen into the drawing's own
+// coordinates and nothing here has to reimplement what `preserveAspectRatio`
+// already does.
+
+const cam = { k: 1, tx: 0, ty: 0 };
+const MIN_K = 0.4;
+const MAX_K = 16;
+
+function applyCam() {
+  if (!state.camG) return;
+  state.camG.setAttribute('transform', `translate(${cam.tx},${cam.ty}) scale(${cam.k})`);
+}
+
+/** Back to the framing the browser chose. */
+function fitCam() {
+  cam.k = 1; cam.tx = 0; cam.ty = 0;
+  applyCam();
+}
+
+/**
+ * Put content point `c` under user-space point `u`, at scale `k`.
+ *
+ * Every camera change goes through here, so this is the one place that can
+ * refuse a non-finite result -- and it does. A NaN reaching the transform would
+ * stick, because NaN survives every comparison, and the drawing would vanish
+ * permanently. One dropped frame is the better failure.
+ */
+function place(k, c, u) {
+  const kk = Math.min(MAX_K, Math.max(MIN_K, k));
+  const tx = u.x - kk * c.x;
+  const ty = u.y - kk * c.y;
+  if (!Number.isFinite(kk) || !Number.isFinite(tx) || !Number.isFinite(ty)) return;
+  cam.k = kk; cam.tx = tx; cam.ty = ty;
+  applyCam();
+}
+
+function setupCamera(svg) {
+  const live = new Map();
+  let gesture = null;   // { c, k0, d0 } -- the content point being held, and the
+                        // pinch it started from. One shape for both cases.
+  let travel = 0;
+
+  const toUser = (x, y) => {
+    const m = svg.getScreenCTM();
+    if (!m) return null;
+    const p = new DOMPoint(x, y).matrixTransform(m.inverse());
+    return Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+  };
+
+  // One constructor for the geometry of a two-finger gesture, and only one.
+  // The explorer had two, spelled differently -- one wrote `{x, y}` and the
+  // other read `.cx`/`.cy` -- so the first move after a second finger landed
+  // computed `undefined` and put NaN into the camera. Anything that needs a
+  // midpoint or a spread asks this.
+  const pinchOf = (a, b) => ({
+    d: Math.hypot(a.x - b.x, a.y - b.y),
+    cx: (a.x + b.x) / 2,
+    cy: (a.y + b.y) / 2,
+  });
+
+  const contentAt = (u) => ({ x: (u.x - cam.tx) / cam.k, y: (u.y - cam.ty) / cam.k });
+
+  // Seed from whatever is down now. The ratio is always read against this
+  // seed rather than accumulated per event, which drifts.
+  const seed = () => {
+    const pts = [...live.values()];
+    if (!pts.length) { gesture = null; return; }
+    const anchor = pts.length >= 2 ? pinchOf(pts[0], pts[1]) : { cx: pts[0].x, cy: pts[0].y, d: 0 };
+    const u = toUser(anchor.cx, anchor.cy);
+    gesture = u ? { c: contentAt(u), k0: cam.k, d0: anchor.d } : null;
+  };
+
+  svg.addEventListener('pointerdown', (e) => {
+    if (!state.solo) return;
+    state.dragged = false;
+    travel = 0;
+    live.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    seed();
+    svg.classList.add('dragging');
+  });
+
+  // Move and release are watched on the window rather than captured on the SVG:
+  // `setPointerCapture` retargets the click that follows, which would break
+  // clicking a signal to re-root -- the one interaction this page is for.
+  const onMove = (e) => {
+    if (!live.has(e.pointerId) || !gesture) return;
+    const from = live.get(e.pointerId);
+    travel = Math.max(travel, Math.hypot(e.clientX - from.x, e.clientY - from.y));
+    live.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    const pts = [...live.values()];
+    if (pts.length >= 2) {
+      const now = pinchOf(pts[0], pts[1]);
+      const u = toUser(now.cx, now.cy);
+      if (u && gesture.d0 > 0) place(gesture.k0 * (now.d / gesture.d0), gesture.c, u);
+    } else {
+      const u = toUser(pts[0].x, pts[0].y);
+      if (u) place(cam.k, gesture.c, u);
+    }
+  };
+
+  const onUp = (e) => {
+    if (!live.delete(e.pointerId)) return;
+    // A finger always moves a little, so the slop that separates a tap from a
+    // drag is larger for touch than for a mouse. Without it, every tap on a
+    // signal would register as a drag and select nothing.
+    const slop = e.pointerType === 'mouse' ? 4 : 12;
+    if (travel > slop) state.dragged = true;
+    if (live.size) seed(); else { gesture = null; svg.classList.remove('dragging'); }
+  };
+
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
+
+  svg.addEventListener('wheel', (e) => {
+    if (!state.solo) return;
+    e.preventDefault();
+    const u = toUser(e.clientX, e.clientY);
+    if (!u) return;
+    place(cam.k * Math.exp(-e.deltaY * 0.0015), contentAt(u), u);
+  }, { passive: false });
+
+  svg.addEventListener('dblclick', () => { if (state.solo) fitCam(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -299,9 +448,16 @@ function draw(c) {
   svg.setAttribute('width', width);
   svg.setAttribute('height', height);
 
-  const wires = el('g', { class: 'sch-wires' }, svg);
-  const parts = el('g', { class: 'sch-parts' }, svg);
-  const labels = el('g', { class: 'sch-labels' }, svg);
+  // Everything drawn lives under one group, which is what the camera moves.
+  // A new subject gets a fresh framing: staying zoomed into a corner of the
+  // last drawing would leave the new one off screen with no sign of why.
+  const camG = el('g', { class: 'sch-cam' }, svg);
+  state.camG = camG;
+  fitCam();
+
+  const wires = el('g', { class: 'sch-wires' }, camG);
+  const parts = el('g', { class: 'sch-parts' }, camG);
+  const labels = el('g', { class: 'sch-labels' }, camG);
   const { vss, vcc } = state.data;
 
   for (const { e, out, x: ex, y: ey } of items) {
@@ -378,13 +534,18 @@ function draw(c) {
                  rx: 3, class: 'sch-pill' }, g);
     const t = el('text', { x: (p.flip ? 1 : -1) * p.w / 2, y: 4, class: 'sch-name' }, g);
     t.textContent = nameOf(node);
-    g.addEventListener('click', () => setRoot(node));
+    // A drag that ends on a signal is panning, not choosing. `state.dragged` is
+    // set by the camera on release and cleared on the next press, and click
+    // fires straight after release, so this reads the gesture that just ended.
+    g.addEventListener('click', () => { if (!state.dragged) setRoot(node); });
   }
 
   svg.querySelectorAll('.sch-ctrl').forEach((t) => {
     if (!t.dataset.node) return;
     t.style.cursor = 'pointer';
-    t.addEventListener('click', () => setRoot(Number(t.dataset.node)));
+    t.addEventListener('click', () => {
+      if (!state.dragged) setRoot(Number(t.dataset.node));
+    });
   });
 }
 
@@ -586,9 +747,111 @@ function step(dir) {
   refresh();
 }
 
-/** The only place direction changes, so the two toggles cannot disagree. */
-function setDir(dir) {
-  state.dir = dir === 'fwd' ? 'fwd' : 'back';
+// ---------------------------------------------------------------------------
+// Where you have been
+// ---------------------------------------------------------------------------
+//
+// `{root, dir, depth}` is the whole of the view state and the whole of the deep
+// link, so an entry in this stack is a URL. Re-rooting, flipping direction and
+// changing depth all move you, and until now none of them left a way back --
+// which mattered more once there were two directions to get lost in.
+
+const viewOf = () => ({ root: state.root, dir: state.dir, depth: state.depth });
+
+/** Raise `suppress` for a change that is not a navigation. */
+function withoutHistory(fn) {
+  state.suppress++;
+  try { fn(); } finally { state.suppress--; }
+}
+
+/**
+ * Record where you are, before going somewhere else.
+ *
+ * `kind` exists for one case: the depth slider fires an event per integer, so
+ * dragging from 3 to 6 is three events and one navigation. Consecutive depth
+ * changes on the same signal coalesce, and what you come back to is the depth
+ * you set out from rather than the last value the slider passed through.
+ */
+function remember(kind) {
+  if (state.suppress || state.root == null) return;
+  const top = state.past[state.past.length - 1];
+  if (kind === 'depth' && state.lastKind === 'depth'
+      && top && top.root === state.root && top.dir === state.dir) return;
+  state.past.push(viewOf());
+  if (state.past.length > HISTORY_MAX) state.past.shift();
+  state.future.length = 0;
+  state.lastKind = kind;
+  paintHistory();
+}
+
+function paintHistory() {
+  const set = (id, on) => { const b = $(id); if (b) b.disabled = !on; };
+  set('sch-back', state.past.length > 0);
+  set('sch-fwd', state.future.length > 0);
+  set('solo-back-nav', state.past.length > 0);
+  set('solo-fwd-nav', state.future.length > 0);
+}
+
+function restore(v) {
+  withoutHistory(() => {
+    state.root = v.root;
+    state.dir = v.dir;
+    // The study view is one level by definition, so returning restores *where*
+    // you were and not how deep -- otherwise stepping back past the moment you
+    // went fullscreen would quietly break the one thing that mode promises.
+    if (!state.solo) state.depth = Math.max(1, Math.min(6, v.depth));
+    paintDir();
+    paintDepth();
+    clearCompare();
+    renderSignal(state.root);
+    paintPicker();
+    render();
+    syncUrl();
+  });
+  state.lastKind = null;
+  paintHistory();
+}
+
+function goBack() {
+  const prev = state.past.pop();
+  if (!prev) return;
+  state.future.push(viewOf());
+  restore(prev);
+}
+
+function goForward() {
+  const next = state.future.pop();
+  if (!next) return;
+  state.past.push(viewOf());
+  restore(next);
+}
+
+// ---------------------------------------------------------------------------
+
+function syncUrl() {
+  const q = new URLSearchParams(location.search);
+  q.set('signal', nameOf(state.root));
+  q.set('dir', state.dir);
+  q.set('depth', String(state.depth));
+  history.replaceState(null, '', '?' + q.toString());
+}
+
+function clearCompare() {
+  state.compare = null;
+  state.diffControls = null;
+  const box = $('sch-compare-out');
+  if (box) box.hidden = true;
+}
+
+/** Keep the picker on the signal being shown, when it holds it at all. */
+function paintPicker() {
+  const sel = $('sch-signal');
+  if (sel && sel.querySelector(`option[value="${state.root}"]`)) {
+    sel.value = String(state.root);
+  }
+}
+
+function paintDir() {
   const back = $('dir-back');
   const fwd = $('dir-fwd');
   if (back) back.classList.toggle('on', state.dir === 'back');
@@ -598,10 +861,25 @@ function setDir(dir) {
     solo.classList.toggle('on', state.dir === 'fwd');
     solo.title = state.dir === 'fwd' ? 'Showing what it drives (d)' : 'Showing what makes it (d)';
   }
+}
+
+function paintDepth() {
+  const el = $('sch-depth');
+  if (el) {
+    el.value = String(state.depth);
+    const out = $('sch-depth-val');
+    if (out) out.textContent = String(state.depth);
+  }
+}
+
+/** The only place direction changes, so the two toggles cannot disagree. */
+function setDir(dir) {
+  const next = dir === 'fwd' ? 'fwd' : 'back';
+  if (next !== state.dir) remember('dir');
+  state.dir = next;
+  paintDir();
   render();
-  const q = new URLSearchParams(location.search);
-  q.set('dir', state.dir);
-  history.replaceState(null, '', '?' + q.toString());
+  syncUrl();
 }
 
 /** The only place run state changes, so the two transports cannot disagree. */
@@ -620,27 +898,21 @@ function setRunning(on) {
 
 /** The only place depth changes, so the slider and solo mode cannot disagree. */
 function setDepth(n) {
-  state.depth = Math.max(1, Math.min(6, n));
-  const el = $('sch-depth');
-  if (el) {
-    el.value = String(state.depth);
-    const out = $('sch-depth-val');
-    if (out) out.textContent = String(state.depth);
-  }
+  const next = Math.max(1, Math.min(6, n));
+  if (next !== state.depth) remember('depth');
+  state.depth = next;
+  paintDepth();
   render();
 }
 
 function setRoot(node) {
+  if (node !== state.root) remember('root');
   state.root = node;
   renderSignal(node);
-  state.compare = null;
-  state.diffControls = null;
-  $('sch-compare-out').hidden = true;
+  clearCompare();
+  paintPicker();
   render();
-  const q = new URLSearchParams(location.search);
-  q.set('signal', nameOf(node));
-  q.set('depth', String(state.depth));
-  history.replaceState(null, '', '?' + q.toString());
+  syncUrl();
 }
 
 function render() {
@@ -721,10 +993,15 @@ function runCompare(a, b) {
         : ''}
     </p>`;
 
-  // Draw the first of the pair, with the differences marked.
+  // Draw the first of the pair, with the differences marked. This moves the
+  // subject, so it is somewhere you can come back from -- but the comparison
+  // itself is not part of the view state and does not survive going back.
+  if (a !== state.root) remember('root');
   state.root = a;
   renderSignal(a);
+  paintPicker();
   render();
+  syncUrl();
 }
 
 function buildPicker() {
@@ -810,12 +1087,25 @@ async function boot() {
     $('solo-step').addEventListener('click', () => step(+1));
     $('solo-back').addEventListener('click', () => step(-1));
 
+    $('sch-back').addEventListener('click', goBack);
+    $('sch-fwd').addEventListener('click', goForward);
+    $('solo-back-nav').addEventListener('click', goBack);
+    $('solo-fwd-nav').addEventListener('click', goForward);
+    $('solo-fit').addEventListener('click', fitCam);
+    setupCamera($('sch-svg'));
+
     // Keyboard, because the study view is meant to be looked at rather than
     // aimed at. Ignored while typing in the filter box.
     document.addEventListener('keydown', (ev) => {
-      if (!state.solo) return;
       if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement) return;
-      if (ev.key === ' ') { setRunning(!state.running); ev.preventDefault(); }
+      // History works wherever the drawing does. The clock and the camera below
+      // only exist in the study view. `←`/`→` belong to the clock, which is why
+      // going back is on the brackets.
+      if (ev.key === '[' || ev.key === 'Backspace') { goBack(); ev.preventDefault(); return; }
+      if (ev.key === ']') { goForward(); ev.preventDefault(); return; }
+      if (!state.solo) return;
+      if (ev.key === '0') { fitCam(); ev.preventDefault(); }
+      else if (ev.key === ' ') { setRunning(!state.running); ev.preventDefault(); }
       else if (ev.key === 'ArrowRight') { step(+1); ev.preventDefault(); }
       else if (ev.key === 'ArrowLeft') { step(-1); ev.preventDefault(); }
       else if (ev.key === 'd' || ev.key === 'D') {
@@ -876,12 +1166,17 @@ async function boot() {
     const console_ = document.querySelector('.console');
     setupFullscreen(console_, $('sch-fullscreen'), () => {
       const on = console_.classList.contains('immersive');
-      if (on && !state.solo) {
-        state.depthBeforeSolo = state.depth;
-        setDepth(1);
-      } else if (!on && state.solo) {
-        setDepth(state.depthBeforeSolo);
-      }
+      // Entering and leaving is not a navigation: the depth swap below is the
+      // mode's doing, not the reader's, and recording it would put a step in
+      // the history that nothing on screen corresponds to.
+      withoutHistory(() => {
+        if (on && !state.solo) {
+          state.depthBeforeSolo = state.depth;
+          setDepth(1);
+        } else if (!on && state.solo) {
+          setDepth(state.depthBeforeSolo);
+        }
+      });
       state.solo = on;
       console_.classList.toggle('solo', on);
       if (state.root != null) render();
@@ -897,6 +1192,7 @@ async function boot() {
     }
 
     buildLegend();
+    paintHistory();
     renderSignal(state.root);
     setDir(state.dir);
     $('sch-boot').hidden = true;

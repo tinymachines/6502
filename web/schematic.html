@@ -95,12 +95,30 @@
               <button id="dir-fwd" class="sch-dir-btn" type="button">what it drives</button>
             </div>
           </div>
+          <div class="field">
+            <span>Where you have been</span>
+            <div class="sch-dir" role="group" aria-label="History">
+              <button id="sch-back" class="sch-dir-btn" type="button" disabled
+                      title="Back to the last signal ([)">↩ back</button>
+              <button id="sch-fwd" class="sch-dir-btn" type="button" disabled
+                      title="Forward again (])">forward ↪</button>
+            </div>
+          </div>
         </div>
 
         <div class="sch-stage">
           <svg id="sch-svg" role="img" aria-label="Gate-level schematic"></svg>
           <button id="sch-solo-exit" class="sch-solo-exit" type="button"
                   aria-label="Leave fullscreen">esc</button>
+
+          <div class="sch-solo-nav" role="group" aria-label="History">
+            <button id="solo-back-nav" class="solo-btn" type="button" disabled
+                    aria-label="Back to the last signal" title="Back ([)">↩</button>
+            <button id="solo-fwd-nav" class="solo-btn" type="button" disabled
+                    aria-label="Forward again" title="Forward (])">↪</button>
+            <button id="solo-fit" class="solo-btn" type="button"
+                    aria-label="Fit the drawing" title="Fit (0)">⌾</button>
+          </div>
 
           <div class="sch-solo-bar" role="group" aria-label="Clock">
             <button id="solo-back" class="solo-btn" type="button"
@@ -114,7 +132,8 @@
             <span class="solo-clock mono" id="solo-clock"></span>
           </div>
           <p class="sch-solo-hint">
-            click a signal to follow it back · space to run · ← → to step · esc to leave
+            click a signal to follow it · space run · ← → step · <b>[</b> <b>]</b> back and
+            forward · pinch or scroll to zoom · <b>0</b> to fit · esc to leave
           </p>
         </div>
         <p class="sch-caption mono" id="sch-caption"></p>

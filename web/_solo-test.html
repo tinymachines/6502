@@ -146,6 +146,107 @@ f.addEventListener('load', async () => {
     ok('what is lit changes as the chip is stepped', seen.size > 1,
        `${seen.size} distinct states over 12 half-cycles`);
 
+    // --- where you have been -------------------------------------------------
+    //
+    // Re-rooting, flipping direction and changing depth all move you, and until
+    // there was a stack there was no way back -- which matters most here, where
+    // walking the islands is the whole activity.
+    const rootNow = () => svg.querySelector('.sch-node.root').dataset.node;
+    ok('back is offered, a signal having already been followed',
+       !$('solo-back-nav').disabled);
+
+    const wasAt = rootNow();
+    const other = [...svg.querySelectorAll('.sch-node')]
+      .find((n) => !n.classList.contains('root'));
+    const otherId = other.dataset.node;
+    other.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(200);
+    ok('following a signal moves the subject', rootNow() === otherId, rootNow());
+
+    $('solo-back-nav').click();
+    await sleep(200);
+    ok('back returns to where you were', rootNow() === wasAt, `${rootNow()} vs ${wasAt}`);
+    // The study view is one level by definition, so back restores *where* you
+    // were and not how deep. Otherwise stepping back past the moment you went
+    // fullscreen would quietly undo the one thing this mode promises.
+    ok('and back stays at one level', $('sch-depth').value === '1', $('sch-depth').value);
+    ok('forward is offered once you have gone back', !$('solo-fwd-nav').disabled);
+
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: ']', bubbles: true }));
+    await sleep(200);
+    ok('] goes forward again', rootNow() === otherId, rootNow());
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: '[', bubbles: true }));
+    await sleep(200);
+    ok('[ goes back', rootNow() === wasAt, rootNow());
+
+    // --- the camera ----------------------------------------------------------
+    const camT = () => svg.querySelector('.sch-cam').getAttribute('transform');
+    const camNums = () => (camT().match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi) || []).map(Number);
+    const camK = () => camNums()[2];
+    ok('the drawing rides on a camera group', camNums().length === 3, camT());
+    const k0 = camK();
+
+    // Two fingers, through the real handlers -- the gesture headless cannot
+    // reach with hardware absent.
+    //
+    // The assertion that earns its place is that the pinch is *anchored*: the
+    // point of the drawing under the midpoint must still be under the midpoint
+    // afterwards. "Did the scale go up" looked like the obvious check and tests
+    // nothing. Injecting the explorer's exact bug -- pinch state written with
+    // one spelling and read with another -- leaves the zoom working, because
+    // `new DOMPoint(undefined, undefined)` is (0, 0) rather than NaN, so the
+    // gesture anchors on the corner of the screen and still scales by the right
+    // ratio. Only the anchor shows it.
+    const pt = (type, id, x, y, target) => target.dispatchEvent(
+      new w.PointerEvent(type, {
+        pointerId: id, clientX: x, clientY: y, bubbles: true, pointerType: 'touch',
+      }));
+    const contentUnder = (x, y) => {
+      const m = svg.getScreenCTM();
+      const p = new w.DOMPoint(x, y).matrixTransform(m.inverse());
+      const [tx, ty, k] = camNums();
+      return { x: (p.x - tx) / k, y: (p.y - ty) / k };
+    };
+    const box = svg.getBoundingClientRect();
+    const mx = box.left + box.width / 2, my = box.top + box.height / 2;
+    const held = contentUnder(mx, my);
+    pt('pointerdown', 1, mx - 40, my, svg);
+    pt('pointerdown', 2, mx + 40, my, svg);
+    pt('pointermove', 1, mx - 120, my, w);
+    pt('pointermove', 2, mx + 120, my, w);
+    await sleep(80);
+    ok('a pinch zooms in', camK() > k0 * 1.5, `${k0} -> ${camK()}`);
+    const still = contentUnder(mx, my);
+    ok('and it zooms about the fingers, not about somewhere else',
+       Math.hypot(still.x - held.x, still.y - held.y) < 1,
+       `held (${held.x.toFixed(1)}, ${held.y.toFixed(1)}) `
+       + `-> (${still.x.toFixed(1)}, ${still.y.toFixed(1)})`);
+    ok('and the camera stays finite',
+       camNums().length === 3 && camNums().every(Number.isFinite) && !/NaN|Infinity/.test(camT()),
+       camT());
+    pt('pointerup', 1, mx - 120, my, w);
+    pt('pointerup', 2, mx + 120, my, w);
+    await sleep(60);
+
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: '0', bubbles: true }));
+    await sleep(60);
+    ok('0 fits the drawing again', Math.abs(camK() - 1) < 1e-9, camT());
+
+    // A drag that happens to end on a signal is panning, not choosing. Without
+    // slop, every touch on a pill would register as a drag and select nothing.
+    const stayAt = rootNow();
+    const victim = [...svg.querySelectorAll('.sch-node')]
+      .find((n) => !n.classList.contains('root'));
+    const vb = victim.getBoundingClientRect();
+    pt('pointerdown', 3, vb.left + 4, vb.top + 4, svg);
+    pt('pointermove', 3, vb.left + 64, vb.top + 44, w);
+    pt('pointerup', 3, vb.left + 64, vb.top + 44, w);
+    victim.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(150);
+    ok('a drag ending on a signal pans rather than selecting it',
+       rootNow() === stayAt, `${rootNow()} vs ${stayAt}`);
+    ok('the pan moved the camera', camK() === 1 && camNums()[0] !== 0, camT());
+
     $('sch-solo-exit').click();
     for (let i = 0; i < 60 && con.classList.contains('solo'); i++) await sleep(50);
     ok('leaving restores the page', !con.classList.contains('solo')

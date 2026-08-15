@@ -2,11 +2,16 @@
 <!--
   Development harness, never shipped.
 
-  This file uses its own stub markup, which has now drifted from the real page
-  four times now -- each time the page gained an element and boot threw here first.
-  That is the stub earning its keep, but it is also why `_solo-test.html` drives
-  the real page in an iframe instead: a test about markup and stylesheet working
-  together cannot use a copy of the markup.
+  This file used to carry its own stub markup, and that stub drifted from the
+  real page six times -- each time the page gained an element, boot threw here
+  first, and the fix was to copy the new element across by hand. Six is enough:
+  the markup is now *lifted out of `schematic.html`* at load, so it cannot drift
+  again. What is left is the reason the stub existed at all -- this harness needs
+  the page's elements at top level, not in an iframe, because it measures
+  geometry with `getBBox` and drives the module directly.
+
+  `_solo-test.html` still uses an iframe, for a different property: it is about
+  what the shipped markup and stylesheet do *together* in the study view.
 
   The schematic's claim is that every symbol on it is a real structure on the
   die. A drawing routine that quietly skips something it cannot place still
@@ -22,41 +27,20 @@
 <link rel="stylesheet" href="style.css">
 </head><body style="margin:0">
 
-<div id="sch-boot"><p id="sch-status">…</p></div>
-<div class="console"><div id="sch-main" hidden>
-  <div class="sch-controls">
-    <input id="sch-filter" type="search"><span id="sch-shown"></span>
-    <select id="sch-signal"></select>
-    <input id="sch-depth" type="range" min="1" max="6" value="3"><b id="sch-depth-val"></b>
-    <button id="dir-back"></button><button id="dir-fwd"></button>
-  </div>
-  <div class="sch-stage"><svg id="sch-svg"></svg>
-    <button id="sch-solo-exit"></button><p class="sch-solo-hint"></p>
-    <div class="sch-solo-bar"><button id="solo-back"></button><button id="solo-run"></button>
-      <button id="solo-step"></button><button id="solo-dir"></button>
-      <span id="solo-clock"></span></div></div>
-  <p id="sch-caption"></p>
-  <div id="sch-signal-info"></div>
-  <div id="sch-key"></div>
-  <div class="sch-compare">
-    <select id="sch-bus"></select>
-    <select id="sch-bit-a"><option>0</option><option>7</option></select>
-    <select id="sch-bit-b"><option>0</option><option selected>7</option></select>
-    <button id="sch-compare" type="button">Compare</button>
-    <select id="sch-any-a"></select>
-    <select id="sch-any-b"></select>
-    <button id="sch-compare-any" type="button">Compare</button>
-  </div>
-  <button id="sch-fullscreen" type="button">FS</button>
-  <div id="sch-compare-out" hidden></div>
-  <button id="sch-run" type="button">Run</button>
-  <button id="sch-step" type="button">Step</button>
-</div>
-</div>
-<div id="sch-stats"></div>
+<div id="host"></div>
 
 <script type="module">
-import './schematic.js';
+// The page's own markup, lifted rather than copied. Importing the module before
+// this exists would throw on the first control it wires up, so the import is
+// dynamic and comes after.
+const src = await fetch('schematic.html').then((r) => r.text());
+const page = new DOMParser().parseFromString(src, 'text/html');
+for (const sel of ['#sch-stats', '.console']) {
+  const node = page.querySelector(sel);
+  if (!node) throw new Error(`schematic.html no longer has ${sel}`);
+  document.getElementById('host').append(document.importNode(node, true));
+}
+await import('./schematic.js');
 
 const results = [];
 const ok = (name, cond, detail) =>
