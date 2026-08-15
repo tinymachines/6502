@@ -1600,3 +1600,89 @@ body.no-scroll #view { z-index: 70; }
 /* The study view's own depth slider, the page's being out of sight in there. */
 .sp-depth { margin-bottom: .55rem; }
 .sp-depth input[type=range] { width: 100%; accent-color: var(--accent); }
+
+/* --- The primer's runnable examples ----------------------------------------
+   One chip, five views of it: they share a machine and a clock, so the
+   transports are five copies of one control and paint from the chip rather than
+   from whichever was last pressed. */
+
+.dm {
+  margin: 1.4rem 0; padding: 0;
+  border: 2px solid var(--line); border-radius: .45rem; background: var(--surface);
+  overflow: hidden;
+}
+.dm-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem;
+  padding: .55rem .8rem; border-bottom: 2px solid var(--line); background: var(--subtle);
+}
+.dm-tag {
+  font: 700 .58rem/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+  color: var(--accent-foreground); background: var(--accent);
+  padding: .25rem .4rem; border-radius: .2rem;
+}
+.dm-title { font-weight: 800; font-size: .9rem; }
+.dm-sub { font-size: .74rem; color: var(--muted); }
+.dm-body { padding: .7rem .8rem; }
+
+.dm-bar { display: flex; align-items: center; gap: .25rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.dm-btn {
+  font: 700 .8rem/1 var(--font-mono); min-width: 2.2rem; padding: .4rem .5rem;
+  color: var(--muted); background: var(--subtle); cursor: pointer;
+  border: 2px solid var(--line); border-radius: .25rem;
+}
+.dm-btn:hover { color: var(--accent); border-color: var(--accent); }
+.dm-btn.on { color: var(--accent-foreground); background: var(--accent); border-color: var(--accent); }
+.dm-clock { font-size: .66rem; color: #6f819f; margin-left: auto; white-space: nowrap; }
+
+.dm-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .35rem .8rem; margin: 0; }
+.dm-kv dt {
+  font: 700 .58rem/1.6 var(--font-mono); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.dm-kv dd { margin: 0; font-size: .8rem; min-width: 0; }
+.dm-write { color: var(--hot); }
+
+.dm-lamps { display: inline-flex; flex-wrap: wrap; gap: 1px; margin-left: .45rem; vertical-align: middle; }
+.dm-lamps i {
+  font: 700 .5rem/1 var(--font-mono); font-style: normal;
+  width: .74rem; padding: .2rem 0; text-align: center;
+  color: #4a5a78; background: var(--subtle); border-radius: 1px;
+}
+.dm-lamps i.on { color: var(--accent-foreground); background: var(--accent); }
+
+.dm-pins { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .7rem; }
+.dm-pin {
+  font: 700 .64rem/1 var(--font-mono); letter-spacing: .06em; padding: .45rem .55rem;
+  color: var(--muted); background: var(--subtle);
+  border: 2px solid var(--line); border-radius: .25rem; cursor: pointer;
+}
+.dm-pin:hover { color: var(--foreground); border-color: var(--accent); }
+.dm-pin.low { color: var(--accent-foreground); background: var(--hot); border-color: var(--hot); }
+
+.dm-terms { display: flex; flex-wrap: wrap; gap: .25rem; }
+.dm-terms i, .dm-join i {
+  font: 600 .66rem/1 var(--font-mono); font-style: normal;
+  padding: .25rem .4rem; border-radius: .2rem;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.dm-join { display: inline-flex; align-items: center; gap: .2rem; flex-wrap: wrap; }
+.dm-join b { color: var(--muted); font-size: .7rem; }
+.dm-level {
+  display: inline-block; margin-left: .5rem; padding: .1rem .35rem;
+  font: 700 .62rem/1.5 var(--font-mono);
+  color: var(--accent-foreground); background: var(--accent); border-radius: .2rem;
+}
+
+.dm-note { margin: .7rem 0 0; font-size: .72rem; line-height: 1.6; color: var(--muted); }
+
+/* The scope: a recording of what the pins did, not a diagram of what they
+   should have done. */
+.dm-scope { display: block; width: 100%; height: auto; margin: .2rem 0 .6rem; }
+.dm-scope-label {
+  fill: var(--muted); font: 700 9px var(--font-mono); letter-spacing: .06em;
+}
+.dm-scope-tick { stroke: var(--line); stroke-width: 1; opacity: .5; }
+.dm-scope-now { stroke: var(--hot); stroke-width: 1.5; opacity: .8; }
+.dm-scope-trace { fill: none; stroke: var(--accent); stroke-width: 2; }
+.dm-scope-trace.dm-ch-sync { stroke: var(--mint); }
+.dm-scope-trace.dm-ch-rw { stroke: var(--hot); }

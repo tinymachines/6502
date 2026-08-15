@@ -85,6 +85,17 @@
       </table>
     </div>
 
+
+    <figure class="dm" data-demo-wrap>
+      <figcaption class="dm-head">
+        <span class="dm-tag">live</span>
+        <span class="dm-title">The edge of the chip</span>
+        <span class="dm-sub">every pin above, live — and the five you can pull yourself</span>
+      </figcaption>
+      <div class="dm-body" data-demo="pins">
+        <p class="dm-note">Starting the chip…</p>
+      </div>
+    </figure>
     <p>
       Two things in that table are worth stopping on.
     </p>
@@ -131,6 +142,17 @@
       long and the charge — which <em>is</em> the state — leaks away. There is no
       static storage holding your registers between phases.
     </p>
+
+    <figure class="dm" data-demo-wrap>
+      <figcaption class="dm-head">
+        <span class="dm-tag">live</span>
+        <span class="dm-title">Two edges, recorded</span>
+        <span class="dm-sub">the chip is running as you read; this is what its pins did</span>
+      </figcaption>
+      <div class="dm-body" data-demo="clock">
+        <p class="dm-note">Starting the chip…</p>
+      </div>
+    </figure>
     <p class="pr-seealso">
       See it: <a href="trace">Trace</a> lists every half-cycle of an instruction
       and marks which fields changed on each.
@@ -166,6 +188,17 @@
       that assert them; <span data-fact="linesUnresolved">…</span> have not, and
       ship as unresolved rather than as guesses.
     </p>
+
+    <figure class="dm" data-demo-wrap>
+      <figcaption class="dm-head">
+        <span class="dm-tag">live</span>
+        <span class="dm-title">The plane, matching</span>
+        <span class="dm-sub">the instruction register, and the terms high because of it</span>
+      </figcaption>
+      <div class="dm-body" data-demo="decode">
+        <p class="dm-note">Starting the chip…</p>
+      </div>
+    </figure>
     <p class="pr-seealso">
       See it: <a href="decode">Decode</a> has every product term and the opcodes
       that fire it. <a href="schematic">Schematic</a> shows the gate behind any
@@ -209,6 +242,17 @@
       <span data-fact="endOnNothing">…</span> have nothing arriving at all. Both
       numbers are on the page, because two thirds is the honest figure.
     </p>
+
+    <figure class="dm" data-demo-wrap>
+      <figcaption class="dm-head">
+        <span class="dm-tag">live</span>
+        <span class="dm-title">A cycle count, emerging</span>
+        <span class="dm-sub">counted after the fact, because nothing on the chip holds it</span>
+      </figcaption>
+      <div class="dm-body" data-demo="timing">
+        <p class="dm-note">Starting the chip…</p>
+      </div>
+    </figure>
     <p class="pr-seealso">
       See it: <a href="timing">Timing</a> has every instruction's length and what
       ended it.
@@ -250,6 +294,17 @@
       <span data-fact="transistors">…</span> switches, and so does every cycle
       count on this site.
     </p>
+
+    <figure class="dm" data-demo-wrap>
+      <figcaption class="dm-head">
+        <span class="dm-tag">live</span>
+        <span class="dm-title">What is joined to what, right now</span>
+        <span class="dm-sub">bit 0 of the datapath, as the switches open and close</span>
+      </figcaption>
+      <div class="dm-body" data-demo="groups">
+        <p class="dm-note">Starting the chip…</p>
+      </div>
+    </figure>
     <p class="pr-seealso">
       See it: <a href="trace">Trace</a>, with the wire panel open — the "shorted
       together right now" list has no equivalent in any software model of a 6502.

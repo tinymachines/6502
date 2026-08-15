@@ -294,10 +294,22 @@ def main() -> None:
                       f"fetch('{b.ref('schematic.json')}')", where="trace.js")
     b.emit("trace.js", tr.encode())
 
-    # 3g. primer.js: no wasm, no geometry -- it reads the three published
-    #     measurement files and fills the numbers into the prose, so an
-    #     explanatory page cannot drift away from what it explains.
+    # 3g. demos.js: the pieces the primer's runnable examples are built from.
+    #     Shared so that a lamp strip on one page cannot come to disagree with a
+    #     lamp strip on another about which end bit 7 is on.
+    b.emit("demos.js", b.read("demos.js"))
+
+    # 3h. primer.js: the three published measurement files fill the prose, and
+    #     the wasm runs the examples underneath it. An explanatory page is the
+    #     one most likely to drift away from what it explains, so neither its
+    #     numbers nor its demonstrations are written down anywhere in it.
     pr = b.read("primer.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+        ("./demos.js", "./" + b.ref("demos.js")),
+    ]:
+        pr = replace_once(pr, f"'{original}'", f"'{resolved}'", where="primer.js")
     for original in ["schematic.json", "decode.json", "timing.json"]:
         pr = replace_once(pr, f"'{original}'", f"'{b.ref(original)}'", where="primer.js")
     b.emit("primer.js", pr.encode())

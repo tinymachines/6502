@@ -23,7 +23,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Simulation | Complete. 79 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
-| Primer | The mental model, corrected one step at a time. Every number derived. |
+| Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
@@ -220,7 +220,7 @@ _contrast-test.html    # every button, every state, checked for readable text
 _persist-test.html     # the console's configuration, across a second page load
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
-_primer-test.html      # every number on the primer, re-derived from the JSON
+_primer-test.html      # the primer's numbers re-derived, and its five examples run
 _trace-test.html       # cycle counts counted, and ADC landing after the end
 _schematic-test.html   # does the drawing contain everything the caption claims?
 _solo-test.html        # the study view, driven against the REAL page in an iframe
@@ -1233,7 +1233,41 @@ It is meant to grow. The thing to preserve as it does:
 - **Every section ends by linking to the page that demonstrates it** — Trace for
   the half-cycles, Decode for the PLA, Timing for the chain. The primer explains;
   it does not become a fourth place that owns a fact.
-- It loads no wasm and runs no simulation. Three fetches and some text.
+- **Every section carries a runnable example**, built from `web/demos.js` — a
+  shared toolkit rather than five one-off widgets, because a lamp strip that
+  disagreed with another lamp strip about which end bit 7 is on is exactly the
+  quiet difference this site exists to remove.
+  - **One chip, five views of it.** They share a machine and a clock, so stepping
+    in any of them steps all of them. That is the honest arrangement — they are
+    five readings of one piece of silicon, not five simulations — and it is also
+    the cheap one. Each transport paints from the chip rather than from whichever
+    button was last pressed, or two of them disagree the moment you use the other.
+  - **The scope is the one genuinely new primitive.** Every other page reports
+    what is true *now*; "two edges, not one blip" is a claim about time, and a
+    claim about time needs something that remembers. It samples once per
+    half-cycle and draws the recording, with a divider every second sample — so
+    the waveform is measured rather than illustrated, and the point being made is
+    the thing you can count.
+    - It records forwards only. Stepping back rewinds the chip, and growing a new
+      sample for a half-cycle being *undone* would make it a history of the
+      reader rather than of the chip; it clears instead.
+  - **The chip is warmed before anyone looks** (`chip.warm(24)`). It comes out of
+    a power cycle mid-reset, which is not what a page about fetching instructions
+    wants on screen, and the scope at rest has nothing to show.
+  - **Nothing runs off screen**, via one `IntersectionObserver` over the whole
+    examples region plus `visibilitychange`.
+  - **The examples cannot take the page down.** They boot after it, in their own
+    try/catch, and a failure writes itself into the boxes rather than leaving
+    five empty ones that look like a layout bug. The prose and its measurements
+    are worth reading without them.
+  - **The stray-digit scan exempts them, and the exemption is the rule stated
+    precisely.** It polices what is *written into `primer.html`*, where a count
+    would sit unchecked forever. A demo's own prose says things like "on bit 0" —
+    a choice about what to watch, not a measurement that can go stale.
+  - Two `\b` traps cost a round each here, both in the harness rather than the
+    page: `textContent` runs a readout's label into its value and its value into
+    the next paragraph, so `/\b\d+ cycles?\b/` never matches "took2
+    cyclesNothing" at either end.
 
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 

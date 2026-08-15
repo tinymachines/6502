@@ -47,9 +47,16 @@ f.addEventListener('load', async () => {
 
     // A number typed into the prose is one nothing checks. There should be no
     // bare digits in the body text outside a fact slot, a code span or a link.
+    //
+    // The examples are exempt, and the exemption is the rule stated precisely:
+    // this polices what is *written into primer.html*, where a count would sit
+    // unchecked forever. Everything inside a demo is generated from a running
+    // chip, and its prose says things like "on bit 0" -- a choice about what to
+    // watch, not a measurement that could go stale.
     const body = $('pr-main');
     const stray = [];
     for (const p of body.querySelectorAll('p')) {
+      if (p.closest('[data-demo]')) continue;
       const clone = p.cloneNode(true);
       for (const kill of clone.querySelectorAll('[data-fact], .mono, code, a')) kill.remove();
       // "6502" is the chip's name, not a figure -- nothing measures it and
@@ -121,6 +128,84 @@ f.addEventListener('load', async () => {
     ok('the address bus is as wide as the die says',
        busRow && busRow.textContent.includes(String(abBits)),
        busRow && busRow.querySelector('.pr-pin').textContent);
+
+    // --- the runnable examples ------------------------------------------------
+    //
+    // Five views of one chip. The prose above is checked against the published
+    // measurements; these are checked against the chip itself, which is the same
+    // rule approached from the other end.
+    const w = f.contentWindow;
+    for (let i = 0; i < 300 && !d.querySelector('.dm-bar'); i++) await sleep(50);
+    const demos = [...d.querySelectorAll('[data-demo]')];
+    ok('every section has an example', demos.length === 5, `${demos.length}`);
+    const built = demos.filter((x) => x.querySelector('.dm-bar'));
+    ok('and all of them built', built.length === demos.length,
+       built.length ? '' : d.querySelector('[data-demo]').textContent.trim().slice(0, 80));
+
+    const at = () => Number(/½cyc (\d+)/.exec(d.querySelector('.dm-clock').textContent)[1]);
+    const stepBtn = (host) => [...host.querySelectorAll('.dm-btn')]
+      .find((b) => b.title === 'Forward one half-cycle');
+    const demo = (kind) => d.querySelector(`[data-demo="${kind}"]`);
+
+    // The chip comes up past its reset sequence with a recording already on the
+    // scope -- a page whose first impression is an empty graph and a chip mid-
+    // reset is a worse page.
+    ok('the chip arrives warmed up, not at zero', at() > 10, `½cyc ${at()}`);
+
+    const before = at();
+    stepBtn(demo('decode')).click();
+    await sleep(80);
+    ok('stepping one example steps them all', at() === before + 1,
+       `${before} -> ${at()}`);
+    const clocks = [...d.querySelectorAll('.dm-clock')].map((c) => c.textContent);
+    ok('and every transport agrees about the time',
+       new Set(clocks).size === 1, clocks.join(' | '));
+
+    // The scope is a recording, so it has to have recorded something -- and the
+    // clock has to be doing what the section says it does, which is change on
+    // every half-cycle rather than every cycle.
+    const scope = demo('clock').querySelector('.dm-scope');
+    ok('the scope drew a trace per channel',
+       scope.querySelectorAll('.dm-scope-trace').length === 3,
+       `${scope.querySelectorAll('.dm-scope-trace').length}`);
+    const phaseNow = () => /· (φ[12])/.exec(d.querySelector('.dm-clock').textContent)[1];
+    const p0 = phaseNow();
+    stepBtn(demo('clock')).click();
+    await sleep(80);
+    ok('and the phase flips on every half-cycle, not every cycle',
+       phaseNow() !== p0, `${p0} -> ${phaseNow()}`);
+
+    // The pins are read off the pads, and the five inputs really reach the chip.
+    const irq = demo('pins').querySelector('[data-pin="irq"]');
+    ok('IRQ starts high', !irq.classList.contains('low'), irq.textContent);
+    irq.click();
+    await sleep(80);
+    ok('and clicking it pulls the pin low, read back off the node',
+       irq.classList.contains('low'), irq.textContent);
+    irq.click();
+    await sleep(80);
+    ok('and again releases it', !irq.classList.contains('low'), irq.textContent);
+
+    // Run a while and the rest of them have to say something about the chip.
+    let sawTerm = false, sawCycles = false, sawJoin = false;
+    for (let i = 0; i < 60; i++) {
+      stepBtn(demo('timing')).click();
+      if (demo('decode').querySelector('.dm-terms i')) sawTerm = true;
+      // No leading \b: the readout's label and value run together in
+      // textContent ("took2 cycles"), and "k2" has no word boundary in it.
+      // No word boundaries on either end. `textContent` runs the readout's
+      // label into its value and its value into the next paragraph -- "took2
+      // cyclesNothing on the chip..." -- so both edges of the match sit between
+      // two word characters, and \b never fires at either of them.
+      if (/\d+ cycles?/.test(demo('timing').textContent)) sawCycles = true;
+      if (demo('groups').querySelectorAll('.dm-join i').length > 1) sawJoin = true;
+    }
+    await sleep(120);
+    ok('the decode plane matches something as the chip runs', sawTerm);
+    ok('a cycle count emerges from the timing chain, unprompted', sawCycles,
+       demo('timing').textContent.replace(/\s+/g, ' ').slice(0, 90));
+    ok('and wires are found shorted together on bit 0', sawJoin,
+       demo('groups').textContent.replace(/\s+/g, ' ').slice(0, 90));
 
     // --- it is part of the site ----------------------------------------------
     const nav = [...d.querySelectorAll('#site-nav a')].map((a) => a.getAttribute('href'));

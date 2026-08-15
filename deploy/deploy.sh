@@ -58,7 +58,7 @@ for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/programs.js web/blueprint.html web/blueprint.js web/blueprint.json \
          web/exploded.html web/exploded.js web/exploded-gl.js web/blocks.json \
          web/schematic.html web/schematic.js web/schematic.json \
-         web/trace.html web/trace.js web/primer.html web/primer.js \
+         web/trace.html web/trace.js web/primer.html web/primer.js web/demos.js \
          web/decode.html web/decode.js web/decode.json \
          web/timing.html web/timing.js web/timing.json \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
