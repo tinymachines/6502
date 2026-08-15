@@ -21,6 +21,9 @@ const state = {
   machine: null,
   gateOf: new Map(),      // out node -> gate
   switchesOn: new Map(),  // node -> [switch]
+  gatesUsing: new Map(),  // node -> [gate] it is an input to
+  switchesBy: new Map(),  // node -> [switch] it opens
+  dir: 'back',            // 'back' = what makes it, 'fwd' = what it drives
   root: null,
   depth: 3,
   compare: null,          // [nodeA, nodeB] when comparing two signals
@@ -46,37 +49,80 @@ const isNamed = (n) => state.data.names[n] != null;
 // re-rooting and changing depth cost nothing.
 // ---------------------------------------------------------------------------
 
-function cone(root, depth) {
+// Most signals drive one or two things -- the median forward fan-out is 1 --
+// but `cclk` opens 273 switches and the IR bits feed dozens of terms. Those are
+// capped and the cap is reported, because a picture that quietly showed 16 of
+// 273 would be a lie about the chip rather than a limit of the page.
+const MAX_FAN = 16;
+
+/**
+ * Everything behind a signal, or everything in front of it.
+ *
+ * Backward asks what makes this value: the gate that drives it, and the wires a
+ * switch could bring to it. Forward asks what this value changes: the gates it
+ * is an input to, and the switches it opens. Pass transistors appear in both,
+ * because a pass transistor genuinely is bidirectional -- the direction that is
+ * really directional is the gate, and the control line.
+ */
+function cone(root, depth, dir = 'back') {
   const { vss, vcc } = state.data;
   const isRail = (n) => n === vss || n === vcc;
   const levels = [[root]];
   const seen = new Set([root]);
-  const elements = [];   // {kind, out, inputs, control, level}
+  const elements = [];
+  let truncated = 0;
 
   for (let level = 0; level < depth; level++) {
     const next = [];
     for (const node of levels[level]) {
-      const g = state.gateOf.get(node);
-      if (g) {
-        const inputs = [...new Set(g.terms.flat())];
-        elements.push({ kind: g.kind, out: node, inputs, terms: g.terms, level, precharge: g.precharge });
-        for (const i of inputs) {
-          if (!isRail(i) && !seen.has(i)) { seen.add(i); next.push(i); }
+      const push = (n) => {
+        if (!isRail(n) && !seen.has(n)) { seen.add(n); next.push(n); }
+      };
+      const cap = (list) => {
+        if (list.length <= MAX_FAN) return list;
+        truncated += list.length - MAX_FAN;
+        return list.slice(0, MAX_FAN);
+      };
+
+      if (dir === 'back') {
+        const g = state.gateOf.get(node);
+        if (g) {
+          const inputs = [...new Set(g.terms.flat())];
+          elements.push({ kind: g.kind, out: node, inputs, terms: g.terms, level,
+                          precharge: g.precharge });
+          inputs.forEach(push);
+        }
+      } else {
+        // The gates this signal is an input to: it helps decide their output.
+        for (const g of cap(state.gatesUsing.get(node) || [])) {
+          elements.push({ kind: g.kind, out: g.out, inputs: [node], terms: g.terms,
+                          level, precharge: g.precharge, forward: true });
+          push(g.out);
+        }
+        // ...and the switches it opens, which is what a control line is for.
+        for (const w of cap(state.switchesBy.get(node) || [])) {
+          for (const side of [w.a, w.b]) {
+            if (isRail(side)) continue;
+            elements.push({ kind: 'switch', out: side, inputs: [node],
+                            control: node, level, forward: true, opens: true });
+            push(side);
+          }
         }
       }
-      for (const w of state.switchesOn.get(node) || []) {
+
+      // A pass transistor conducts both ways, so its far side belongs to either
+      // reading. The control rides on the element as a label and is never
+      // expanded: cclk alone gates 273 transistors.
+      for (const w of cap(state.switchesOn.get(node) || [])) {
         const far = w.a === node ? w.b : w.a;
         elements.push({ kind: 'switch', out: node, inputs: [far], control: w.control, level });
-        // The control rides on the element as a label and is not expanded.
-        // cclk alone gates 273 transistors; following it drags the whole clock
-        // tree in and buries the signal that was asked about.
-        if (!isRail(far) && !seen.has(far)) { seen.add(far); next.push(far); }
+        push(far);
       }
     }
     if (!next.length) break;
     levels.push(next);
   }
-  return { root, levels, elements };
+  return { root, levels, elements, dir, truncated };
 }
 
 /**
@@ -150,6 +196,12 @@ function boxWidth(node) {
  * boxes stop touching.
  */
 function layout(c) {
+  // A forward cone is the same layout mirrored. Causality has to read the same
+  // way in both: the thing being explained sits at the anchored end and what
+  // relates to it grows away from it. Backwards that means inputs to the left;
+  // forwards it means consumers to the right, so every x is negated and the
+  // pills anchor from their other edge.
+  const flip = c.dir === 'fwd';
   const place = new Map();
   const colW = c.levels.map((nodes) => Math.max(...nodes.map(boxWidth), 46));
 
@@ -163,10 +215,22 @@ function layout(c) {
   }
 
   const tallest = Math.max(...c.levels.map((l) => (l.length - 1) * ROW), 0);
+  const sx = flip ? -1 : 1;
   c.levels.forEach((nodes, li) => {
     const top = (tallest - (nodes.length - 1) * ROW) / 2;
     nodes.forEach((n, i) => {
-      place.set(n, { x: nodeRight[li], y: top + i * ROW, w: boxWidth(n) });
+      const w = boxWidth(n);
+      const x = nodeRight[li] * sx;
+      place.set(n, {
+        x, y: top + i * ROW, w, flip,
+        // Where the box sits, and where a wire meets it. Stored rather than
+        // recomputed at every use, so the two cannot disagree about which edge
+        // is which.
+        boxL: flip ? x : x - w,
+        boxR: flip ? x + w : x,
+        wireIn: flip ? x + 4 : x - 4,     // just inside, on the element side
+        wireOut: flip ? x + w : x - w,    // the far edge, where the output meets it
+      });
     });
   });
 
@@ -180,7 +244,7 @@ function layout(c) {
     if (!out) continue;
     const ins = e.inputs.map((n) => place.get(n)).filter(Boolean);
     const y = ins.length ? ins.reduce((s, p) => s + p.y, 0) / ins.length : out.y;
-    items.push({ e, out, x: elX[e.level], y });
+    items.push({ e, out, x: elX[e.level] * sx, y });
   }
 
   // Separate within each column. Sorting first makes one sweep enough, and
@@ -209,7 +273,7 @@ function layout(c) {
     minX = Math.min(minX, x0); maxX = Math.max(maxX, x1);
     minY = Math.min(minY, y0); maxY = Math.max(maxY, y1);
   };
-  for (const p of place.values()) see(p.x - p.w, p.y - NODE_H / 2, p.x, p.y + NODE_H / 2);
+  for (const p of place.values()) see(p.boxL, p.y - NODE_H / 2, p.boxR, p.y + NODE_H / 2);
   for (const it of items) {
     const railward = it.e.inputs.some((n) => !place.has(n)) ? RAIL_LEAD + 4 : 0;
     see(it.x - EL_W / 2 - railward, it.y - EL_H / 2 - EL_LABEL - 6,
@@ -219,15 +283,17 @@ function layout(c) {
 
   const dx = PAD - minX;
   const dy = PAD - minY;
-  for (const p of place.values()) { p.x += dx; p.y += dy; }
+  for (const p of place.values()) {
+    p.x += dx; p.y += dy; p.boxL += dx; p.boxR += dx; p.wireIn += dx; p.wireOut += dx;
+  }
   for (const it of items) { it.x += dx; it.y += dy; }
-  return { place, items, width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 };
+  return { place, items, flip, width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 };
 }
 
 function draw(c) {
   const svg = $('sch-svg');
   svg.replaceChildren();
-  const { place, items, width, height } = layout(c);
+  const { place, items, flip, width, height } = layout(c);
 
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('width', width);
@@ -245,14 +311,16 @@ function draw(c) {
     // left the caption claiming five switches while none appeared.
     for (const n of e.inputs) {
       const p = place.get(n);
+      const sgn = flip ? -1 : 1;
       if (p) {
         el('path', {
-          d: `M ${p.x - 4} ${p.y} H ${ex - EL_W / 2 - 10} L ${ex - EL_W / 2 + 4} ${ey}`,
+          d: `M ${p.wireIn} ${p.y} H ${ex - sgn * (EL_W / 2 + 10)} `
+             + `L ${ex - sgn * (EL_W / 2 - 4)} ${ey}`,
           class: 'sch-wire', 'data-from': n,
         }, wires);
       } else {
-        const rx = ex - EL_W / 2 - RAIL_LEAD;
-        el('path', { d: `M ${rx} ${ey} H ${ex - EL_W / 2 + 4}`, class: 'sch-wire' }, wires);
+        const rx = ex - sgn * (EL_W / 2 + RAIL_LEAD);
+        el('path', { d: `M ${rx} ${ey} H ${ex - sgn * (EL_W / 2 - 4)}`, class: 'sch-wire' }, wires);
         el('line', { x1: rx, y1: ey - 8, x2: rx, y2: ey + 8, class: 'sch-rail' }, wires);
         // Below the stub rather than beside it: the space under a rail tap is
         // always free, whereas the space to its left is the next column.
@@ -260,8 +328,10 @@ function draw(c) {
         t.textContent = n === vss ? 'Vss' : n === vcc ? 'Vcc' : '?';
       }
     }
-    el('path', { d: `M ${ex + EL_W / 2 - 4} ${ey} H ${out.x - out.w - 2} `
-      + `M ${out.x - out.w - 2} ${ey} V ${out.y} H ${out.x - out.w}`, class: 'sch-wire' }, wires);
+    const sgnOut = flip ? -1 : 1;
+    const meet = out.wireOut + sgnOut * 2;
+    el('path', { d: `M ${ex + sgnOut * (EL_W / 2 - 4)} ${ey} H ${meet} `
+      + `M ${meet} ${ey} V ${out.y} H ${out.wireOut}`, class: 'sch-wire' }, wires);
 
     if (e.kind === 'switch') {
       // A pass transistor is a gap that a control line closes, so it is drawn
@@ -304,8 +374,9 @@ function draw(c) {
       'data-node': node,
       transform: `translate(${p.x},${p.y})`,
     }, parts);
-    el('rect', { x: -p.w, y: -NODE_H / 2, width: p.w, height: NODE_H, rx: 3, class: 'sch-pill' }, g);
-    const t = el('text', { x: -p.w / 2, y: 4, class: 'sch-name' }, g);
+    el('rect', { x: p.flip ? 0 : -p.w, y: -NODE_H / 2, width: p.w, height: NODE_H,
+                 rx: 3, class: 'sch-pill' }, g);
+    const t = el('text', { x: (p.flip ? 1 : -1) * p.w / 2, y: 4, class: 'sch-name' }, g);
     t.textContent = nameOf(node);
     g.addEventListener('click', () => setRoot(node));
   }
@@ -515,6 +586,24 @@ function step(dir) {
   refresh();
 }
 
+/** The only place direction changes, so the two toggles cannot disagree. */
+function setDir(dir) {
+  state.dir = dir === 'fwd' ? 'fwd' : 'back';
+  const back = $('dir-back');
+  const fwd = $('dir-fwd');
+  if (back) back.classList.toggle('on', state.dir === 'back');
+  if (fwd) fwd.classList.toggle('on', state.dir === 'fwd');
+  const solo = $('solo-dir');
+  if (solo) {
+    solo.classList.toggle('on', state.dir === 'fwd');
+    solo.title = state.dir === 'fwd' ? 'Showing what it drives (d)' : 'Showing what makes it (d)';
+  }
+  render();
+  const q = new URLSearchParams(location.search);
+  q.set('dir', state.dir);
+  history.replaceState(null, '', '?' + q.toString());
+}
+
 /** The only place run state changes, so the two transports cannot disagree. */
 function setRunning(on) {
   state.running = on;
@@ -555,13 +644,17 @@ function setRoot(node) {
 }
 
 function render() {
-  const c = cone(state.root, state.depth);
+  const c = cone(state.root, state.depth, state.dir);
   draw(c);
   const gates = c.elements.filter((e) => e.kind !== 'switch').length;
   const sw = c.elements.length - gates;
+  const way = c.dir === 'fwd' ? 'levels forward' : 'levels back';
+  const capped = c.truncated
+    ? ` · ${c.truncated} more not shown (fan-out capped at ${MAX_FAN})`
+    : '';
   $('sch-caption').textContent =
-    `${nameOf(state.root)} — ${c.nodes ?? c.levels.reduce((a, l) => a + l.length, 0)} signals, `
-    + `${gates} gates, ${sw} switches, ${c.levels.length} levels back`;
+    `${nameOf(state.root)} — ${c.levels.reduce((a, l) => a + l.length, 0)} signals, `
+    + `${gates} gates, ${sw} switches, ${c.levels.length} ${way}${capped}`;
 }
 
 /** Turn a signature entry into something a reader can act on. */
@@ -585,8 +678,8 @@ function describe(sig) {
  * the differing controls are highlighted in the drawing as well.
  */
 function runCompare(a, b) {
-  const ca = cone(a, state.depth);
-  const cb = cone(b, state.depth);
+  const ca = cone(a, state.depth, state.dir);
+  const cb = cone(b, state.depth, state.dir);
   const d = diff(ca, cb);
   state.compare = [a, b];
 
@@ -676,6 +769,15 @@ async function boot() {
         if (!state.switchesOn.has(n)) state.switchesOn.set(n, []);
         state.switchesOn.get(n).push({ control, a, b });
       }
+      // ...and the other direction: what this control line opens.
+      if (!state.switchesBy.has(control)) state.switchesBy.set(control, []);
+      state.switchesBy.get(control).push({ control, a, b });
+    }
+    for (const g of state.gateOf.values()) {
+      for (const lit of new Set(g.terms.flat())) {
+        if (!state.gatesUsing.has(lit)) state.gatesUsing.set(lit, []);
+        state.gatesUsing.get(lit).push(g);
+      }
     }
 
     const m = new Machine();
@@ -691,6 +793,7 @@ async function boot() {
 
     const q = new URLSearchParams(location.search);
     state.depth = Math.max(1, Math.min(6, Number(q.get('depth')) || 3));
+    state.dir = q.get('dir') === 'fwd' ? 'fwd' : 'back';
     $('sch-depth').value = String(state.depth);
     $('sch-depth-val').textContent = String(state.depth);
 
@@ -715,9 +818,17 @@ async function boot() {
       if (ev.key === ' ') { setRunning(!state.running); ev.preventDefault(); }
       else if (ev.key === 'ArrowRight') { step(+1); ev.preventDefault(); }
       else if (ev.key === 'ArrowLeft') { step(-1); ev.preventDefault(); }
+      else if (ev.key === 'd' || ev.key === 'D') {
+        setDir(state.dir === 'back' ? 'fwd' : 'back');
+        ev.preventDefault();
+      }
     });
     $('sch-step').addEventListener('click', () => step(+1));
     $('sch-solo-exit').addEventListener('click', () => $('sch-fullscreen').click());
+    $('dir-back').addEventListener('click', () => setDir('back'));
+    $('dir-fwd').addEventListener('click', () => setDir('fwd'));
+    $('solo-dir').addEventListener('click', () =>
+      setDir(state.dir === 'back' ? 'fwd' : 'back'));
 
     // The bit comparison. Populated from the buses the die actually names.
     const busSel = $('sch-bus');
@@ -787,7 +898,7 @@ async function boot() {
 
     buildLegend();
     renderSignal(state.root);
-    render();
+    setDir(state.dir);
     $('sch-boot').hidden = true;
     $('sch-main').hidden = false;
     tick();

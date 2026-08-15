@@ -1229,3 +1229,15 @@ body.no-scroll #view { z-index: 70; }
   .console.solo .sch-solo-bar { bottom: 2.6rem; gap: .25rem; padding: .3rem .35rem; }
   .solo-clock { font-size: .6rem; min-width: 0; }
 }
+
+/* --- Schematic: direction ---------------------------------------------------- */
+
+.sch-dir { display: flex; gap: .3rem; }
+.sch-dir-btn {
+  flex: 1; min-width: 0; font: inherit; font-size: .74rem; padding: .35rem .5rem;
+  cursor: pointer; color: var(--muted); background: var(--subtle);
+  border: 2px solid var(--line); border-radius: .25rem; white-space: nowrap;
+}
+.sch-dir-btn:hover { color: var(--accent); }
+.sch-dir-btn.on { color: var(--accent); border-color: var(--accent); }
+.solo-dir.on { color: var(--accent); border-color: var(--accent); }

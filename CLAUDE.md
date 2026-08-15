@@ -686,6 +686,21 @@ Clicking a signal re-roots and stays there, which is how the islands get walked.
   collapses to its content and the drawing sits at the top of an empty screen —
   which looked centred on a desktop only because the drawing filled the width,
   and was obvious the moment it was seen on a phone.
+- **The walk runs both ways.** Backward asks what produces a value (the gate
+  driving it, the wires a switch could bring to it); forward asks what it
+  changes (the gates it feeds, the switches it opens). Pass transistors appear
+  in both, deliberately — a pass transistor conducts both ways, and the parts
+  that have a direction are the gate and the control line.
+  - **Forward mirrors the layout** rather than reusing it. Causality has to read
+    the same way round in both, so the anchored end holds the subject and the
+    rest grows away from it: every x is negated and the pills anchor from the
+    other edge. Pill geometry is stored per node (`boxL`, `boxR`, `wireIn`,
+    `wireOut`) rather than recomputed at each use, so the two ends cannot
+    disagree about which edge is which.
+  - **Fan-out is capped at 16, and the cap is stated in the caption.** The
+    median forward fan-out is 1 and only 19 of 707 signals exceed 20 — but
+    `cclk` opens 273 switches. Showing sixteen of those silently would be a
+    claim about the chip rather than a limit of the page.
 - **The study view has its own clock**, because the point of pinning to one
   island is watching an edge happen on it. Back / run / step plus arrow keys and
   space, with a readout of half-cycle, phase, T-state and `sync`.

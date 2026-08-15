@@ -88,6 +88,13 @@
             <span>Depth <b class="mono" id="sch-depth-val">3</b></span>
             <input id="sch-depth" type="range" min="1" max="6" value="3">
           </label>
+          <div class="field">
+            <span>Direction</span>
+            <div class="sch-dir" role="group" aria-label="Direction">
+              <button id="dir-back" class="sch-dir-btn on" type="button">what makes it</button>
+              <button id="dir-fwd" class="sch-dir-btn" type="button">what it drives</button>
+            </div>
+          </div>
         </div>
 
         <div class="sch-stage">
@@ -102,6 +109,8 @@
                     aria-label="Run" title="Run (space)">▶</button>
             <button id="solo-step" class="solo-btn" type="button"
                     aria-label="Forward one half-cycle" title="Step (→)">▶❙</button>
+            <button id="solo-dir" class="solo-btn solo-dir" type="button"
+                    aria-label="Show what this drives" title="Flip direction (d)">⇄</button>
             <span class="solo-clock mono" id="solo-clock"></span>
           </div>
           <p class="sch-solo-hint">
@@ -246,6 +255,32 @@
       273 transistors, so following controls pulls the entire clock tree into
       view within two levels and buries the signal you asked about. Click a
       control line to make it the subject instead.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">Both directions</p>
+      <h2>What makes it, and what it changes.</h2>
+    </div>
+    <p>
+      The same walk runs either way. Backwards it asks what produces a value:
+      the gate that drives it, and the wires a switch could bring to it.
+      Forwards it asks what the value changes: the gates it is an input to, and
+      the switches it opens — which, for a control line, is the entire reason it
+      exists.
+    </p>
+    <p>
+      Pass transistors appear in both, and that is not a hedge. A pass transistor
+      genuinely conducts both ways; the parts that have a direction are the gate
+      and the control line, and those are the parts that differ between the two
+      readings.
+    </p>
+    <p>
+      <strong>Fan-out is capped at 16 and the cap is declared.</strong> Most
+      signals drive one or two things — the median is one — but
+      <span class="mono">cclk</span> opens 273 switches and the instruction
+      register's bits feed dozens of product terms. A picture that quietly
+      showed sixteen of those would be a claim about the chip rather than a limit
+      of the page, so the caption says how many it left out.
     </p>
   </section>
 

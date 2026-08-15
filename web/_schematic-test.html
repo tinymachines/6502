@@ -28,11 +28,13 @@
     <input id="sch-filter" type="search"><span id="sch-shown"></span>
     <select id="sch-signal"></select>
     <input id="sch-depth" type="range" min="1" max="6" value="3"><b id="sch-depth-val"></b>
+    <button id="dir-back"></button><button id="dir-fwd"></button>
   </div>
   <div class="sch-stage"><svg id="sch-svg"></svg>
     <button id="sch-solo-exit"></button><p class="sch-solo-hint"></p>
     <div class="sch-solo-bar"><button id="solo-back"></button><button id="solo-run"></button>
-      <button id="solo-step"></button><span id="solo-clock"></span></div></div>
+      <button id="solo-step"></button><button id="solo-dir"></button>
+      <span id="solo-clock"></span></div></div>
   <p id="sch-caption"></p>
   <div id="sch-signal-info"></div>
   <div id="sch-key"></div>
@@ -264,6 +266,56 @@ try {
   ok('and the difference names the shifter',
      /ADDSB7|ADDSB06/.test(out.textContent),
      (out.textContent.match(/ADDSB\d+/g) || []).join(' ') || 'no ADDSB mentioned');
+
+  // --- direction ------------------------------------------------------------
+  //
+  // Backward asks what makes a signal; forward asks what it changes. A pass
+  // transistor appears in both because it genuinely conducts both ways -- the
+  // directional parts are the gate and the control line.
+  const iSbx = byName.get('dpc3_SBX');
+  document.getElementById('sch-signal').value = String(iSbx);
+  document.getElementById('sch-signal').dispatchEvent(new Event('change'));
+  document.getElementById('sch-depth').value = '1';
+  document.getElementById('sch-depth').dispatchEvent(new Event('input'));
+  await sleep(200);
+  const backCap = caption();
+  const backDrawn = drawn();
+  ok('the backward caption says so', /levels back/.test(backCap), backCap);
+
+  document.getElementById('dir-fwd').click();
+  await sleep(250);
+  const fwdCap = caption();
+  ok('the forward caption says so', /levels forward/.test(fwdCap), fwdCap);
+  ok('forward is a different picture',
+     drawn().signals !== backDrawn.signals || drawn().switches !== backDrawn.switches,
+     `${JSON.stringify(backDrawn)} -> ${JSON.stringify(drawn())}`);
+  // A control line's forward cone is the switches it opens, which is the whole
+  // reason a control line exists.
+  ok('a control line drives switches', drawn().switches > 0, `${drawn().switches}`);
+
+  // Mirrored: the root sits at the opposite end, so causality reads the same
+  // way round in both modes.
+  const rootX = () => {
+    const g = svg.querySelector('.sch-node.root');
+    return Number(/translate\(([-\d.]+)/.exec(g.getAttribute('transform'))[1]);
+  };
+  const vbW = () => Number(svg.getAttribute('viewBox').split(/\s+/)[2]);
+  const fwdRoot = rootX() / vbW();
+  document.getElementById('dir-back').click();
+  await sleep(250);
+  const backRoot = rootX() / vbW();
+  ok('the root swaps ends when the direction flips', fwdRoot < 0.5 && backRoot > 0.5,
+     `forward ${fwdRoot.toFixed(2)}, backward ${backRoot.toFixed(2)}`);
+
+  // Fan-out is capped, and a capped picture must say so rather than pretending
+  // it showed everything. cclk opens 273 switches.
+  document.getElementById('sch-signal').value = String(byName.get('cclk'));
+  document.getElementById('sch-signal').dispatchEvent(new Event('change'));
+  document.getElementById('dir-fwd').click();
+  await sleep(300);
+  ok('a capped cone declares what it left out', /not shown/.test(caption()), caption());
+  document.getElementById('dir-back').click();
+  await sleep(200);
 
   // --- comparing any two signals -------------------------------------------
   $('sch-any-a').value = String(byName.get('dpc20_ADDSB06'));
