@@ -93,6 +93,19 @@
         </div>
         <p class="sch-caption mono" id="sch-caption"></p>
 
+        <div class="panel-box" id="sch-signal-info"></div>
+
+        <details class="sch-keybox" open>
+          <summary>Key — what the shapes mean</summary>
+          <div id="sch-key" class="sch-key"></div>
+          <p class="sch-key-note">
+            Every gate here inverts. NMOS has no AND and no OR: a pulldown network
+            fights a pullup, so the output falls when the network conducts. The
+            bubble on the nose of each symbol is that inversion, and it is not
+            optional.
+          </p>
+        </details>
+
         <div class="sch-compare">
           <span class="sch-cmp-label">Compare two bits of</span>
           <select id="sch-bus" aria-label="Bus"></select>

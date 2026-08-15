@@ -6,6 +6,9 @@
 //! extraction is cheap, and doing it in the page means the reader can re-root
 //! anywhere and change depth without another fetch.
 
+use v6502_netlist::blocks::Blocks;
+use v6502_netlist::blueprint::Blueprint;
+use v6502_netlist::pla::Pla;
 use v6502_netlist::schematic::{Kind, Schematic};
 use v6502_netlist::{Netlist, NodeId};
 
@@ -21,6 +24,36 @@ fn main() -> std::io::Result<()> {
         Kind::Aoi => 3,
         Kind::Dynamic => 4,
     };
+
+    // What a signal *is*, derived from the passes that already know. The page
+    // needs this to answer "what is dpc3_SBX" with facts rather than with a
+    // naming convention, and deriving it here rather than fetching three more
+    // files at runtime keeps one source of truth for node numbering.
+    let blocks = Blocks::derive(&nl);
+    let pla = Pla::derive(&nl);
+    let bp = Blueprint::derive(&nl);
+
+    let mut role = vec![0u8; nl.node_count()];
+    for r in &pla.rows {
+        role[r.node as usize] = 1; // a product term of the decode PLA
+    }
+    for o in &pla.outputs {
+        role[o.node as usize] = 2; // a decode control line
+    }
+
+    // A control line's job, as the blueprint measured it: the two datapath
+    // units it joins and the bits it carries. This is what makes "SBX" mean
+    // something without anyone asserting that S-B-X stands for anything.
+    let mut paths: Vec<(NodeId, &str, &str, u8)> = Vec::new();
+    for link in &bp.links {
+        paths.push((
+            link.control_node,
+            bp.units[link.a].name.as_str(),
+            bp.units[link.b].name.as_str(),
+            link.bits,
+        ));
+    }
+    paths.sort_by_key(|p| p.0);
 
     let mut s = String::with_capacity(1 << 19);
     s.push_str("{\n  \"kinds\": [\"inverter\",\"nor\",\"nand\",\"aoi\",\"dynamic\"],\n");
@@ -52,6 +85,47 @@ fn main() -> std::io::Result<()> {
         }
     }
     s.push_str("],\n");
+
+    s.push_str("  \"blockNames\": [");
+    for (i, b) in blocks.blocks.iter().enumerate() {
+        if i > 0 {
+            s.push(',');
+        }
+        s.push_str(&format!("{:?}", b.name));
+    }
+    s.push_str("],\n  \"nodeBlock\": [");
+    for n in 0..nl.node_count() {
+        if n > 0 {
+            s.push(',');
+        }
+        s.push_str(&blocks.of_node(n as NodeId).to_string());
+    }
+    s.push_str("],\n  \"nodeFanout\": [");
+    for n in 0..nl.node_count() {
+        if n > 0 {
+            s.push(',');
+        }
+        s.push_str(&nl.gates_of(n as NodeId).len().to_string());
+    }
+    s.push_str("],\n  \"nodeRole\": [");
+    for n in 0..nl.node_count() {
+        if n > 0 {
+            s.push(',');
+        }
+        s.push_str(&role[n].to_string());
+    }
+    s.push_str("],\n  \"controlPaths\": [\n");
+    for (i, (node, a, b, bits)) in paths.iter().enumerate() {
+        s.push_str(&format!(
+            "    [{},{:?},{:?},{}]{}\n",
+            node,
+            a,
+            b,
+            bits,
+            if i + 1 < paths.len() { "," } else { "" }
+        ));
+    }
+    s.push_str("  ],\n");
 
     // [out, kind, precharge, [[literal,...], ...]]
     s.push_str("  \"gates\": [\n");

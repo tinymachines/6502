@@ -1052,3 +1052,50 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
   border: 1px solid var(--line); border-radius: 2px; padding: .05rem .3rem; }
 .sch-rail { stroke: #6b7a99; stroke-width: 2.4; }
 .sch-rail-label { fill: #6b7a99; font: 500 8.5px var(--font-mono); text-anchor: middle; }
+
+/* --- Schematic: key and signal panel -------------------------------------- */
+
+.sch-keybox { border-top: 2px solid var(--line); padding: .7rem 1rem 1rem; }
+.sch-keybox > summary { cursor: pointer; font-size: .72rem; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); }
+.sch-keybox > summary:hover { color: var(--accent); }
+.sch-key { display: grid; gap: .5rem; margin-top: .7rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+.sch-key-item { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: .5rem;
+  align-items: center; margin: 0; padding: .35rem .45rem;
+  background: var(--panel-2); border: 2px solid var(--line); border-radius: 2px; }
+.sch-key-svg { width: 70px; height: 44px; background: #080c15; border-radius: 2px; }
+.sch-key-item figcaption { display: grid; gap: .1rem; min-width: 0; }
+.sch-key-item b { font-size: .76rem; }
+.sch-key-item span { font-size: .68rem; color: var(--muted); }
+.sch-key-note { margin: .8rem 0 0; font-size: .74rem; color: var(--muted); }
+
+#sch-signal-info { margin: 0 1rem 1rem; }
+.sch-sig-name { margin: 0 0 .5rem; font-family: var(--font-mono); font-size: .95rem;
+  display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
+.sch-sig-id { font-size: .64rem; color: var(--muted); font-weight: 400; }
+.tagm { font-family: var(--font-mono); font-size: .55rem; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent); border: 1px solid var(--line);
+  border-radius: 2px; padding: 0 .25rem; margin-left: .35rem; vertical-align: middle; }
+
+/* --- Schematic on a phone -------------------------------------------------- */
+
+@media (max-width: 46rem) {
+  /* Labels above their control, not beside it: the row form collapses into a
+     scatter of stray words at this width. */
+  .sch-controls { grid-template-columns: minmax(0, 1fr); gap: .5rem; }
+  .sch-controls .field { display: grid; gap: .2rem; }
+  .sch-controls .field > span { font-size: .66rem; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); }
+  #sch-shown { order: 2; }
+  .sch-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .4rem; align-items: center; }
+  .sch-cmp-label, .sch-compare .btn { grid-column: 1 / -1; }
+  .sch-compare .muted { display: none; }
+  .sch-key { grid-template-columns: minmax(0, 1fr); }
+  .sch-stage { max-height: 56vh; }
+  /* The term/definition pair is two narrow columns at this width, which wraps
+     every value into a ribbon. Stack them instead. */
+  #sch-signal-info .ends { grid-template-columns: minmax(0, 1fr); gap: .15rem; }
+  #sch-signal-info .ends dd { margin-bottom: .5rem; }
+}

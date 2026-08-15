@@ -315,12 +315,181 @@ function paint(levels) {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// What a signal is
+// ---------------------------------------------------------------------------
+
+/**
+ * What the name stems stand for.
+ *
+ * This is the one authored table on the page, and it is only a *reading of the
+ * names*: the die calls a wire `sb`, and "special bus" is what that abbreviation
+ * has always been taken to mean. Everything else in the panel below -- which
+ * block a signal sits in, what it gates, which two units a control line joins
+ * and on how many bits -- is measured, and is labelled as such.
+ */
+const STEMS = {
+  sb: 'special bus', dasb: 'special bus (its other name)',
+  idb: 'internal data bus', idl: 'input data latch',
+  db: 'data pins', ab: 'address pins',
+  adl: 'address low, internal', adh: 'address high, internal',
+  abl: 'address low, latched to the pins', abh: 'address high, latched to the pins',
+  a: 'accumulator', x: 'X index register', y: 'Y index register',
+  s: 'stack pointer', p: 'status flags', Pout: 'status flags, read side',
+  pcl: 'program counter, low byte', pch: 'program counter, high byte',
+  pclp: 'program counter low, precharge', pchp: 'program counter high, precharge',
+  alua: 'ALU input A', alub: 'ALU input B', alu: 'ALU result',
+  ir: 'instruction register', notir: 'instruction register, complemented',
+  pd: 'predecode', dor: 'data output register',
+  cclk: 'the clock that latches the decode pipeline',
+  cp1: 'clock phase 1', cp2: 'clock phase 2',
+  clock1: 'timing chain, stage 1', clock2: 'timing chain, stage 2',
+  t2: 'timing state T2', t3: 'timing state T3', t4: 'timing state T4', t5: 'timing state T5',
+  sync: 'high during an opcode fetch', rw: 'read/write to the pins',
+};
+
+/** Split `sb3` into ("sb", 3), the same rule the Rust side uses. */
+function splitBit(name) {
+  const m = /^([A-Za-z_]+)(\d+)$/.exec(name);
+  return m ? [m[1], Number(m[2])] : null;
+}
+
+const ROLE = ['', 'a product term of the decode PLA', 'a decode control line'];
+
+function renderSignal(node) {
+  const box = $('sch-signal-info');
+  const d = state.data;
+  const name = nameOf(node);
+  const named = isNamed(node);
+  const rows = [];
+
+  const add = (k, v) => rows.push(`<dt>${k}</dt><dd>${v}</dd>`);
+
+  // --- what the name says --------------------------------------------------
+  const dpc = /^dpc(-?\d+)_(.+)$/.exec(name);
+  const bit = splitBit(name);
+  if (dpc) {
+    add('Name', `control line <b>${dpc[1]}</b> of the decode pipeline. `
+      + `<span class="muted">The suffix <span class="mono">${dpc[2]}</span> is the die's own `
+      + `shorthand for what it opens.</span>`);
+  } else if (bit && STEMS[bit[0]]) {
+    add('Name', `bit <b>${bit[1]}</b> of <span class="mono">${bit[0]}</span> — ${STEMS[bit[0]]}`);
+  } else if (STEMS[name]) {
+    add('Name', STEMS[name]);
+  } else if (/^op-/.test(name)) {
+    add('Name', 'a decode PLA product term. '
+      + `<span class="muted">The die names these after the T-state and the instructions they serve.</span>`);
+  } else if (!named) {
+    add('Name', 'unnamed. <span class="muted">An internal node the die trace did not label — '
+      + 'most gate outputs are unnamed, because nobody needed to refer to them.</span>');
+  }
+
+  // --- what was measured ---------------------------------------------------
+  const role = d.nodeRole[node];
+  if (role) add('Role <span class="tagm">measured</span>', ROLE[role]);
+  add('Region <span class="tagm">measured</span>', d.blockNames[d.nodeBlock[node]]);
+
+  const g = state.gateOf.get(node);
+  if (g) {
+    const kind = { inverter: 'an inverter', nor: 'a NOR', nand: 'a NAND',
+                   aoi: 'an and-or-invert', dynamic: 'a precharged (dynamic) gate' }[g.kind];
+    const inputs = new Set(g.terms.flat()).size;
+    add('Driven by <span class="tagm">measured</span>',
+        `${kind} of ${inputs} input${inputs === 1 ? '' : 's'}`
+        + (g.precharge >= 0 ? `, precharged by <span class="mono">${nameOf(g.precharge)}</span>` : ''));
+  } else {
+    add('Driven by <span class="tagm">measured</span>',
+        '<span class="muted">no gate — it is fed through switches only</span>');
+  }
+
+  const fan = d.nodeFanout[node];
+  add('Gates <span class="tagm">measured</span>',
+      `${fan} transistor${fan === 1 ? '' : 's'}`
+      + (fan === 0 ? ' <span class="muted">— it drives nothing</span>' : ''));
+
+  // The blueprint measured which two units a control line joins. This is the
+  // part that turns a name like SBX into a fact rather than an expansion.
+  const path = (d.controlPaths || []).find((p) => p[0] === node);
+  if (path) {
+    const [, a, b, bits] = path;
+    const n = (bits.toString(2).match(/1/g) || []).length;
+    add('Opens <span class="tagm">measured</span>',
+        `<span class="mono">${a}</span> ${STEMS[a] ? `(${STEMS[a]})` : ''} `
+        + `→ <span class="mono">${b}</span> ${STEMS[b] ? `(${STEMS[b]})` : ''}`
+        + `, on ${n === 8 ? 'all 8 bits' : `${n} bit${n === 1 ? '' : 's'}`}`);
+  }
+
+  box.innerHTML = `<h3 class="sch-sig-name">${name}<span class="sch-sig-id">node ${node}</span></h3>`
+    + `<dl class="ends">${rows.join('')}</dl>`;
+}
+
+/** The key. Draws the same symbols the diagram does, at the same size. */
+function buildLegend() {
+  const host = $('sch-key');
+  host.replaceChildren();
+  const item = (title, note, paint) => {
+    const fig = document.createElement('figure');
+    fig.className = 'sch-key-item';
+    const svg = document.createElementNS(SVGNS, 'svg');
+    svg.setAttribute('viewBox', '0 0 70 44');
+    svg.setAttribute('class', 'sch-key-svg');
+    paint(svg);
+    const cap = document.createElement('figcaption');
+    cap.innerHTML = `<b>${title}</b><span>${note}</span>`;
+    fig.append(svg, cap);
+    host.append(fig);
+  };
+
+  const gate = (glyph, cls) => (svg) => {
+    const g = el('g', { class: `sch-el sch-gate ${cls}` }, svg);
+    el('path', { d: 'M 18 6 L 18 38 L 44 22 Z', class: 'sch-body' }, g);
+    el('circle', { cx: 49, cy: 22, r: 5, class: 'sch-bubble' }, g);
+    el('path', { d: 'M 4 22 H 18 M 54 22 H 66', class: 'sch-wire' }, svg);
+    const t = el('text', { x: 27, y: 26, class: 'sch-kind' }, g);
+    t.textContent = glyph;
+  };
+
+  item('Inverter', 'out is low when its one input is high', gate('1', 'sch-inverter'));
+  item('NOR ≥1', 'low if <em>any</em> input is high — transistors in parallel', gate('≥1', 'sch-nor'));
+  item('NAND &', 'low only if <em>all</em> inputs are high — in series', gate('&', 'sch-nand'));
+  item('And-or-invert', 'a mix of both, in one gate', gate('&≥', 'sch-aoi'));
+  item('Precharged φ', 'no pullup: a clock charges it, the network drains it',
+       gate('φ', 'sch-dynamic'));
+  item('Switch', 'a pass transistor. The name above it is what opens it', (svg) => {
+    const g = el('g', { class: 'sch-el sch-switch' }, svg);
+    el('path', { d: 'M 4 26 H 27 M 43 26 H 66', class: 'sch-wire' }, svg);
+    el('line', { x1: 31, y1: 17, x2: 31, y2: 35, class: 'sch-sw-plate' }, g);
+    el('line', { x1: 39, y1: 17, x2: 39, y2: 35, class: 'sch-sw-plate' }, g);
+    el('line', { x1: 35, y1: 6, x2: 35, y2: 17, class: 'sch-sw-gate' }, g);
+  });
+  item('Power rail', 'Vcc above, Vss below — where a gate pulls to', (svg) => {
+    el('path', { d: 'M 20 22 H 60', class: 'sch-wire' }, svg);
+    el('line', { x1: 20, y1: 12, x2: 20, y2: 32, class: 'sch-rail' }, svg);
+    const t = el('text', { x: 20, y: 42, class: 'sch-rail-label' }, svg);
+    t.textContent = 'Vcc';
+  });
+  item('Signal', 'a wire. Click it to make it the subject', (svg) => {
+    const g = el('g', { class: 'sch-node', transform: 'translate(62,22)' }, svg);
+    el('rect', { x: -56, y: -11, width: 56, height: 22, rx: 3, class: 'sch-pill' }, g);
+    const t = el('text', { x: -28, y: 4, class: 'sch-name' }, g);
+    t.textContent = 'sb3';
+  });
+  item('Lit', 'a signal that is high right now, with the chip running', (svg) => {
+    const g = el('g', { class: 'sch-node hot', transform: 'translate(62,22)' }, svg);
+    el('rect', { x: -56, y: -11, width: 56, height: 22, rx: 3, class: 'sch-pill' }, g);
+    const t = el('text', { x: -28, y: 4, class: 'sch-name' }, g);
+    t.textContent = 'sb3';
+  });
+}
+
 // ---------------------------------------------------------------------------
 // UI
 // ---------------------------------------------------------------------------
 
 function setRoot(node) {
   state.root = node;
+  renderSignal(node);
   state.compare = null;
   $('sch-compare-out').hidden = true;
   render();
@@ -469,6 +638,8 @@ async function boot() {
       if (a != null && b != null) runCompare(a, b);
     }
 
+    buildLegend();
+    renderSignal(state.root);
     render();
     $('sch-boot').hidden = true;
     $('sch-main').hidden = false;

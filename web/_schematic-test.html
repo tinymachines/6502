@@ -25,6 +25,8 @@
   </div>
   <div class="sch-stage"><svg id="sch-svg"></svg></div>
   <p id="sch-caption"></p>
+  <div id="sch-signal-info"></div>
+  <div id="sch-key"></div>
   <div class="sch-compare">
     <select id="sch-bus"></select>
     <select id="sch-bit-a"><option>0</option><option>7</option></select>
@@ -171,6 +173,47 @@ try {
   }
   ok('and nothing overlaps there either', denseHits === 0, `${denseHits} overlaps`);
   void busy;
+
+  // --- the key and the signal panel -----------------------------------------
+  ok('the key draws a symbol per shape',
+     document.querySelectorAll('.sch-key-item').length >= 8,
+     `${document.querySelectorAll('.sch-key-item').length} items`);
+  ok('every key symbol has actual geometry',
+     [...document.querySelectorAll('.sch-key-svg')].every((s) => s.querySelector('path, line, rect')));
+
+  // The panel's job is to answer "what is this signal", and most of it must be
+  // measured rather than a reading of the name. A control line is the case
+  // where the two are easy to confuse.
+  const info = () => document.getElementById('sch-signal-info').textContent;
+  const iSBX = byName.get('dpc3_SBX');
+  document.getElementById('sch-signal').value = String(iSBX);
+  document.getElementById('sch-signal').dispatchEvent(new Event('change'));
+  await sleep(200);
+  ok('the panel names the signal', info().includes('dpc3_SBX'), info().slice(0, 60));
+  ok('it reports the region it sits in', /Control pipeline/.test(info()));
+  ok('it reports what the signal gates', /8 transistors/.test(info()));
+  // Derived from the blueprint, not from expanding the letters S-B-X.
+  ok('it reports the measured path a control line opens',
+     /special bus/.test(info()) && /X index register/.test(info()) && /all 8 bits/.test(info()),
+     info().slice(-140));
+  ok('measured claims are marked as measured',
+     document.querySelectorAll('#sch-signal-info .tagm').length >= 3,
+     `${document.querySelectorAll('#sch-signal-info .tagm').length} tags`);
+
+  // An unnamed internal node must still say something useful rather than
+  // rendering an empty panel.
+  const anon = [...svg.querySelectorAll('.sch-node.anon')][0];
+  if (anon) {
+    anon.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(200);
+    ok('an unnamed node still gets an explanation',
+       /unnamed/i.test(info()) && info().length > 60, info().slice(0, 80));
+  } else {
+    ok('an unnamed node still gets an explanation', true, 'none in this cone');
+  }
+  document.getElementById('sch-signal').value = String(iSBX);
+  document.getElementById('sch-signal').dispatchEvent(new Event('change'));
+  await sleep(200);
 
   // --- depth actually deepens ----------------------------------------------
   const depth = $('sch-depth');

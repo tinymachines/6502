@@ -658,6 +658,28 @@ in the explanatory comment broke the module outright.
   hrefs are exempted -- otherwise the link resolves differently depending on how
   deep the page is.
 
+#### Explaining it to a reader
+
+The page carries a **key** drawn with the same primitives as the diagram (so a
+symbol cannot drift from what it documents) and a **signal panel** that answers
+"what is this wire".
+
+- **Nearly all of the panel is derived, and the derived lines are labelled
+  `measured`.** Region comes from `blocks.rs`, the driving gate and its
+  precharge from `schematic.rs`, fan-out from the netlist, and the *path a
+  control line opens* from `blueprint.rs` — so `dpc3_SBX` reports "opens `sb`
+  (special bus) → `x` (X index register), on all 8 bits" without anyone
+  asserting that S-B-X stands for anything.
+- **One authored table remains**, `STEMS` in `schematic.js`: what `sb`, `idb`,
+  `alua` and friends are called. That is a reading of the names rather than a
+  measurement, so it is kept small, kept separate, and deliberately *not* given
+  the `measured` tag.
+- Those facts ride in `schematic.json` rather than being fetched from
+  `blocks.json` and `decode.json` at runtime: three files indexed by node number
+  is three chances for the numbering to disagree.
+- An unnamed node still gets an explanation. Most gate outputs are unnamed
+  because nobody needed to refer to them, and an empty panel reads as a bug.
+
 #### The bit slice is a lie
 
 The expected win was collapsing eight identical bit slices into one. It does not
