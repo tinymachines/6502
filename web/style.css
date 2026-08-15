@@ -1099,3 +1099,27 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
   #sch-signal-info .ends { grid-template-columns: minmax(0, 1fr); gap: .15rem; }
   #sch-signal-info .ends dd { margin-bottom: .5rem; }
 }
+
+/* --- Schematic: compare, fullscreen ---------------------------------------- */
+
+.cmp-head { margin: 0 0 .4rem; font-size: .9rem; }
+.cmp-cols { display: grid; gap: .8rem; margin-top: .7rem; }
+@media (min-width: 42rem) { .cmp-cols { grid-template-columns: 1fr 1fr; } }
+.cmp-cols h4 { margin: 0 0 .3rem; font-size: .74rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .07em; }
+.cmp-list { margin: 0; padding-left: 1rem; display: grid; gap: .2rem; }
+.cmp-list li { font-size: .74rem; }
+.cmp-lvl { font-family: var(--font-mono); font-size: .62rem; color: var(--accent);
+  border: 1px solid var(--line); border-radius: 2px; padding: 0 .22rem; margin-right: .3rem; }
+.cmp-note { margin: .8rem 0 0; font-size: .72rem; color: var(--muted); }
+.sch-cmp-sep { color: var(--muted); font-size: .74rem; }
+.sch-el.cmp-differs .sch-sw-plate, .sch-el.cmp-differs .sch-sw-gate { stroke: #ffd166; }
+.sch-el.cmp-differs .sch-sw-lead { stroke: #ffd166; }
+
+/* The console filling the viewport. Keyed on classes, never on :fullscreen --
+   an unknown pseudo-class invalidates the whole selector list. */
+.console.immersive { display: flex; flex-direction: column; }
+.console.immersive .sch-stage { flex: 1; max-height: none; }
+.console.faux { position: fixed; inset: 0; z-index: 80; border-radius: 0;
+  background: var(--panel); overflow: auto; }
+body.no-scroll #view { z-index: 70; }

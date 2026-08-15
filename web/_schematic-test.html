@@ -17,7 +17,7 @@
 </head><body style="margin:0">
 
 <div id="sch-boot"><p id="sch-status">…</p></div>
-<div id="sch-main" hidden>
+<div class="console"><div id="sch-main" hidden>
   <div class="sch-controls">
     <input id="sch-filter" type="search"><span id="sch-shown"></span>
     <select id="sch-signal"></select>
@@ -32,10 +32,15 @@
     <select id="sch-bit-a"><option>0</option><option>7</option></select>
     <select id="sch-bit-b"><option>0</option><option selected>7</option></select>
     <button id="sch-compare" type="button">Compare</button>
+    <select id="sch-any-a"></select>
+    <select id="sch-any-b"></select>
+    <button id="sch-compare-any" type="button">Compare</button>
   </div>
+  <button id="sch-fullscreen" type="button">FS</button>
   <div id="sch-compare-out" hidden></div>
   <button id="sch-run" type="button">Run</button>
   <button id="sch-step" type="button">Step</button>
+</div>
 </div>
 <div id="sch-stats"></div>
 
@@ -250,6 +255,50 @@ try {
   ok('and the difference names the shifter',
      /ADDSB7|ADDSB06/.test(out.textContent),
      (out.textContent.match(/ADDSB\d+/g) || []).join(' ') || 'no ADDSB mentioned');
+
+  // --- comparing any two signals -------------------------------------------
+  $('sch-any-a').value = String(byName.get('dpc20_ADDSB06'));
+  $('sch-any-b').value = String(byName.get('dpc19_ADDSB7'));
+  $('sch-compare-any').click();
+  await sleep(250);
+  ok('any two signals can be compared',
+     /ADDSB06/.test(out.textContent) && /ADDSB7/.test(out.textContent),
+     out.textContent.slice(0, 80));
+
+  // The differences must be listed, not just counted: a bare count is the least
+  // useful form of the answer.
+  $('sch-bus').value = 'sb';
+  $('sch-bit-a').value = '0';
+  $('sch-bit-b').value = '7';
+  $('sch-compare').click();
+  await sleep(250);
+  ok('the differing elements are listed individually',
+     document.querySelectorAll('#sch-compare-out .cmp-list li').length > 0,
+     `${document.querySelectorAll('#sch-compare-out .cmp-list li').length} listed`);
+  ok('each difference says how far back it sits',
+     document.querySelectorAll('#sch-compare-out .cmp-lvl').length > 0);
+  ok('differing controls are marked in the drawing',
+     svg.querySelectorAll('.cmp-differs').length > 0,
+     `${svg.querySelectorAll('.cmp-differs').length} ringed`);
+
+  // --- fullscreen ------------------------------------------------------------
+  const con = document.querySelector('.console');
+  const fsBtn = $('sch-fullscreen');
+  delete window.Element.prototype.requestFullscreen;
+  delete window.Element.prototype.webkitRequestFullscreen;
+  con.requestFullscreen = undefined;
+  con.webkitRequestFullscreen = undefined;
+  fsBtn.click();
+  for (let i = 0; i < 40 && !con.classList.contains('immersive'); i++) await sleep(50);
+  ok('fullscreen falls back to covering the viewport',
+     con.classList.contains('immersive') && con.classList.contains('faux'),
+     con.className);
+  ok('and locks the page behind it', document.body.classList.contains('no-scroll'));
+  fsBtn.click();
+  for (let i = 0; i < 40 && con.classList.contains('immersive'); i++) await sleep(50);
+  ok('and exits cleanly',
+     !con.classList.contains('immersive') && !con.classList.contains('faux')
+     && !document.body.classList.contains('no-scroll'), con.className);
 
   ok('stats are stated', /gates/.test($('sch-stats').textContent),
      $('sch-stats').textContent.slice(0, 80));

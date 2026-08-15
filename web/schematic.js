@@ -11,6 +11,7 @@
 
 import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR } from './programs.js';
+import { setupFullscreen } from './fullscreen.js';
 
 const $ = (id) => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -22,7 +23,8 @@ const state = {
   switchesOn: new Map(),  // node -> [switch]
   root: null,
   depth: 3,
-  compare: null,          // [nodeA, nodeB] when comparing two bits
+  compare: null,          // [nodeA, nodeB] when comparing two signals
+  diffControls: null,     // control names that differ, ringed in the drawing
   running: false,
   raf: 0,
 };
@@ -255,7 +257,11 @@ function draw(c) {
     if (e.kind === 'switch') {
       // A pass transistor is a gap that a control line closes, so it is drawn
       // as a break in the wire with its control above it.
-      const g = el('g', { class: 'sch-el sch-switch', 'data-control': e.control }, parts);
+      const differs = state.diffControls && state.diffControls.has(nameOf(e.control));
+      const g = el('g', {
+        class: 'sch-el sch-switch' + (differs ? ' cmp-differs' : ''),
+        'data-control': e.control,
+      }, parts);
       el('line', { x1: ex - 14, y1: ey, x2: ex - 4, y2: ey, class: 'sch-sw-lead' }, g);
       el('line', { x1: ex + 4, y1: ey, x2: ex + 14, y2: ey, class: 'sch-sw-lead' }, g);
       el('line', { x1: ex - 4, y1: ey - 9, x2: ex - 4, y2: ey + 9, class: 'sch-sw-plate' }, g);
@@ -491,6 +497,7 @@ function setRoot(node) {
   state.root = node;
   renderSignal(node);
   state.compare = null;
+  state.diffControls = null;
   $('sch-compare-out').hidden = true;
   render();
   const q = new URLSearchParams(location.search);
@@ -509,28 +516,73 @@ function render() {
     + `${gates} gates, ${sw} switches, ${c.levels.length} levels back`;
 }
 
+/** Turn a signature entry into something a reader can act on. */
+function describe(sig) {
+  const [level, kind, rest] = sig.split(':');
+  const at = `<span class="cmp-lvl">${level} back</span>`;
+  if (kind === 'switch') {
+    const short = (rest || '').replace(/^dpc-?\d*_?/, '');
+    return `${at} a switch opened by <span class="mono">${short}</span>`;
+  }
+  const g = { inverter: 'an inverter', nor: 'a NOR', nand: 'a NAND',
+              aoi: 'an and-or-invert', dynamic: 'a precharged gate' }[rest] || rest;
+  return `${at} ${g}`;
+}
+
+/**
+ * Compare two signals as circuits.
+ *
+ * The counts alone say "these differ", which is the least useful form of the
+ * answer. What matters is *which* elements differ, so both sides are listed and
+ * the differing controls are highlighted in the drawing as well.
+ */
 function runCompare(a, b) {
   const ca = cone(a, state.depth);
   const cb = cone(b, state.depth);
   const d = diff(ca, cb);
   state.compare = [a, b];
+
+  // The control lines that appear on one side only -- the concrete difference.
+  const controlsOf = (list) => [...new Set(list
+    .filter((x) => x.includes(':switch:'))
+    .map((x) => x.split(':').slice(2).join(':')))];
+  state.diffControls = new Set([...controlsOf(d.onlyA), ...controlsOf(d.onlyB)]);
+
+  const list = (items) => items.length
+    ? `<ul class="cmp-list">${items.map((x) => `<li>${describe(x)}</li>`).join('')}</ul>`
+    : '<p class="muted">nothing — every element here has a partner</p>';
+
+  const same = !d.onlyA.length && !d.onlyB.length;
+  const total = d.shared.length + d.onlyA.length + d.onlyB.length;
   const box = $('sch-compare-out');
   box.hidden = false;
-  const fmt = (list) => list.length
-    ? list.map((s) => `<code>${s.split(':').slice(1).join(' ')}</code>`).join(' ')
-    : '<span class="muted">nothing</span>';
-  box.innerHTML =
-    `<h3>${nameOf(a)} vs ${nameOf(b)}</h3>`
-    + `<p class="${d.onlyA.length || d.onlyB.length ? 'sch-differ' : 'sch-same'}">`
-    + (d.onlyA.length || d.onlyB.length
-      ? `<strong>Different circuits.</strong> ${d.shared.length} elements in common, `
-        + `${d.onlyA.length + d.onlyB.length} not.`
-      : `<strong>Identical.</strong> All ${d.shared.length} elements match.`)
-    + '</p>'
-    + `<dl class="ends"><dt>only ${nameOf(a)}</dt><dd>${fmt(d.onlyA)}</dd>`
-    + `<dt>only ${nameOf(b)}</dt><dd>${fmt(d.onlyB)}</dd></dl>`;
-  // Draw the first of the pair so there is something to look at.
+  box.innerHTML = `
+    <h3 class="cmp-head">
+      <span class="mono">${nameOf(a)}</span> vs <span class="mono">${nameOf(b)}</span>
+    </h3>
+    <p class="${same ? 'sch-same' : 'sch-differ'}">
+      ${same
+        ? `<strong>Identical circuits.</strong> All ${d.shared.length} elements match.`
+        : `<strong>Different circuits.</strong> ${d.shared.length} of ${total} elements match; `
+          + `${d.onlyA.length + d.onlyB.length} do not.`}
+    </p>
+    <div class="cmp-cols">
+      <div><h4>Only <span class="mono">${nameOf(a)}</span></h4>${list(d.onlyA)}</div>
+      <div><h4>Only <span class="mono">${nameOf(b)}</span></h4>${list(d.onlyB)}</div>
+    </div>
+    <p class="cmp-note">
+      Compared as <em>shape</em>: how many elements of each kind sit at each level
+      behind the signal, with a switch identified by the control line that opens
+      it. Two bits of one bus use different wires by definition — the question is
+      whether they are wired the <em>same way</em>, and mostly they are not.
+      ${state.diffControls.size
+        ? 'The differing controls are ringed in the drawing below.'
+        : ''}
+    </p>`;
+
+  // Draw the first of the pair, with the differences marked.
   state.root = a;
+  renderSignal(a);
   render();
 }
 
@@ -631,6 +683,31 @@ async function boot() {
       if (a != null && b != null) runCompare(a, b);
     };
     $('sch-compare').addEventListener('click', doCompare);
+
+    // ...and the same comparison between any two signals, since the interesting
+    // pairs are not always two bits of one bus: a control line against its
+    // complement, or the same bit of two different buses.
+    const named = data.names.map((n, i) => [n, i]).filter(([n]) => n)
+      .sort((x, y) => x[0].localeCompare(y[0]));
+    for (const id of ['sch-any-a', 'sch-any-b']) {
+      const sel = $(id);
+      for (const [name, node] of named) {
+        const o = document.createElement('option');
+        o.value = String(node);
+        o.textContent = name;
+        sel.append(o);
+      }
+    }
+    $('sch-any-a').value = String(byName.get('sb0') ?? named[0][1]);
+    $('sch-any-b').value = String(byName.get('sb7') ?? named[1][1]);
+    $('sch-compare-any').addEventListener('click', () =>
+      runCompare(Number($('sch-any-a').value), Number($('sch-any-b').value)));
+
+    setupFullscreen(document.querySelector('.console'), $('sch-fullscreen'), () => {
+      // The stage's height is bound to the viewport, so a re-render is what
+      // makes the drawing use the space it just gained.
+      if (state.root != null) render();
+    });
 
     if (q.get('compare')) {
       const [x, y] = q.get('compare').split(',');

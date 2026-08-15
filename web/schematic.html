@@ -67,6 +67,8 @@
         <div class="bar-spacer"></div>
         <button id="sch-run" class="btn btn-primary" type="button">Run</button>
         <button id="sch-step" class="btn" type="button">Step</button>
+        <button id="sch-fullscreen" class="btn btn-icon" type="button"
+                aria-label="Fullscreen" title="Fullscreen">⛶</button>
       </div>
 
       <div id="sch-boot" class="bp-boot"><p id="sch-status">Loading the circuit…</p></div>
@@ -120,6 +122,10 @@
             <option selected>7</option>
           </select>
           <button id="sch-compare" class="btn" type="button">Compare</button>
+          <span class="sch-cmp-sep">or any two signals</span>
+          <select id="sch-any-a" aria-label="First signal"></select>
+          <select id="sch-any-b" aria-label="Second signal"></select>
+          <button id="sch-compare-any" class="btn" type="button">Compare</button>
         </div>
         <div class="panel-box" id="sch-compare-out" hidden></div>
       </div>
