@@ -604,8 +604,8 @@ by hand.
 pullup holds a node high, a pulldown network to vss can beat it, so the output
 is low when the network conducts — every static gate is an inverted sum of
 products. Parallel transistors are the ORs, series are the ANDs. There is no AND
-gate and no OR gate anywhere on this die. Result: 515 inverters, 354 NORs (2–9
-inputs), 39 NANDs, 110 AOI, and **exactly one node that fails to resolve** (a
+gate and no OR gate anywhere on this die. Result: 534 inverters, 354 NORs (2–9
+inputs), 39 NANDs, 91 AOI, and **exactly one node that fails to resolve** (a
 series chain three deep).
 
 - **Keying on pullups alone misses the interesting half.** `dpc3_SBX`,
@@ -620,9 +620,19 @@ series chain three deep).
   two levels and buries the signal that was asked about. A gate's *inputs* are
   expanded, and must be — they are the circuit. A test asserting "no control
   line is ever a node" conflates the two and fails on correct behaviour.
-- **Count absorbed transistors as a set.** Summing the per-gate lists gives 3517
-  against a die of 3510, because twelve pulldowns genuinely belong to two gates
-  at once. A total larger than the chip is how that was noticed.
+- **A node with fan-out is a signal, never a gate's internal junction.** Two
+  switches in a row really do pull an output down, so a chain reads as one gate
+  with a series leg — electrically true wherever it fires, and the wrong reading
+  unless the middle node is a junction. `alua` sits between `sb` and ground
+  (`SBADD` in, `0ADD` down), was read as a series leg of `sb`, and had both its
+  transistors swallowed: the ALU's A input rendered with **no circuit at all**.
+  Found by clicking through islands and hitting a dead end, not by a test.
+  Requiring the middle node to gate nothing fixed it — and removed the last of
+  the shared pulldowns, which were the same artefact.
+- **Count absorbed transistors as a set.** It mattered when gates could share a
+  pulldown: the sum came to 3517 against a die of 3510. They no longer can, and
+  the set count stays because a total larger than the chip is the cheapest way
+  to notice a recurrence.
 - **The drawing must contain everything the caption counts.** Switches whose far
   side is a power rail were silently skipped while the caption went on reporting
   five of them — a convincing circuit with pieces missing.

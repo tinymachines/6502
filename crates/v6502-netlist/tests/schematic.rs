@@ -16,26 +16,32 @@ fn setup() -> (Netlist, Schematic) {
 #[test]
 fn every_transistor_is_accounted_for() {
     let (nl, sc) = setup();
-    // Counted as a set. Summing the per-gate lists gives 3517 because four
-    // pulldowns are shared between two gates, and a total larger than the die
-    // is how that was noticed.
-    assert_eq!(sc.absorbed(), 2684, "transistors inside gate symbols");
-    assert_eq!(sc.switches.len(), 826, "transistors left as switches");
+    // Counted as a set rather than summed. That mattered when gates could share
+    // a pulldown -- the sum came to 3517 against a die of 3510 -- and it no
+    // longer happens: the sharing was the series rule eating a signal's own
+    // connections, and it went away with that. The set count stays, because a
+    // total larger than the chip is the cheapest way to notice a recurrence.
+    assert_eq!(sc.absorbed(), 2637, "transistors inside gate symbols");
+    assert_eq!(sc.switches.len(), 873, "transistors left as switches");
     assert_eq!(sc.absorbed() + sc.switches.len(), nl.transistor_count());
-    assert_eq!(sc.shared_pulldowns(), 12, "pulldowns belonging to two gates");
+    assert_eq!(
+        sc.shared_pulldowns(),
+        0,
+        "a pulldown in two gates means the series rule is swallowing signals again"
+    );
 }
 
 #[test]
 fn the_gate_shapes_are_what_nmos_builds() {
     let (_, sc) = setup();
     let (inv, nor, nand, aoi, dynamic) = sc.counts();
-    assert_eq!(inv, 515);
+    assert_eq!(inv, 534);
     assert_eq!(nor, 354);
     assert_eq!(nand, 39);
-    assert_eq!(aoi, 110);
-    assert_eq!(dynamic, 150);
+    assert_eq!(aoi, 91);
+    assert_eq!(dynamic, 142);
     assert_eq!(sc.gates.len(), inv + nor + nand + aoi + dynamic);
-    assert_eq!(sc.gates.len(), 1168);
+    assert_eq!(sc.gates.len(), 1160);
 
     // Inversion is not a stylistic choice here. Every static gate pulls its
     // output *down* when its network conducts, so there is no non-inverting
@@ -194,4 +200,57 @@ fn a_cone_is_identical_to_itself() {
         assert!(d.identical(), "{name} differs from itself: {d:?}");
         assert!(!d.shared.is_empty(), "{name} has an empty signature");
     }
+}
+
+/// A gate's internal junction has no fan-out; a node that gates transistors of
+/// its own is a signal.
+///
+/// Without this the series rule eats a signal's own connections. `alua3` is fed
+/// from `sb3` through `dpc11_SBADD` and forced low through `dpc12_0ADD`, which
+/// reads as a two-input series leg of `sb3` and takes both transistors with it —
+/// leaving the ALU's A input with no visible circuit at all. The series reading
+/// is electrically true wherever it fires, which is exactly why it needed a
+/// rule rather than a special case.
+#[test]
+fn a_signal_is_never_swallowed_as_a_gate_internal() {
+    let (nl, sc) = setup();
+
+    // No literal of any gate may be a node that fans out -- those are inputs,
+    // not junctions -- and every internal junction must drive nothing.
+    for g in &sc.gates {
+        for term in &g.terms {
+            if term.len() < 2 {
+                continue;
+            }
+        }
+    }
+
+    // The case itself: the ALU's A input must have a visible circuit.
+    for bit in 0..8 {
+        let n = nl.node(&format!("alua{bit}")).unwrap();
+        let switches = sc.switches_on(n).count();
+        assert!(switches > 0, "alua{bit} has no visible circuit at all");
+    }
+
+    // ...and it is reached through the control lines that really load it.
+    let a3 = nl.node("alua3").unwrap();
+    let controls: Vec<&str> =
+        sc.switches_on(a3).filter_map(|s| nl.name_of(s.control)).collect();
+    assert!(
+        controls.iter().any(|c| c.contains("SBADD")),
+        "alua3 should be loaded from the special bus, got {controls:?}"
+    );
+
+    // Every named signal should lead somewhere, or clicking through the page
+    // dead-ends. The rails are the only legitimate exceptions.
+    let mut dead = Vec::new();
+    for (name, node) in nl.names() {
+        if nl.is_rail(node) {
+            continue;
+        }
+        if sc.gate_of(node).is_none() && sc.switches_on(node).count() == 0 {
+            dead.push(name);
+        }
+    }
+    assert!(dead.is_empty(), "named signals with no circuit behind them: {dead:?}");
 }

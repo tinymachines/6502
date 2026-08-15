@@ -220,12 +220,25 @@
       <h2>What this accounts for.</h2>
     </div>
     <p>
-      <strong>1168 symbols absorb 2684 of 3510 transistors</strong>; the
-      remaining 826 stay as switches, because that is what they are — the die
+      <strong>1160 symbols absorb 2637 of 3510 transistors</strong>; the
+      remaining 873 stay as switches, because that is what they are — the die
       uses them to steer signals, not to compute with them. The two numbers add
-      to exactly 3510, which is checked rather than assumed: an earlier version
-      summed the per-gate lists and reported 3517, having double-counted twelve
-      pulldowns that genuinely belong to two gates at once.
+      to exactly 3510, which is checked rather than assumed.
+    </p>
+    <p>
+      One rule earns its place there. Two switches in a row really do pull an
+      output down, so a chain of them reads as a single gate with a two-input
+      series leg — and that reading is electrically true wherever it fires. But
+      it is only the right reading when the node in the middle is a junction.
+      The ALU's A input sits between the special bus and ground, fed through
+      <span class="mono">SBADD</span> and forced low through
+      <span class="mono">0ADD</span>, and reading it as a series leg swallowed
+      both of its transistors — leaving
+      <span class="mono">alua0</span>…<span class="mono">alua7</span> with no
+      visible circuit at all, on a page whose entire job is to show what makes a
+      signal. A gate's internal junction drives nothing; a node that gates
+      transistors of its own is a signal. That one distinction fixed it, and
+      took the last of the double-counted pulldowns with it.
     </p>
     <p>
       A switch's control line is drawn as a label rather than followed. Expanding

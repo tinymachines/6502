@@ -39,10 +39,14 @@
 //! the simulator models with `ChargedHigh`, and the reason the 6502 has a
 //! *minimum* clock speed as well as a maximum.
 //!
-//! Together: 1168 gate symbols absorbing 2684 transistors, leaving 826 as
-//! switches. 2684 + 826 is exactly 3510, and `every_transistor_is_accounted_for`
-//! checks that rather than trusting it -- the first version summed the per-gate
-//! lists and reported 3517, because four pulldowns are shared between two gates.
+//! Together: 1160 gate symbols absorbing 2637 transistors, leaving 873 as
+//! switches. 2637 + 873 is exactly 3510, and `every_transistor_is_accounted_for`
+//! checks that rather than trusting it -- an earlier version summed the per-gate
+//! lists and reported 3517, because gates could then share a pulldown.
+//!
+//! They no longer can. The sharing turned out to be the series rule eating a
+//! signal's own connections, and both went away together when a node with
+//! fan-out stopped counting as a gate's internal junction.
 //!
 //! # What is deliberately not attempted
 //!
@@ -193,6 +197,21 @@ impl Schematic {
                     // pulldown network. A pullup on the far side means the node
                     // is driven in its own right, so this is a switch between
                     // two gates rather than a series leg inside one.
+                    continue;
+                }
+                // A node that gates transistors of its own is a signal, not the
+                // inside of a gate.
+                //
+                // The series rule is electrically true wherever it fires -- two
+                // switches in a row do pull the output down. But a real gate's
+                // internal junction drives nothing; it exists only to be a
+                // junction. `alua3` is the case that exposed this: it is fed
+                // from `sb3` through `dpc11_SBADD` and forced low through
+                // `dpc12_0ADD`, which reads as a two-input series leg of `sb3`
+                // and swallowed both transistors -- leaving the ALU's A input
+                // with no visible circuit at all, on a page whose whole job is
+                // to show what makes a signal.
+                if !nl.gates_of(t.other).is_empty() {
                     continue;
                 }
                 // An intermediate node with its own path to ground is a series

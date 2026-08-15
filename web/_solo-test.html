@@ -108,18 +108,32 @@ f.addEventListener('load', async () => {
     await sleep(120);
     ok('the left arrow goes back', at() === t0, String(at()));
 
-    // Running must be slow enough to watch. Half a second at 4/s is ~2 steps;
-    // the page loop would have done ~240 in the same time.
+    // Space toggles running. The *rate* is deliberately not asserted here: the
+    // paced runner is driven by animation frames, and an iframe throttles those
+    // to nearly nothing -- so a run of half a second advances the clock by zero
+    // or one depending on scheduling. That is the iframe rule doing exactly what
+    // it says, and weakening the assertion to accommodate it would leave
+    // something that passes whatever happens. What can be checked without a
+    // frame is the state itself.
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    await sleep(500);
-    const moved = at() - t0;
+    await sleep(80);
+    ok('space starts it running', $('solo-run').classList.contains('on'),
+       $('solo-run').className);
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    await sleep(120);
-    ok('running is paced to be watchable', moved > 0 && moved < 25,
-       `${moved} half-cycles in ~0.5s`);
+    await sleep(80);
+    ok('space stops it again', !$('solo-run').classList.contains('on'));
+
     const stopped = at();
     await sleep(250);
-    ok('space pauses it again', at() === stopped, `${stopped} -> ${at()}`);
+    ok('and it really is stopped', at() === stopped, `${stopped} -> ${at()}`);
+
+    // Stepping while it was running must have paused it rather than fighting it.
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await sleep(60);
+    $('solo-step').click();
+    await sleep(60);
+    ok('a step pauses a run rather than racing it',
+       !$('solo-run').classList.contains('on'));
 
     // And the whole point: the drawing reflects the chip, not a static picture.
     const litAt = () => svg.querySelectorAll('.sch-node.hot, .sch-switch.open').length;
