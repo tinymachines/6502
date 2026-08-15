@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trace — one instruction, half-cycle by half-cycle</title>
+<meta name="description" content="Pick any opcode and follow it through the MOS 6502 one half-cycle at a time: the registers as they mutate, every node that changed level, and the wires that are shorted together while it happens.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav">
+        <a href="./#explorer">Explorer</a>
+        <a href="./#lab">Lab</a>
+        <a href="trace" aria-current="page">Trace</a>
+        <a href="exploded">Exploded</a>
+        <a href="schematic">Schematic</a>
+        <a href="blueprint">Blueprint</a>
+        <a href="decode">Decode</a>
+        <a href="timing">Timing</a>
+        <a href="./#credit">Credit</a>
+        <a href="archive/">Archive</a>
+      </div>
+      <a class="btn btn-primary nav-cta" href="./#explorer">Run it</a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Measured · not looked up</p>
+    <h1>Follow one<br><span class="hl">instruction.</span></h1>
+    <p class="lede">
+      Pick any of the 256 opcodes. It is assembled into memory, the chip fetches
+      it, and everything below is read back out of the silicon afterwards —
+      the registers as they mutate, every node that changed level, and the wires
+      that are <em>shorted together</em> while it happens.
+    </p>
+    <p class="lede">
+      Nothing here consults a table of what an instruction is supposed to do. The
+      cycle counts are free to be wrong, which is what makes them worth
+      something when they are right.
+    </p>
+    <div class="statbar" id="tr-preamble">…</div>
+  </section>
+
+  <section class="wrap" id="view">
+    <div class="console">
+      <div class="console-bar">
+        <span class="tag live">trace · live</span>
+        <span class="bar-note">← → to step · space to run · R to restart</span>
+        <div class="bar-spacer"></div>
+        <button id="tr-back" class="btn" type="button">◀ Back</button>
+        <button id="tr-run" class="btn btn-primary" type="button">Run</button>
+        <button id="tr-step" class="btn" type="button">Step ▶</button>
+        <button id="tr-restart" class="btn" type="button">Restart</button>
+      </div>
+
+      <div id="tr-boot" class="bp-boot"><p id="tr-status">Loading the chip…</p></div>
+
+      <div id="tr-main" hidden>
+        <div class="sch-controls">
+          <label class="field">
+            <span>Instruction</span>
+            <select id="tr-opcode" aria-label="Opcode"></select>
+          </label>
+          <label class="field">
+            <span>Operand bytes <span class="muted">hex</span></span>
+            <input id="tr-operand" type="text" inputmode="latin" spellcheck="false"
+                   aria-label="Operand bytes">
+          </label>
+          <label class="field">
+            <span>Watching bit <b class="mono" id="tr-bit-val">0</b></span>
+            <input id="tr-bit" type="range" min="0" max="7" value="0">
+          </label>
+        </div>
+
+        <p id="tr-warn" class="tr-warn" hidden>
+          The chip never fetched that instruction — it jammed before reaching it.
+          Twelve opcodes do this and the Timing page names them.
+        </p>
+
+        <div class="tr-head mono" id="tr-head"></div>
+
+        <div class="tr-state" id="tr-state"></div>
+
+        <div class="tr-cols">
+          <section class="panel-box">
+            <h3 class="tr-h">One wire, right now</h3>
+            <p class="tr-note">
+              A node's level is a property of the <em>group</em> it is joined to,
+              not of the node. When a pass transistor is open the two wires either
+              side of it are not two wires holding the same value — they are one
+              wire. Freshly joined groups are marked.
+            </p>
+            <ul class="tr-joins" id="tr-joins"></ul>
+            <p class="tr-watch mono" id="tr-watch"></p>
+          </section>
+
+          <section class="panel-box">
+            <h3 class="tr-h">What moved</h3>
+            <p class="tr-note" id="tr-changed-sum"></p>
+            <div class="tr-changed" id="tr-changed"></div>
+            <h4 class="tr-h4">Switches on this bit</h4>
+            <ul class="tr-switches" id="tr-switches"></ul>
+          </section>
+        </div>
+
+        <div class="tr-tablewrap">
+          <table class="tr-table">
+            <thead><tr>
+              <th>cyc</th><th>φ</th><th>T-states</th><th>AB</th><th>DB</th><th>R/W</th>
+              <th>A</th><th>X</th><th>Y</th><th>S</th><th>P</th><th>PC</th><th>Δ</th>
+            </tr></thead>
+            <tbody id="tr-table-body"></tbody>
+          </table>
+        </div>
+        <p class="sch-caption mono">
+          Every row is one half-cycle. Click one to jump to it. Δ counts the nodes
+          that changed level since the row above.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">Why it runs past the end</p>
+      <h2>The result is not in the register when the instruction ends.</h2>
+    </div>
+    <p class="lede">
+      The 6502 overlaps the tail of one instruction with the next opcode fetch.
+      An ALU result is not in the accumulator when <span class="mono">sync</span>
+      rises — it is sitting in the adder's hold register, and it transfers during
+      the cycle that belongs to the <em>next</em> instruction.
+    </p>
+    <p>
+      So this trace deliberately runs past the next <span class="mono">sync</span>
+      and marks those rows as the tail. Stopping at the boundary would show the
+      instruction not having happened, which is the most misleading thing this
+      page could do — and it is exactly what a behavioural emulator hides, because
+      it writes the register at the end of the instruction where you expect it.
+      Trace <span class="mono">ADC</span> and watch the accumulator change a cycle
+      after the instruction is over.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The way in</p>
+      <h2>A pin is not a wire.</h2>
+    </div>
+    <p>
+      Following the data pins into the chip finds nothing. All eleven of
+      <span class="mono">db0</span>'s connections go to a power rail, because a
+      pin is an output <em>driver</em> — nothing enters the chip from a pin
+      through a pass transistor at all. The way in is the input receiver, which
+      is a gate, and the first wire that behaves like a wire is
+      <span class="mono">idl</span>, the input data latch.
+    </p>
+    <p>
+      That is why the group above starts at <span class="mono">idl</span> and
+      <span class="mono">idb</span> rather than at the pins, and it is a fact
+      about the die rather than a convenience: a trace that follows only switches
+      can never leave the pad ring.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">Scale</p>
+      <h2>Most of what conducts is not a wire either.</h2>
+    </div>
+    <p>
+      At any instant <strong>1503 of the 3510 transistors are conducting</strong>,
+      and about <strong>165 nodes change level every half-cycle</strong> — a tenth
+      of the chip, at every edge. Lighting up everything that is on would produce
+      a picture of the whole chip and tell you nothing.
+    </p>
+    <p>
+      But the datapath is not that graph. Almost all of what conducts is pulldowns
+      inside gates rather than switches joining named wires, so walking only open
+      pass transistors from the internal data bus reaches a median of
+      <strong>three</strong> nodes. The accumulator is joined to the data bus in
+      <strong>two half-cycles out of ninety</strong>, and when it is, the path is
+      two switches long: <span class="mono">SBDB</span> then
+      <span class="mono">SBAC</span>. That is what the panel above is showing.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">What is not shown</p>
+      <h2>One bit at a time, and eight are not the same.</h2>
+    </div>
+    <p>
+      The wire panel watches a single bit, because the eight are genuinely
+      different circuits and merging them would make a join look wider than it
+      is. Bit 7 of the special bus is opened by
+      <span class="mono">ADDSB7</span> where bits 0–6 share
+      <span class="mono">ADDSB06</span> — that difference is the shifter. Move the
+      bit slider and watch which joins appear and disappear.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="trace.js"></script>
+<script type="module" src="site-nav.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

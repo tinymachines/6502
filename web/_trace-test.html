@@ -1,0 +1,159 @@
+<!doctype html>
+<!--
+  Development harness, never shipped.
+
+  Drives the REAL trace page in an iframe. Safe here for the same reason
+  `_solo-test.html` is: stepping applies synchronously rather than waiting for
+  an animation frame, and headless throttles frames inside a frame to nearly
+  nothing. Nothing asserted below needs a frame. The paced *run* does, and is
+  therefore deliberately not asserted.
+
+  What is worth checking is not that the page renders -- it is that the numbers
+  it renders are the chip's and not a table's. Cycle counts here come from
+  counting half-cycles between one opcode fetch and the next, so agreeing with
+  the datasheet is evidence. The most important assertion is the last group:
+  ADC's result reaches the accumulator *after* the instruction is over.
+
+    http://localhost:8777/_trace-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1200px;height:900px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="trace"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+f.addEventListener('load', async () => {
+  const w = f.contentWindow, d = f.contentDocument;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 300 && $('tr-main').hidden; i++) await sleep(50);
+    ok('the real page booted', !$('tr-main').hidden, $('tr-status').textContent);
+
+    // Pick an opcode the way a reader does, and wait for the retrace.
+    const pick = async (op, operand) => {
+      const sel = $('tr-opcode');
+      sel.value = String(op);
+      sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+      await sleep(400);
+      if (operand !== undefined) {
+        const box = $('tr-operand');
+        box.value = operand;
+        box.dispatchEvent(new w.Event('change', { bubbles: true }));
+        await sleep(400);
+      }
+    };
+    const rows = () => [...$('tr-table-body').querySelectorAll('tr')].map((tr) => ({
+      tail: tr.classList.contains('tail'),
+      cells: [...tr.querySelectorAll('td')].map((td) => td.textContent.trim()),
+    }));
+    const A = 6, DELTA = 12;
+
+    // --- cycle counts, counted rather than looked up -------------------------
+    //
+    // Each row is a half-cycle, so the instruction's length is the number of
+    // rows before the next fetch begins, divided by two. Nothing in the path
+    // that produced these consulted an instruction table.
+    const cycles = async (op, operand) => {
+      await pick(op, operand);
+      return rows().filter((r) => !r.tail).length / 2;
+    };
+    const documented = [
+      [0xa9, '42', 2, 'LDA #imm'],
+      [0xa5, '10', 3, 'LDA zp'],
+      [0xad, '34 12', 4, 'LDA abs'],
+      [0x8d, '34 12', 4, 'STA abs'],
+      [0xe8, '', 2, 'INX'],
+      [0x48, '', 3, 'PHA'],
+      [0x20, '34 12', 6, 'JSR abs'],
+      [0x06, '10', 5, 'ASL zp'],
+    ];
+    for (const [op, operand, want, label] of documented) {
+      const got = await cycles(op, operand);
+      ok(`${label} takes ${want} cycles`, got === want, `measured ${got}`);
+    }
+
+    // --- the state readout actually tracks the chip --------------------------
+    await pick(0xa9, '42');
+    const lda = rows();
+    ok('LDA loads the operand into A',
+       lda.some((r) => r.cells[A] === '42'), lda.map((r) => r.cells[A]).join(' '));
+    ok('every row after the first counts nodes that moved',
+       lda.slice(1).every((r) => Number(r.cells[DELTA]) > 0),
+       lda.map((r) => r.cells[DELTA]).join(' '));
+    ok('the first row has nothing to compare against', lda[0].cells[DELTA] === '0');
+
+    // --- the wire groups -----------------------------------------------------
+    //
+    // The claim on the page is that a level belongs to a *group*, and that the
+    // accumulator is briefly the same wire as the special bus. If the panel
+    // never shows `a` joined to anything across a whole LDA, the page is showing
+    // decoration rather than the chip.
+    // Read the wire names as elements, not by matching the rendered text: the
+    // stem `a` is a substring of `alua`, `alub`, `adl` and half the datapath,
+    // so a text search answers yes whatever is on screen.
+    const wires = () => [...$('tr-joins').querySelectorAll('.tr-wire')]
+      .map((e) => e.textContent.trim());
+    const seenWires = new Set();
+    let sawAny = false;
+    $('tr-restart').click();
+    await sleep(150);
+    for (let i = 0; i < lda.length; i++) {
+      const w = wires();
+      w.forEach((n) => seenWires.add(n));
+      if (w.length) sawAny = true;
+      $('tr-step').click();
+      await sleep(90);
+    }
+    ok('wires are shown joined at some point', sawAny, [...seenWires].join(' '));
+    ok('the accumulator joins something during LDA', seenWires.has('a'),
+       [...seenWires].sort().join(' '));
+    ok('and so does the special bus it arrives on', seenWires.has('sb'));
+
+    // --- the headline: the result lands after the instruction ----------------
+    //
+    // The 6502 overlaps the tail of one instruction with the next opcode fetch,
+    // so an ALU result is not in the accumulator when sync rises. This is the
+    // thing the whole project exists to show, and it is exactly what a
+    // behavioural emulator hides. A page that stopped at the boundary would
+    // report ADC as not having happened.
+    await pick(0x69, '11');           // ADC #$11 against A = $41 from the preamble
+    const adc = rows();
+    const body = adc.filter((r) => !r.tail);
+    const tail = adc.filter((r) => r.tail);
+    ok('ADC #imm takes 2 cycles', body.length / 2 === 2, String(body.length / 2));
+    ok('there is a tail past the next fetch', tail.length > 0, `${tail.length} rows`);
+    const beforeEnd = body[body.length - 1].cells[A];
+    ok('the accumulator still holds the old value when the instruction ends',
+       beforeEnd === '41', beforeEnd);
+    ok('and the sum arrives during the tail',
+       tail.some((r) => r.cells[A] === '52'),
+       `A over the tail: ${tail.map((r) => r.cells[A]).join(' ')}`);
+
+    // --- the bit slider ------------------------------------------------------
+    const watch0 = $('tr-watch').textContent;
+    $('tr-bit').value = '7';
+    $('tr-bit').dispatchEvent(new w.Event('input', { bubbles: true }));
+    await sleep(200);
+    ok('the bit slider is wired to the watch list',
+       $('tr-bit-val').textContent === '7' && watch0.length > 0);
+
+    // --- a jammed opcode is reported, not timed out --------------------------
+    await pick(0x02, undefined);
+    ok('choosing a jam opcode still traces its own fetch',
+       $('tr-warn').hidden, 'the subject is fetched; it is the *next* fetch that never comes');
+    const jam = rows();
+    ok('and the jam produces a trace that never reaches a second fetch',
+       jam.every((r) => !r.tail), `${jam.length} rows, ${jam.filter((r) => r.tail).length} tail`);
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
+  }
+  document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+});
+</script>
+</body></html>

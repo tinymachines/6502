@@ -281,6 +281,19 @@ def main() -> None:
                        f"fetch('{b.ref('schematic.json')}')", where="schematic.js")
     b.emit("schematic.js", sch.encode())
 
+    # 3f. trace.js: wasm for the chip, disasm for the opcode names, and the same
+    #     derived circuit the schematic uses -- one file, so the two pages
+    #     cannot disagree about which node is which.
+    tr = b.read("trace.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./disasm.js", "./" + b.ref("disasm.js")),
+    ]:
+        tr = replace_once(tr, f"'{original}'", f"'{resolved}'", where="trace.js")
+    tr = replace_once(tr, "fetch('schematic.json')",
+                      f"fetch('{b.ref('schematic.json')}')", where="trace.js")
+    b.emit("trace.js", tr.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -326,6 +339,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         dech = replace_once(dech, f'"{original}"', f'"{b.ref(original)}"', where="decode.html")
     b.emit("decode.html", dech.encode(), hashed=False)
+
+    trh = b.read("trace.html").decode()
+    for original in ["style.css", "trace.js", "version-footer.js", "site-nav.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        trh = replace_once(trh, f'"{original}"', f'"{b.ref(original)}"', where="trace.html")
+    b.emit("trace.html", trh.encode(), hashed=False)
 
     timh = b.read("timing.html").decode()
     for original in ["style.css", "timing.js", "version-footer.js", "site-nav.js",

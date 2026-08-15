@@ -1265,3 +1265,117 @@ body.no-scroll #view { z-index: 70; }
 .sch-dir-btn[disabled] { opacity: .38; cursor: default; }
 .sch-dir-btn[disabled]:hover { color: var(--muted); }
 .solo-dir.on { color: var(--accent); border-color: var(--accent); }
+
+/* --- Trace: one instruction, half-cycle by half-cycle ----------------------
+   Only real tokens here. A `var()` naming a token that does not exist drops the
+   whole declaration silently, which is how three invented names spread across
+   two pages before anything looked wrong. */
+
+.tr-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem;
+  padding: .7rem .9rem; margin: 0 0 .8rem;
+  border: 2px solid var(--line); border-radius: .4rem; background: var(--subtle);
+  font-size: .82rem; color: var(--muted);
+}
+.tr-op { font-weight: 800; color: var(--accent); font-size: 1rem; }
+.tr-mn { font-weight: 700; color: var(--foreground); font-size: 1rem; }
+.tr-head b { color: var(--foreground); }
+.tr-sep { color: var(--line); }
+.tr-flag {
+  font-size: .66rem; letter-spacing: .08em; text-transform: uppercase;
+  padding: .18rem .4rem; border-radius: .2rem;
+  background: var(--accent); color: var(--accent-foreground); font-weight: 800;
+}
+.tr-flag.tr-tail { background: var(--hot); }
+
+.tr-warn {
+  margin: 0 0 .8rem; padding: .6rem .8rem; font-size: .8rem;
+  border: 2px solid var(--warn); border-radius: .4rem; color: var(--warn);
+}
+
+/* The architectural state. A changed field is the point of the row, so it is
+   marked rather than left for the reader to diff by eye. */
+.tr-state {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
+  gap: .4rem; margin: 0 0 1rem;
+}
+.tr-reg {
+  padding: .45rem .5rem; border: 2px solid var(--line); border-radius: .3rem;
+  background: var(--surface); min-width: 0;
+}
+.tr-reg.moved { border-color: var(--accent); background: #16283a; }
+.tr-reg-k {
+  display: block; font: 700 .6rem/1 var(--font-mono);
+  letter-spacing: .1em; color: var(--muted); text-transform: uppercase;
+}
+.tr-reg-v {
+  display: block; font: 800 1rem/1.3 var(--font-mono); color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+.tr-reg.moved .tr-reg-v { color: var(--accent); }
+.tr-reg-was { display: block; font: .58rem/1 var(--font-mono); color: var(--muted); }
+
+.tr-cols { display: grid; gap: .8rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 62rem) {
+  .tr-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.tr-h { margin: 0 0 .3rem; font-size: .9rem; }
+.tr-h4 { margin: .9rem 0 .3rem; font-size: .74rem; color: var(--muted);
+         text-transform: uppercase; letter-spacing: .08em; }
+.tr-note { margin: 0 0 .6rem; font-size: .74rem; color: var(--muted); line-height: 1.5; }
+
+.tr-joins, .tr-switches { list-style: none; margin: 0; padding: 0;
+                          display: flex; flex-direction: column; gap: .3rem; }
+.tr-joins li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
+  padding: .35rem .5rem; border: 2px solid var(--line); border-radius: .3rem;
+  background: var(--surface); font-size: .78rem;
+}
+.tr-joins li.fresh { border-color: var(--accent); background: #16283a; }
+.tr-joins li.muted { border-style: dashed; color: var(--muted); }
+.tr-wire { font: 700 .78rem/1 var(--font-mono); color: var(--foreground); }
+.tr-eq { color: var(--accent); font-weight: 800; }
+.tr-lvl {
+  margin-left: auto; font: 800 .7rem/1 var(--font-mono);
+  padding: .18rem .35rem; border-radius: .2rem;
+}
+.tr-lvl.hi { background: var(--accent); color: var(--accent-foreground); }
+.tr-lvl.lo { background: var(--subtle); color: var(--muted); }
+.tr-watch { margin: .6rem 0 0; font-size: .62rem; color: var(--line); }
+
+.tr-changed { display: flex; flex-direction: column; gap: .5rem;
+              max-height: 17rem; overflow: auto; }
+.tr-blk h4 { margin: 0 0 .2rem; font-size: .68rem; color: var(--muted);
+             text-transform: uppercase; letter-spacing: .08em; }
+.tr-blk p { margin: 0; line-height: 1.9; }
+.tr-node {
+  font: 700 .64rem/1 var(--font-mono); padding: .16rem .3rem;
+  border-radius: .2rem; background: var(--subtle); color: var(--muted);
+  white-space: nowrap;
+}
+.tr-node.up { color: var(--accent); }
+.tr-node.down { color: var(--muted); }
+.tr-node i { font-style: normal; opacity: .7; margin-left: .1rem; }
+
+.tr-switches li {
+  padding: .3rem .5rem; border-left: 3px solid var(--line);
+  background: var(--surface); font-size: .74rem;
+}
+.tr-switches li.opened { border-left-color: var(--accent); }
+.tr-switches li.closed { border-left-color: var(--line); }
+.tr-switches li.muted { border-left-style: dashed; color: var(--muted); }
+
+.tr-tablewrap { margin: 1rem 0 .4rem; overflow-x: auto; max-height: 26rem; overflow-y: auto; }
+.tr-table { border-collapse: collapse; width: 100%; font-size: .7rem; }
+.tr-table th, .tr-table td { padding: .28rem .5rem; text-align: right; white-space: nowrap; }
+.tr-table th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--subtle); color: var(--muted);
+  font: 700 .62rem/1.6 var(--font-mono); letter-spacing: .06em;
+  text-transform: uppercase; border-bottom: 2px solid var(--line);
+}
+.tr-table tbody tr { cursor: pointer; border-bottom: 1px solid #1c2b45; }
+.tr-table tbody tr:hover { background: var(--subtle); }
+.tr-table tbody tr.tail td { color: var(--hot); }
+.tr-table tbody tr.here { background: #16283a; outline: 2px solid var(--accent);
+                          outline-offset: -2px; }

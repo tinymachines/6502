@@ -9,6 +9,11 @@
   wide thing itself. This names it.
 
     http://localhost:8777/_overflow-test.html?w=320
+    http://localhost:8777/_overflow-test.html?w=320&page=trace
+
+  `page` defaults to the explorer. It exists because this harness was pointed at
+  one page for a long time while the site grew to seven, so every page but the
+  first was going unchecked at 320px by an accident of the default.
 
   Elements inside a deliberately scrollable container (the panel tab strip) will
   be listed too -- overflowing a scroller is not a bug. Compare docScrollWidth
@@ -24,10 +29,12 @@
   .bad { color: #fb7185; }
 </style>
 </head><body>
-<iframe id="f" src="index.html"></iframe>
+<iframe id="f"></iframe>
 <script type="module">
-const width = Number(new URLSearchParams(location.search).get('w') || 320);
+const params = new URLSearchParams(location.search);
+const width = Number(params.get('w') || 320);
 const f = document.getElementById('f');
+f.src = params.get('page') || 'index.html';
 f.style.width = width + 'px';
 f.style.height = '900px';
 
