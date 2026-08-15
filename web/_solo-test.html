@@ -19,8 +19,15 @@
 <style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
 iframe{width:1100px;height:760px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
 </head><body>
-<iframe id="f" src="schematic?signal=dpc3_SBX&depth=3"></iframe>
+<iframe id="f"></iframe>
 <script type="module">
+// Same origin, so this is the storage the page reads. The console's
+// configuration is saved now, and a setting left over from a previous run --
+// or from somebody using the page in this browser -- would be a hidden input to
+// every assertion below. _persist-test.html is where saving is checked.
+localStorage.removeItem('v6502.schematic.console');
+document.getElementById('f').src = 'schematic?signal=dpc3_SBX&depth=3';
+
 const results = [];
 const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -552,6 +559,23 @@ f.addEventListener('load', async () => {
     await sleep(120);
     ok('a pin with nowhere to vector leaves the chip pushing',
        rowsNow().length >= deep, `${deep} -> ${rowsNow().length} shown`);
+
+    // A drag that starts on a button is still a drag. The strip is 2.5rem wide
+    // and half of it is buttons, so refusing to move when the press lands on one
+    // made it hard to grab -- and worse, the press still reached the button, so
+    // dragging from the exit icon left the study view on release. That is one of
+    // the two ways a reader loses a walk to a stray gesture.
+    const exit = $('sch-solo-exit');
+    const eb = exit.getBoundingClientRect();
+    pt('pointerdown', 40, eb.left + 10, eb.top + 10, exit);
+    pt('pointermove', 40, eb.left + 10, eb.top + 90, w);
+    pt('pointerup', 40, eb.left + 10, eb.top + 90, w);
+    exit.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(150);
+    ok('dragging from the exit icon moves the console rather than leaving',
+       con.classList.contains('solo'), con.className);
+    ok('and it really did move it', Math.abs(parseFloat(pal.style.top) - 90) < 40,
+       pal.style.top);
 
     // Collapsing leaves the grip, and with it the clock -- the one readout
     // worth keeping when everything else is in the way.

@@ -1024,10 +1024,20 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 
 /* --- The schematic ------------------------------------------------------- */
 
-.sch-controls { display: grid; gap: .6rem .9rem; padding: .8rem 1rem;
+/* Columns as wide as they need to be, rather than a count chosen per
+   breakpoint. Three columns from 46rem was far too eager: a field here is a
+   label *and* a pair of buttons, and at tablet widths the label ran straight
+   through the control beside it while the last button was clipped by the
+   console's own `overflow: hidden`. `auto-fit` with a real minimum cannot make
+   that mistake at any width, and the label sits above its control at every size
+   for the same reason -- beside it, the two compete for a track that is already
+   too narrow. */
+.sch-controls { display: grid; gap: .7rem .9rem; padding: .8rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr)); align-items: end;
   border-bottom: 2px solid var(--line); background: var(--surface); }
-@media (min-width: 46rem) { .sch-controls { grid-template-columns: 1fr 1fr 1fr; align-items: end; } }
-.sch-controls .field { min-width: 0; }
+.sch-controls .field { display: grid; gap: .25rem; min-width: 0; }
+.sch-controls .field > span { font-size: .66rem; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted); }
 .sch-controls select, .sch-controls input[type=search] { width: 100%; min-width: 0; font-size: 16px; }
 .sch-controls input[type=range] { width: 100%; accent-color: var(--accent); }
 
@@ -1100,10 +1110,7 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 @media (max-width: 46rem) {
   /* Labels above their control, not beside it: the row form collapses into a
      scatter of stray words at this width. */
-  .sch-controls { grid-template-columns: minmax(0, 1fr); gap: .5rem; }
-  .sch-controls .field { display: grid; gap: .2rem; }
-  .sch-controls .field > span { font-size: .66rem; text-transform: uppercase;
-    letter-spacing: .08em; color: var(--muted); }
+  .sch-controls { gap: .5rem; }
   #sch-shown { order: 2; }
   .sch-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: .4rem; align-items: center; }
@@ -1170,7 +1177,20 @@ body.no-scroll #view { z-index: 70; }
    selected signal, centred on an empty screen, so the shape of a single island
    is the only thing there is to look at. */
 
-.console.solo { background: #05070d; }
+/* The whole immersive surface claims the touch stream, not just the drawing.
+   A gesture that starts on any part of it that is not the stage -- a border, the
+   space beside the console -- would otherwise reach the browser, and on a tablet
+   a downward swipe there is a page scroll or worse. `overscroll-behavior` stops
+   the drawer's own scrolling from chaining out to the document when it hits its
+   end, which is the other way a pull turns into something the page did not
+   intend.
+
+   What this cannot do is stop the *browser's* own fullscreen-exit gesture. That
+   one belongs to the platform, which is why the console's configuration and the
+   walk are saved: getting dropped out has to be cheap. */
+.console.solo { background: #05070d; touch-action: none; overscroll-behavior: contain; }
+.console.solo .sp-panel { touch-action: pan-y; overscroll-behavior: contain; }
+.console.solo .sp-strip { overscroll-behavior: contain; }
 .console.solo > .console-bar,
 .console.solo .sch-controls,
 .console.solo .sch-caption,

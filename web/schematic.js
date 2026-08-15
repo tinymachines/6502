@@ -816,6 +816,8 @@ function drawTrail(cones) {
   // is fixed. The new island lands next to the pill that was clicked, so it
   // arrives in view without anything having to move. Only entering the mode,
   // and asking, frame anything.
+  if (state.solo) saveConfig();
+
   if (state.solo && state.framed) {
     applyCam();
     const cur = state.islands[state.islands.length - 1];
@@ -1064,7 +1066,60 @@ function buildLegend() {
 // nodes, and memory is the bus the chip is actually talking to -- so a rewind
 // takes the hex dump back with it.
 
-const PAL_KEY = 'v6502.schematic.palette';
+// Everything about the study view that is a *setting* rather than a fact about
+// the chip: where the console was put, which drawer was open, and the walk that
+// was on the bench. Saved on every change and restored on the next visit.
+//
+// This matters more than it sounds. A tablet's own gesture can drop you out of
+// fullscreen without asking, and losing a five-island walk to a stray swipe is
+// the difference between a tool and a toy. It cannot be prevented from here --
+// the browser owns that gesture -- so the answer is to make it cost nothing.
+const CFG_KEY = 'v6502.schematic.console';
+
+function saveConfig() {
+  if (state.root == null) return;
+  try {
+    localStorage.setItem(CFG_KEY, JSON.stringify({
+      pos: state.palPos,
+      drawer: state.drawer,
+      tab: state.tab,
+      // The walk is stored with the direction it was drawn in, because the
+      // layout mirrors: restoring a backward ribbon into a forward view would
+      // put every thread on the wrong side.
+      dir: state.dir,
+      root: state.root,
+      trail: state.trail.map((t) => ({ node: t.node, from: t.from })),
+    }));
+  } catch { /* private mode: the page works, it just forgets */ }
+}
+
+function loadConfig() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CFG_KEY));
+    return raw && typeof raw === 'object' ? raw : null;
+  } catch { return null; }
+}
+
+/**
+ * Put back the walk that was on the bench, if it is still the same bench.
+ *
+ * A deep link, or any other subject, wins: restoring someone else's islands
+ * around a signal they asked for would be the page overruling the URL. So the
+ * saved walk is only reinstated when it ends where the reader now is.
+ */
+function restoreTrail(cfg) {
+  if (!cfg || cfg.dir !== state.dir || !Array.isArray(cfg.trail) || !cfg.trail.length) return false;
+  const n = state.data.names.length;
+  const clean = cfg.trail
+    .filter((t) => t && Number.isInteger(t.node) && t.node >= 0 && t.node < n)
+    .slice(-TRAIL_MAX);
+  if (!clean.length || clean[clean.length - 1].node !== state.root) return false;
+  state.trail = clean.map((t, i) => ({
+    node: t.node,
+    from: Number.isInteger(t.from) && t.from < i ? t.from : i - 1,
+  }));
+  return true;
+}
 
 const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
 const hex4 = (v) => v.toString(16).padStart(4, '0').toUpperCase();
@@ -1363,6 +1418,7 @@ function setTab(name) {
   host.replaceChildren();
   state.panel = PANELS[state.tab](host);
   state.panel();
+  saveConfig();
 }
 
 /** Open or shut the drawer, leaving the strip. */
@@ -1371,6 +1427,7 @@ function setDrawer(on) {
   $('solo-palette').dataset.drawer = state.drawer ? 'open' : 'shut';
   $('sp-collapse').setAttribute('aria-expanded', state.drawer ? 'true' : 'false');
   setTab(state.tab);
+  saveConfig();
   // Opening changes the panel's width and height, so where it is allowed to be
   // changes with it. Without this, opening a drawer near an edge puts half of
   // it outside the stage.
@@ -1398,12 +1455,15 @@ function placePalette(x, y) {
   pal.style.left = `${nx}px`;
   pal.style.top = `${ny}px`;
   state.palPos = { x: nx, y: ny };
-  try { localStorage.setItem(PAL_KEY, JSON.stringify(state.palPos)); } catch { /* private mode */ }
+  saveConfig();
 }
 
 /** Entering the study view: open the console where it was left. */
-function openPalette() {
-  setDrawer(true);
+function openPalette(cfg) {
+  if (cfg && cfg.pos && Number.isFinite(cfg.pos.x) && Number.isFinite(cfg.pos.y)) {
+    state.palPos = cfg.pos;
+  }
+  setDrawer(state.drawer);
   const pos = state.palPos || (() => {
     const sr = stageRect();
     const pr = $('solo-palette').getBoundingClientRect();
@@ -1415,25 +1475,42 @@ function openPalette() {
 function setupPalette() {
   const pal = $('solo-palette');
   const grip = $('sp-strip');
-  try { state.palPos = JSON.parse(localStorage.getItem(PAL_KEY)) || null; } catch { state.palPos = null; }
-  if (state.palPos && !(Number.isFinite(state.palPos.x) && Number.isFinite(state.palPos.y))) {
-    state.palPos = null;
-  }
+  const cfg = loadConfig();
+  state.palPos = cfg && cfg.pos
+    && Number.isFinite(cfg.pos.x) && Number.isFinite(cfg.pos.y) ? cfg.pos : null;
 
-  // Dragged from the grip only, and never when the press landed on one of the
-  // buttons living in it. Move and release are watched on the window for the
-  // same reason the camera does it: `setPointerCapture` would retarget the
-  // click, and these buttons are the ones that leave the mode.
+  // The strip is the handle, buttons included.
+  //
+  // It used to refuse a press that landed on a button, which made a 2.5rem-wide
+  // panel hard to grab and had a worse consequence: the press still reached the
+  // button, so a drag that started on the exit icon *left the study view on
+  // release*. That is one of the two ways a reader loses their walk to a stray
+  // gesture. Now anything on the strip drags, and a press that turned into a
+  // drag has its click swallowed on the way back up.
+  //
+  // Move and release are watched on the window for the same reason the camera
+  // does it: `setPointerCapture` retargets the click, and half these buttons are
+  // the ones the reader means to press.
   let drag = null;
+  let dragged = false;
   grip.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('button')) return;
     const r = pal.getBoundingClientRect();
-    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
-    pal.classList.add('dragging');
-    e.preventDefault();
+    drag = {
+      dx: e.clientX - r.left, dy: e.clientY - r.top,
+      x: e.clientX, y: e.clientY,
+      // A finger always moves a little, so the slop that separates a press from
+      // a drag is larger for touch -- the same figures the camera uses.
+      slop: e.pointerType === 'mouse' ? 4 : 12,
+    };
+    dragged = false;
+    // Only claim the gesture when it did not start on a control: preventing the
+    // default on a button would cost it focus and the press that goes with it.
+    if (!e.target.closest('button')) e.preventDefault();
   });
   const move = (e) => {
     if (!drag) return;
+    if (!dragged && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= drag.slop) return;
+    if (!dragged) { dragged = true; pal.classList.add('dragging'); }
     const sr = stageRect();
     placePalette(e.clientX - sr.left - drag.dx, e.clientY - sr.top - drag.dy);
   };
@@ -1441,7 +1518,18 @@ function setupPalette() {
     if (!drag) return;
     drag = null;
     pal.classList.remove('dragging');
+    // Let the click that follows this release be swallowed, then forget. A drag
+    // that ends off a button produces no click at all, and a flag left latched
+    // would eat the next real press instead of the one it was raised for.
+    if (dragged) setTimeout(() => { dragged = false; }, 0);
   };
+  // Capture, so it runs before the button's own handler rather than after it.
+  grip.addEventListener('click', (e) => {
+    if (!dragged) return;
+    dragged = false;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up);
   window.addEventListener('pointercancel', up);
@@ -1974,11 +2062,21 @@ async function boot() {
       // A walk belongs to the study view: the page proper draws one island in a
       // scrolling stage, with no camera to find a second one with. So both
       // entering and leaving start it again from wherever the reader is.
+      // Read the saved configuration *once*, up front. Reading it again after
+      // the first render would find what that render had just written -- and
+      // rendering happens before the console is opened, so the defaults would
+      // have overwritten the saved tab a moment before it was wanted.
+      const cfg = on ? loadConfig() : null;
       resetTrail();
+      if (cfg) {
+        restoreTrail(cfg);                    // the same walk, if it is the same bench
+        if (PANELS[cfg.tab]) state.tab = cfg.tab;
+        state.drawer = cfg.drawer !== false;
+      }
       if (state.root != null) render();
       // The console only exists in this mode, so entering has to open and
       // populate it rather than waiting for the next animation frame.
-      if (on) openPalette();
+      if (on) openPalette(cfg);
       refresh();
     });
 

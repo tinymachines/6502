@@ -217,6 +217,7 @@ _resize-test.html      # resize the renderer, then read back pixels: is it drawn
 _handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320&page=trace   # what pushes a page wider than the viewport
 _contrast-test.html    # every button, every state, checked for readable text
+_persist-test.html     # the console's configuration, across a second page load
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _primer-test.html      # every number on the primer, re-derived from the JSON
@@ -905,6 +906,39 @@ else — the clock, history, fit — rides in the drawer's header.
 - **Its controls repaint on the action, not on the next frame** — the same
   responsiveness bug the clock already had, and invisible until the page is
   driven somewhere frames are throttled.
+- **The whole configuration is saved and restored** — where the console was put,
+  which drawer was open, and the walk that was on the bench. That is not a
+  convenience: a tablet's own gesture can drop the reader out of fullscreen
+  without asking, and the browser owns that gesture, so it cannot be prevented
+  from here. Making it *cost nothing* is the available answer.
+  - **The saved walk is only reinstated when it ends where the reader now is.**
+    A deep link, or any other subject, wins — restoring somebody else's islands
+    around a signal that was asked for by name would be the page overruling the
+    URL. It is stored with the direction it was drawn in, because the layout
+    mirrors.
+  - **The configuration is read once, up front, on entering.** Reading it again
+    after the first render finds what that render just wrote: rendering happens
+    before the console is opened, so the default tab overwrote the saved one a
+    moment before it was wanted. `_persist-test.html` caught it.
+  - **`_solo-test.html` clears the key before it starts.** A persisted setting is
+    a hidden input to every assertion after it, which is why the tab and the
+    drawer were deliberately *not* saved when the console was first built. Saving
+    them is what the reader asked for; the harness had to become deterministic
+    instead.
+- **A drag that starts on a strip button is still a drag.** Refusing to move when
+  the press landed on a control made a 2.5rem-wide panel hard to grab, and had a
+  worse consequence: the press still reached the button, so dragging from the
+  exit icon left the study view on release. Anything on the strip drags now, and
+  a press that turned into a drag has its click swallowed in the capture phase.
+  - **The suppression must not latch.** A drag ending off a button produces no
+    click at all, so a flag left raised eats the *next* real press. It is cleared
+    on a zero timeout after release — late enough for the click it was raised
+    for, early enough for everything else.
+- **The immersive surface claims the touch stream as a whole**, not just the
+  drawing, and `overscroll-behavior: contain` stops the drawer's own scrolling
+  from chaining out to the document at its end. Both are defensive: they cannot
+  be verified here, for the reason at the top of this file — a headless check
+  cannot reach a second contact point and cannot tell you a gesture feels wrong.
 - **Position is clamped against the stage and re-clamped on resize and whenever
   the drawer opens or shuts.** A panel dragged to the bottom of a tall window and reopened on a
   phone would otherwise be gone with no way back but clearing storage. Position
@@ -1382,6 +1416,15 @@ Layout gotchas already paid for, in narrowing order of subtlety:
 - **Grid tracks need `minmax(0, 1fr)`**, not `1fr`, or the track takes its
   automatic minimum from content. This sized the canvas to 1280×1280 in a 913px
   window.
+- **Count columns with `auto-fit` and a real minimum, not with a breakpoint.**
+  The schematic's controls went to three columns at 46rem, and a field there is a
+  label *and* a pair of buttons — so at tablet widths the label ran through the
+  control beside it and the last button was clipped by the console's own
+  `overflow: hidden`. `repeat(auto-fit, minmax(13.5rem, 1fr))` cannot make that
+  mistake at any width. The label sits above its control at every size for the
+  same reason: beside it, the two compete for a track that is already too narrow.
+  Found on a tablet, not in a harness — `_overflow-test.html` reported the page
+  as fine, because the overrun was *inside* an element that fits.
 - **`[hidden]` needs `!important`** here, because the UA rule is specificity
   (0,1,0) and `#boot`/`#app` declare `display`.
 - Test at **320px**, not just 390. Several things only break at the narrowest

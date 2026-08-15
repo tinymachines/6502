@@ -1,0 +1,147 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The study view's configuration survives a reload: where the console was put,
+  which drawer was open, and the walk that was on the bench.
+
+  It is its own harness because it needs a *second page load* to mean anything,
+  and _solo-test.html holds a window and a document across 78 assertions that
+  would all go stale on a reload. It also has to start from cleared storage --
+  a persisted setting is a hidden input to every later assertion, which is the
+  reason this was left unsaved to begin with.
+
+    http://localhost:8777/_persist-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1100px;height:700px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const KEY = 'v6502.schematic.console';
+
+// Same origin, so this is the storage the page will read.
+localStorage.removeItem(KEY);
+
+const load = (src) => new Promise((resolve) => {
+  f.addEventListener('load', function once() {
+    f.removeEventListener('load', once);
+    resolve();
+  });
+  f.src = src;
+});
+
+/** Boot the page, go fullscreen, and hand back its window. */
+async function enter(src) {
+  await load(src);
+  const w = f.contentWindow, d = f.contentDocument;
+  const $ = (id) => d.getElementById(id);
+  for (let i = 0; i < 300 && $('sch-main').hidden; i++) await sleep(50);
+  // Force the fallback: the API is unavailable in an iframe anyway.
+  delete w.Element.prototype.requestFullscreen;
+  delete w.Element.prototype.webkitRequestFullscreen;
+  const con = d.querySelector('.console');
+  con.requestFullscreen = undefined;
+  con.webkitRequestFullscreen = undefined;
+  $('sch-fullscreen').click();
+  for (let i = 0; i < 60 && !con.classList.contains('solo'); i++) await sleep(50);
+  return { w, d, $, con };
+}
+
+(async () => {
+  try {
+    // --- first visit: nothing saved -----------------------------------------
+    let { w, d, $, con } = await enter('schematic?signal=dpc3_SBX');
+    ok('the study view opens', con.classList.contains('solo'), con.className);
+    const pal = $('solo-palette');
+    ok('and with nothing saved it opens on Signal',
+       pal.dataset.open === 'signal' && pal.dataset.drawer === 'open', pal.dataset.open);
+
+    // Put it somewhere, on a tab, with a walk on the bench.
+    d.querySelector('.sp-icon[data-tab="mem"]').click();
+    await sleep(80);
+    const svg = $('sch-svg');
+    const island = () => svg.querySelector('.sch-island.current');
+    for (let i = 0; i < 2; i++) {
+      const n = [...island().querySelectorAll('.sch-node')]
+        .find((x) => !x.classList.contains('root'))
+        || [...svg.querySelectorAll('.sch-node')].find((x) => !x.classList.contains('root'));
+      if (!n) break;
+      n.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+      await sleep(160);
+    }
+    const walked = svg.querySelectorAll('.sch-island').length;
+    const subject = island().querySelector('.sch-node.root').dataset.node;
+    ok('a walk is on the bench', walked >= 2, `${walked} islands`);
+
+    const pt = (type, id, x, y, target) => target.dispatchEvent(
+      new w.PointerEvent(type, { pointerId: id, clientX: x, clientY: y,
+                                 bubbles: true, pointerType: 'touch' }));
+    const strip = $('sp-strip');
+    let g = strip.getBoundingClientRect();
+    pt('pointerdown', 1, g.left + 14, g.top + 6, strip);
+    pt('pointermove', 1, g.left + 134, g.top + 6, w);
+    pt('pointerup', 1, g.left + 134, g.top + 6, w);
+    await sleep(80);
+    const movedTo = pal.style.left;
+    ok('and the console has been moved', parseFloat(movedTo) > 20, movedTo);
+
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    ok('all of which was written down', !!saved && saved.tab === 'mem'
+       && saved.trail.length === walked && saved.pos, JSON.stringify(saved && {
+         tab: saved.tab, drawer: saved.drawer, trail: saved.trail.length, pos: saved.pos }));
+
+    // --- and back again ------------------------------------------------------
+    //
+    // The deep link carries the signal, exactly as it would after a tablet's own
+    // gesture dropped the reader out of fullscreen and they pressed the button
+    // again. Everything else has to come back on its own.
+    ({ w, d, $, con } = await enter(`schematic?signal=${
+      encodeURIComponent(d.querySelector('.sch-island.current .sch-node.root')
+        .querySelector('text').textContent)}`));
+    const pal2 = $('solo-palette');
+    ok('the drawer comes back on the tab it was left on',
+       pal2.dataset.open === 'mem' && pal2.dataset.drawer === 'open', pal2.dataset.open);
+    ok('the console comes back where it was put',
+       pal2.style.left === movedTo, `${pal2.style.left} vs ${movedTo}`);
+    const back = $('sch-svg').querySelectorAll('.sch-island').length;
+    ok('and the walk is still on the bench', back === walked, `${back} vs ${walked}`);
+    ok('with the same signal in front of you',
+       $('sch-svg').querySelector('.sch-island.current .sch-node.root').dataset.node === subject);
+
+    // --- but a different subject starts a new walk ---------------------------
+    //
+    // Restoring somebody else's islands around a signal that was asked for by
+    // name would be the page overruling the URL.
+    ({ w, d, $, con } = await enter('schematic?signal=sync'));
+    const fresh = $('sch-svg').querySelectorAll('.sch-island').length;
+    ok('a different subject starts again rather than inheriting a walk',
+       fresh === 1, `${fresh} islands`);
+    ok('though the console still remembers where it goes',
+       $('solo-palette').dataset.open === 'mem'
+       && $('solo-palette').style.left === movedTo);
+
+    // --- a shut drawer stays shut -------------------------------------------
+    d.getElementById('sp-collapse').click();
+    await sleep(80);
+    ({ w, d, $, con } = await enter('schematic?signal=sync'));
+    ok('a drawer shut on the way out is shut on the way back in',
+       $('solo-palette').dataset.drawer === 'shut'
+       && w.getComputedStyle($('sp-drawer')).display === 'none');
+    ok('and the strip is still there to open it with',
+       w.getComputedStyle($('sp-strip')).display !== 'none');
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
+  }
+  localStorage.removeItem(KEY);
+  document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>
