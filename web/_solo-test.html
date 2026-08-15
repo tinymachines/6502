@@ -120,14 +120,43 @@ f.addEventListener('load', async () => {
     const pillH = () => island().querySelector('.sch-pill').getBoundingClientRect().height;
     ok('the new island is framed at reading size', pillH() > 10, `${pillH().toFixed(1)}px pills`);
 
-    for (let i = 0; i < 6; i++) {
+    // A bench keeps what is put on it. Adding an island must not move the
+    // camera -- which is only possible because the study view's coordinate
+    // space is fixed rather than sized to whatever is currently drawn.
+    const camOf = () => svg.querySelector('.sch-cam').getAttribute('transform');
+    const zoomOf = () => Number(/scale\(([-\d.e+]+)\)/.exec(camOf())[1]);
+    const parked = zoomOf();
+    const one = pickOther();
+    one.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(200);
+    // A bench keeps what is put on it: adding an island never rescales the
+    // view. It may *pan*, and only by the least it can -- the island you just
+    // clicked into being has to be somewhere you can see, and a walk long
+    // enough eventually reaches the edge of the screen.
+    ok('adding an island does not rescale the view', zoomOf() === parked,
+       `${parked} -> ${zoomOf()}`);
+    const inView = () => {
+      const a = island().getBoundingClientRect(), b = svg.getBoundingClientRect();
+      return a.left >= b.left - 1 && a.right <= b.right + 1
+          && a.top >= b.top - 1 && a.bottom <= b.bottom + 1;
+    };
+    ok('and the island it added is on screen', inView());
+    ok('and the bench itself does not move either',
+       svg.getAttribute('viewBox') === `0 0 1200 800`, svg.getAttribute('viewBox'));
+
+    // The dots are the only thing that makes zoom visible on an empty field,
+    // and they have to be *inside* the camera group or they would not move.
+    const grid = svg.querySelectorAll('.sch-cam > .sch-grid');
+    ok('the bench is dotted, inside the camera', grid.length === 2, `${grid.length} grids`);
+
+    for (let i = 0; i < 5; i++) {
       const n = pickOther();
       if (!n) break;
       n.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
       await sleep(160);
     }
     ok('the walk is capped rather than growing without limit',
-       islands() === 6, `${islands()} islands after 7 clicks`);
+       islands() === 6, `${islands()} islands after 8 clicks`);
     ok('and the subject is still at reading size six islands in',
        pillH() > 10, `${pillH().toFixed(1)}px pills`);
 
@@ -306,7 +335,10 @@ f.addEventListener('load', async () => {
     });
     ok('0 fits the whole walk on screen', outside.length === 0,
        `${outside.length} of ${islands()} islands off screen`);
-    ok('and it had to zoom out to do it', camK() < 1, camT());
+    // Fitting a two-island world into a 1200x800 bench can legitimately magnify,
+    // so "k < 1" would be asserting the arithmetic rather than the behaviour.
+    // What is being claimed is that it pulled back from wherever the reader was.
+    ok('and it pulled back from where the pinch left it', camK() < 3, camT());
 
     // A drag that happens to end on a signal is panning, not choosing. Without
     // slop, every touch on a pill would register as a drag and select nothing.
@@ -337,39 +369,66 @@ f.addEventListener('load', async () => {
     ok('and it holds the clock, the walk and the way out',
        pal.contains($('solo-clock')) && pal.contains($('solo-back-nav'))
        && pal.contains($('sch-solo-exit')));
+    // A vertical strip of icons, each opening the drawer onto one thing. The
+    // strip is what stays when the drawer is shut, so the transport and the way
+    // out live on it rather than behind it.
+    ok('the strip carries an icon per drawer',
+       $('sp-strip').querySelectorAll('.sp-icon[data-tab]').length === 5);
+    ok('and the transport and the exit stay on the strip, not in a drawer',
+       $('sp-strip').contains($('solo-run')) && $('sp-strip').contains($('sch-solo-exit')));
 
     const palAt = () => [parseFloat(pal.style.left), parseFloat(pal.style.top)];
+    let id = 20;
+    const dragBy = async (dx, dy) => {
+      const g = $('sp-strip').getBoundingClientRect();
+      const n = ++id;
+      pt('pointerdown', n, g.left + 14, g.top + 6, $('sp-strip'));
+      pt('pointermove', n, g.left + 14 + dx, g.top + 6 + dy, w);
+      pt('pointerup', n, g.left + 14 + dx, g.top + 6 + dy, w);
+      await sleep(60);
+    };
+
+    // Park it at the top left first: the default position is at the bottom, so
+    // a downward drag from there would be measuring the clamp rather than the
+    // drag. Which is worth its own assertion, and gets one.
+    await dragBy(-4000, -4000);
+    ok('it cannot be dragged off the top left', palAt().join() === '0,0', palAt().join());
+
     const [px, py] = palAt();
-    const gr = $('sp-grip').getBoundingClientRect();
-    pt('pointerdown', 9, gr.left + 40, gr.top + 8, $('sp-grip'));
-    pt('pointermove', 9, gr.left + 140, gr.top + 68, w);
-    pt('pointerup', 9, gr.left + 140, gr.top + 68, w);
-    await sleep(80);
+    await dragBy(100, 60);
     const [qx, qy] = palAt();
-    ok('dragging the grip moves it', Math.abs(qx - px - 100) < 2 && Math.abs(qy - py - 60) < 2,
+    ok('dragging the strip moves it', Math.abs(qx - px - 100) < 2 && Math.abs(qy - py - 60) < 2,
        `(${px}, ${py}) -> (${qx}, ${qy})`);
 
     // Dragged at the far corner it must stop at the edge, not leave. A panel
     // that can be lost off screen is one the reader cannot get back without
     // clearing storage.
-    const gr2 = $('sp-grip').getBoundingClientRect();
-    pt('pointerdown', 10, gr2.left + 40, gr2.top + 8, $('sp-grip'));
-    pt('pointermove', 10, gr2.left + 4000, gr2.top + 4000, w);
-    pt('pointerup', 10, gr2.left + 4000, gr2.top + 4000, w);
-    await sleep(80);
+    await dragBy(4000, 4000);
     const pr = pal.getBoundingClientRect(), sr = stage.getBoundingClientRect();
     ok('and it cannot be dragged out of reach',
        pr.right <= sr.right + 1 && pr.bottom <= sr.bottom + 1 && pr.left >= sr.left - 1,
        `panel ${pr.left.toFixed(0)},${pr.top.toFixed(0)} in stage ${sr.width}x${sr.height}`);
+    await dragBy(-4000, -2000);
 
-    const tab = (name) => pal.querySelector(`.sp-tab[data-tab="${name}"]`);
+    const tab = (name) => pal.querySelector(`.sp-icon[data-tab="${name}"]`);
     const body = () => $('sp-panel').textContent;
 
-    // The pins. Asserted state is read back out of the node rather than
-    // remembered beside the button, so this is a claim about the chip.
+    // Pressing an icon opens the drawer onto it; pressing the open one shuts
+    // it, which is the only way back to a bench with nothing on it but a strip.
     tab('io').click();
     await sleep(80);
-    ok('the I/O tab reports the pads', /Address/.test(body()) && /Data/.test(body()), body().slice(0, 60));
+    ok('an icon opens the drawer onto its panel',
+       pal.dataset.drawer === 'open' && pal.dataset.open === 'io'
+       && $('sp-drawer-title').textContent === 'I/O', pal.dataset.open);
+    ok('and the icon shows as the open one', tab('io').classList.contains('on'));
+    tab('io').click();
+    await sleep(80);
+    ok('pressing it again shuts the drawer',
+       pal.dataset.drawer === 'shut' && !vis($('sp-drawer')) && vis($('sp-strip')));
+    tab('io').click();
+    await sleep(80);
+    ok('the I/O drawer reports the pads', /Address/.test(body()) && /Data/.test(body()),
+       body().slice(0, 60));
     // Memory. The dump is the bus the chip is talking to, so the program that
     // was loaded has to be in it -- checked against the shared program list
     // rather than against whatever the page happens to show.
@@ -488,11 +547,12 @@ f.addEventListener('load', async () => {
     // worth keeping when everything else is in the way.
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'p', bubbles: true }));
     await sleep(80);
-    ok('p collapses the console', pal.dataset.collapsed === 'true' && !vis($('sp-body')));
-    ok('and the clock is still readable', vis($('solo-clock')));
+    ok('p shuts the drawer, leaving the strip',
+       pal.dataset.drawer === 'shut' && !vis($('sp-drawer')) && vis($('sp-strip')));
+    ok('and the transport is still there to run the chip with', vis($('solo-run')));
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'p', bubbles: true }));
     await sleep(80);
-    ok('p opens it again', pal.dataset.collapsed === 'false' && vis($('sp-body')));
+    ok('p opens it again', pal.dataset.drawer === 'open' && vis($('sp-drawer')));
 
     $('sch-solo-exit').click();
     for (let i = 0; i < 60 && con.classList.contains('solo'); i++) await sleep(50);

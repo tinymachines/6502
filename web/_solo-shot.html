@@ -41,7 +41,7 @@ f.addEventListener('load', async () => {
     await sleep(200);
   }
   if (p.get('tab')) {
-    d.querySelector(`.sp-tab[data-tab="${p.get('tab')}"]`).click();
+    d.querySelector(`.sp-icon[data-tab="${p.get('tab')}"]`).click();
     for (let i = 0; i < Number(p.get('steps') || 0); i++) $('solo-step').click();
   }
   if (p.get('fit')) d.dispatchEvent(new w.KeyboardEvent('keydown', { key: '0', bubbles: true }));

@@ -61,8 +61,14 @@ const state = {
   // The study view's console: which tab is showing, the object that paints it,
   // and where the reader dragged the panel to.
   tab: 'signal',
+  drawer: true,
   panel: null,
   palPos: null,
+  // Whether the camera has been aimed at this bench yet. Raised on the first
+  // draw after entering the study view and lowered on leaving, so a re-render
+  // caused by walking somewhere leaves the view exactly as the reader left it.
+  framed: false,
+  viewBox: null,
 };
 
 const HISTORY_MAX = 200;
@@ -204,11 +210,26 @@ function diff(a, b) {
 // already does.
 
 const cam = { k: 1, tx: 0, ty: 0 };
-// The lower bound has to reach a whole walk. The viewBox is one island, so six
-// of them side by side is roughly a tenth the width of what the browser is
-// scaling to fit -- 0.4 would refuse to show the reader their own walk.
+// The lower bound has to reach a whole walk: six islands side by side are
+// roughly a tenth the width of one, and 0.4 would refuse to show the reader
+// their own walk.
 const MIN_K = 0.05;
 const MAX_K = 16;
+
+// The study view's coordinate space, and it is *fixed*.
+//
+// This is what makes the workbench a workbench. The page proper sizes the
+// viewBox to its one drawing, which is right there -- but in the study view the
+// drawing grows as you walk, and a viewBox that tracked it would move the world
+// under the camera on every step. Islands would drift, the zoom would change
+// meaning, and putting something somewhere would not keep it there. So the
+// space is constant and only the camera moves in it.
+const WORKBENCH = { w: 1200, h: 800 };
+
+// How far the initial framing is allowed to magnify. A cone of four signals
+// would otherwise be scaled to fill a 1400px screen, which draws one inverter
+// the size of a hand and leaves no room for the island you walk to next.
+const MAX_FIT = 2;
 
 function applyCam() {
   if (!state.camG) return;
@@ -223,22 +244,51 @@ function applyCam() {
  * to the viewBox fits it to the screen, and nothing here has to measure the
  * canvas -- which is the same reason the single-island version never did.
  */
-function frameOn(box) {
+function frameOn(box, maxScale = Infinity) {
   const vb = state.viewBox;
   if (!vb || !box || box.w <= 0 || box.h <= 0) return;
-  const k = Math.min(vb.w / box.w, vb.h / box.h);
+  const k = Math.min(vb.w / box.w, vb.h / box.h, maxScale);
   place(k, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, { x: vb.w / 2, y: vb.h / 2 });
 }
 
-/** The signal being studied, at reading size. */
+/** The signal being studied, fitted to the portal. */
 function focusCurrent() {
   const cur = state.islands[state.islands.length - 1];
-  if (cur) frameOn(cur.box);
+  if (cur) frameOn(cur.box, MAX_FIT);
 }
 
 /** Everything you have walked through, however small that makes it. */
 function fitAll() {
   if (state.world) frameOn(state.world);
+}
+
+/**
+ * Nudge a box into view, without changing the zoom.
+ *
+ * The bench keeps what is put on it, so walking somewhere must not re-frame the
+ * view -- but the island you just clicked into being has to be somewhere you can
+ * see. This pans by the least it can and never scales, so the reader's zoom and
+ * everything else's position survive; a box already in view moves nothing at
+ * all.
+ */
+function ensureVisible(box, margin = 24) {
+  const vb = state.viewBox;
+  if (!vb || !box) return;
+  const x0 = cam.k * box.x + cam.tx, x1 = cam.k * (box.x + box.w) + cam.tx;
+  const y0 = cam.k * box.y + cam.ty, y1 = cam.k * (box.y + box.h) + cam.ty;
+  const shift = (lo, hi, span) => {
+    if (hi - lo > span) return (span - (lo + hi)) / 2;   // too big to fit: centre it
+    if (hi > span - margin) return span - margin - hi;
+    if (lo < margin) return margin - lo;
+    return 0;
+  };
+  const dx = shift(x0, x1, vb.w);
+  const dy = shift(y0, y1, vb.h);
+  if (!dx && !dy) return;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+  cam.tx += dx;
+  cam.ty += dy;
+  applyCam();
 }
 
 /**
@@ -258,7 +308,16 @@ function place(k, c, u) {
   applyCam();
 }
 
-function setupCamera(svg) {
+/**
+ * Pan, pinch and wheel over the whole workbench.
+ *
+ * Listened for on the *stage*, not on the drawing. An `<svg>` only hit-tests
+ * where it has been painted, so with a bench that is mostly empty space a finger
+ * landing between two islands would reach nothing and the gesture would not
+ * start -- which is exactly what a pinch on a phone does most of the time. The
+ * SVG is still what maps screen coordinates into the drawing.
+ */
+function setupCamera(stage, svg) {
   const live = new Map();
   let gesture = null;   // { c, k0, d0 } -- the content point being held, and the
                         // pinch it started from. One shape for both cases.
@@ -294,8 +353,11 @@ function setupCamera(svg) {
     gesture = u ? { c: contentAt(u), k0: cam.k, d0: anchor.d } : null;
   };
 
-  svg.addEventListener('pointerdown', (e) => {
+  stage.addEventListener('pointerdown', (e) => {
     if (!state.solo) return;
+    // The console floats over the bench and has its own drag. A press that
+    // starts on it is never a pan.
+    if (e.target.closest && e.target.closest('.solo-palette')) return;
     state.dragged = false;
     travel = 0;
     live.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -337,15 +399,16 @@ function setupCamera(svg) {
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
 
-  svg.addEventListener('wheel', (e) => {
+  stage.addEventListener('wheel', (e) => {
     if (!state.solo) return;
+    if (e.target.closest && e.target.closest('.solo-palette')) return;
     e.preventDefault();
     const u = toUser(e.clientX, e.clientY);
     if (!u) return;
     place(cam.k * Math.exp(-e.deltaY * 0.0015), contentAt(u), u);
   }, { passive: false });
 
-  svg.addEventListener('dblclick', () => { if (state.solo) fitAll(); });
+  stage.addEventListener('dblclick', () => { if (state.solo) fitAll(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -667,16 +730,20 @@ function drawTrail(cones) {
   const offs = arrange(layouts);
   const cur = layouts.length - 1;
 
-  const W = layouts[cur].width;
-  const H = layouts[cur].height;
-  state.viewBox = { w: W, h: H };
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.setAttribute('width', W);
-  svg.setAttribute('height', H);
+  // The page proper is sized to its one drawing; the study view is a fixed
+  // workbench the camera moves around in. Anything else and adding an island
+  // would move everything already on the bench.
+  const vb = state.solo ? WORKBENCH : { w: layouts[cur].width, h: layouts[cur].height };
+  state.viewBox = vb;
+  svg.setAttribute('viewBox', `0 0 ${vb.w} ${vb.h}`);
+  svg.setAttribute('width', vb.w);
+  svg.setAttribute('height', vb.h);
 
   // Everything drawn lives under one group, which is what the camera moves.
   const camG = el('g', { class: 'sch-cam' }, svg);
   state.camG = camG;
+
+  if (state.solo) drawGrid(svg, camG);
 
   // Threads first, so they pass behind the pills they join.
   const threads = el('g', { class: 'sch-threads' }, camG);
@@ -720,9 +787,51 @@ function drawTrail(cones) {
   }
   state.world = Number.isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
 
-  // A new subject gets a fresh framing at reading size: staying where the last
-  // drawing was would leave this one off screen with no sign of why.
-  focusCurrent();
+  // The camera is *not* reset here. Adding an island to a bench should leave
+  // everything else on the bench where it was -- and it can, because the space
+  // is fixed. The new island lands next to the pill that was clicked, so it
+  // arrives in view without anything having to move. Only entering the mode,
+  // and asking, frame anything.
+  if (state.solo && state.framed) {
+    applyCam();
+    const cur = state.islands[state.islands.length - 1];
+    if (cur) ensureVisible(cur.box);
+  } else {
+    focusCurrent();
+    state.framed = state.solo;
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The bench itself: dots, so zoom has something to be relative to.
+ *
+ * Scale is invisible on an empty background -- a circuit drawn twice as large on
+ * a black field looks like a circuit, not like a closer circuit. The dots ride
+ * inside the camera group, so they scale and slide with everything else, and two
+ * grids an order of magnitude apart mean there is always one of them at a
+ * useful density.
+ */
+function drawGrid(svg, camG) {
+  const defs = el('defs', {}, svg);
+  const dot = (id, step, r, cls) => {
+    const p = el('pattern', {
+      id, width: step, height: step, patternUnits: 'userSpaceOnUse',
+    }, defs);
+    el('circle', { cx: step / 2, cy: step / 2, r, class: cls }, p);
+  };
+  dot('sch-dots-fine', 40, 1, 'sch-dot');
+  dot('sch-dots-coarse', 200, 2.2, 'sch-dot sch-dot-coarse');
+  // Big enough that the reader cannot pan off the edge of it at any zoom the
+  // camera allows, and cheap either way: a pattern fill is one paint.
+  const span = 60000;
+  for (const id of ['sch-dots-fine', 'sch-dots-coarse']) {
+    el('rect', {
+      x: -span / 2, y: -span / 2, width: span, height: span,
+      fill: `url(#${id})`, class: 'sch-grid',
+    }, camG);
+  }
 }
 
 /** Colour the drawing from the running chip. */
@@ -998,9 +1107,13 @@ const PANELS = {
     };
   },
 
-  /** Where you have walked, and back to any of it. */
+  /** Where you have walked, which way the walk reads, and back to any of it. */
   walk(host) {
-    host.innerHTML = `<div class="sp-walk" id="sp-walk"></div>
+    host.innerHTML = `<div class="sp-dirpair" role="group" aria-label="Direction">
+        <button class="sp-dirbtn" id="solo-dir-back" type="button">what makes it</button>
+        <button class="sp-dirbtn" id="solo-dir" type="button">what it drives</button>
+      </div>
+      <div class="sp-walk" id="sp-walk"></div>
       <div class="sp-actions">
         <button class="solo-btn sp-wide" id="sp-clear" type="button">start again from here</button>
       </div>
@@ -1012,6 +1125,12 @@ const PANELS = {
       resetTrail();
       render();
     });
+    // Direction lives here rather than on the strip because it is a labelled
+    // choice, not an icon: "what makes it" and "what it drives" are the two
+    // readings, and an arrow glyph for either would be a guess.
+    host.querySelector('#solo-dir-back').addEventListener('click', () => setDir('back'));
+    host.querySelector('#solo-dir').addEventListener('click', () => setDir('fwd'));
+    paintDir();
     const list = host.querySelector('#sp-walk');
     let last = null;
     return () => {
@@ -1195,18 +1314,43 @@ const PANELS = {
   },
 };
 
-/** Which panel is showing. Rebuilt on switch, painted every frame. */
+const TAB_NAMES = {
+  signal: 'Signal', walk: 'Walk', io: 'I/O', mem: 'Memory', stack: 'Stack',
+};
+
+/**
+ * Which drawer is open. Rebuilt on switch, painted every frame.
+ *
+ * The strip is the console; the drawer is one thing at a time pulled out of it.
+ * Pressing the icon that is already open shuts it, which is the only way to get
+ * back to a bench with nothing but a strip of icons on it.
+ */
 function setTab(name) {
   state.tab = PANELS[name] ? name : 'signal';
-  for (const b of $('sp-tabs').querySelectorAll('.sp-tab')) {
-    const on = b.dataset.tab === state.tab;
+  const pal = $('solo-palette');
+  pal.dataset.open = state.tab;
+  for (const b of $('sp-strip').querySelectorAll('.sp-icon[data-tab]')) {
+    const on = b.dataset.tab === state.tab && state.drawer;
     b.classList.toggle('on', on);
-    b.setAttribute('aria-selected', on ? 'true' : 'false');
+    b.setAttribute('aria-expanded', on ? 'true' : 'false');
   }
+  $('sp-drawer-title').textContent = TAB_NAMES[state.tab];
   const host = $('sp-panel');
   host.replaceChildren();
   state.panel = PANELS[state.tab](host);
   state.panel();
+}
+
+/** Open or shut the drawer, leaving the strip. */
+function setDrawer(on) {
+  state.drawer = !!on;
+  $('solo-palette').dataset.drawer = state.drawer ? 'open' : 'shut';
+  $('sp-collapse').setAttribute('aria-expanded', state.drawer ? 'true' : 'false');
+  setTab(state.tab);
+  // Opening changes the panel's width and height, so where it is allowed to be
+  // changes with it. Without this, opening a drawer near an edge puts half of
+  // it outside the stage.
+  if (state.palPos) placePalette(state.palPos.x, state.palPos.y);
 }
 
 const stageRect = () => document.querySelector('.sch-stage').getBoundingClientRect();
@@ -1233,20 +1377,9 @@ function placePalette(x, y) {
   try { localStorage.setItem(PAL_KEY, JSON.stringify(state.palPos)); } catch { /* private mode */ }
 }
 
-function setCollapsed(on) {
-  const pal = $('solo-palette');
-  pal.dataset.collapsed = on ? 'true' : 'false';
-  const b = $('sp-collapse');
-  b.textContent = on ? '▸' : '▾';
-  b.setAttribute('aria-expanded', on ? 'false' : 'true');
-  b.setAttribute('aria-label', on ? 'Open the console' : 'Collapse the console');
-  if (state.palPos) placePalette(state.palPos.x, state.palPos.y);
-}
-
 /** Entering the study view: open the console where it was left. */
 function openPalette() {
-  setCollapsed(false);
-  setTab(state.tab);
+  setDrawer(true);
   const pos = state.palPos || (() => {
     const sr = stageRect();
     const pr = $('solo-palette').getBoundingClientRect();
@@ -1257,7 +1390,7 @@ function openPalette() {
 
 function setupPalette() {
   const pal = $('solo-palette');
-  const grip = $('sp-grip');
+  const grip = $('sp-strip');
   try { state.palPos = JSON.parse(localStorage.getItem(PAL_KEY)) || null; } catch { state.palPos = null; }
   if (state.palPos && !(Number.isFinite(state.palPos.x) && Number.isFinite(state.palPos.y))) {
     state.palPos = null;
@@ -1292,18 +1425,18 @@ function setupPalette() {
     if (state.solo && state.palPos) placePalette(state.palPos.x, state.palPos.y);
   });
 
-  $('sp-collapse').addEventListener('click', () => {
-    setCollapsed(pal.dataset.collapsed !== 'true');
-  });
-  for (const b of $('sp-tabs').querySelectorAll('.sp-tab')) {
-    b.addEventListener('click', () => setTab(b.dataset.tab));
+  $('sp-collapse').addEventListener('click', () => setDrawer(false));
+  for (const b of $('sp-strip').querySelectorAll('.sp-icon[data-tab]')) {
+    b.addEventListener('click', () => {
+      if (state.drawer && state.tab === b.dataset.tab) setDrawer(false);
+      else { state.tab = b.dataset.tab; setDrawer(true); }
+    });
   }
 }
 
 /** Paint the live half of whichever panel is open. */
 function refreshPalette() {
-  if (!state.solo || !state.panel) return;
-  if ($('solo-palette').dataset.collapsed === 'true') return;
+  if (!state.solo || !state.panel || !state.drawer) return;
   state.panel();
 }
 
@@ -1443,11 +1576,11 @@ function paintDir() {
   const fwd = $('dir-fwd');
   if (back) back.classList.toggle('on', state.dir === 'back');
   if (fwd) fwd.classList.toggle('on', state.dir === 'fwd');
-  const solo = $('solo-dir');
-  if (solo) {
-    solo.classList.toggle('on', state.dir === 'fwd');
-    solo.title = state.dir === 'fwd' ? 'Showing what it drives (d)' : 'Showing what makes it (d)';
-  }
+  // The study view's pair, which exists only while the Walk drawer is built.
+  const fwdBtn = $('solo-dir');
+  const backBtn = $('solo-dir-back');
+  if (fwdBtn) fwdBtn.classList.toggle('on', state.dir === 'fwd');
+  if (backBtn) backBtn.classList.toggle('on', state.dir === 'back');
 }
 
 function paintDepth() {
@@ -1724,7 +1857,7 @@ async function boot() {
     $('solo-back-nav').addEventListener('click', goBack);
     $('solo-fwd-nav').addEventListener('click', goForward);
     $('solo-fit').addEventListener('click', fitAll);
-    setupCamera($('sch-svg'));
+    setupCamera(document.querySelector('.sch-stage'), $('sch-svg'));
     setupPalette();
 
     // Keyboard, because the study view is meant to be looked at rather than
@@ -1742,7 +1875,7 @@ async function boot() {
       else if (ev.key === 'ArrowRight') { step(+1); ev.preventDefault(); }
       else if (ev.key === 'ArrowLeft') { step(-1); ev.preventDefault(); }
       else if (ev.key === 'p' || ev.key === 'P') {
-        setCollapsed($('solo-palette').dataset.collapsed !== 'true');
+        setDrawer(!state.drawer);
         ev.preventDefault();
       } else if (ev.key === 'd' || ev.key === 'D') {
         setDir(state.dir === 'back' ? 'fwd' : 'back');
@@ -1753,8 +1886,6 @@ async function boot() {
     $('sch-solo-exit').addEventListener('click', () => $('sch-fullscreen').click());
     $('dir-back').addEventListener('click', () => setDir('back'));
     $('dir-fwd').addEventListener('click', () => setDir('fwd'));
-    $('solo-dir').addEventListener('click', () =>
-      setDir(state.dir === 'back' ? 'fwd' : 'back'));
 
     // The bit comparison. Populated from the buses the die actually names.
     const busSel = $('sch-bus');
@@ -1814,6 +1945,7 @@ async function boot() {
         }
       });
       state.solo = on;
+      state.framed = false;      // aim the camera once, on arrival
       console_.classList.toggle('solo', on);
       // A walk belongs to the study view: the page proper draws one island in a
       // scrolling stage, with no camera to find a second one with. So both

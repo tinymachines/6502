@@ -779,16 +779,38 @@ activity.
   by a thread from the pill that was clicked to the root it produced. Replacing
   it made the study view a series of unrelated pictures, when the thing being
   studied is the path between them.
-  - **The viewBox is one island, not the walk.** That is the whole trick, and the
-    obvious alternative is wrong: sizing the viewBox to the world lets the
-    browser scale the ribbon to fit, so every step you take shrinks the signal
-    you are reading. Here the world grows *around* a fixed-size window and the
-    camera moves within it, so a pill stays the same size on screen however far
-    you have walked — which is what `_solo-test.html` measures, a pill being a
-    constant 22 units tall and therefore a direct readout of the zoom.
-  - **`0` fits the whole walk**, and therefore no longer means k = 1. `MIN_K` had
-    to drop from 0.4 to 0.05 for that to be reachable: six islands side by side
-    are roughly a tenth the width of one.
+  - **The study view's coordinate space is fixed** (`WORKBENCH`, 1200x800) and
+    only the camera moves in it. This is what makes it a bench rather than a
+    viewer, and the obvious alternative is wrong twice over: a viewBox sized to
+    what is currently drawn lets the browser scale the ribbon to fit, so every
+    step shrinks the signal you are reading — *and* it moves the world under the
+    camera on every append, so nothing you put down stays where you put it. The
+    page proper keeps the sized-to-its-drawing behaviour, because it has one
+    drawing and no camera.
+  - **Adding an island does not re-frame.** It never rescales, and it pans only
+    when it has to: `ensureVisible()` nudges the new island into view by the
+    least it can, because a walk long enough does reach the edge of the screen
+    and the island you just clicked into being has to be somewhere you can see.
+    The harness asserts both halves — zoom unchanged, island on screen — since
+    "the camera did not move at all" would fail the day the walk got long.
+  - **The initial framing is capped at 2×** (`MAX_FIT`). Fitting a four-signal
+    cone to the portal otherwise draws one inverter the size of a hand and leaves
+    no room for the island you walk to next.
+  - **A pill is the readout for zoom.** Every pill is a constant 22 units tall,
+    so its height on screen *is* the effective scale, which is what
+    `_solo-test.html` measures rather than reasoning about the transform.
+  - **`0` fits the whole walk**, and therefore no longer means k = 1 — with a
+    fixed bench it can even magnify. `MIN_K` had to drop from 0.4 to 0.05 for a
+    six-island ribbon to be reachable at all.
+  - **The bench is dotted, and the dots are inside the camera group.** Zoom is
+    invisible on an empty field: a circuit drawn twice as large on black looks
+    like a circuit, not like a closer one. Two grids an order of magnitude apart
+    (40 and 200 units) mean one of them is always at a useful density.
+  - **The camera listens on the stage, not on the drawing.** An `<svg>` only
+    hit-tests where it has been painted, and a bench is mostly empty space — so
+    a finger landing between two islands reached nothing and the pinch never
+    started, which on a phone is most pinches. `touch-action: none` had to move
+    with it, or that gesture scrolls the page instead.
   - **An island is positioned by a transform on its group**, with its own
     coordinates left alone. Baking the offset into the numbers would put raw
     negative values back in the drawing, which is what the layout harness reads
@@ -846,9 +868,18 @@ activity.
 The study view's controls are **one draggable panel**, not three clusters nailed
 to three corners. On a screen whose entire content is one drawing the controls
 are the only thing that can be in the way, and *where* they are in the way
-depends on the drawing — which changes with every signal followed. It carries the
-clock, the walk, the way out, and five tabs: **Signal**, **Walk**, **I/O**,
-**Memory**, **Stack**.
+depends on the drawing — which changes with every signal followed.
+
+It is a **vertical strip of icons** with a **drawer** beside it. The strip is
+what remains when the drawer is shut, so what lives on it is what has to survive
+that: the five drawers (**Signal**, **Walk**, **I/O**, **Memory**, **Stack**),
+the transport, and the way out. Pressing the icon that is already open shuts the
+drawer, which is the only way back to a bench with nothing on it. Everything
+else — the clock, history, fit — rides in the drawer's header.
+
+- **Direction is in the Walk drawer, not on the strip**, because "what makes it"
+  and "what it drives" is a labelled choice; any arrow glyph for it would be a
+  guess, and the one that fits best (`⇄`) already means I/O.
 
 - **Each panel is built once and painted every frame**, and the split is
   load-bearing: rebuilding the markup per frame would blow away the address field
@@ -857,8 +888,8 @@ clock, the walk, the way out, and five tabs: **Signal**, **Walk**, **I/O**,
 - **Its controls repaint on the action, not on the next frame** — the same
   responsiveness bug the clock already had, and invisible until the page is
   driven somewhere frames are throttled.
-- **Position is clamped against the stage and re-clamped on resize and on
-  collapse.** A panel dragged to the bottom of a tall window and reopened on a
+- **Position is clamped against the stage and re-clamped on resize and whenever
+  the drawer opens or shuts.** A panel dragged to the bottom of a tall window and reopened on a
   phone would otherwise be gone with no way back but clearing storage. Position
   persists; the tab and the collapsed state deliberately do not, because a
   persisted UI state is a hidden input to every later assertion.

@@ -110,54 +110,63 @@
         <div class="sch-stage">
           <svg id="sch-svg" role="img" aria-label="Gate-level schematic"></svg>
 
-          <!-- The study view's console. One panel rather than three clusters
-               pinned to three corners, and draggable, because on a screen whose
-               whole content is one drawing the controls are the only thing that
-               can be in the way -- and where they are in the way depends on the
-               drawing, which changes every time a signal is followed. -->
-          <div class="solo-palette" id="solo-palette" data-collapsed="false">
-            <div class="sp-grip" id="sp-grip">
-              <span class="sp-dots" aria-hidden="true">⣿</span>
-              <span class="sp-title">console</span>
-              <span class="solo-clock mono" id="solo-clock"></span>
-              <button id="sp-collapse" class="solo-btn" type="button" aria-expanded="true"
-                      aria-label="Collapse the console" title="Collapse (p)">▾</button>
-              <button id="sch-solo-exit" class="solo-btn sp-exit" type="button"
-                      aria-label="Leave fullscreen" title="Leave (esc)">esc</button>
+          <!-- The study view's console: a vertical strip of icons that opens a
+               drawer, floating over the workbench and draggable by its grip.
+               On a screen whose whole content is one drawing the controls are
+               the only thing that can be in the way, and where they are in the
+               way depends on the drawing -- which changes with every signal
+               followed. The strip is what stays when the drawer is shut. -->
+          <div class="solo-palette" id="solo-palette" data-open="signal">
+            <div class="sp-strip" id="sp-strip">
+              <div class="sp-grip" id="sp-grip" title="Drag to move the console"
+                   aria-hidden="true">⠿</div>
+
+              <button class="sp-icon" type="button" data-tab="signal"
+                      aria-label="Signal" title="Signal — what this wire is">◈</button>
+              <button class="sp-icon" type="button" data-tab="walk"
+                      aria-label="Walk" title="Walk — where you have been">⇢</button>
+              <button class="sp-icon" type="button" data-tab="io"
+                      aria-label="I/O" title="I/O — the pads and the input pins">⇄</button>
+              <button class="sp-icon" type="button" data-tab="mem"
+                      aria-label="Memory" title="Memory — the bus the chip is talking to">▦</button>
+              <button class="sp-icon" type="button" data-tab="stack"
+                      aria-label="Stack" title="Stack — where S points">≣</button>
+
+              <span class="sp-strip-sep" aria-hidden="true"></span>
+
+              <button id="solo-back" class="sp-icon" type="button"
+                      aria-label="Back one half-cycle" title="Back (←)">◀</button>
+              <button id="solo-run" class="sp-icon solo-run" type="button"
+                      aria-label="Run" title="Run (space)">▶</button>
+              <button id="solo-step" class="sp-icon" type="button"
+                      aria-label="Forward one half-cycle" title="Step (→)">▶❙</button>
+
+              <span class="sp-strip-sep" aria-hidden="true"></span>
+
+              <button id="sch-solo-exit" class="sp-icon sp-exit" type="button"
+                      aria-label="Leave fullscreen" title="Leave (esc)">✕</button>
             </div>
 
-            <div class="sp-body" id="sp-body">
-              <div class="sp-row" role="group" aria-label="Clock and walk">
-                <button id="solo-back" class="solo-btn" type="button"
-                        aria-label="Back one half-cycle" title="Back (←)">◀</button>
-                <button id="solo-run" class="solo-btn solo-run" type="button"
-                        aria-label="Run" title="Run (space)">▶</button>
-                <button id="solo-step" class="solo-btn" type="button"
-                        aria-label="Forward one half-cycle" title="Step (→)">▶❙</button>
-                <span class="sp-sep" aria-hidden="true"></span>
-                <button id="solo-dir" class="solo-btn solo-dir" type="button"
-                        aria-label="Show what this drives" title="Flip direction (d)">⇄</button>
+            <div class="sp-drawer" id="sp-drawer">
+              <div class="sp-drawer-head">
+                <span class="sp-title" id="sp-drawer-title">Signal</span>
+                <span class="solo-clock mono" id="solo-clock"></span>
                 <button id="solo-back-nav" class="solo-btn" type="button" disabled
                         aria-label="Back to the last signal" title="Back ([)">↩</button>
                 <button id="solo-fwd-nav" class="solo-btn" type="button" disabled
                         aria-label="Forward again" title="Forward (])">↪</button>
                 <button id="solo-fit" class="solo-btn" type="button"
                         aria-label="Fit the whole walk" title="Fit everything (0)">⌾</button>
-              </div>
-
-              <div class="sp-tabs" id="sp-tabs" role="tablist" aria-label="Console">
-                <button class="sp-tab on" type="button" role="tab" data-tab="signal">Signal</button>
-                <button class="sp-tab" type="button" role="tab" data-tab="walk">Walk</button>
-                <button class="sp-tab" type="button" role="tab" data-tab="io">I/O</button>
-                <button class="sp-tab" type="button" role="tab" data-tab="mem">Memory</button>
-                <button class="sp-tab" type="button" role="tab" data-tab="stack">Stack</button>
+                <button id="sp-collapse" class="solo-btn" type="button"
+                        aria-label="Close the drawer" title="Close (p)">✕</button>
               </div>
 
               <div class="sp-panel" id="sp-panel" role="tabpanel"></div>
 
               <p class="sp-hint">
                 click a signal to follow it · space run · ← → step · <b>[</b> <b>]</b> back
-                and forward · pinch to zoom · <b>0</b> fit all · <b>p</b> hide this
+                and forward · pinch or scroll to zoom · <b>0</b> fits the walk ·
+                <b>p</b> shuts this
               </p>
             </div>
           </div>
