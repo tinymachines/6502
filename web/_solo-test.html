@@ -94,7 +94,12 @@ f.addEventListener('load', async () => {
     $('sch-fullscreen').click();
     for (let i = 0; i < 60 && !con.classList.contains('solo'); i++) await sleep(50);
     ok('fullscreen enters the study view', con.classList.contains('solo'), con.className);
-    ok('it drops to a single level', $('sch-depth').value === '1', $('sch-depth').value);
+    // It used to drop to a single level on the way in. That made sense when the
+    // mode showed one cone with nothing else on screen; it is a workbench now,
+    // and arriving to less than the page was already showing is a jolt with
+    // nothing to recommend it.
+    ok('it arrives showing what the page was showing',
+       $('sch-depth').value === depthBefore, `${$('sch-depth').value} vs ${depthBefore}`);
 
     // The point of the mode: nothing on screen but the circuit.
     const hidden = ['.console-bar', '.sch-controls', '.sch-caption',
@@ -120,7 +125,8 @@ f.addEventListener('load', async () => {
     await sleep(250);
     ok('clicking a signal re-roots without leaving the mode',
        con.classList.contains('solo') && rootNow() === want, con.className);
-    ok('and it is still a single level', $('sch-depth').value === '1');
+    ok('and it is still at the depth it came in with',
+       $('sch-depth').value === depthBefore, $('sch-depth').value);
 
     // --- the walk stays on the bench, as one drawing -------------------------
     //
@@ -317,10 +323,8 @@ f.addEventListener('load', async () => {
     // starting a new one -- the island beyond it is the step being undone.
     ok('and it un-walks rather than starting again',
        steps() === afterClick - 1, `${steps()} vs ${afterClick}`);
-    // The study view is one level by definition, so back restores *where* you
-    // were and not how deep. Otherwise stepping back past the moment you went
-    // fullscreen would quietly undo the one thing this mode promises.
-    ok('and back stays at one level', $('sch-depth').value === '1', $('sch-depth').value);
+    ok('and back keeps the depth it was walked at',
+       $('sch-depth').value === depthBefore, $('sch-depth').value);
     ok('forward is offered once you have gone back', !$('solo-fwd-nav').disabled);
 
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: ']', bubbles: true }));
@@ -479,6 +483,28 @@ f.addEventListener('load', async () => {
 
     const tab = (name) => pal.querySelector(`.sp-icon[data-tab="${name}"]`);
     const body = () => $('sp-panel').textContent;
+
+    // Carrying the page's depth in is only half of it: the page's own slider is
+    // hidden in this mode, so the mode needs one of its own or the reader
+    // arrives able to see the setting and not to change it.
+    tab('walk').click();
+    await sleep(80);
+    const soloDepth = $('solo-depth');
+    ok('the study view has a depth control of its own', !!soloDepth && vis(soloDepth));
+    ok('and it agrees with the page it came from',
+       soloDepth.value === $('sch-depth').value, `${soloDepth.value} vs ${$('sch-depth').value}`);
+    const wider = String(Math.min(6, Number(soloDepth.value) + 1));
+    soloDepth.value = wider;
+    soloDepth.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await sleep(200);
+    ok('moving it reaches further back', $('sch-depth').value === wider
+       && $('solo-depth-val').textContent === wider, $('sch-depth').value);
+    ok('and the drawing grew with it', svg.querySelectorAll('.sch-node').length > 1,
+       `${svg.querySelectorAll('.sch-node').length} signals`);
+    ok('with still no signal drawn twice', dupes().length === 0, dupes().slice(0, 4).join(', '));
+    soloDepth.value = depthBefore;
+    soloDepth.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await sleep(200);
 
     // Pressing an icon opens the drawer onto it; pressing the open one shuts
     // it, which is the only way back to a bench with nothing on it but a strip.

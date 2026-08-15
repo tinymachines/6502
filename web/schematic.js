@@ -36,7 +36,6 @@ const state = {
   soloRate: 4,
   soloAcc: 0,
   lastFrame: 0,
-  depthBeforeSolo: 3,
   running: false,
   raf: 0,
   // Where you have been. An entry is `{root, dir, depth}` -- which is exactly
@@ -1185,9 +1184,13 @@ const PANELS = {
     };
   },
 
-  /** Where you have walked, which way the walk reads, and back to any of it. */
+  /** Where you have walked, how far back each step reaches, and back to any of it. */
   walk(host) {
-    host.innerHTML = `<div class="sp-dirpair" role="group" aria-label="Direction">
+    host.innerHTML = `<label class="sp-field sp-depth">
+        <span>Depth <b class="mono" id="solo-depth-val">${state.depth}</b></span>
+        <input id="solo-depth" type="range" min="1" max="6" value="${state.depth}">
+      </label>
+      <div class="sp-dirpair" role="group" aria-label="Direction">
         <button class="sp-dirbtn" id="solo-dir-back" type="button">what makes it</button>
         <button class="sp-dirbtn" id="solo-dir" type="button">what it drives</button>
       </div>
@@ -1212,6 +1215,10 @@ const PANELS = {
     // readings, and an arrow glyph for either would be a guess.
     host.querySelector('#solo-dir-back').addEventListener('click', () => setDir('back'));
     host.querySelector('#solo-dir').addEventListener('click', () => setDir('fwd'));
+    // Changing how far each step reaches resizes every column, so the walk
+    // starts again from here -- the same rule the page's own slider follows.
+    host.querySelector('#solo-depth').addEventListener('input', (e) =>
+      setDepth(Number(e.target.value)));
     paintDir();
     const list = host.querySelector('#sp-walk');
     let last = null;
@@ -1631,10 +1638,7 @@ function restore(v) {
       if (at >= 0) state.trail.length = at + 1;
       else resetTrail();
     }
-    // The study view is one level by definition, so returning restores *where*
-    // you were and not how deep -- otherwise stepping back past the moment you
-    // went fullscreen would quietly break the one thing that mode promises.
-    if (!state.solo) state.depth = Math.max(1, Math.min(6, v.depth));
+    state.depth = Math.max(1, Math.min(6, v.depth));
     paintDir();
     paintDepth();
     clearCompare();
@@ -1699,11 +1703,14 @@ function paintDir() {
 }
 
 function paintDepth() {
-  const el = $('sch-depth');
-  if (el) {
+  // Both sliders: the page's, and the study view's own -- which exists only
+  // while the Walk drawer is built.
+  for (const [slider, out] of [['sch-depth', 'sch-depth-val'], ['solo-depth', 'solo-depth-val']]) {
+    const el = $(slider);
+    if (!el) continue;
     el.value = String(state.depth);
-    const out = $('sch-depth-val');
-    if (out) out.textContent = String(state.depth);
+    const label = $(out);
+    if (label) label.textContent = String(state.depth);
   }
 }
 
@@ -2056,17 +2063,13 @@ async function boot() {
       const cfg = on ? loadConfig() : null;
       state.quiet = true;
       try {
-        // Entering and leaving is not a navigation: the depth swap is the
-        // mode's doing, not the reader's, and recording it would put a step in
-        // the history that nothing on screen corresponds to.
-        withoutHistory(() => {
-          if (on && !state.solo) {
-            state.depthBeforeSolo = state.depth;
-            setDepth(1);
-          } else if (!on && state.solo) {
-            setDepth(state.depthBeforeSolo);
-          }
-        });
+        // Fullscreen used to drop to a single level on the way in and put the
+        // reader's depth back on the way out. That made sense when it showed one
+        // cone with everything else hidden -- but it is a workbench now, and
+        // arriving to *less* than the page was already showing is a jolt with
+        // nothing to recommend it. It carries the view in: same signal, same
+        // depth, same direction. The depth control comes along too, in the Walk
+        // drawer, since the page's own slider is out of sight in this mode.
         state.solo = on;
         state.framed = false;      // aim the camera once, on arrival
         console_.classList.toggle('solo', on);

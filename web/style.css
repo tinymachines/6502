@@ -1596,3 +1596,7 @@ body.no-scroll #view { z-index: 70; }
 
 #pr-statbar [data-fact] { color: var(--foreground); font-weight: 700; }
 
+
+/* The study view's own depth slider, the page's being out of sight in there. */
+.sp-depth { margin-bottom: .55rem; }
+.sp-depth input[type=range] { width: 100%; accent-color: var(--accent); }

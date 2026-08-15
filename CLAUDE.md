@@ -756,14 +756,22 @@ in the explanatory comment broke the module outright.
 
 #### Fullscreen is the study view
 
-Fullscreen on this page is **not the page with its chrome hidden**. It is one
-level behind the selected signal, with everything else gone, and the islands you
-walked through still beside it. Clicking a signal follows it, which is the whole
-activity.
+Fullscreen on this page is **not the page with its chrome hidden**. It is a
+workbench: the same view the page was showing, with everything else gone and room
+to walk. Clicking a signal follows it, which is the whole activity.
 
-- Entering stores the reader's depth and drops to 1; leaving restores it.
-  `setDepth()` is the only place depth changes, so the slider and the mode
-  cannot disagree about it.
+**It arrives showing what the page was showing** — same signal, same depth, same
+direction. It used to drop to a single level on the way in and put the reader's
+depth back on the way out, which made sense when the mode showed one cone with
+nothing else on screen. It is a bench now, and arriving to *less* than the page
+was already showing is a jolt with nothing to recommend it. The depth control
+comes along too, in the Walk drawer, because the page's own slider is out of
+sight in this mode and a setting you can see but not change is worse than one you
+cannot see.
+
+- `setDepth()` is the only place depth changes and `paintDepth()` the only place
+  it is displayed, so the page's slider and the study view's own cannot disagree
+  about it.
 - **Centring is `viewBox` plus `width/height: 100%`** and nothing else —
   `preserveAspectRatio` scales and centres for free. No code measures anything.
 - **The stage is two levels down** (`.console > #sch-main > .sch-stage`), so
@@ -855,9 +863,6 @@ activity.
   and fullscreen forcing depth to 1. Neither is somewhere the reader chose to
   go. Consecutive depth changes coalesce, because the slider fires once per
   integer and a drag from 3 to 6 is one navigation.
-  - **Going back inside the study view restores where you were, not how deep.**
-    Otherwise stepping back past the moment you went fullscreen would silently
-    put the page at three levels in a mode whose entire promise is one.
 - **The camera rides on a wrapper group, not on the viewBox.** `viewBox` plus
   `width/height: 100%` is what centres the drawing, and rewriting it to zoom
   would fight that; a transform on a `<g>` leaves `preserveAspectRatio` alone
