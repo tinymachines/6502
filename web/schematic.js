@@ -26,6 +26,13 @@ const state = {
   compare: null,          // [nodeA, nodeB] when comparing two signals
   diffControls: null,     // control names that differ, ringed in the drawing
   solo: false,            // fullscreen: one level, centred, nothing else
+  // Half-cycles per second while running in the study view. The page loop does
+  // eight per animation frame, which is ~480/s -- fine for watching a die light
+  // up, useless for watching six wires change. The point of this mode is to see
+  // an edge happen, so it is paced in time rather than in frames.
+  soloRate: 4,
+  soloAcc: 0,
+  lastFrame: 0,
   depthBeforeSolo: 3,
   running: false,
   raf: 0,
@@ -495,6 +502,33 @@ function buildLegend() {
 // UI
 // ---------------------------------------------------------------------------
 
+/**
+ * One half-cycle forward or back, applied at once.
+ *
+ * Rewind is keyframed and bounded, so the earliest reachable half-cycle is not
+ * necessarily zero; a refusal at the start of history is normal, not an error.
+ */
+function step(dir) {
+  setRunning(false);
+  if (dir > 0) state.machine.halfStep();
+  else state.machine.stepBack();
+  refresh();
+}
+
+/** The only place run state changes, so the two transports cannot disagree. */
+function setRunning(on) {
+  state.running = on;
+  state.soloAcc = 0;
+  const a = $('sch-run');
+  if (a) a.textContent = on ? 'Pause' : 'Run';
+  const b = $('solo-run');
+  if (b) {
+    b.textContent = on ? '❙❙' : '▶';
+    b.setAttribute('aria-label', on ? 'Pause' : 'Run');
+    b.classList.toggle('on', on);
+  }
+}
+
 /** The only place depth changes, so the slider and solo mode cannot disagree. */
 function setDepth(n) {
   state.depth = Math.max(1, Math.min(6, n));
@@ -668,11 +702,21 @@ async function boot() {
     $('sch-filter').addEventListener('input', buildPicker);
     $('sch-signal').addEventListener('change', (e) => setRoot(Number(e.target.value)));
     $('sch-depth').addEventListener('input', (e) => setDepth(Number(e.target.value)));
-    $('sch-run').addEventListener('click', () => {
-      state.running = !state.running;
-      $('sch-run').textContent = state.running ? 'Pause' : 'Run';
+    $('sch-run').addEventListener('click', () => setRunning(!state.running));
+    $('solo-run').addEventListener('click', () => setRunning(!state.running));
+    $('solo-step').addEventListener('click', () => step(+1));
+    $('solo-back').addEventListener('click', () => step(-1));
+
+    // Keyboard, because the study view is meant to be looked at rather than
+    // aimed at. Ignored while typing in the filter box.
+    document.addEventListener('keydown', (ev) => {
+      if (!state.solo) return;
+      if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement) return;
+      if (ev.key === ' ') { setRunning(!state.running); ev.preventDefault(); }
+      else if (ev.key === 'ArrowRight') { step(+1); ev.preventDefault(); }
+      else if (ev.key === 'ArrowLeft') { step(-1); ev.preventDefault(); }
     });
-    $('sch-step').addEventListener('click', () => state.machine.halfStep());
+    $('sch-step').addEventListener('click', () => step(+1));
     $('sch-solo-exit').addEventListener('click', () => $('sch-fullscreen').click());
 
     // The bit comparison. Populated from the buses the die actually names.
@@ -730,6 +774,9 @@ async function boot() {
       state.solo = on;
       console_.classList.toggle('solo', on);
       if (state.root != null) render();
+      // The clock readout only exists in this mode, so entering has to populate
+      // it rather than waiting for the next animation frame.
+      refresh();
     });
 
     if (q.get('compare')) {
@@ -751,9 +798,40 @@ async function boot() {
   }
 }
 
-function tick() {
-  if (state.running) for (let i = 0; i < 8; i++) state.machine.halfStep();
-  paint(state.machine.nodeLevels());
+/**
+ * Push the machine's current state into the drawing.
+ *
+ * Called from the frame loop while running, and directly after any discrete
+ * step. A step used to wait for the next animation frame, which is a real
+ * responsiveness bug -- and is invisible until the page is driven somewhere
+ * animation frames are throttled, such as inside an iframe.
+ */
+function refresh() {
+  const m = state.machine;
+  const out = $('solo-clock');
+  if (state.solo && out) {
+    const parts = [`½cyc ${m.halfCycle()}`, m.clk0() ? 'φ1' : 'φ2', m.timingStates() || '—'];
+    if (m.sync()) parts.push('sync');
+    const text = parts.join(' · ');
+    if (out.textContent !== text) out.textContent = text;
+  }
+  paint(m.nodeLevels());
+}
+
+function tick(now = 0) {
+  const m = state.machine;
+  if (state.running) {
+    if (state.solo) {
+      // Paced in wall-clock time so an edge is watchable.
+      const dt = state.lastFrame ? Math.min(now - state.lastFrame, 250) : 0;
+      state.soloAcc += (dt / 1000) * state.soloRate;
+      while (state.soloAcc >= 1) { m.halfStep(); state.soloAcc -= 1; }
+    } else {
+      for (let i = 0; i < 8; i++) m.halfStep();
+    }
+  }
+  state.lastFrame = now;
+  refresh();
   state.raf = requestAnimationFrame(tick);
 }
 

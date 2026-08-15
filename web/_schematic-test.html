@@ -3,7 +3,7 @@
   Development harness, never shipped.
 
   This file uses its own stub markup, which has now drifted from the real page
-  three times -- each time the page gained an element and boot threw here first.
+  four times now -- each time the page gained an element and boot threw here first.
   That is the stub earning its keep, but it is also why `_solo-test.html` drives
   the real page in an iframe instead: a test about markup and stylesheet working
   together cannot use a copy of the markup.
@@ -30,7 +30,9 @@
     <input id="sch-depth" type="range" min="1" max="6" value="3"><b id="sch-depth-val"></b>
   </div>
   <div class="sch-stage"><svg id="sch-svg"></svg>
-    <button id="sch-solo-exit"></button><p class="sch-solo-hint"></p></div>
+    <button id="sch-solo-exit"></button><p class="sch-solo-hint"></p>
+    <div class="sch-solo-bar"><button id="solo-back"></button><button id="solo-run"></button>
+      <button id="solo-step"></button><span id="solo-clock"></span></div></div>
   <p id="sch-caption"></p>
   <div id="sch-signal-info"></div>
   <div id="sch-key"></div>

@@ -1204,3 +1204,28 @@ body.no-scroll #view { z-index: 70; }
   .console.solo .sch-stage { padding: .75rem; }
   .console.solo .sch-solo-hint { font-size: .6rem; }
 }
+
+/* --- Schematic: the study view's clock ------------------------------------ */
+
+.sch-solo-bar { display: none; }
+.console.solo .sch-solo-bar {
+  display: flex; align-items: center; gap: .4rem;
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 2.2rem;
+  padding: .35rem .5rem; border: 2px solid var(--line); border-radius: .4rem;
+  background: rgba(10, 14, 24, .82); backdrop-filter: blur(2px);
+}
+.solo-btn {
+  font: 700 .8rem/1 var(--font-mono); min-width: 2.1rem; padding: .38rem .5rem;
+  color: var(--muted); background: transparent; cursor: pointer;
+  border: 2px solid transparent; border-radius: .25rem;
+}
+.solo-btn:hover { color: var(--accent); border-color: var(--line); }
+.solo-btn.on { color: var(--accent); border-color: var(--accent); }
+.solo-clock {
+  font-size: .66rem; color: #6f819f; padding: 0 .35rem 0 .5rem;
+  border-left: 1px solid var(--line); min-width: 12.5em;
+}
+@media (max-width: 46rem) {
+  .console.solo .sch-solo-bar { bottom: 2.6rem; gap: .25rem; padding: .3rem .35rem; }
+  .solo-clock { font-size: .6rem; min-width: 0; }
+}

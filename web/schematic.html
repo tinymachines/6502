@@ -94,7 +94,19 @@
           <svg id="sch-svg" role="img" aria-label="Gate-level schematic"></svg>
           <button id="sch-solo-exit" class="sch-solo-exit" type="button"
                   aria-label="Leave fullscreen">esc</button>
-          <p class="sch-solo-hint">click any signal to follow it back · esc to leave</p>
+
+          <div class="sch-solo-bar" role="group" aria-label="Clock">
+            <button id="solo-back" class="solo-btn" type="button"
+                    aria-label="Back one half-cycle" title="Back (←)">◀</button>
+            <button id="solo-run" class="solo-btn solo-run" type="button"
+                    aria-label="Run" title="Run (space)">▶</button>
+            <button id="solo-step" class="solo-btn" type="button"
+                    aria-label="Forward one half-cycle" title="Step (→)">▶❙</button>
+            <span class="solo-clock mono" id="solo-clock"></span>
+          </div>
+          <p class="sch-solo-hint">
+            click a signal to follow it back · space to run · ← → to step · esc to leave
+          </p>
         </div>
         <p class="sch-caption mono" id="sch-caption"></p>
 

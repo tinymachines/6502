@@ -79,6 +79,59 @@ f.addEventListener('load', async () => {
        con.className);
     ok('and it is still a single level', $('sch-depth').value === '1');
 
+    // --- the clock, pinned to one island ------------------------------------
+    //
+    // The point of this mode is watching an edge happen on six wires. That needs
+    // a transport inside the mode, and a rate that is watchable: the page loop
+    // runs eight half-cycles per animation frame, which is far too fast to
+    // follow, so the study view is paced in wall-clock time instead.
+    const clock = () => $('solo-clock').textContent;
+    ok('the clock readout is shown', vis($('solo-clock')) && clock().includes('cyc'), clock());
+
+    const at = () => Number(/½cyc (\d+)/.exec(clock())?.[1] ?? -1);
+    const t0 = at();
+    ok('the readout reports a half-cycle', t0 >= 0, String(t0));
+
+    $('solo-step').click();
+    await sleep(120);
+    ok('stepping advances the clock', at() === t0 + 1, `${t0} -> ${at()}`);
+
+    $('solo-back').click();
+    await sleep(120);
+    ok('and stepping back rewinds it', at() === t0, `${at()} vs ${t0}`);
+
+    // Arrow keys, since the mode is meant to be looked at rather than aimed at.
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await sleep(120);
+    ok('the right arrow steps', at() === t0 + 1, `${t0} -> ${at()}`);
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    await sleep(120);
+    ok('the left arrow goes back', at() === t0, String(at()));
+
+    // Running must be slow enough to watch. Half a second at 4/s is ~2 steps;
+    // the page loop would have done ~240 in the same time.
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await sleep(500);
+    const moved = at() - t0;
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await sleep(120);
+    ok('running is paced to be watchable', moved > 0 && moved < 25,
+       `${moved} half-cycles in ~0.5s`);
+    const stopped = at();
+    await sleep(250);
+    ok('space pauses it again', at() === stopped, `${stopped} -> ${at()}`);
+
+    // And the whole point: the drawing reflects the chip, not a static picture.
+    const litAt = () => svg.querySelectorAll('.sch-node.hot, .sch-switch.open').length;
+    const seen = new Set();
+    for (let i = 0; i < 12; i++) {
+      $('solo-step').click();
+      await sleep(60);
+      seen.add(litAt());
+    }
+    ok('what is lit changes as the chip is stepped', seen.size > 1,
+       `${seen.size} distinct states over 12 half-cycles`);
+
     $('sch-solo-exit').click();
     for (let i = 0; i < 60 && con.classList.contains('solo'); i++) await sleep(50);
     ok('leaving restores the page', !con.classList.contains('solo')

@@ -676,11 +676,27 @@ Clicking a signal re-roots and stays there, which is how the islands get walked.
   collapses to its content and the drawing sits at the top of an empty screen —
   which looked centred on a desktop only because the drawing filled the width,
   and was obvious the moment it was seen on a phone.
+- **The study view has its own clock**, because the point of pinning to one
+  island is watching an edge happen on it. Back / run / step plus arrow keys and
+  space, with a readout of half-cycle, phase, T-state and `sync`.
+  - **Running is paced in wall-clock time, not in frames.** The page loop does
+    eight half-cycles per animation frame — about 480/s, which is fine for
+    watching a die light up and useless for watching six wires change. The study
+    view runs at 4/s.
+  - **A discrete step applies immediately rather than waiting for a frame.**
+    That is a real responsiveness bug on its own, and it is invisible until the
+    page is driven somewhere animation frames are throttled — which is exactly
+    what an iframe does, and how it was found.
+  - Rewind is keyframed and bounded, so the earliest reachable half-cycle is not
+    necessarily zero. A refusal at the start of history is normal.
 - **`_solo-test.html` drives the real page in an iframe**, deliberately. A
   hand-written stub was tried first and failed on its own inaccuracy: it nested
   `.console-bar` inside `#sch-main`, where the page has it as a direct child, so
   a `>` selector that works in production did not match in the test. The
-  iframe rule is about animation frames, and nothing here depends on one.
+  iframe rule is about animation frames, and the layout assertions do not depend
+  on one — but the clock assertions did, and failed until the page was made to
+  update on the action instead of on the next frame. The rule is real; the
+  exemption has to be argued per assertion, not per file.
   `_schematic-test.html`'s stub has now drifted from the page three times.
 
 #### Explaining it to a reader
