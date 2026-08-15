@@ -745,7 +745,19 @@ function drawTrail(cones) {
 
   if (state.solo) drawGrid(svg, camG);
 
-  // Threads first, so they pass behind the pills they join.
+  // The bench card: a shaded patch under the island being studied.
+  //
+  // Marking the current one is better than dimming the others, which is what
+  // this did first. Every island on the bench is live -- the state overlay
+  // paints all of them -- so fading the ones you walked through was saying
+  // "these are less real" when what was meant is "this is the one you are on".
+  // Drawn before the islands and after the grid, so it reads as bench rather
+  // than as part of any circuit.
+  // Only on the bench: the page proper draws one island, and a card around the
+  // only thing on screen marks nothing.
+  const card = state.solo ? el('rect', { class: 'sch-bench-card', rx: 10 }, camG) : null;
+
+  // Threads next, so they pass behind the pills they join.
   const threads = el('g', { class: 'sch-threads' }, camG);
 
   state.islands = [];
@@ -777,6 +789,18 @@ function drawTrail(cones) {
       d: `M ${ax} ${ay} C ${mid} ${ay}, ${mid} ${by}, ${bx} ${by}`,
       class: 'sch-thread',
     }, threads);
+  }
+
+  // Sized to the island it marks, once that island has a position. The layout
+  // already carries PAD inside its box, so this only adds enough for the card
+  // to read as something the circuit is sitting on.
+  if (card) {
+    const on = state.islands[cur];
+    const bleed = 12;
+    for (const [k, v] of Object.entries({
+      x: on.box.x - bleed, y: on.box.y - bleed,
+      width: on.box.w + bleed * 2, height: on.box.h + bleed * 2,
+    })) card.setAttribute(k, v);
   }
 
   // The world, which is what "fit everything" fits.

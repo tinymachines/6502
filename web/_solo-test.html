@@ -109,6 +109,16 @@ f.addEventListener('load', async () => {
     ok('and it is drawn as past, not current',
        svg.querySelectorAll('.sch-island.past').length === 1
        && svg.querySelectorAll('.sch-island.current').length === 1);
+    // The one being studied is marked by what it sits on. Both islands stay
+    // fully drawn -- the state overlay paints all of them, so fading the ones
+    // you walked through would say they were less real than they are.
+    const card = svg.querySelector('.sch-bench-card');
+    const cardBox = () => card.getBoundingClientRect();
+    const curBox = () => island().getBoundingClientRect();
+    ok('the current island sits on a shaded card',
+       !!card && cardBox().width >= curBox().width
+       && cardBox().left <= curBox().left + 1 && cardBox().top <= curBox().top + 1,
+       card ? `card ${cardBox().width.toFixed(0)} vs island ${curBox().width.toFixed(0)}` : 'none');
     ok('a thread joins them', svg.querySelectorAll('.sch-thread').length === 1);
 
     // Reading size is the claim, and a pill measures it directly: every pill is

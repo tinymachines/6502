@@ -802,6 +802,12 @@ activity.
   - **`0` fits the whole walk**, and therefore no longer means k = 1 — with a
     fixed bench it can even magnify. `MIN_K` had to drop from 0.4 to 0.05 for a
     six-island ribbon to be reachable at all.
+  - **The island being studied is marked by what it sits on**, a shaded card
+    behind it, rather than by fading the ones you walked through. Every island on
+    the bench is live — the state overlay paints all of them — so dimming them
+    said "these are less real" when what was meant is "this is the one you are
+    on". The card is drawn only in the study view: on the page proper it would
+    ring the only thing on screen.
   - **The bench is dotted, and the dots are inside the camera group.** Zoom is
     invisible on an empty field: a circuit drawn twice as large on black looks
     like a circuit, not like a closer one. Two grids an order of magnitude apart

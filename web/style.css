@@ -1218,8 +1218,16 @@ body.no-scroll #view { z-index: 70; }
 .sch-dot { fill: #1c2740; }
 .sch-dot-coarse { fill: #2b3b5c; }
 
-.sch-island.past { opacity: .34; }
-.sch-island.past .sch-name { fill: var(--muted); }
+/* Every island on the bench is live -- the state overlay paints all of them --
+   so the one being studied is marked by what it sits on rather than by fading
+   the others out. Dimming them said "these are less real" when what was meant
+   is "this is the one you are on". */
+.sch-bench-card {
+  fill: rgba(34, 211, 238, .055);
+  stroke: rgba(34, 211, 238, .22);
+  stroke-width: 2;
+  pointer-events: none;
+}
 .sch-thread {
   fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5;
   opacity: .5;
@@ -1250,13 +1258,13 @@ body.no-scroll #view { z-index: 70; }
 }
 .sp-strip::-webkit-scrollbar { display: none; }
 .solo-palette.dragging .sp-strip { cursor: grabbing; border-color: var(--accent); }
-.sp-grip { color: var(--line); font-size: .8rem; line-height: 1; padding: .1rem 0 .25rem; }
+.sp-grip { color: var(--line); font-size: 1rem; line-height: 1; padding: .2rem 0 .3rem; }
 .sp-strip-sep { width: 60%; height: 1px; background: var(--line); margin: .2rem 0; flex: none; }
 
 .sp-icon {
   display: flex; align-items: center; justify-content: center;
-  width: 2rem; height: 2rem; flex: none;
-  font: 700 .85rem/1 var(--font-mono); cursor: pointer;
+  width: 2.5rem; height: 2.5rem; flex: none;
+  font: 700 1.15rem/1 var(--font-mono); cursor: pointer;
   color: var(--muted); background: transparent;
   border: 2px solid transparent; border-radius: .25rem;
 }
@@ -1403,7 +1411,7 @@ body.no-scroll #view { z-index: 70; }
   /* Capped so the drawing keeps most of a phone screen. The panel scrolls, and
      a console that fills the viewport is not a console, it is a page. */
   .sp-drawer { width: min(17rem, 68vw); max-height: 24rem; }
-  .sp-icon { width: 1.85rem; height: 1.85rem; }
+  .sp-icon { width: 2.25rem; height: 2.25rem; font-size: 1rem; }
 }
 
 /* --- Schematic: direction ---------------------------------------------------- */
