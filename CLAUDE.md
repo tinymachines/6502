@@ -24,6 +24,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
+| Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
@@ -46,14 +47,13 @@ Known gaps, all deliberate:
   SwiftShader software rasterisation (~2–5 fps), which says nothing about a real
   device.
 - No CI. The tests and checks below are run by hand.
-- **The schematic's walk has no history.** You can re-root by clicking, change
-  depth, and flip direction — but there is no way back to where you just were,
-  which now matters more because there are two directions to get lost in. The
-  next thing to build. Shape it is likely to take: a stack of
-  `{root, dir, depth}`, a back affordance in both the page controls and the
-  study view, `←`/`→` already taken by the clock so probably `[` `]` or
-  Backspace, and the deep link already carries the whole state (`?signal=&dir=&depth=`)
-  so an entry is just that triple.
+- **The trace shows one bit at a time and says so.** The wire panel watches a
+  single bit because the eight are different circuits; a reader who wants the
+  whole byte has to move the slider eight times. Showing all eight at once
+  would need a different presentation, not a bigger list.
+- **The trace's preamble is fixed.** `LDA #$41 / LDX #$02 / LDY #$03 / CLC`,
+  printed on the page. Tracing an instruction against a *chosen* starting state
+  would need an editor and is not built.
 - **The full Wayback drip is complete** (`archive/tools/drip.py`): 24,442 URLs
   indexed, **24,429 fetched, 13 permanently failed, 3.01 GB on disk** across
   23,958 distinct content blobs (471 URLs deduplicated by digest). The 13 are
@@ -82,6 +82,9 @@ cargo test -p v6502-sim --test functional  # vs the documented ISA
 cargo clippy --workspace --all-targets
 cargo run --release -p v6502-sim --example bench   # throughput
 cargo run --release -p v6502-sim --example trace   # per-half-cycle state dump
+cargo run --release -p v6502-sim --example activity # how much of the chip moves
+                                    # per half-cycle. Run this before designing
+                                    # anything that wants to draw "what changed".
 
 # Regenerate the oracle (5 MB, gitignored; required by the golden test)
 node tools/golden-trace/gen.js --steps 3000
@@ -203,9 +206,10 @@ end has no other test route and screenshots do not catch this class of bug.
 _camera-test.html      # zoom limits and pan clamping, asserted
 _resize-test.html      # resize the renderer, then read back pixels: is it drawn?
 _handler-test.html     # drive every event handler; report anything that throws
-_overflow-test.html?w=320   # what pushes the page wider than the viewport
+_overflow-test.html?w=320&page=trace   # what pushes a page wider than the viewport
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
+_trace-test.html       # cycle counts counted, and ADC landing after the end
 _schematic-test.html   # does the drawing contain everything the caption claims?
 _solo-test.html        # the study view, driven against the REAL page in an iframe
 _exploded-test.html    # the exploded view: do the sliders actually move geometry?
@@ -403,8 +407,8 @@ plus the transistor bounding boxes for hit-testing.
 
 Plain ES modules, no build step, no framework: `renderer.js` (WebGL2),
 `app.js` (glue + UI), `disasm.js`, `lab.js`, `programs.js` (shared program list),
-`blueprint.js`, `decode.js` and `timing.js` (three further pages, see below),
-`index.html`,
+`blueprint.js`, `decode.js`, `timing.js` and `trace.js` (four further pages, see
+below), `index.html`,
 `style.css`, plus
 `site-nav.js` and `version-footer.js` which are **shared verbatim with the
 archive** (`build-archive.py` copies them). A second copy of either would drift.
@@ -457,6 +461,66 @@ through `nodeId()` gives both a die region to frame and a live readout.
 What `adc` demonstrates is the thing the whole project exists to show: at +5
 half-cycles the adder holds `$42` and the accumulator still reads `$40`. The
 result exists and is in no register. `?lab=adc&step=4` links to that moment.
+
+### The Trace (`trace.html`, `trace.js`)
+
+Any of the 256 opcodes, half-cycle by half-cycle. The opcode is assembled into
+memory behind a fixed preamble, the chip fetches it, and every number on the
+page is read back out of the silicon. **Nothing consults an instruction table**,
+so the cycle counts are free to be wrong — eight of them agreeing with the
+datasheet in `_trace-test.html` is therefore evidence rather than tautology.
+
+**No new Rust.** `schematic.json` already carries names, blocks, switches and
+control paths, and a switch conducts exactly when its control node is high — so
+the whole thing computes in the page from node levels. Sharing that one file
+with the schematic is also what stops the two pages disagreeing about which node
+is which.
+
+Three kinds of fact per half-cycle, deliberately not mixed: architectural state
+with the changed fields marked, the nodes that changed level grouped by block,
+and **the named wires that are shorted together right now** (`Machine.nodeGroup`).
+The last is the one no behavioural emulator has to model — a level belongs to
+the *group* a node is joined to, not to the node.
+
+- **It runs past the next `sync` on purpose**, and marks those rows as tail. The
+  6502 overlaps the tail of one instruction with the next opcode fetch, so
+  ADC's sum is not in the accumulator when the instruction ends. Stopping at the
+  boundary would report ADC as not having happened. Pinned: A is `$41` at the
+  end and `$52` in the tail.
+- **Forward and back are different operations.** `rewindTo` correctly refuses a
+  target in the future, so using it to step forward fails *silently* and the
+  cursor sticks at row 0 while the table still looks right. Forward is just
+  running the chip. `seek()` is the only place either happens.
+- **A table of formatted strings evaluates every entry.** `subjectText` built
+  one keyed by addressing mode, so an implied instruction ran the immediate
+  formatter and did `hex2(undefined)`. The throw escaped through `refresh()` and
+  the page went on showing the *previous* instruction's trace — INX reported 4
+  cycles because the rows on screen were still LDA's. Formatters are functions
+  now, and only the one for the mode is called. **Both of this page's bugs
+  produced plausible output**; both were found by dumping the console and the
+  DOM, not by reasoning.
+
+#### What the measurement said before any of it was drawn
+
+`cargo run --release -p v6502-sim --example activity`. Run this before designing
+anything that wants to visualise "what changed" — the numbers rule out the
+obvious design:
+
+- **~165 nodes change level per half-cycle** (median; 63 named, p90 252). A tenth
+  of the chip at every edge, so a list of everything that moved is a wall.
+- **1503 of 3510 transistors conduct at any instant.** Lighting up everything
+  that is on draws the whole chip.
+- **But the datapath is not that graph.** Almost all of what conducts is
+  pulldowns inside gates rather than switches joining named wires, so walking
+  only *open pass transistors* from `idb0` reaches a median of **three** nodes.
+  `idb0` is connected to `a0` in **2 of 90 half-cycles**, and both times the path
+  is exactly two switches — `SBDB` then `SBAC`.
+- **A pin is not a wire.** The first version of that walk started at `db0` and
+  found nothing, ever: all eleven of its terminals go to a rail, because a pad
+  is an output *driver*. Nothing enters the chip from a pin through a pass
+  transistor — the way in is the input receiver, which is a gate. A trace that
+  follows only switches can never leave the pad ring, which is why the watch
+  list starts at `idl`/`idb`.
 
 ### The Exploded view (`exploded.html`, `exploded-gl.js`, `blocks.rs`)
 
@@ -722,6 +786,32 @@ Clicking a signal re-roots and stays there, which is how the islands get walked.
     what an iframe does, and how it was found.
   - Rewind is keyframed and bounded, so the earliest reachable half-cycle is not
     necessarily zero. A refusal at the start of history is normal.
+- **The walk has a history, and `{root, dir, depth}` is all of it.** That triple
+  is also the whole deep link, so an entry in the stack *is* a URL. `[` and `]`
+  go back and forward; the arrows belong to the clock. Two things are
+  deliberately not recorded, both via `withoutHistory()`: restoring an entry,
+  and fullscreen forcing depth to 1. Neither is somewhere the reader chose to
+  go. Consecutive depth changes coalesce, because the slider fires once per
+  integer and a drag from 3 to 6 is one navigation.
+  - **Going back inside the study view restores where you were, not how deep.**
+    Otherwise stepping back past the moment you went fullscreen would silently
+    put the page at three levels in a mode whose entire promise is one.
+- **The camera rides on a wrapper group, not on the viewBox.** `viewBox` plus
+  `width/height: 100%` is what centres the drawing, and rewriting it to zoom
+  would fight that; a transform on a `<g>` leaves `preserveAspectRatio` alone
+  and keeps `getScreenCTM()` a correct screen-to-drawing map. `touch-action:
+  none` is scoped to `.solo` — on the page proper the drawing sits in a
+  scrolling stage, and claiming the touch stream there stops a phone scrolling
+  the page at all.
+  - **"Did the scale go up" is not a test of a pinch.** Injecting the explorer's
+    exact bug — pinch state written with one spelling and read with another —
+    leaves the zoom working, because `new DOMPoint(undefined, undefined)` is
+    `(0, 0)` and not NaN: the gesture anchors on the corner of the screen and
+    still scales by the right ratio. The assertion that fails is that the
+    drawing point under the fingers is still under the fingers.
+  - A drag that ends on a signal pans rather than selecting it (slop 12px touch,
+    4px mouse), and that is asserted too — without it, every touch on a pill
+    re-roots.
 - **`_solo-test.html` drives the real page in an iframe**, deliberately. A
   hand-written stub was tried first and failed on its own inaccuracy: it nested
   `.console-bar` inside `#sch-main`, where the page has it as a direct child, so
@@ -730,7 +820,13 @@ Clicking a signal re-roots and stays there, which is how the islands get walked.
   on one — but the clock assertions did, and failed until the page was made to
   update on the action instead of on the next frame. The rule is real; the
   exemption has to be argued per assertion, not per file.
-  `_schematic-test.html`'s stub has now drifted from the page three times.
+- **`_schematic-test.html` no longer carries a copy of the markup.** Its stub
+  drifted from the page six times — each time the page gained an element, `boot`
+  threw there first, and the fix was to hand-copy the element across. It now
+  lifts `#sch-stats` and `.console` out of `schematic.html` at load and imports
+  the module dynamically afterwards, so it cannot drift again. What is left is
+  the reason the stub existed: this harness needs the elements at *top level*,
+  because it measures geometry with `getBBox`.
 
 #### Explaining it to a reader
 
