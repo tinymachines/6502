@@ -1,0 +1,227 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  Every button on the site, in every state, checked for text you can read.
+
+  This exists because of a bug that is invisible to a screenshot of a page at
+  rest: `.btn:hover` declares `color: var(--accent)` at specificity (0,2,0),
+  which outranks `.btn-primary`'s (0,1,0) `color: var(--accent-foreground)`. So
+  hovering the primary call to action left cyan text on a gold background --
+  two light blues at a contrast ratio of 1.08 -- and nothing rendered at rest
+  could show it. It is the same shape as the missing background on the base
+  class: a variant that changes its background must restate its colour, because
+  the base's *state* rules outrank the variant's resting one.
+
+  A state cannot be forced from script, so this reads the stylesheet instead:
+  for each element and each of :hover, :active and :focus, it collects the rules
+  that would match, sorts them by specificity then source order, and reports the
+  colour and background that win. That is a re-implementation of the cascade and
+  is only as good as it is simple -- it handles what this stylesheet uses (class
+  and descendant selectors, var() tokens, media queries that currently apply)
+  and reports anything it could not resolve rather than passing it.
+
+    http://localhost:8777/_contrast-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1200px;height:600px;border:0}pre{padding:1rem;white-space:pre-wrap}
+.bad{color:#fb7185}</style>
+</head><body>
+<iframe id="f" src="index.html"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+// Anything below this and the label has stopped being a label. 3:1 is the AA
+// threshold for user-interface text; the bug this was written for scored 1.08,
+// and the fix scores 11.3, so there is no argument about where the line goes.
+const FLOOR = 3;
+
+const STATES = [':hover', ':active', ':focus'];
+
+f.addEventListener('load', async () => {
+  const w = f.contentWindow, d = f.contentDocument;
+  try {
+    // Wait for the app, not just for the header: the console and its tabs live
+    // inside `#app`, which is hidden until the wasm has booted. Checking before
+    // that would silently skip every button that is not in the nav.
+    for (let i = 0; i < 400 && d.getElementById('app').hidden; i++) await sleep(50);
+    ok('the app booted, so its buttons exist to check',
+       !d.getElementById('app').hidden);
+
+    const root = w.getComputedStyle(d.documentElement);
+    const token = (v) => {
+      // One level of var() is all this stylesheet's colours need: the tokens in
+      // :root are literals. Anything deeper is reported, not guessed.
+      const m = /^var\((--[\w-]+)(?:\s*,\s*([^)]+))?\)$/.exec(v.trim());
+      if (!m) return v.trim();
+      const got = root.getPropertyValue(m[1]).trim();
+      return got || (m[2] || '').trim();
+    };
+
+    // sRGB relative luminance, and the WCAG ratio built from it.
+    const lum = (rgb) => {
+      const f2 = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f2(rgb[0] / 255) + 0.7152 * f2(rgb[1] / 255) + 0.0722 * f2(rgb[2] / 255);
+    };
+    const ratio = (a, b) => {
+      const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+      return (x + 0.05) / (y + 0.05);
+    };
+    // Resolve any colour the browser understands, by asking the browser.
+    const probe = d.createElement('span');
+    d.body.append(probe);
+    const rgbOf = (v) => {
+      probe.style.color = '';
+      probe.style.color = v;
+      const c = w.getComputedStyle(probe).color;
+      const m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/.exec(c);
+      if (!m) return null;
+      const alpha = m[4] === undefined ? 1 : Number(m[4]);
+      return alpha < 0.98 ? null : [+m[1], +m[2], +m[3]];
+    };
+    const rgb = rgbOf;
+
+    // What is actually behind a transparent element. Buttons that declare no
+    // background of their own -- the ghost and the menu button -- are read
+    // against the first opaque thing above them, which is what the eye does.
+    const behind = (el) => {
+      for (let n = el; n; n = n.parentElement) {
+        const c = rgbOf(w.getComputedStyle(n).backgroundColor);
+        if (c) return c;
+      }
+      // The page's background is a gradient, so no ancestor has a background
+      // *colour* at all. Its darkest declared stop is the honest answer, and
+      // that is the token the palette is built on.
+      return rgbOf(w.getComputedStyle(d.documentElement).backgroundColor)
+          || rgbOf(token('var(--space)'));
+    };
+
+    // Specificity, counting what this stylesheet actually contains.
+    const spec = (sel) => {
+      const s = sel.replace(/::[\w-]+/g, '');
+      return [
+        (s.match(/#[\w-]+/g) || []).length,
+        (s.match(/\.[\w-]+|\[[^\]]+\]|:[\w-]+(?:\([^)]*\))?/g) || []).length,
+        (s.match(/(^|[\s>+~])[a-zA-Z][\w-]*/g) || []).length,
+      ];
+    };
+    const cmp = (a, b) => a.spec[0] - b.spec[0] || a.spec[1] - b.spec[1]
+      || a.spec[2] - b.spec[2] || a.order - b.order;
+
+    // Every style rule, flattened, in source order, skipping media queries that
+    // do not currently apply -- a rule behind `min-width: 62rem` is not part of
+    // the cascade at this width and including it would report a bug that is not
+    // on screen.
+    const rules = [];
+    const walk = (list) => {
+      for (const r of list) {
+        if (r.media) { if (w.matchMedia(r.media.mediaText).matches) walk(r.cssRules); continue; }
+        if (r.cssRules && !r.selectorText) { walk(r.cssRules); continue; }
+        if (r.selectorText) rules.push({ sel: r.selectorText, text: r.cssText });
+      }
+    };
+    for (const sheet of d.styleSheets) {
+      try { walk(sheet.cssRules); } catch { /* cross-origin: none here */ }
+    }
+    ok('the stylesheet was readable', rules.length > 100, `${rules.length} rules`);
+
+    // The declarations a rule makes for one property, read out of its text
+    // because a `background: var(--x)` shorthand does not expand in the CSSOM.
+    const declOf = (text, prop) => {
+      const body = text.slice(text.indexOf('{') + 1, text.lastIndexOf('}'));
+      let found = null;
+      for (const part of body.split(';')) {
+        const i = part.indexOf(':');
+        if (i < 0) continue;
+        const name = part.slice(0, i).trim();
+        if (name === prop || (prop === 'background-color' && name === 'background')) {
+          found = part.slice(i + 1).trim().replace(/\s*!important$/, '');
+        }
+      }
+      return found;
+    };
+
+    /** What `prop` resolves to for `el` in `state`, by cascade. */
+    const winner = (el, state, prop) => {
+      const hits = [];
+      rules.forEach((r, order) => {
+        for (const one of r.sel.split(',')) {
+          const sel = one.trim();
+          const stripped = sel.replace(/:(hover|active|focus|focus-visible)\b/g, '');
+          const wants = sel !== stripped;
+          if (wants && !sel.includes(state)) continue;   // a different state
+          let m = false;
+          try { m = el.matches(stripped || '*'); } catch { m = false; }
+          if (!m) continue;
+          const v = declOf(r.text, prop);
+          if (v != null) hits.push({ spec: spec(sel), order, value: v, sel });
+        }
+      });
+      hits.sort(cmp);
+      return hits.length ? hits[hits.length - 1] : null;
+    };
+
+    // The buttons worth checking. Ones that are not on this page are reported as
+    // skipped rather than silently passing.
+    const TARGETS = [
+      ['.nav-cta', 'the header call to action'],
+      ['.hero .btn-primary', 'the hero button'],
+      ['.btn-ghost', 'a ghost button'],
+      ['.console-bar .iconbtn', 'a console button'],
+      ['.menu-btn', 'the menu button'],
+      ['.tabs .tab', 'a panel tab'],
+    ];
+
+    const bad = [];
+    const skipped = [];
+    const seen = [];
+    for (const [sel, label] of TARGETS) {
+      const el = d.querySelector(sel);
+      if (!el) { skipped.push(sel); continue; }
+      for (const state of STATES) {
+        const fg = winner(el, state, 'color');
+        const bgRule = winner(el, state, 'background-color');
+        // No background of its own means whatever is behind it, which for these
+        // is the page or a panel -- take it from the resting computed style.
+        const bgVal = bgRule ? token(bgRule.value)
+                             : w.getComputedStyle(el).backgroundColor;
+        const c = rgb(token(fg ? fg.value : w.getComputedStyle(el).color));
+        // A transparent or translucent background is not a colour, it is
+        // whatever is behind it.
+        const b = rgb(bgVal) || behind(el);
+        if (!c || !b) { bad.push(`${label}${state}: could not resolve`); continue; }
+        const r = ratio(c, b);
+        seen.push([label, state, r]);
+        if (r < FLOOR) {
+          bad.push(`${label}${state}: ${r.toFixed(2)} — ${token(fg ? fg.value : '?')} on ${bgVal}`);
+        }
+      }
+    }
+
+    ok('every button was found', skipped.length === 0, skipped.join(', '));
+    ok('and every one is readable in every state', bad.length === 0, bad.join(' | '));
+
+    // The specific pair this was written for, stated as its own assertion so a
+    // regression names itself instead of arriving as one of a list.
+    const cta = d.querySelector('.nav-cta');
+    const fg = winner(cta, ':hover', 'color');
+    const bg = winner(cta, ':hover', 'background-color');
+    const r = ratio(rgb(token(fg.value)), rgb(token(bg.value)));
+    ok('the call to action is legible while it is being pressed', r >= FLOOR,
+       `${token(fg.value)} on ${token(bg.value)} = ${r.toFixed(2)}`);
+
+    results.push('', ...seen.map(([l, s, v]) => `     ${v.toFixed(2)}  ${l}${s}`));
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
+  }
+  const lines = results.filter((r) => r.startsWith('PASS') || r.startsWith('FAIL'));
+  document.title = lines.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+});
+</script>
+</body></html>

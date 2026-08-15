@@ -221,6 +221,15 @@ function setupUI() {
   });
 
   // -- transport --
+  // "Run it" means run it. The header call to action and the hero button both
+  // point at #explorer, so the browser does the scrolling and this only has to
+  // start the chip. Sub-pages cannot do that -- they are a navigation away --
+  // so their copy of the button carries `?run=1` instead, which lands here and
+  // is applied by the deep-link reader above. Two routes, one behaviour.
+  for (const a of document.querySelectorAll('a[href="#explorer"]')) {
+    a.addEventListener('click', () => setRunning(true));
+  }
+
   $('btn-run').onclick = () => setRunning(!state.running);
   $('btn-half').onclick = () => { setRunning(false); state.machine.halfStep(); };
   $('btn-cycle').onclick = () => { setRunning(false); state.machine.stepCycle(); };

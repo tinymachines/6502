@@ -124,7 +124,17 @@ code {
   border-color: var(--accent); background: var(--accent);
   color: var(--accent-foreground); box-shadow: var(--hard);
 }
-.btn-primary:hover { border-color: var(--gold); background: var(--gold); }
+/* The colour has to be restated here, and this is the same trap as the missing
+   background on the base class. `.btn:hover` declares `color: var(--accent)` at
+   specificity (0,2,0), which outranks `.btn-primary`'s (0,1,0) -- so hovering a
+   primary button left cyan text on the gold background, two light blues one on
+   top of the other at a contrast ratio of 1.08. A variant that changes its
+   background must restate its colour, because the base class's *state* rules
+   outrank the variant's resting one. `_contrast-test.html` checks every button
+   in every state for this. */
+.btn-primary:hover, .btn-primary:active, .btn-primary:focus {
+  border-color: var(--gold); background: var(--gold); color: var(--accent-foreground);
+}
 .btn-primary:active { box-shadow: 3px 3px 0 rgba(2, 6, 16, .5); }
 .btn-ghost { border-color: var(--line); background: transparent; color: var(--foreground); }
 .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }

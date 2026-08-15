@@ -188,6 +188,13 @@ Expect ~2–5 fps: that is software rasterisation, not the renderer.
 - `--screenshot=/dev/null` logs an "Unsupported screenshot image file type"
   error. Harmless.
 
+**"Run it" runs it.** The header call to action and the hero button both point at
+`#explorer`, so the browser does the scrolling and `app.js` only has to start the
+chip on click. Sub-pages cannot do that — they are a navigation away — so their
+copy of the button carries `?run=1#explorer` instead, which the deep-link reader
+already honours. Two routes, one behaviour, and `_handler-test.html` asserts
+both: the click here, and the href there.
+
 ### Deep links
 
 `?program=N&run=1&speed=N&steps=N&find=SIGNAL&panel=NAME&lab=ID&step=N` —
@@ -209,6 +216,7 @@ _camera-test.html      # zoom limits and pan clamping, asserted
 _resize-test.html      # resize the renderer, then read back pixels: is it drawn?
 _handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320&page=trace   # what pushes a page wider than the viewport
+_contrast-test.html    # every button, every state, checked for readable text
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _primer-test.html      # every number on the primer, re-derived from the JSON
@@ -1251,6 +1259,25 @@ instead sweeps in the terms describing the instruction's class (`op-implied`,
   face — white, on a dark page. Every secondary button on every page wore it.
   Set `background`, `border-color` and `color` explicitly on the base class;
   variants override.
+- **A variant that changes its background must restate its colour**, because the
+  base class's *state* rules outrank the variant's resting one. `.btn:hover`
+  declares `color: var(--accent)` at specificity (0,2,0) and `.btn-primary`
+  declares its colour at (0,1,0), so hovering the primary call to action put
+  cyan text on the gold background — two light blues at a contrast ratio of
+  **1.08**, and nothing rendered at rest could show it. This is the same shape as
+  the missing background above and was found the same way: by somebody pressing
+  the button.
+  - `_contrast-test.html` now checks every button in `:hover`, `:active` and
+    `:focus`. A state cannot be forced from script, so it **re-implements the
+    cascade**: collect the rules that would match, sort by specificity then
+    source order, resolve `var()` against `:root`, and compute the winning pair.
+    Verified by reintroducing the bug and watching it go from 11.31 to 1.08.
+  - Two things it has to get right, both of which it got wrong first. A
+    `background: var(--x)` shorthand does **not** expand in the CSSOM, so
+    declarations are read out of `cssText` rather than from `rule.style`. And the
+    page background is a *gradient*, so no ancestor has a background colour at
+    all — a transparent button is read against the first opaque ancestor, and
+    failing that against `--space`.
 - **Anything decided before an `await` must be rechecked after it.** The
   fullscreen handler awaits `requestFullscreen` and then a 120ms verification
   before committing the fallback. Without a guard that commit lands whatever the
