@@ -124,6 +124,37 @@ async function enter(src) {
     ok('with the same signal in front of you',
        $('sch-svg').querySelector('.sch-graph .sch-node.root').dataset.node === subject);
 
+    // --- out and back in, without a reload -----------------------------------
+    //
+    // The path every reader actually takes, and the one this harness did not
+    // cover: each check above loads a fresh page, so nothing here ever *left*
+    // the study view. Leaving restores the reader's depth, which starts the walk
+    // again -- and it did that while still in the mode, so the render it
+    // triggered saved a one-step walk over the saved one on the way out. The
+    // walk was gone before anybody came back for it.
+    d.querySelector('.sp-icon[data-tab="walk"]').click();
+    await sleep(80);
+    const beforeExit = d.querySelectorAll('#sp-walk .sp-step').length;
+    $('sch-solo-exit').click();
+    for (let i = 0; i < 60 && con.classList.contains('solo'); i++) await sleep(50);
+    ok('leaving the study view works', !con.classList.contains('solo'), con.className);
+    const kept = JSON.parse(localStorage.getItem(KEY) || 'null');
+    ok('and leaving does not overwrite the walk on the way out',
+       !!kept && kept.trail.length === beforeExit,
+       `${kept && kept.trail.length} saved vs ${beforeExit} walked`);
+
+    $('sch-fullscreen').click();
+    for (let i = 0; i < 60 && !con.classList.contains('solo'); i++) await sleep(50);
+    d.querySelector('.sp-icon[data-tab="walk"]').click();
+    await sleep(120);
+    ok('and going straight back in brings the whole walk with it',
+       d.querySelectorAll('#sp-walk .sp-step').length === beforeExit,
+       `${d.querySelectorAll('#sp-walk .sp-step').length} vs ${beforeExit}`);
+    ok('with the same signal in front of you, still',
+       $('sch-svg').querySelector('.sch-graph .sch-node.root').dataset.node === subject);
+    d.querySelector('.sp-icon[data-tab="mem"]').click();
+    await sleep(80);
+
     // --- but a different subject starts a new walk ---------------------------
     //
     // Restoring somebody else's islands around a signal that was asked for by

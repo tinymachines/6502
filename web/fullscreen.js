@@ -44,6 +44,21 @@ export function setupFullscreen(target, btn, onChange = () => {}) {
   // pressed Escape, putting them into a fullscreen they just cancelled.
   let generation = 0;
 
+  // On a touch device the platform's own fullscreen can be dismissed by a
+  // *swipe*. iPadOS treats a downward drag on a fullscreen element as "exit",
+  // the same gesture it uses for video -- and a reader who is panning a drawing
+  // does that by accident, several times a minute. Nothing in a page can
+  // prevent it: the gesture belongs to the browser.
+  //
+  // The fallback has no such gesture, because it is only a fixed element that
+  // happens to cover the viewport. So on a coarse pointer it is the better of
+  // the two, and the API is not asked. What it costs is the browser's own
+  // chrome staying on screen, which is a smaller loss than being thrown out of
+  // the mode mid-gesture.
+  const swipeCanDismiss = () =>
+    typeof matchMedia === 'function'
+    && (matchMedia('(pointer: coarse)').matches || matchMedia('(hover: none)').matches);
+
   btn.onclick = async () => {
     const mine = ++generation;
     if (target.classList.contains('faux')) { setFaux(false); return; }
@@ -52,7 +67,7 @@ export function setupFullscreen(target, btn, onChange = () => {}) {
       if (off) { try { await off.call(document); } catch { /* leave the class alone */ } }
       return;
     }
-    const on = request();
+    const on = swipeCanDismiss() ? null : request();
     if (on) {
       // webkitRequestFullscreen returns undefined rather than a promise, so a
       // resolved await proves nothing. Check whether it actually took.

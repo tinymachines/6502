@@ -66,6 +66,7 @@ const state = {
   // caused by walking somewhere leaves the view exactly as the reader left it.
   framed: false,
   viewBox: null,
+  quiet: false,    // raised while entering or leaving, so nothing saves mid-switch
 };
 
 const HISTORY_MAX = 200;
@@ -1075,7 +1076,10 @@ function buildLegend() {
 const CFG_KEY = 'v6502.schematic.console';
 
 function saveConfig() {
-  if (state.root == null) return;
+  // `quiet` is raised while the mode is being switched. Everything that runs in
+  // there is the switch's own doing rather than the reader's, and one of those
+  // things resets the walk.
+  if (state.quiet || state.root == null) return;
   try {
     localStorage.setItem(CFG_KEY, JSON.stringify({
       pos: state.palPos,
@@ -2038,37 +2042,50 @@ async function boot() {
     const console_ = document.querySelector('.console');
     setupFullscreen(console_, $('sch-fullscreen'), () => {
       const on = console_.classList.contains('immersive');
-      // Entering and leaving is not a navigation: the depth swap below is the
-      // mode's doing, not the reader's, and recording it would put a step in
-      // the history that nothing on screen corresponds to.
-      withoutHistory(() => {
-        if (on && !state.solo) {
-          state.depthBeforeSolo = state.depth;
-          setDepth(1);
-        } else if (!on && state.solo) {
-          setDepth(state.depthBeforeSolo);
-        }
-      });
-      state.solo = on;
-      state.framed = false;      // aim the camera once, on arrival
-      console_.classList.toggle('solo', on);
-      // A walk belongs to the study view: the page proper draws one island in a
-      // scrolling stage, with no camera to find a second one with. So both
-      // entering and leaving start it again from wherever the reader is.
-      // Read the saved configuration *once*, up front. Reading it again after
-      // the first render would find what that render had just written -- and
-      // rendering happens before the console is opened, so the defaults would
-      // have overwritten the saved tab a moment before it was wanted.
+      // Read the saved configuration *once*, up front, and write nothing until
+      // the switch is over.
+      //
+      // Both halves of that are load-bearing and the second was learnt the hard
+      // way. Leaving restores the reader's depth, `setDepth` starts the walk
+      // again because every column would change size, and it does all that while
+      // `state.solo` is still true -- so the render it triggers *saved a
+      // one-step walk over the saved one*, a moment before leaving. The walk was
+      // gone by the time anybody came back for it. Reading late is the other
+      // half: a render writes the current state, so a read after the first one
+      // finds the defaults it just wrote rather than what was saved.
       const cfg = on ? loadConfig() : null;
-      resetTrail();
-      if (cfg) {
-        restoreTrail(cfg);                    // the same walk, if it is the same bench
-        if (PANELS[cfg.tab]) state.tab = cfg.tab;
-        state.drawer = cfg.drawer !== false;
+      state.quiet = true;
+      try {
+        // Entering and leaving is not a navigation: the depth swap is the
+        // mode's doing, not the reader's, and recording it would put a step in
+        // the history that nothing on screen corresponds to.
+        withoutHistory(() => {
+          if (on && !state.solo) {
+            state.depthBeforeSolo = state.depth;
+            setDepth(1);
+          } else if (!on && state.solo) {
+            setDepth(state.depthBeforeSolo);
+          }
+        });
+        state.solo = on;
+        state.framed = false;      // aim the camera once, on arrival
+        console_.classList.toggle('solo', on);
+        // A walk belongs to the study view: the page proper draws one cone in a
+        // scrolling stage, with no camera to find the rest of a walk with.
+        resetTrail();
+        if (cfg) {
+          restoreTrail(cfg);                  // the same walk, if it is the same bench
+          if (PANELS[cfg.tab]) state.tab = cfg.tab;
+          state.drawer = cfg.drawer !== false;
+        }
+        if (state.root != null) render();
+      } finally {
+        state.quiet = false;
       }
-      if (state.root != null) render();
       // The console only exists in this mode, so entering has to open and
-      // populate it rather than waiting for the next animation frame.
+      // populate it rather than waiting for the next animation frame. Opening it
+      // is also the first write after the switch, which puts the restored walk
+      // back on disk under its own name.
       if (on) openPalette(cfg);
       refresh();
     });

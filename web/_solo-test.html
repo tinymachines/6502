@@ -644,6 +644,48 @@ f.addEventListener('load', async () => {
        && vis(d.querySelector('.sch-caption')));
     ok('and restores the depth it had', $('sch-depth').value === depthBefore,
        `${$('sch-depth').value} vs ${depthBefore}`);
+
+    // --- which fullscreen, and why ------------------------------------------
+    //
+    // On a touch device the platform's own fullscreen is dismissed by a downward
+    // swipe -- iPadOS uses the video gesture for it -- and a reader panning a
+    // drawing does that by accident. No page can prevent it. The fallback has no
+    // such gesture, so on a coarse pointer it is asked for instead, and the API
+    // is not called at all.
+    // The spy goes on the element, not on the prototype: this harness sets
+    // `con.requestFullscreen = undefined` at the top to force the fallback, and
+    // an own property shadows anything installed on the prototype afterwards.
+    const asked = [];
+    con.requestFullscreen = function req() {
+      asked.push(1);
+      return Promise.resolve();
+    };
+    const realMM = w.matchMedia.bind(w);
+    const stubMM = (coarse) => {
+      w.matchMedia = (q) => (/coarse|hover:\s*none/.test(q)
+        ? { matches: coarse, media: q, addEventListener() {}, removeEventListener() {},
+            addListener() {}, removeListener() {} }
+        : realMM(q));
+    };
+
+    stubMM(true);
+    $('sch-fullscreen').click();
+    for (let i = 0; i < 60 && !con.classList.contains('immersive'); i++) await sleep(50);
+    ok('on a touch device the swipe-dismissible fullscreen is not asked for',
+       asked.length === 0 && con.classList.contains('faux'),
+       `${asked.length} calls, console="${con.className}"`);
+    $('sch-solo-exit').click();
+    for (let i = 0; i < 60 && con.classList.contains('immersive'); i++) await sleep(50);
+
+    // ...and the real one is still used where a swipe cannot take it away.
+    stubMM(false);
+    $('sch-fullscreen').click();
+    await sleep(300);
+    ok('but a pointer device still gets the real thing', asked.length === 1,
+       `${asked.length} calls`);
+    w.matchMedia = realMM;
+    con.requestFullscreen = undefined;
+    if (con.classList.contains('faux')) { $('sch-solo-exit').click(); await sleep(200); }
   } catch (e) {
     results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
   }

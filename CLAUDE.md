@@ -910,10 +910,21 @@ else — the clock, history, fit — rides in the drawer's header.
     around a signal that was asked for by name would be the page overruling the
     URL. It is stored with the direction it was drawn in, because the layout
     mirrors.
-  - **The configuration is read once, up front, on entering.** Reading it again
-    after the first render finds what that render just wrote: rendering happens
-    before the console is opened, so the default tab overwrote the saved one a
-    moment before it was wanted. `_persist-test.html` caught it.
+  - **The configuration is read once up front, and nothing is written while the
+    mode is switching.** Both halves cost a round.
+    - Reading late finds what the first render just wrote: rendering happens
+      before the console is opened, so the default tab overwrote the saved one a
+      moment before it was wanted.
+    - Writing during the switch is worse, and is what a reader hit on a tablet.
+      *Leaving* restores the reader's depth; `setDepth` starts the walk again
+      because every column changes size; and it does that while `state.solo` is
+      still true — so the render it triggered **saved a one-step walk over the
+      saved one on the way out**. The walk was gone before anyone came back for
+      it. `saveConfig()` now refuses while `state.quiet` is raised.
+    - The harness could not have caught it: every check in `_persist-test.html`
+      began with a fresh page load, so nothing ever *left* the study view. It now
+      goes out and back in without a reload, which is the path every reader
+      actually takes.
   - **`_solo-test.html` clears the key before it starts.** A persisted setting is
     a hidden input to every assertion after it, which is why the tab and the
     drawer were deliberately *not* saved when the console was first built. Saving
@@ -930,9 +941,19 @@ else — the clock, history, fit — rides in the drawer's header.
     for, early enough for everything else.
 - **The immersive surface claims the touch stream as a whole**, not just the
   drawing, and `overscroll-behavior: contain` stops the drawer's own scrolling
-  from chaining out to the document at its end. Both are defensive: they cannot
-  be verified here, for the reason at the top of this file — a headless check
-  cannot reach a second contact point and cannot tell you a gesture feels wrong.
+  from chaining out to the document at its end.
+- **On a touch device the fallback fullscreen is used deliberately, in
+  preference to the real one.** iPadOS dismisses a fullscreen element on a
+  downward swipe — the gesture it uses for video — and a reader panning a drawing
+  performs that by accident several times a minute. No page can prevent it: the
+  gesture belongs to the browser. The fallback has none, being only a fixed
+  element that covers the viewport, so `fullscreen.js` skips the API when
+  `(pointer: coarse)` or `(hover: none)` matches. The cost is the browser's own
+  chrome staying on screen, which is the smaller loss. `_solo-test.html` drives
+  both branches with `matchMedia` stubbed and a spy on `requestFullscreen`.
+  - The spy has to go **on the element**, not on the prototype: that harness sets
+    `con.requestFullscreen = undefined` at the top to force the fallback, and an
+    own property shadows anything installed on the prototype later.
 - **Position is clamped against the stage and re-clamped on resize and whenever
   the drawer opens or shuts.** A panel dragged to the bottom of a tall window and reopened on a
   phone would otherwise be gone with no way back but clearing storage. Position
