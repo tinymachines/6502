@@ -25,6 +25,7 @@ are served no-cache so a deploy takes effect immediately.
 
 import hashlib
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -184,6 +185,7 @@ def main() -> None:
     b.copy_hashed("lab.js")
     b.copy_hashed("version-footer.js")
     b.copy_hashed("site-nav.js")
+    b.copy_hashed("fullscreen.js")
     b.copy_hashed("programs.js")
     b.copy_hashed("exploded-gl.js")
     b.copy_hashed("blocks.json")
@@ -273,6 +275,8 @@ def main() -> None:
         ("./programs.js", "./" + b.ref("programs.js")),
     ]:
         sch = replace_once(sch, f"'{original}'", f"'{resolved}'", where="schematic.js")
+    sch = replace_once(sch, "'./fullscreen.js'", f"'./{b.ref('fullscreen.js')}'",
+                       where="schematic.js")
     sch = replace_once(sch, "fetch('schematic.json')",
                        f"fetch('{b.ref('schematic.json')}')", where="schematic.js")
     b.emit("schematic.js", sch.encode())
@@ -350,6 +354,30 @@ def main() -> None:
         "precache": json.dumps([p if p == "./" else "./" + p for p in precache], indent=2),
     }
     b.emit("sw.js", sw.encode(), hashed=False)
+
+    # Nothing may reference a relative file that was not emitted.
+    #
+    # Adding `import './fullscreen.js'` to schematic.js and forgetting to hash it
+    # here produced a bundle that built cleanly, deployed cleanly, and then did
+    # not boot: the import 404s and the page sits on its loading message. Every
+    # emitted module is scanned for relative imports and fetches, and anything
+    # pointing at a file that is not in the output is a build failure rather
+    # than a runtime one.
+    emitted = {f.name for f in out.rglob("*") if f.is_file()}
+    dangling = []
+    for js in sorted(out.rglob("*.js")):
+        text = js.read_text()
+        refs = re.findall(r"""(?:from|import)\s+['"]\.\/([^'"]+)['"]""", text)
+        refs += re.findall(r"""fetch\(['"](?!https?:)([^'"]+)['"]\)""", text)
+        for ref in refs:
+            name = ref.split("/")[-1]
+            if name not in emitted:
+                dangling.append(f"{js.name} -> {ref}")
+    if dangling:
+        raise SystemExit(
+            "build: these references point at files that were not emitted:\n  "
+            + "\n  ".join(dangling)
+        )
 
     (out / "asset-manifest.json").write_text(json.dumps(b.map, indent=2) + "\n")
 
