@@ -26,7 +26,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
-| Schematic | 1160 gates recognised from the switch network. Walk a signal both ways. |
+| Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
@@ -212,6 +212,7 @@ _lab-test.html         # every Lab claim, checked against the engine
 _trace-test.html       # cycle counts counted, and ADC landing after the end
 _schematic-test.html   # does the drawing contain everything the caption claims?
 _solo-test.html        # the study view, driven against the REAL page in an iframe
+_solo-shot.html        # ...and into a screenshot: fullscreen needs a click
 _exploded-test.html    # the exploded view: do the sliders actually move geometry?
 _blueprint-test.html   # the block diagram: drawn, bound, and no label collisions
 _decode-test.html      # the decode table, re-checked against the documented ISA
@@ -744,9 +745,9 @@ in the explanatory comment broke the module outright.
 #### Fullscreen is the study view
 
 Fullscreen on this page is **not the page with its chrome hidden**. It is one
-level behind the selected signal, centred on an empty screen, with everything
-else gone — the shape of a single island and nothing to distract from it.
-Clicking a signal re-roots and stays there, which is how the islands get walked.
+level behind the selected signal, with everything else gone, and the islands you
+walked through still beside it. Clicking a signal follows it, which is the whole
+activity.
 
 - Entering stores the reader's depth and drops to 1; leaving restores it.
   `setDepth()` is the only place depth changes, so the slider and the mode
@@ -773,6 +774,33 @@ Clicking a signal re-roots and stays there, which is how the islands get walked.
     median forward fan-out is 1 and only 19 of 707 signals exceed 20 — but
     `cclk` opens 273 switches. Showing sixteen of those silently would be a
     claim about the chip rather than a limit of the page.
+- **The walk stays on screen.** Following a signal appends an island rather than
+  replacing the drawing: the last six sit side by side, older ones dimmed, joined
+  by a thread from the pill that was clicked to the root it produced. Replacing
+  it made the study view a series of unrelated pictures, when the thing being
+  studied is the path between them.
+  - **The viewBox is one island, not the walk.** That is the whole trick, and the
+    obvious alternative is wrong: sizing the viewBox to the world lets the
+    browser scale the ribbon to fit, so every step you take shrinks the signal
+    you are reading. Here the world grows *around* a fixed-size window and the
+    camera moves within it, so a pill stays the same size on screen however far
+    you have walked — which is what `_solo-test.html` measures, a pill being a
+    constant 22 units tall and therefore a direct readout of the zoom.
+  - **`0` fits the whole walk**, and therefore no longer means k = 1. `MIN_K` had
+    to drop from 0.4 to 0.05 for that to be reachable: six islands side by side
+    are roughly a tenth the width of one.
+  - **An island is positioned by a transform on its group**, with its own
+    coordinates left alone. Baking the offset into the numbers would put raw
+    negative values back in the drawing, which is what the layout harness reads
+    to catch labels outside the viewBox.
+  - **The anchor is the island the reader clicked in**, carried on the trail
+    entry as `from`, not "the one before". Both the layout and the thread ask
+    `anchorOf()` for it, because a thread that starts somewhere the island is
+    not is worse than no thread.
+  - Flipping direction or changing depth starts the walk again: both axes of the
+    layout mirror, so a ribbon drawn one way round cannot be extended the other.
+    Going *back* to a signal still on the ribbon truncates to it instead —
+    un-walking, which is what back means here.
 - **The study view has its own clock**, because the point of pinning to one
   island is watching an edge happen on it. Back / run / step plus arrow keys and
   space, with a readout of half-cycle, phase, T-state and `sync`.
@@ -812,6 +840,66 @@ Clicking a signal re-roots and stays there, which is how the islands get walked.
   - A drag that ends on a signal pans rather than selecting it (slop 12px touch,
     4px mouse), and that is asserted too — without it, every touch on a pill
     re-roots.
+
+#### The console, and what it found
+
+The study view's controls are **one draggable panel**, not three clusters nailed
+to three corners. On a screen whose entire content is one drawing the controls
+are the only thing that can be in the way, and *where* they are in the way
+depends on the drawing — which changes with every signal followed. It carries the
+clock, the walk, the way out, and five tabs: **Signal**, **Walk**, **I/O**,
+**Memory**, **Stack**.
+
+- **Each panel is built once and painted every frame**, and the split is
+  load-bearing: rebuilding the markup per frame would blow away the address field
+  the reader is typing into. Every painter also compares what it is about to
+  write against what is there, so a stopped chip does no DOM work.
+- **Its controls repaint on the action, not on the next frame** — the same
+  responsiveness bug the clock already had, and invisible until the page is
+  driven somewhere frames are throttled.
+- **Position is clamped against the stage and re-clamped on resize and on
+  collapse.** A panel dragged to the bottom of a tall window and reopened on a
+  phone would otherwise be gone with no way back but clearing storage. Position
+  persists; the tab and the collapsed state deliberately do not, because a
+  persisted UI state is a hidden input to every later assertion.
+- Dragging watches the window rather than capturing the pointer, for the same
+  reason the camera does: `setPointerCapture` retargets the click, and the
+  buttons in the grip are the ones that leave the mode.
+
+**Adding a memory readout found a bug three pages old.** `schematic.js` and
+`exploded.js` loaded a program at `$0200` and never pointed the reset vector at
+it, so both chips reset to `$0000`, read `$00` — a `BRK` — and ran a BRK loop
+against themselves forever, climbing down the stack. Every gate lit up
+convincingly the whole time. Nothing on either page could have said otherwise
+until something showed what the chip was *reading*. `app.js`, `lab.js`,
+`trace.js` and `blueprint.js` all set it; those two were the omission.
+
+Two things the panels are careful not to claim:
+
+- **The stack panel reports no depth.** `$FF - S` looks like the number of bytes
+  on the stack and is an assumption: the 6502 does not reset its stack pointer —
+  reset decrements it by three and nothing else — so out of a power-on S holds
+  whatever its storage nodes came up as. The panel shows S, where a push goes,
+  where a pull comes from, and the bytes above it in pull order. It also lists
+  **top first**, because the stack grows downward and listing from `$01FF` down
+  reads as a stack upside down (which is how it was written first).
+- **The pin buttons show the level, not an interpretation of it.** Four of the
+  five are active low, so 0 means asserted — but `so` comes out of reset *low*
+  (`Cpu::reset` drives it there, as the reference does), and a button calling
+  that "asserted" would be reporting a polarity it assumed in place of a level it
+  measured.
+
+- **The pin test runs last in `_solo-test.html`, and that is not tidiness.**
+  Pulling IRQ low with no handler installed vectors through `$FFFE` to `$0000`,
+  which is a `BRK`, which vectors to itself — so the chip ends the test climbing
+  down the stack forever. That is the silicon being right, and it wrecks every
+  assertion about memory or the stack made after it. The BRK loop is then used as
+  the evidence that the button reached the silicon rather than only the DOM.
+- **`_solo-shot.html` exists because fullscreen needs a click.** There is no deep
+  link into the study view, so without a harness that enters it and walks a few
+  signals, the one mode most likely to be wrong is the one that cannot be
+  photographed headlessly.
+
 - **`_solo-test.html` drives the real page in an iframe**, deliberately. A
   hand-written stub was tried first and failed on its own inaccuracy: it nested
   `.console-bar` inside `#sch-main`, where the page has it as a direct child, so

@@ -1160,8 +1160,6 @@ body.no-scroll #view { z-index: 70; }
    selected signal, centred on an empty screen, so the shape of a single island
    is the only thing there is to look at. */
 
-.sch-solo-exit, .sch-solo-hint { display: none; }
-
 .console.solo { background: #05070d; }
 .console.solo > .console-bar,
 .console.solo .sch-controls,
@@ -1198,44 +1196,60 @@ body.no-scroll #view { z-index: 70; }
 }
 .console.solo #sch-svg.dragging { cursor: grabbing; }
 
-/* Where you have been sits opposite the clock: history top left, time bottom
-   centre, so the two never crowd each other on a 320px phone. */
-.sch-solo-nav { display: none; }
-.console.solo .sch-solo-nav {
-  display: flex; gap: .25rem;
-  position: absolute; top: .75rem; left: .75rem;
-  padding: .2rem .25rem; border: 2px solid var(--line); border-radius: .4rem;
-  background: rgba(10, 14, 24, .82);
-}
-.solo-btn[disabled] { opacity: .3; cursor: default; }
-.solo-btn[disabled]:hover { color: var(--muted); border-color: transparent; }
-
-.console.solo .sch-solo-exit {
-  display: block; position: absolute; top: .75rem; right: .75rem;
-  font: 700 .7rem/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
-  color: var(--muted); background: transparent; cursor: pointer;
-  border: 2px solid var(--line); border-radius: .3rem; padding: .4rem .6rem;
-}
-.console.solo .sch-solo-exit:hover { color: var(--accent); border-color: var(--accent); }
-.console.solo .sch-solo-hint {
-  display: block; position: absolute; left: 0; right: 0; bottom: .8rem;
-  margin: 0; text-align: center; font-size: .68rem; color: #4a5a78;
-  pointer-events: none;
-}
 @media (max-width: 46rem) {
   .console.solo .sch-stage { padding: .75rem; }
-  .console.solo .sch-solo-hint { font-size: .6rem; }
 }
 
-/* --- Schematic: the study view's clock ------------------------------------ */
+/* --- Schematic: the walk ---------------------------------------------------
+   The islands already visited stay on screen, dimmed, joined to the one that
+   followed by a thread from the pill that was clicked. They are still live --
+   the state overlay paints every island -- so they fade rather than grey out. */
 
-.sch-solo-bar { display: none; }
-.console.solo .sch-solo-bar {
+.sch-island.past { opacity: .34; }
+.sch-island.past .sch-name { fill: var(--muted); }
+.sch-thread {
+  fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5;
+  opacity: .5;
+}
+
+/* --- Schematic: the study view's console -----------------------------------
+   One floating panel rather than three clusters pinned to three corners. It is
+   draggable because on a screen whose whole content is one drawing, the
+   controls are the only thing that can be in the way -- and where they are in
+   the way depends on the drawing, which changes with every signal followed. */
+
+.solo-palette { display: none; }
+.console.solo .solo-palette {
+  display: flex; flex-direction: column;
+  position: absolute; top: 0; left: 0; z-index: 5;
+  width: min(21rem, calc(100% - 1.5rem));
+  max-height: min(30rem, calc(100% - 1.5rem));
+  border: 2px solid var(--line); border-radius: .45rem;
+  background: rgba(10, 14, 24, .93); backdrop-filter: blur(3px);
+  box-shadow: var(--hard);
+}
+.console.solo .solo-palette.dragging { border-color: var(--accent); }
+
+.sp-grip {
   display: flex; align-items: center; gap: .4rem;
-  position: absolute; left: 50%; transform: translateX(-50%); bottom: 2.2rem;
-  padding: .35rem .5rem; border: 2px solid var(--line); border-radius: .4rem;
-  background: rgba(10, 14, 24, .82); backdrop-filter: blur(2px);
+  padding: .3rem .35rem .3rem .5rem;
+  border-bottom: 2px solid var(--line);
+  cursor: grab; touch-action: none; user-select: none;
 }
+.solo-palette.dragging .sp-grip { cursor: grabbing; }
+.solo-palette[data-collapsed="true"] .sp-grip { border-bottom: 0; }
+.solo-palette[data-collapsed="true"] .sp-body { display: none; }
+.sp-dots { color: var(--line); font-size: .8rem; line-height: 1; }
+.sp-title {
+  font: 700 .62rem/1 var(--font-mono); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--muted);
+}
+.sp-exit { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; }
+
+.sp-body { display: flex; flex-direction: column; min-height: 0; }
+.sp-row { display: flex; align-items: center; gap: .2rem; padding: .35rem .4rem; flex-wrap: wrap; }
+.sp-sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 .2rem; }
+
 .solo-btn {
   font: 700 .8rem/1 var(--font-mono); min-width: 2.1rem; padding: .38rem .5rem;
   color: var(--muted); background: transparent; cursor: pointer;
@@ -1243,13 +1257,123 @@ body.no-scroll #view { z-index: 70; }
 }
 .solo-btn:hover { color: var(--accent); border-color: var(--line); }
 .solo-btn.on { color: var(--accent); border-color: var(--accent); }
+.solo-btn[disabled] { opacity: .3; cursor: default; }
+.solo-btn[disabled]:hover { color: var(--muted); border-color: transparent; }
 .solo-clock {
-  font-size: .66rem; color: #6f819f; padding: 0 .35rem 0 .5rem;
-  border-left: 1px solid var(--line); min-width: 12.5em;
+  font-size: .62rem; color: #6f819f; margin-left: auto; padding-left: .4rem;
+  white-space: nowrap;
 }
+
+.sp-tabs {
+  display: flex; gap: .15rem; padding: 0 .4rem; overflow-x: auto;
+  border-top: 1px solid var(--line); border-bottom: 2px solid var(--line);
+  scrollbar-width: none;
+}
+.sp-tabs::-webkit-scrollbar { display: none; }
+.sp-tab {
+  font: 700 .66rem/1 var(--font-mono); letter-spacing: .06em; white-space: nowrap;
+  padding: .5rem .5rem; color: var(--muted); background: transparent;
+  border: 0; border-bottom: 2px solid transparent; margin-bottom: -2px;
+  cursor: pointer;
+}
+.sp-tab:hover { color: var(--foreground); }
+.sp-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+
+.sp-panel { padding: .5rem .6rem; overflow: auto; min-height: 0; }
+.sp-hint {
+  margin: 0; padding: .35rem .6rem .45rem; font-size: .58rem; line-height: 1.5;
+  color: #4a5a78; border-top: 1px solid var(--line);
+}
+.sp-note { margin: .5rem 0 0; font-size: .62rem; line-height: 1.55; color: #6f819f; }
+.sp-sub {
+  margin: .6rem 0 .3rem; font: 700 .6rem/1 var(--font-mono);
+  letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+.sp-empty { margin: .4rem 0 0; font-size: .68rem; color: var(--muted); }
+
+/* Key/value rows, used by I/O and the stack. */
+.sp-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .25rem .6rem; margin: 0; }
+.sp-kv dt {
+  font: 700 .58rem/1.6 var(--font-mono); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.sp-kv dd { margin: 0; font-size: .72rem; color: var(--foreground); }
+.sp-kv dd.sp-write { color: var(--hot); }
+
+.sp-bits { display: inline-flex; gap: 1px; margin-left: .4rem; vertical-align: middle; }
+.sp-bits i {
+  font: 700 .5rem/1 var(--font-mono); font-style: normal;
+  width: .72rem; padding: .2rem 0; text-align: center;
+  color: #4a5a78; background: var(--subtle); border-radius: 1px;
+}
+.sp-bits i.on { color: var(--accent-foreground); background: var(--accent); }
+
+.sp-pins { display: flex; flex-wrap: wrap; gap: .25rem; }
+.sp-pin {
+  font: 700 .62rem/1 var(--font-mono); letter-spacing: .06em; padding: .4rem .5rem;
+  color: var(--muted); background: var(--subtle);
+  border: 2px solid var(--line); border-radius: .25rem; cursor: pointer;
+}
+.sp-pin:hover { color: var(--foreground); }
+.sp-pin.low {
+  color: var(--accent-foreground); background: var(--hot); border-color: var(--hot);
+}
+
+/* Memory, as a hex dump of the bus the chip is talking to. */
+.sp-fields { display: flex; gap: .4rem; align-items: flex-end; flex-wrap: wrap; }
+.sp-field { display: grid; gap: .15rem; flex: 1 1 8rem; min-width: 0; }
+.sp-field.sp-narrow { flex: 0 0 5.5rem; }
+.sp-field > span {
+  font: 700 .55rem/1 var(--font-mono); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.sp-field select, .sp-field input {
+  width: 100%; min-width: 0; font: inherit; font-size: .7rem; padding: .3rem .35rem;
+  color: var(--foreground); background: var(--subtle);
+  border: 2px solid var(--line); border-radius: .25rem;
+}
+.sp-dump { margin-top: .5rem; font-size: .64rem; line-height: 1.7; }
+.sp-dump-row { display: flex; gap: .3rem; white-space: nowrap; }
+.sp-dump-row b { color: var(--muted); font-weight: 700; }
+.sp-dump-row i {
+  font-style: normal; color: var(--foreground); padding: 0 .1rem; border-radius: 2px;
+}
+.sp-dump-row i.at { outline: 1px solid var(--accent); color: var(--accent); }
+.sp-dump-row i.pc { color: var(--accent-foreground); background: var(--hot); }
+
+.sp-stack { margin-top: .5rem; font-size: .68rem; }
+.sp-stack-row { display: flex; align-items: baseline; gap: .5rem; padding: .1rem 0; }
+.sp-stack-row b { color: var(--muted); font-weight: 700; }
+.sp-stack-row i { font-style: normal; color: var(--foreground); }
+.sp-stack-row.top i { color: var(--accent); }
+.sp-stack-note { font-size: .58rem; color: #6f819f; }
+
+/* The walk. */
+.sp-walk { display: flex; flex-direction: column; gap: .2rem; }
+.sp-step {
+  display: flex; align-items: center; gap: .5rem; text-align: left;
+  font: inherit; font-size: .72rem; padding: .3rem .4rem; cursor: pointer;
+  color: var(--muted); background: var(--subtle);
+  border: 2px solid transparent; border-radius: .25rem;
+}
+.sp-step:hover { color: var(--foreground); border-color: var(--line); }
+.sp-step.on { color: var(--accent); border-color: var(--accent); }
+.sp-step-n { font-size: .58rem; color: #6f819f; min-width: 1rem; }
+.sp-actions { margin-top: .5rem; }
+.solo-btn.sp-wide {
+  width: 100%; font-size: .66rem; letter-spacing: .06em;
+  border-color: var(--line); background: var(--subtle);
+}
+
+/* The signal card, in a panel a third the width it has on the page. */
+.sp-card .sch-sig-name { margin: 0 0 .4rem; font-size: .85rem; }
+.sp-card .ends { margin: 0; }
+.sp-card .ends dt { font-size: .55rem; }
+.sp-card .ends dd { font-size: .7rem; }
+
 @media (max-width: 46rem) {
-  .console.solo .sch-solo-bar { bottom: 2.6rem; gap: .25rem; padding: .3rem .35rem; }
-  .solo-clock { font-size: .6rem; min-width: 0; }
+  .console.solo .solo-palette { max-height: min(22rem, calc(100% - 1.5rem)); }
+  .solo-clock { font-size: .58rem; }
 }
 
 /* --- Schematic: direction ---------------------------------------------------- */

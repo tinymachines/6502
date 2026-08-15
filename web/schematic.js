@@ -50,9 +50,31 @@ const state = {
   suppress: 0,
   camG: null,
   dragged: false,
+  // The walk, as islands still on screen. An entry is `{node, from}` -- the
+  // signal, and the index of the island whose pill was clicked to reach it, so
+  // the thread joining them starts where the reader actually pressed. `from` is
+  // -1 when there is no such island: the first entry, or one whose anchor has
+  // since been dropped off the end.
+  trail: [],
+  islands: [],     // laid-out geometry, one per trail entry
+  world: null,     // the union of them, which is what "fit" fits
+  // The study view's console: which tab is showing, the object that paints it,
+  // and where the reader dragged the panel to.
+  tab: 'signal',
+  panel: null,
+  palPos: null,
 };
 
 const HISTORY_MAX = 200;
+
+// How many islands stay on screen. The walk is the point of the study view, so
+// the last few steps of it are worth keeping -- but a ribbon that grows without
+// limit ends up too small to read at any zoom that shows all of it. The cap is
+// declared on the Walk tab rather than applied quietly.
+const TRAIL_MAX = 6;
+
+// Space between one island and the next, in drawing units.
+const TRAIL_GAP = 90;
 
 const nameOf = (n) => state.data.names[n] ?? `#${n}`;
 const isNamed = (n) => state.data.names[n] != null;
@@ -182,7 +204,10 @@ function diff(a, b) {
 // already does.
 
 const cam = { k: 1, tx: 0, ty: 0 };
-const MIN_K = 0.4;
+// The lower bound has to reach a whole walk. The viewBox is one island, so six
+// of them side by side is roughly a tenth the width of what the browser is
+// scaling to fit -- 0.4 would refuse to show the reader their own walk.
+const MIN_K = 0.05;
 const MAX_K = 16;
 
 function applyCam() {
@@ -190,10 +215,30 @@ function applyCam() {
   state.camG.setAttribute('transform', `translate(${cam.tx},${cam.ty}) scale(${cam.k})`);
 }
 
-/** Back to the framing the browser chose. */
-function fitCam() {
-  cam.k = 1; cam.tx = 0; cam.ty = 0;
-  applyCam();
+/**
+ * Frame a rectangle of the drawing.
+ *
+ * The viewBox is the size of the *current* island, and the browser is already
+ * scaling that to the element with `preserveAspectRatio`. So fitting something
+ * to the viewBox fits it to the screen, and nothing here has to measure the
+ * canvas -- which is the same reason the single-island version never did.
+ */
+function frameOn(box) {
+  const vb = state.viewBox;
+  if (!vb || !box || box.w <= 0 || box.h <= 0) return;
+  const k = Math.min(vb.w / box.w, vb.h / box.h);
+  place(k, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, { x: vb.w / 2, y: vb.h / 2 });
+}
+
+/** The signal being studied, at reading size. */
+function focusCurrent() {
+  const cur = state.islands[state.islands.length - 1];
+  if (cur) frameOn(cur.box);
+}
+
+/** Everything you have walked through, however small that makes it. */
+function fitAll() {
+  if (state.world) frameOn(state.world);
 }
 
 /**
@@ -300,7 +345,7 @@ function setupCamera(svg) {
     place(cam.k * Math.exp(-e.deltaY * 0.0015), contentAt(u), u);
   }, { passive: false });
 
-  svg.addEventListener('dblclick', () => { if (state.solo) fitCam(); });
+  svg.addEventListener('dblclick', () => { if (state.solo) fitAll(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -439,25 +484,19 @@ function layout(c) {
   return { place, items, flip, width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 };
 }
 
-function draw(c) {
-  const svg = $('sch-svg');
-  svg.replaceChildren();
-  const { place, items, flip, width, height } = layout(c);
-
-  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  svg.setAttribute('width', width);
-  svg.setAttribute('height', height);
-
-  // Everything drawn lives under one group, which is what the camera moves.
-  // A new subject gets a fresh framing: staying zoomed into a corner of the
-  // last drawing would leave the new one off screen with no sign of why.
-  const camG = el('g', { class: 'sch-cam' }, svg);
-  state.camG = camG;
-  fitCam();
-
-  const wires = el('g', { class: 'sch-wires' }, camG);
-  const parts = el('g', { class: 'sch-parts' }, camG);
-  const labels = el('g', { class: 'sch-labels' }, camG);
+/**
+ * Draw one cone into its own group.
+ *
+ * The island keeps its local coordinates and is positioned by a transform on
+ * the group, so every raw `x`/`y` written here stays inside the island's own
+ * box -- which is what the layout harness checks, and what would stop being
+ * true if the offset were baked into the numbers instead.
+ */
+function drawIsland(host, c, L, index) {
+  const { place, items, flip } = L;
+  const wires = el('g', { class: 'sch-wires' }, host);
+  const parts = el('g', { class: 'sch-parts' }, host);
+  const labels = el('g', { class: 'sch-labels' }, host);
   const { vss, vcc } = state.data;
 
   for (const { e, out, x: ex, y: ey } of items) {
@@ -537,16 +576,153 @@ function draw(c) {
     // A drag that ends on a signal is panning, not choosing. `state.dragged` is
     // set by the camera on release and cleared on the next press, and click
     // fires straight after release, so this reads the gesture that just ended.
-    g.addEventListener('click', () => { if (!state.dragged) setRoot(node); });
+    g.addEventListener('click', () => { if (!state.dragged) setRoot(node, index); });
   }
 
-  svg.querySelectorAll('.sch-ctrl').forEach((t) => {
+  host.querySelectorAll('.sch-ctrl').forEach((t) => {
     if (!t.dataset.node) return;
     t.style.cursor = 'pointer';
     t.addEventListener('click', () => {
-      if (!state.dragged) setRoot(Number(t.dataset.node));
+      if (!state.dragged) setRoot(Number(t.dataset.node), index);
     });
   });
+}
+
+/**
+ * Lay the islands of a walk out beside one another.
+ *
+ * Each island is placed so that the signal it is rooted on sits just beyond the
+ * pill that was clicked to reach it, in the direction the drawing grows -- left
+ * for a backward walk, right for a forward one. So the ribbon reads the same way
+ * round as a single island does, and the thread between two islands is the click
+ * that joined them.
+ */
+/**
+ * Which island a step was taken from.
+ *
+ * The reader's own click, when that island is still on screen; the one before,
+ * when it is not. Both the layout and the thread ask this, and they have to
+ * agree or the thread would start somewhere the island is not.
+ */
+function anchorOf(i) {
+  const from = state.trail[i] ? state.trail[i].from : -1;
+  return from >= 0 && from < i ? from : i - 1;
+}
+
+function arrange(layouts) {
+  const offs = [];
+  for (let i = 0; i < layouts.length; i++) {
+    if (i === 0) { offs.push({ x: 0, y: 0 }); continue; }
+    const L = layouts[i];
+    const sgn = L.flip ? 1 : -1;               // which way this walk grows
+    const root = L.place.get(L.root);
+    const anchorIsland = anchorOf(i);
+    const anchor = anchorIsland >= 0 ? layouts[anchorIsland].place.get(L.root) : null;
+
+    let x, y;
+    if (root && anchor) {
+      const a = offs[anchorIsland];
+      // The far edge of the clicked pill, plus a gutter, is where the new
+      // island's own root pill goes.
+      x = a.x + (sgn < 0 ? anchor.boxL - TRAIL_GAP - root.boxR
+                         : anchor.boxR + TRAIL_GAP - root.boxL);
+      y = a.y + anchor.y - root.y;
+    } else {
+      // Nothing to hang it on -- the anchor island has been dropped off the end
+      // of the walk. Put it beside the one before, which is at least a walk.
+      const p = offs[i - 1], P = layouts[i - 1];
+      x = sgn < 0 ? p.x - TRAIL_GAP - L.width : p.x + P.width + TRAIL_GAP;
+      y = p.y;
+    }
+
+    // Push it clear of anything already placed. Islands are displaced sideways
+    // from their anchor, so this rarely fires -- but a walk that doubles back
+    // on itself would otherwise draw one island on top of another.
+    const boxOf = (j, o) => ({ x: o.x, y: o.y, w: layouts[j].width, h: layouts[j].height });
+    const hits = (b) => offs.some((o, j) => {
+      const q = boxOf(j, o);
+      return b.x < q.x + q.w && q.x < b.x + b.w && b.y < q.y + q.h && q.y < b.y + b.h;
+    });
+    for (let guard = 0; guard < 24 && hits({ x, y, w: L.width, h: L.height }); guard++) {
+      y += L.height + TRAIL_GAP / 2;
+    }
+    offs.push({ x, y });
+  }
+  return offs;
+}
+
+/**
+ * Draw a whole walk: the current island, and the ones it came from.
+ *
+ * The viewBox stays the size of the *current* island, not of the walk. That is
+ * what keeps a signal at reading size however far you have walked -- the world
+ * grows around it and the camera moves within it, rather than the browser
+ * scaling everything down to fit an ever-wider ribbon.
+ */
+function drawTrail(cones) {
+  const svg = $('sch-svg');
+  svg.replaceChildren();
+
+  const layouts = cones.map((c) => Object.assign(layout(c), { root: c.root }));
+  const offs = arrange(layouts);
+  const cur = layouts.length - 1;
+
+  const W = layouts[cur].width;
+  const H = layouts[cur].height;
+  state.viewBox = { w: W, h: H };
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+
+  // Everything drawn lives under one group, which is what the camera moves.
+  const camG = el('g', { class: 'sch-cam' }, svg);
+  state.camG = camG;
+
+  // Threads first, so they pass behind the pills they join.
+  const threads = el('g', { class: 'sch-threads' }, camG);
+
+  state.islands = [];
+  layouts.forEach((L, i) => {
+    const o = offs[i];
+    const g = el('g', {
+      class: 'sch-island' + (i === cur ? ' current' : ' past'),
+      'data-island': i,
+      transform: `translate(${o.x},${o.y})`,
+    }, camG);
+    drawIsland(g, cones[i], L, i);
+    state.islands.push({ box: { x: o.x, y: o.y, w: L.width, h: L.height }, root: L.root });
+  });
+
+  // The click that joined two islands, drawn as the thread it was.
+  for (let i = 1; i < layouts.length; i++) {
+    const from = anchorOf(i);
+    if (from < 0) continue;
+    const a = layouts[from].place.get(layouts[i].root);
+    const b = layouts[i].place.get(layouts[i].root);
+    if (!a || !b) continue;
+    const flip = layouts[i].flip;
+    const ax = offs[from].x + (flip ? a.boxR : a.boxL);
+    const ay = offs[from].y + a.y;
+    const bx = offs[i].x + (flip ? b.boxL : b.boxR);
+    const by = offs[i].y + b.y;
+    const mid = (ax + bx) / 2;
+    el('path', {
+      d: `M ${ax} ${ay} C ${mid} ${ay}, ${mid} ${by}, ${bx} ${by}`,
+      class: 'sch-thread',
+    }, threads);
+  }
+
+  // The world, which is what "fit everything" fits.
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const isl of state.islands) {
+    x0 = Math.min(x0, isl.box.x); y0 = Math.min(y0, isl.box.y);
+    x1 = Math.max(x1, isl.box.x + isl.box.w); y1 = Math.max(y1, isl.box.y + isl.box.h);
+  }
+  state.world = Number.isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+
+  // A new subject gets a fresh framing at reading size: staying where the last
+  // drawing was would leave this one off screen with no sign of why.
+  focusCurrent();
 }
 
 /** Colour the drawing from the running chip. */
@@ -604,8 +780,14 @@ function splitBit(name) {
 
 const ROLE = ['', 'a product term of the decode PLA', 'a decode control line'];
 
-function renderSignal(node) {
-  const box = $('sch-signal-info');
+/**
+ * What is known about a signal, as markup.
+ *
+ * Returned rather than written, because the study view's console shows the same
+ * card in its own panel. Two copies of this would be two chances to explain the
+ * same wire differently.
+ */
+function signalHtml(node) {
   const d = state.data;
   const name = nameOf(node);
   const named = isNamed(node);
@@ -667,8 +849,12 @@ function renderSignal(node) {
         + `, on ${n === 8 ? 'all 8 bits' : `${n} bit${n === 1 ? '' : 's'}`}`);
   }
 
-  box.innerHTML = `<h3 class="sch-sig-name">${name}<span class="sch-sig-id">node ${node}</span></h3>`
+  return `<h3 class="sch-sig-name">${name}<span class="sch-sig-id">node ${node}</span></h3>`
     + `<dl class="ends">${rows.join('')}</dl>`;
+}
+
+function renderSignal(node) {
+  $('sch-signal-info').innerHTML = signalHtml(node);
 }
 
 /** The key. Draws the same symbols the diagram does, at the same size. */
@@ -728,6 +914,397 @@ function buildLegend() {
     const t = el('text', { x: -28, y: 4, class: 'sch-name' }, g);
     t.textContent = 'sb3';
   });
+}
+
+// ---------------------------------------------------------------------------
+// The study view's console
+// ---------------------------------------------------------------------------
+//
+// One floating panel rather than three clusters pinned to three corners. On a
+// screen whose entire content is one drawing, the controls are the only thing
+// that can be in the way -- and *where* they are in the way depends on the
+// drawing, which changes every time a signal is followed. So it is draggable,
+// and it remembers where it was put.
+//
+// Everything it reports is read out of the running chip. The address and data
+// buses are the levels on the pads, the registers are read out of their storage
+// nodes, and memory is the bus the chip is actually talking to -- so a rewind
+// takes the hex dump back with it.
+
+const PAL_KEY = 'v6502.schematic.palette';
+
+const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
+const hex4 = (v) => v.toString(16).padStart(4, '0').toUpperCase();
+
+/** A byte or a word as lamps, high bit first. */
+function bitStrip(v, n) {
+  let out = '';
+  for (let b = n - 1; b >= 0; b--) {
+    const on = (v >> b) & 1;
+    out += `<i class="${on ? 'on' : ''}">${on}</i>`;
+  }
+  return `<span class="sp-bits">${out}</span>`;
+}
+
+// The chip's input pins.
+//
+// The button shows the level on the pin rather than an interpretation of it.
+// Four of the five are active low, so low means asserted -- but `so` comes out
+// of reset *low* (the reset sequence drives it there, as the reference does),
+// and a button that called that "asserted" would be reporting a polarity it had
+// assumed instead of the level it measured.
+const PINS = [
+  ['res', 'RES', 'setRes', 'reset — active low'],
+  ['irq', 'IRQ', 'setIrq', 'interrupt request, active low — masked by the I flag'],
+  ['nmi', 'NMI', 'setNmi', 'non-maskable interrupt, active low'],
+  ['rdy', 'RDY', 'setRdy', 'ready — low stalls the chip on a read cycle'],
+  ['so', 'SO', 'setSo', 'set overflow — held low out of reset'],
+];
+
+const pinHigh = (name) => {
+  const node = state.pinNodes[name];
+  return node == null || node < 0 ? true : state.machine.isNodeHigh(node);
+};
+
+/**
+ * Assert or release a pin.
+ *
+ * The level is read back out of the node afterwards rather than remembered
+ * here, so the button cannot come to disagree with the chip -- the same reason
+ * the drawing reads levels instead of storing them beside the prose.
+ */
+function togglePin(name, setter) {
+  state.machine[setter](!pinHigh(name));
+  refresh();
+}
+
+/**
+ * The panels. Each takes its host element, builds whatever is static once, and
+ * returns the function that paints the live parts.
+ *
+ * The split matters: this repaints on every animation frame, and rebuilding the
+ * markup each time would blow away the address field the reader is typing in.
+ * Each painter also compares what it is about to write against what is there,
+ * so a stopped chip does no DOM work at all.
+ */
+const PANELS = {
+  /** What this wire is. The same card the page proper shows below the drawing. */
+  signal(host) {
+    let shown = null;
+    return () => {
+      if (shown === state.root) return;
+      shown = state.root;
+      host.innerHTML = `<div class="sp-card">${signalHtml(state.root)}</div>`;
+    };
+  },
+
+  /** Where you have walked, and back to any of it. */
+  walk(host) {
+    host.innerHTML = `<div class="sp-walk" id="sp-walk"></div>
+      <div class="sp-actions">
+        <button class="solo-btn sp-wide" id="sp-clear" type="button">start again from here</button>
+      </div>
+      <p class="sp-note">The last ${TRAIL_MAX} islands stay on screen and older
+        ones are dropped, because a ribbon that grows without limit is too small
+        to read at any zoom that shows all of it. Click a step to fly to it;
+        <b>⌾</b> fits the whole walk.</p>`;
+    host.querySelector('#sp-clear').addEventListener('click', () => {
+      resetTrail();
+      render();
+    });
+    const list = host.querySelector('#sp-walk');
+    let last = null;
+    return () => {
+      const key = state.trail.map((t) => t.node).join(',');
+      if (key === last) return;
+      last = key;
+      list.innerHTML = state.trail.map((t, i) => `
+        <button class="sp-step${i === state.trail.length - 1 ? ' on' : ''}"
+                type="button" data-i="${i}">
+          <span class="sp-step-n mono">${i + 1}</span>
+          <span class="mono">${nameOf(t.node)}</span>
+        </button>`).join('');
+      for (const b of list.querySelectorAll('.sp-step')) {
+        b.addEventListener('click', () => {
+          const isl = state.islands[Number(b.dataset.i)];
+          if (isl) frameOn(isl.box);
+        });
+      }
+    };
+  },
+
+  /** The chip's edge: what is on the pads, and the five pins that drive it. */
+  io(host) {
+    host.innerHTML = `<dl class="sp-kv" id="sp-io"></dl>
+      <p class="sp-sub">Input pins — the level on each. Click to flip it.</p>
+      <div class="sp-pins" id="sp-pins"></div>
+      <p class="sp-note">Everything above is read off the pads: the address and
+        data buses are the levels on <span class="mono">ab0…15</span> and
+        <span class="mono">db0…7</span>, not a number kept beside them. Four of
+        the pins are active low, so 0 means asserted — <b>SO</b> is the
+        exception and comes out of reset low. Holding <b>RDY</b> low stops the
+        chip without stopping its clock; pulling <b>IRQ</b> low with no handler
+        installed vectors through <span class="mono">$FFFE</span> to
+        <span class="mono">$0000</span>, which is a <span class="mono">BRK</span>,
+        and the chip climbs down the stack forever.</p>`;
+    const pins = host.querySelector('#sp-pins');
+    for (const [name, label, setter, why] of PINS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sp-pin';
+      b.dataset.pin = name;
+      b.dataset.label = label;
+      b.title = why;
+      b.addEventListener('click', () => togglePin(name, setter));
+      pins.append(b);
+    }
+    const kv = host.querySelector('#sp-io');
+    let last = '';
+    return () => {
+      const m = state.machine;
+      const ab = m.addressBus();
+      const db = m.dataBus();
+      const rw = m.isRead();
+      const html = `
+        <dt>Address</dt><dd><b class="mono">$${hex4(ab)}</b>${bitStrip(ab, 16)}</dd>
+        <dt>Data</dt><dd><b class="mono">$${hex2(db)}</b>${bitStrip(db, 8)}</dd>
+        <dt>Cycle</dt><dd class="${rw ? '' : 'sp-write'}">
+          ${rw ? `read <span class="mono">$${hex4(ab)}</span> → <span class="mono">$${hex2(db)}</span>`
+               : `write <span class="mono">$${hex2(db)}</span> → <span class="mono">$${hex4(ab)}</span>`}
+        </dd>
+        <dt>Phase</dt><dd class="mono">${m.clk0() ? 'φ1' : 'φ2'} · ${m.timingStates() || '—'}${m.sync() ? ' · SYNC' : ''}</dd>`;
+      if (html !== last) { last = html; kv.innerHTML = html; }
+      for (const b of pins.children) {
+        const high = pinHigh(b.dataset.pin);
+        b.classList.toggle('low', !high);
+        const text = `${b.dataset.label} ${high ? 1 : 0}`;
+        if (b.textContent !== text) b.textContent = text;
+      }
+    };
+  },
+
+  /** Memory, as the chip sees it, following whatever is worth following. */
+  mem(host) {
+    host.innerHTML = `<div class="sp-fields">
+        <label class="sp-field"><span>Follow</span>
+          <select id="sp-mem-follow">
+            <option value="pc">the program counter</option>
+            <option value="ab">the address bus</option>
+            <option value="s">the stack pointer</option>
+            <option value="fixed">a fixed address</option>
+          </select></label>
+        <label class="sp-field sp-narrow"><span>At $</span>
+          <input id="sp-mem-at" class="mono" value="0200" size="4" maxlength="4"
+                 inputmode="latin" aria-label="Address"></label>
+      </div>
+      <div class="sp-dump mono" id="sp-dump"></div>
+      <p class="sp-note">The bus the chip is talking to, not a copy of it — so
+        stepping back takes the bytes back with it, writes and all. The cell the
+        address bus is pointing at is ringed; the byte under the program counter
+        is lit.</p>`;
+    const follow = host.querySelector('#sp-mem-follow');
+    const at = host.querySelector('#sp-mem-at');
+    // Typing an address means you want that address, so the mode follows the
+    // typing rather than making the reader set it twice.
+    //
+    // Both handlers repaint at once rather than waiting for the next animation
+    // frame. The chip runs at four half-cycles a second here, so a frame is not
+    // a long wait -- but a control that responds on somebody else's schedule is
+    // the same responsiveness bug the study view's clock already had, and it is
+    // invisible until the page is driven somewhere frames are throttled.
+    at.addEventListener('input', () => { follow.value = 'fixed'; refreshPalette(); });
+    follow.addEventListener('change', refreshPalette);
+    const dump = host.querySelector('#sp-dump');
+    let last = '';
+    return () => {
+      const m = state.machine;
+      const fixed = parseInt(at.value.replace(/[^0-9a-fA-F]/g, ''), 16);
+      const origin = {
+        pc: () => m.pc(),
+        ab: () => m.addressBus(),
+        s: () => 0x100 + m.s(),
+        fixed: () => (Number.isFinite(fixed) ? fixed : 0) & 0xffff,
+      }[follow.value]();
+      // Start a couple of rows above, on a row boundary, so the thing being
+      // followed sits in the middle and does not jitter a row at a time.
+      const base = (origin - 0x18) & 0xfff8 & 0xffff;
+      const bytes = m.memorySlice(base, 64);
+      const pc = m.pc(), ab = m.addressBus();
+      let html = '';
+      for (let r = 0; r < 8; r++) {
+        const addr = (base + r * 8) & 0xffff;
+        let cells = '';
+        for (let i = 0; i < 8; i++) {
+          const a = (addr + i) & 0xffff;
+          const cls = (a === ab ? ' at' : '') + (a === pc ? ' pc' : '');
+          cells += `<i class="${cls.trim()}">${hex2(bytes[r * 8 + i])}</i>`;
+        }
+        html += `<div class="sp-dump-row"><b>${hex4(addr)}</b>${cells}</div>`;
+      }
+      if (html !== last) { last = html; dump.innerHTML = html; }
+    };
+  },
+
+  /**
+   * The stack: where S points, and what a pull would return.
+   *
+   * Deliberately *not* "how many bytes are on the stack". That would be
+   * `$FF - S`, which assumes the stack began empty at the top — and the 6502
+   * does not clear S at reset. It decrements it by three and nothing else, so
+   * out of a power-on it holds whatever its storage nodes came up as, exactly as
+   * this simulator reproduces. How much is on the stack is not something the
+   * chip knows, and a panel that reported a number for it would be reporting an
+   * assumption in the same typeface as a measurement.
+   */
+  stack(host) {
+    host.innerHTML = `<div id="sp-stack"></div>
+      <p class="sp-note">S is read out of its storage nodes like every other
+        register, and it points at the <em>next free byte</em> — so a push writes
+        to $0100+S and then decrements, and the stack grows downward. The bytes
+        below the list are whatever was pushed and pulled earlier: still in
+        memory, still on the Memory tab, and no longer the chip's business.</p>
+      <p class="sp-note">There is no count here on purpose. The 6502 does not
+        reset its stack pointer — reset only decrements it by three — so how deep
+        the stack is is not a fact the chip holds.</p>`;
+    const box = host.querySelector('#sp-stack');
+    const DEEP = 12;
+    let last = '';
+    return () => {
+      const m = state.machine;
+      const s = m.s();
+      // Top first, which is the order pulls return them. The stack grows
+      // downward, so the most recent push is at the *lowest* address -- listing
+      // from $01FF down would read as a stack upside down.
+      let rows = '';
+      for (let i = 0; i < DEEP; i++) {
+        const a = 0x100 + ((s + 1 + i) & 0xff);
+        rows += `<div class="sp-stack-row${i === 0 ? ' top' : ''}">`
+          + `<b>$${hex4(a)}</b><i>${hex2(m.peek(a))}</i>`
+          + `<span class="sp-stack-note">${i === 0 ? 'the next pull' : ''}</span></div>`;
+      }
+      const html = `<dl class="sp-kv">
+          <dt>S</dt><dd><b class="mono">$${hex2(s)}</b>${bitStrip(s, 8)}</dd>
+          <dt>Next push</dt><dd class="mono">$${hex4(0x100 + s)}</dd>
+          <dt>Next pull</dt><dd class="mono">$${hex4(0x100 + ((s + 1) & 0xff))}</dd>
+        </dl>
+        <div class="sp-stack mono">${rows}</div>`;
+      if (html === last) return;
+      last = html;
+      box.innerHTML = html;
+    };
+  },
+};
+
+/** Which panel is showing. Rebuilt on switch, painted every frame. */
+function setTab(name) {
+  state.tab = PANELS[name] ? name : 'signal';
+  for (const b of $('sp-tabs').querySelectorAll('.sp-tab')) {
+    const on = b.dataset.tab === state.tab;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  }
+  const host = $('sp-panel');
+  host.replaceChildren();
+  state.panel = PANELS[state.tab](host);
+  state.panel();
+}
+
+const stageRect = () => document.querySelector('.sch-stage').getBoundingClientRect();
+
+/**
+ * Put the console somewhere, and refuse to put it out of reach.
+ *
+ * The clamp is against the stage rather than the viewport, and it runs again on
+ * resize and on collapse -- a panel dragged to the bottom of a tall window and
+ * then reopened on a phone would otherwise be gone, with no way to get it back
+ * short of clearing storage.
+ */
+function placePalette(x, y) {
+  const pal = $('solo-palette');
+  const sr = stageRect();
+  const pr = pal.getBoundingClientRect();
+  if (!pr.width || !pr.height) return;
+  const nx = Math.min(Math.max(0, sr.width - pr.width), Math.max(0, x));
+  const ny = Math.min(Math.max(0, sr.height - pr.height), Math.max(0, y));
+  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
+  pal.style.left = `${nx}px`;
+  pal.style.top = `${ny}px`;
+  state.palPos = { x: nx, y: ny };
+  try { localStorage.setItem(PAL_KEY, JSON.stringify(state.palPos)); } catch { /* private mode */ }
+}
+
+function setCollapsed(on) {
+  const pal = $('solo-palette');
+  pal.dataset.collapsed = on ? 'true' : 'false';
+  const b = $('sp-collapse');
+  b.textContent = on ? '▸' : '▾';
+  b.setAttribute('aria-expanded', on ? 'false' : 'true');
+  b.setAttribute('aria-label', on ? 'Open the console' : 'Collapse the console');
+  if (state.palPos) placePalette(state.palPos.x, state.palPos.y);
+}
+
+/** Entering the study view: open the console where it was left. */
+function openPalette() {
+  setCollapsed(false);
+  setTab(state.tab);
+  const pos = state.palPos || (() => {
+    const sr = stageRect();
+    const pr = $('solo-palette').getBoundingClientRect();
+    return { x: 14, y: Math.max(0, sr.height - pr.height - 14) };
+  })();
+  placePalette(pos.x, pos.y);
+}
+
+function setupPalette() {
+  const pal = $('solo-palette');
+  const grip = $('sp-grip');
+  try { state.palPos = JSON.parse(localStorage.getItem(PAL_KEY)) || null; } catch { state.palPos = null; }
+  if (state.palPos && !(Number.isFinite(state.palPos.x) && Number.isFinite(state.palPos.y))) {
+    state.palPos = null;
+  }
+
+  // Dragged from the grip only, and never when the press landed on one of the
+  // buttons living in it. Move and release are watched on the window for the
+  // same reason the camera does it: `setPointerCapture` would retarget the
+  // click, and these buttons are the ones that leave the mode.
+  let drag = null;
+  grip.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    const r = pal.getBoundingClientRect();
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    pal.classList.add('dragging');
+    e.preventDefault();
+  });
+  const move = (e) => {
+    if (!drag) return;
+    const sr = stageRect();
+    placePalette(e.clientX - sr.left - drag.dx, e.clientY - sr.top - drag.dy);
+  };
+  const up = () => {
+    if (!drag) return;
+    drag = null;
+    pal.classList.remove('dragging');
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
+  window.addEventListener('resize', () => {
+    if (state.solo && state.palPos) placePalette(state.palPos.x, state.palPos.y);
+  });
+
+  $('sp-collapse').addEventListener('click', () => {
+    setCollapsed(pal.dataset.collapsed !== 'true');
+  });
+  for (const b of $('sp-tabs').querySelectorAll('.sp-tab')) {
+    b.addEventListener('click', () => setTab(b.dataset.tab));
+  }
+}
+
+/** Paint the live half of whichever panel is open. */
+function refreshPalette() {
+  if (!state.solo || !state.panel) return;
+  if ($('solo-palette').dataset.collapsed === 'true') return;
+  state.panel();
 }
 
 // ---------------------------------------------------------------------------
@@ -793,9 +1370,19 @@ function paintHistory() {
 }
 
 function restore(v) {
+  const flipped = v.dir !== state.dir;
   withoutHistory(() => {
     state.root = v.root;
     state.dir = v.dir;
+    // Going back to a signal that is still on screen walks back up the ribbon
+    // rather than starting a new one -- the islands beyond it are the steps
+    // being undone, so they go. Anything else (a different direction, a signal
+    // that has scrolled off the end of the walk) starts again from here.
+    if (state.solo) {
+      const at = flipped ? -1 : state.trail.findIndex((t) => t.node === v.root);
+      if (at >= 0) state.trail.length = at + 1;
+      else resetTrail();
+    }
     // The study view is one level by definition, so returning restores *where*
     // you were and not how deep -- otherwise stepping back past the moment you
     // went fullscreen would quietly break the one thing that mode promises.
@@ -878,6 +1465,10 @@ function setDir(dir) {
   if (next !== state.dir) remember('dir');
   state.dir = next;
   paintDir();
+  // Both axes of the layout mirror when the direction flips, so a walk drawn
+  // one way round cannot be extended the other. The islands would still be
+  // correct circuits and the ribbon would read backwards.
+  resetTrail();
   render();
   syncUrl();
 }
@@ -900,14 +1491,25 @@ function setRunning(on) {
 function setDepth(n) {
   const next = Math.max(1, Math.min(6, n));
   if (next !== state.depth) remember('depth');
+  if (next !== state.depth) resetTrail();   // every island would change size
   state.depth = next;
   paintDepth();
   render();
 }
 
-function setRoot(node) {
+/**
+ * Make `node` the subject.
+ *
+ * `from` is the island the reader clicked in, when there was one. In the study
+ * view this appends to the walk rather than replacing it: the island you came
+ * from stays on screen, dimmed, with a thread from the pill you pressed. On the
+ * page proper there is one drawing and it is replaced, because that view sits
+ * in a scrolling stage with no camera to find a second island with.
+ */
+function setRoot(node, from = -1) {
   if (node !== state.root) remember('root');
   state.root = node;
+  if (state.solo) walkTo(node, from);
   renderSignal(node);
   clearCompare();
   paintPicker();
@@ -915,9 +1517,29 @@ function setRoot(node) {
   syncUrl();
 }
 
+/** Append to the walk, dropping the oldest island once it is full. */
+function walkTo(node, from) {
+  const last = state.trail[state.trail.length - 1];
+  if (last && last.node === node) return;
+  state.trail.push({ node, from });
+  while (state.trail.length > TRAIL_MAX) {
+    state.trail.shift();
+    // Every island moved down one, and anything that pointed at the one just
+    // dropped now points at nothing -- which `arrange` reads as "no anchor".
+    for (const t of state.trail) t.from -= 1;
+  }
+}
+
+/** Start the walk again from where you are. */
+function resetTrail() {
+  state.trail = state.root == null ? [] : [{ node: state.root, from: -1 }];
+}
+
 function render() {
-  const c = cone(state.root, state.depth, state.dir);
-  draw(c);
+  if (!state.solo || !state.trail.length) resetTrail();
+  const cones = state.trail.map((t) => cone(t.node, state.depth, state.dir));
+  drawTrail(cones);
+  const c = cones[cones.length - 1];
   const gates = c.elements.filter((e) => e.kind !== 'switch').length;
   const sw = c.elements.length - gates;
   const way = c.dir === 'fwd' ? 'levels forward' : 'levels back';
@@ -1060,7 +1682,17 @@ async function boot() {
     const m = new Machine();
     state.machine = m;
     m.load(LOAD_ADDR, new Uint8Array(PROGRAMS[0].bytes));
+    // Without this the reset vector reads $0000, where memory is $00 -- a BRK,
+    // which pushes three bytes and vectors to itself. The chip then runs a BRK
+    // loop forever instead of the program, and every gate on the page lights up
+    // convincingly while doing it. Nothing here could show that until the
+    // console grew a memory and a stack readout.
+    m.setResetVector(LOAD_ADDR);
     m.powerCycle();
+
+    // The pins, resolved once. Their level is read back out of these nodes
+    // rather than remembered, so a button cannot disagree with the chip.
+    state.pinNodes = Object.fromEntries(PINS.map(([name]) => [name, m.nodeId(name)]));
 
     const c = data.counts;
     $('sch-stats').textContent =
@@ -1091,8 +1723,9 @@ async function boot() {
     $('sch-fwd').addEventListener('click', goForward);
     $('solo-back-nav').addEventListener('click', goBack);
     $('solo-fwd-nav').addEventListener('click', goForward);
-    $('solo-fit').addEventListener('click', fitCam);
+    $('solo-fit').addEventListener('click', fitAll);
     setupCamera($('sch-svg'));
+    setupPalette();
 
     // Keyboard, because the study view is meant to be looked at rather than
     // aimed at. Ignored while typing in the filter box.
@@ -1104,11 +1737,14 @@ async function boot() {
       if (ev.key === '[' || ev.key === 'Backspace') { goBack(); ev.preventDefault(); return; }
       if (ev.key === ']') { goForward(); ev.preventDefault(); return; }
       if (!state.solo) return;
-      if (ev.key === '0') { fitCam(); ev.preventDefault(); }
+      if (ev.key === '0') { fitAll(); ev.preventDefault(); }
       else if (ev.key === ' ') { setRunning(!state.running); ev.preventDefault(); }
       else if (ev.key === 'ArrowRight') { step(+1); ev.preventDefault(); }
       else if (ev.key === 'ArrowLeft') { step(-1); ev.preventDefault(); }
-      else if (ev.key === 'd' || ev.key === 'D') {
+      else if (ev.key === 'p' || ev.key === 'P') {
+        setCollapsed($('solo-palette').dataset.collapsed !== 'true');
+        ev.preventDefault();
+      } else if (ev.key === 'd' || ev.key === 'D') {
         setDir(state.dir === 'back' ? 'fwd' : 'back');
         ev.preventDefault();
       }
@@ -1179,9 +1815,14 @@ async function boot() {
       });
       state.solo = on;
       console_.classList.toggle('solo', on);
+      // A walk belongs to the study view: the page proper draws one island in a
+      // scrolling stage, with no camera to find a second one with. So both
+      // entering and leaving start it again from wherever the reader is.
+      resetTrail();
       if (state.root != null) render();
-      // The clock readout only exists in this mode, so entering has to populate
-      // it rather than waiting for the next animation frame.
+      // The console only exists in this mode, so entering has to open and
+      // populate it rather than waiting for the next animation frame.
+      if (on) openPalette();
       refresh();
     });
 
@@ -1222,6 +1863,7 @@ function refresh() {
     const text = parts.join(' · ');
     if (out.textContent !== text) out.textContent = text;
   }
+  refreshPalette();
   paint(m.nodeLevels());
 }
 

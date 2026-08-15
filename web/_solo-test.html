@@ -36,6 +36,29 @@ f.addEventListener('load', async () => {
 
     const con = d.querySelector('.console');
     const svg = $('sch-svg');
+    // The walk leaves earlier islands on screen, and each marks its own root --
+    // so "the signal being studied" is the root of the *current* island, not the
+    // first `.root` in the document, which is the oldest one.
+    const island = () => svg.querySelector('.sch-island.current');
+    const rootNow = () => island().querySelector('.sch-node.root').dataset.node;
+    // A cone can be a single node -- plenty of signals have nothing behind
+    // them at one level -- so fall back to any island. Clicking a pill in an
+    // earlier island is a legitimate move and the walk threads from there.
+    const pickOther = () => [...island().querySelectorAll('.sch-node')]
+      .find((n) => !n.classList.contains('root'))
+      || [...svg.querySelectorAll('.sch-node')].find((n) => !n.classList.contains('root'));
+    const islands = () => svg.querySelectorAll('.sch-island').length;
+    // Jump to a named signal through the page's own picker. The filter narrows
+    // it to one entry first, because the list is capped at 400 and a name is
+    // not guaranteed to be in the first 400 alphabetically.
+    const goTo = (name) => {
+      $('sch-filter').value = name;
+      $('sch-filter').dispatchEvent(new w.Event('input', { bubbles: true }));
+      const sel = $('sch-signal');
+      const opt = [...sel.options].find((o) => o.textContent === name);
+      sel.value = opt.value;
+      sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+    };
     // Force the fallback path: the API is unavailable in an iframe anyway, and
     // removing it makes that explicit rather than incidental.
     delete w.Element.prototype.requestFullscreen;
@@ -68,16 +91,45 @@ f.addEventListener('load', async () => {
     ok('there is a way out', vis($('sch-solo-exit')));
 
     // Walking the islands: click a signal, stay in the mode, stay at one level.
-    const next = [...svg.querySelectorAll('.sch-node')]
-      .find((n) => !n.classList.contains('root'));
+    ok('one island to begin with', islands() === 1, `${islands()}`);
+    const next = pickOther();
     const want = next.dataset.node;
     next.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
     await sleep(250);
     ok('clicking a signal re-roots without leaving the mode',
-       con.classList.contains('solo')
-       && svg.querySelector('.sch-node.root').dataset.node === want,
-       con.className);
+       con.classList.contains('solo') && rootNow() === want, con.className);
     ok('and it is still a single level', $('sch-depth').value === '1');
+
+    // --- the walk stays on screen -------------------------------------------
+    //
+    // The island you came from is the context for the one you are looking at,
+    // and throwing it away on every click is what made the study view a series
+    // of unrelated pictures rather than a walk.
+    ok('the island you came from is still there', islands() === 2, `${islands()}`);
+    ok('and it is drawn as past, not current',
+       svg.querySelectorAll('.sch-island.past').length === 1
+       && svg.querySelectorAll('.sch-island.current').length === 1);
+    ok('a thread joins them', svg.querySelectorAll('.sch-thread').length === 1);
+
+    // Reading size is the claim, and a pill measures it directly: every pill is
+    // the same 22 drawing units tall, so its height on screen *is* the effective
+    // zoom. The viewBox is one island and the camera moves the world within it,
+    // which is what keeps that height steady however long the ribbon gets --
+    // fitting the world into the viewBox instead would shrink it by the length
+    // of the walk.
+    const pillH = () => island().querySelector('.sch-pill').getBoundingClientRect().height;
+    ok('the new island is framed at reading size', pillH() > 10, `${pillH().toFixed(1)}px pills`);
+
+    for (let i = 0; i < 6; i++) {
+      const n = pickOther();
+      if (!n) break;
+      n.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+      await sleep(160);
+    }
+    ok('the walk is capped rather than growing without limit',
+       islands() === 6, `${islands()} islands after 7 clicks`);
+    ok('and the subject is still at reading size six islands in',
+       pillH() > 10, `${pillH().toFixed(1)}px pills`);
 
     // --- the clock, pinned to one island ------------------------------------
     //
@@ -151,21 +203,24 @@ f.addEventListener('load', async () => {
     // Re-rooting, flipping direction and changing depth all move you, and until
     // there was a stack there was no way back -- which matters most here, where
     // walking the islands is the whole activity.
-    const rootNow = () => svg.querySelector('.sch-node.root').dataset.node;
     ok('back is offered, a signal having already been followed',
        !$('solo-back-nav').disabled);
 
     const wasAt = rootNow();
-    const other = [...svg.querySelectorAll('.sch-node')]
-      .find((n) => !n.classList.contains('root'));
+    const other = pickOther();
     const otherId = other.dataset.node;
     other.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
     await sleep(200);
     ok('following a signal moves the subject', rootNow() === otherId, rootNow());
+    const afterClick = islands();
 
     $('solo-back-nav').click();
     await sleep(200);
     ok('back returns to where you were', rootNow() === wasAt, `${rootNow()} vs ${wasAt}`);
+    // Going back to a signal still on the ribbon walks back up it rather than
+    // starting a new one -- the island beyond it is the step being undone.
+    ok('and it un-walks rather than starting again',
+       islands() === afterClick - 1, `${islands()} vs ${afterClick}`);
     // The study view is one level by definition, so back restores *where* you
     // were and not how deep. Otherwise stepping back past the moment you went
     // fullscreen would quietly undo the one thing this mode promises.
@@ -180,6 +235,16 @@ f.addEventListener('load', async () => {
     ok('[ goes back', rootNow() === wasAt, rootNow());
 
     // --- the camera ----------------------------------------------------------
+    //
+    // Walking back has left one island, and the interesting camera claims are
+    // about a ribbon, so put one back deliberately rather than depending on
+    // whatever the walk above happened to end on.
+    goTo('dpc3_SBX');
+    await sleep(200);
+    pickOther().dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(200);
+    ok('there is a ribbon to aim the camera at', islands() >= 2, `${islands()}`);
+
     const camT = () => svg.querySelector('.sch-cam').getAttribute('transform');
     const camNums = () => (camT().match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi) || []).map(Number);
     const camK = () => camNums()[2];
@@ -228,15 +293,27 @@ f.addEventListener('load', async () => {
     pt('pointerup', 2, mx + 120, my, w);
     await sleep(60);
 
+    // `0` no longer means "the framing the browser chose" -- it fits the whole
+    // walk, which with several islands is necessarily smaller than one. So the
+    // assertion is what it is for: everything on screen at once.
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: '0', bubbles: true }));
     await sleep(60);
-    ok('0 fits the drawing again', Math.abs(camK() - 1) < 1e-9, camT());
+    const sb = svg.getBoundingClientRect();
+    const outside = [...svg.querySelectorAll('.sch-island')].filter((g) => {
+      const r = g.getBoundingClientRect();
+      return r.left < sb.left - 1 || r.right > sb.right + 1
+          || r.top < sb.top - 1 || r.bottom > sb.bottom + 1;
+    });
+    ok('0 fits the whole walk on screen', outside.length === 0,
+       `${outside.length} of ${islands()} islands off screen`);
+    ok('and it had to zoom out to do it', camK() < 1, camT());
 
     // A drag that happens to end on a signal is panning, not choosing. Without
     // slop, every touch on a pill would register as a drag and select nothing.
     const stayAt = rootNow();
-    const victim = [...svg.querySelectorAll('.sch-node')]
-      .find((n) => !n.classList.contains('root'));
+    const kBefore = camK();
+    const txBefore = camNums()[0];
+    const victim = pickOther();
     const vb = victim.getBoundingClientRect();
     pt('pointerdown', 3, vb.left + 4, vb.top + 4, svg);
     pt('pointermove', 3, vb.left + 64, vb.top + 44, w);
@@ -245,7 +322,177 @@ f.addEventListener('load', async () => {
     await sleep(150);
     ok('a drag ending on a signal pans rather than selecting it',
        rootNow() === stayAt, `${rootNow()} vs ${stayAt}`);
-    ok('the pan moved the camera', camK() === 1 && camNums()[0] !== 0, camT());
+    ok('the pan moved the camera without rescaling it',
+       camK() === kBefore && camNums()[0] !== txBefore, camT());
+
+    // --- the console ---------------------------------------------------------
+    //
+    // One draggable panel rather than three clusters nailed to three corners.
+    // What has to be true: it goes where it is put, it cannot be put out of
+    // reach, and the panel that carries an input does not lose what is being
+    // typed into it when the chip advances.
+    const pal = $('solo-palette');
+    const stage = d.querySelector('.sch-stage');
+    ok('the console is one panel', !!pal && vis(pal));
+    ok('and it holds the clock, the walk and the way out',
+       pal.contains($('solo-clock')) && pal.contains($('solo-back-nav'))
+       && pal.contains($('sch-solo-exit')));
+
+    const palAt = () => [parseFloat(pal.style.left), parseFloat(pal.style.top)];
+    const [px, py] = palAt();
+    const gr = $('sp-grip').getBoundingClientRect();
+    pt('pointerdown', 9, gr.left + 40, gr.top + 8, $('sp-grip'));
+    pt('pointermove', 9, gr.left + 140, gr.top + 68, w);
+    pt('pointerup', 9, gr.left + 140, gr.top + 68, w);
+    await sleep(80);
+    const [qx, qy] = palAt();
+    ok('dragging the grip moves it', Math.abs(qx - px - 100) < 2 && Math.abs(qy - py - 60) < 2,
+       `(${px}, ${py}) -> (${qx}, ${qy})`);
+
+    // Dragged at the far corner it must stop at the edge, not leave. A panel
+    // that can be lost off screen is one the reader cannot get back without
+    // clearing storage.
+    const gr2 = $('sp-grip').getBoundingClientRect();
+    pt('pointerdown', 10, gr2.left + 40, gr2.top + 8, $('sp-grip'));
+    pt('pointermove', 10, gr2.left + 4000, gr2.top + 4000, w);
+    pt('pointerup', 10, gr2.left + 4000, gr2.top + 4000, w);
+    await sleep(80);
+    const pr = pal.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    ok('and it cannot be dragged out of reach',
+       pr.right <= sr.right + 1 && pr.bottom <= sr.bottom + 1 && pr.left >= sr.left - 1,
+       `panel ${pr.left.toFixed(0)},${pr.top.toFixed(0)} in stage ${sr.width}x${sr.height}`);
+
+    const tab = (name) => pal.querySelector(`.sp-tab[data-tab="${name}"]`);
+    const body = () => $('sp-panel').textContent;
+
+    // The pins. Asserted state is read back out of the node rather than
+    // remembered beside the button, so this is a claim about the chip.
+    tab('io').click();
+    await sleep(80);
+    ok('the I/O tab reports the pads', /Address/.test(body()) && /Data/.test(body()), body().slice(0, 60));
+    // Memory. The dump is the bus the chip is talking to, so the program that
+    // was loaded has to be in it -- checked against the shared program list
+    // rather than against whatever the page happens to show.
+    tab('mem').click();
+    await sleep(80);
+    const { PROGRAMS, LOAD_ADDR } = await import('./programs.js');
+    const follow = $('sp-mem-follow');
+    const addr = $('sp-mem-at');
+    addr.value = LOAD_ADDR.toString(16).padStart(4, '0');
+    addr.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await sleep(120);
+    ok('typing an address switches to following it', follow.value === 'fixed', follow.value);
+    const rowFor = (a) => [...$('sp-dump').querySelectorAll('.sp-dump-row')]
+      .find((r) => r.querySelector('b').textContent === a.toString(16).padStart(4, '0').toUpperCase());
+    const row = rowFor(LOAD_ADDR);
+    const want8 = PROGRAMS[0].bytes.slice(0, 8)
+      .map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+    const got8 = row ? [...row.querySelectorAll('i')].map((i) => i.textContent).join(' ') : '';
+    ok('and memory really holds the program that was loaded', got8 === want8,
+       `${got8} vs ${want8}`);
+
+    // The address field is in the half of the panel that is built once. If it
+    // were rebuilt on every frame the reader could not type into it at all --
+    // and at four half-cycles a second that failure is easy to miss by hand.
+    addr.focus();
+    addr.value = '01f0';
+    addr.dispatchEvent(new w.Event('input', { bubbles: true }));
+    for (let i = 0; i < 4; i++) { $('solo-step').click(); await sleep(60); }
+    ok('and the address field survives the chip advancing',
+       addr.value === '01f0' && d.activeElement === addr,
+       `${addr.value}, focus ${d.activeElement && d.activeElement.id}`);
+
+    // The stack. `JSR $0210` is the second instruction of the loaded program and
+    // it is jumped back to forever, so running far enough must at some point
+    // show its return address on the stack: $0204 -- the address of the last
+    // byte of the JSR, high byte pushed first, so the low byte $04 is on top.
+    //
+    // Scanned for rather than sampled at a fixed half-cycle. Where in the loop
+    // 160 steps happens to land is not a fact about the 6502, and an assertion
+    // that depends on it would be pinning the harness's own arithmetic.
+    tab('stack').click();
+    await sleep(80);
+    ok('the stack tab reports S and where it points',
+       /Next push/.test(body()) && /Next pull/.test(body()));
+    // And says nothing about how deep the stack is, because the chip does not
+    // know: reset decrements S by three rather than clearing it.
+    ok('and claims no depth', !/on the stack/i.test(body()));
+    const rowsNow = () => [...$('sp-panel').querySelectorAll('.sp-stack-row')]
+      .map((r) => [r.querySelector('b').textContent, r.querySelector('i').textContent]);
+    let saw = null;
+    for (let i = 0; i < 400 && !saw; i++) {
+      $('solo-step').click();
+      const r = rowsNow();
+      if (r.length >= 2 && r[0][1] === '04' && r[1][1] === '02') saw = r;
+    }
+    await sleep(120);
+    ok('the JSR return address turns up on the stack, low byte on top',
+       !!saw, saw ? saw.slice(0, 2).map((r) => r.join('=')).join(' ')
+                  : rowsNow().slice(0, 3).map((r) => r.join('=')).join(' '));
+    ok('and the top of the stack is the byte just above S',
+       !!saw && saw[0][0] === '$' + (0x100 + parseInt(/S\$?([0-9A-F]{2})/.exec(
+         $('sp-panel').textContent.replace(/\s/g, ''))[1], 16) + 1)
+         .toString(16).padStart(4, '0').toUpperCase(),
+       saw ? saw[0][0] : '');
+
+    // The two panels have to agree about the same bytes, since they are two
+    // readings of one memory.
+    tab('mem').click();
+    await sleep(80);
+    $('sp-mem-follow').value = 's';
+    $('sp-mem-follow').dispatchEvent(new w.Event('change', { bubbles: true }));
+    await sleep(120);
+    const cell = (a) => {
+      const r = [...$('sp-dump').querySelectorAll('.sp-dump-row')]
+        .find((row) => Number.parseInt(row.querySelector('b').textContent, 16) === (a & 0xfff8));
+      return r ? r.querySelectorAll('i')[a & 7].textContent : null;
+    };
+    const topAddr = saw ? Number.parseInt(saw[0][0].slice(1), 16) : 0;
+    ok('and the hex dump shows the same byte at the same address',
+       !!saw && cell(topAddr) === saw[0][1], `${cell(topAddr)} vs ${saw && saw[0][1]}`);
+
+    // The pins come last, and that is not tidiness. This program installs no
+    // interrupt handler, so the IRQ vector at $FFFE reads $0000, where memory is
+    // $00 -- a BRK, which pushes three bytes and vectors to itself. Asserting
+    // IRQ therefore leaves the chip in a BRK loop climbing down the stack
+    // forever. That is the silicon being right, and it would wreck every
+    // assertion about memory or the stack made after it.
+    tab('io').click();
+    await sleep(80);
+    const pin = (n) => $('sp-pins').querySelector(`[data-pin="${n}"]`);
+    ok('IRQ starts high', !pin('irq').classList.contains('low'), pin('irq').textContent);
+    // SO is the one that comes out of reset low, and a panel that reported it
+    // as "asserted" would be showing an assumed polarity rather than a measured
+    // level. The button says which it is.
+    ok('and SO starts low, as the reset sequence leaves it',
+       pin('so').classList.contains('low'), pin('so').textContent);
+    pin('irq').click();
+    await sleep(80);
+    ok('clicking pulls the pin low', pin('irq').classList.contains('low'),
+       pin('irq').textContent);
+    pin('irq').click();
+    await sleep(80);
+    ok('and clicking again releases it', !pin('irq').classList.contains('low'));
+
+    // ...and the chip is now in that loop, which is itself the evidence the pin
+    // reached the silicon rather than only the button.
+    tab('stack').click();
+    await sleep(80);
+    const deep = rowsNow().length;
+    for (let i = 0; i < 60; i++) $('solo-step').click();
+    await sleep(120);
+    ok('a pin with nowhere to vector leaves the chip pushing',
+       rowsNow().length >= deep, `${deep} -> ${rowsNow().length} shown`);
+
+    // Collapsing leaves the grip, and with it the clock -- the one readout
+    // worth keeping when everything else is in the way.
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'p', bubbles: true }));
+    await sleep(80);
+    ok('p collapses the console', pal.dataset.collapsed === 'true' && !vis($('sp-body')));
+    ok('and the clock is still readable', vis($('solo-clock')));
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'p', bubbles: true }));
+    await sleep(80);
+    ok('p opens it again', pal.dataset.collapsed === 'false' && vis($('sp-body')));
 
     $('sch-solo-exit').click();
     for (let i = 0; i < 60 && con.classList.contains('solo'); i++) await sleep(50);

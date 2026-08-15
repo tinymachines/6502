@@ -90,6 +90,10 @@ function loadProgram(index) {
   const prog = PROGRAMS[index] || PROGRAMS[0];
   const m = state.machine;
   m.load(LOAD_ADDR, new Uint8Array(prog.bytes));
+  // The reset vector has to point at the program or the chip resets to $0000,
+  // reads $00, and runs BRK against itself forever. The die still lights up, so
+  // nothing on this page would ever have said otherwise.
+  m.setResetVector(LOAD_ADDR);
   m.powerCycle();
 }
 

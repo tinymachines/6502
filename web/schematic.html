@@ -109,33 +109,58 @@
 
         <div class="sch-stage">
           <svg id="sch-svg" role="img" aria-label="Gate-level schematic"></svg>
-          <button id="sch-solo-exit" class="sch-solo-exit" type="button"
-                  aria-label="Leave fullscreen">esc</button>
 
-          <div class="sch-solo-nav" role="group" aria-label="History">
-            <button id="solo-back-nav" class="solo-btn" type="button" disabled
-                    aria-label="Back to the last signal" title="Back ([)">↩</button>
-            <button id="solo-fwd-nav" class="solo-btn" type="button" disabled
-                    aria-label="Forward again" title="Forward (])">↪</button>
-            <button id="solo-fit" class="solo-btn" type="button"
-                    aria-label="Fit the drawing" title="Fit (0)">⌾</button>
-          </div>
+          <!-- The study view's console. One panel rather than three clusters
+               pinned to three corners, and draggable, because on a screen whose
+               whole content is one drawing the controls are the only thing that
+               can be in the way -- and where they are in the way depends on the
+               drawing, which changes every time a signal is followed. -->
+          <div class="solo-palette" id="solo-palette" data-collapsed="false">
+            <div class="sp-grip" id="sp-grip">
+              <span class="sp-dots" aria-hidden="true">⣿</span>
+              <span class="sp-title">console</span>
+              <span class="solo-clock mono" id="solo-clock"></span>
+              <button id="sp-collapse" class="solo-btn" type="button" aria-expanded="true"
+                      aria-label="Collapse the console" title="Collapse (p)">▾</button>
+              <button id="sch-solo-exit" class="solo-btn sp-exit" type="button"
+                      aria-label="Leave fullscreen" title="Leave (esc)">esc</button>
+            </div>
 
-          <div class="sch-solo-bar" role="group" aria-label="Clock">
-            <button id="solo-back" class="solo-btn" type="button"
-                    aria-label="Back one half-cycle" title="Back (←)">◀</button>
-            <button id="solo-run" class="solo-btn solo-run" type="button"
-                    aria-label="Run" title="Run (space)">▶</button>
-            <button id="solo-step" class="solo-btn" type="button"
-                    aria-label="Forward one half-cycle" title="Step (→)">▶❙</button>
-            <button id="solo-dir" class="solo-btn solo-dir" type="button"
-                    aria-label="Show what this drives" title="Flip direction (d)">⇄</button>
-            <span class="solo-clock mono" id="solo-clock"></span>
+            <div class="sp-body" id="sp-body">
+              <div class="sp-row" role="group" aria-label="Clock and walk">
+                <button id="solo-back" class="solo-btn" type="button"
+                        aria-label="Back one half-cycle" title="Back (←)">◀</button>
+                <button id="solo-run" class="solo-btn solo-run" type="button"
+                        aria-label="Run" title="Run (space)">▶</button>
+                <button id="solo-step" class="solo-btn" type="button"
+                        aria-label="Forward one half-cycle" title="Step (→)">▶❙</button>
+                <span class="sp-sep" aria-hidden="true"></span>
+                <button id="solo-dir" class="solo-btn solo-dir" type="button"
+                        aria-label="Show what this drives" title="Flip direction (d)">⇄</button>
+                <button id="solo-back-nav" class="solo-btn" type="button" disabled
+                        aria-label="Back to the last signal" title="Back ([)">↩</button>
+                <button id="solo-fwd-nav" class="solo-btn" type="button" disabled
+                        aria-label="Forward again" title="Forward (])">↪</button>
+                <button id="solo-fit" class="solo-btn" type="button"
+                        aria-label="Fit the whole walk" title="Fit everything (0)">⌾</button>
+              </div>
+
+              <div class="sp-tabs" id="sp-tabs" role="tablist" aria-label="Console">
+                <button class="sp-tab on" type="button" role="tab" data-tab="signal">Signal</button>
+                <button class="sp-tab" type="button" role="tab" data-tab="walk">Walk</button>
+                <button class="sp-tab" type="button" role="tab" data-tab="io">I/O</button>
+                <button class="sp-tab" type="button" role="tab" data-tab="mem">Memory</button>
+                <button class="sp-tab" type="button" role="tab" data-tab="stack">Stack</button>
+              </div>
+
+              <div class="sp-panel" id="sp-panel" role="tabpanel"></div>
+
+              <p class="sp-hint">
+                click a signal to follow it · space run · ← → step · <b>[</b> <b>]</b> back
+                and forward · pinch to zoom · <b>0</b> fit all · <b>p</b> hide this
+              </p>
+            </div>
           </div>
-          <p class="sch-solo-hint">
-            click a signal to follow it · space run · ← → step · <b>[</b> <b>]</b> back and
-            forward · pinch or scroll to zoom · <b>0</b> to fit · esc to leave
-          </p>
         </div>
         <p class="sch-caption mono" id="sch-caption"></p>
 
