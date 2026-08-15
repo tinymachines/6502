@@ -910,6 +910,18 @@ instead sweeps in the terms describing the instruction's class (`op-implied`,
   canvas sized itself to the overflow (1280×1280 in a 913px window).
 - **`[hidden]` needs `!important`** here: the UA rule is specificity (0,1,0) and
   the `#boot`/`#app` rules declare `display`, so hiding them silently did nothing.
+- **A `var()` naming a token that does not exist drops the whole declaration,
+  silently.** Three invented names — `--panel`, `--panel-2`, `--fg` — spread
+  across the exploded and schematic styles before anyone noticed, because the
+  usual symptom is "slightly wrong" rather than an error. The one that finally
+  showed was the faux fullscreen: `background: var(--panel)` meant *no*
+  background, so covering the viewport left the page visible underneath. The
+  real tokens are `--surface`, `--subtle`, `--foreground`. Check with a
+  `:root`-vs-`var()` diff, not by eye.
+- **A bare `.btn` had no `background`,** so it inherited the user agent's button
+  face — white, on a dark page. Every secondary button on every page wore it.
+  Set `background`, `border-color` and `color` explicitly on the base class;
+  variants override.
 - **Anything decided before an `await` must be rechecked after it.** The
   fullscreen handler awaits `requestFullscreen` and then a 120ms verification
   before committing the fallback. Without a guard that commit lands whatever the

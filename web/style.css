@@ -111,7 +111,14 @@ code {
   font: inherit; font-weight: 800; font-size: .95rem;
   text-decoration: none; white-space: nowrap; cursor: pointer;
   transition: .15s;
+  /* Set explicitly. Without these a bare .btn inherits the user agent's button
+     face, which is white, and every secondary button on a dark page looked like
+     a mistake. The variants below override where they need to. */
+  background: var(--subtle);
+  border-color: var(--line);
+  color: var(--foreground);
 }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
 .btn:active { transform: translate(2px, 2px); }
 .btn-primary {
   border-color: var(--accent); background: var(--accent);
@@ -955,7 +962,7 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
   gap: .55rem .9rem;
   padding: .8rem 1rem;
   border-top: 2px solid var(--line);
-  background: var(--panel);
+  background: var(--surface);
 }
 @media (min-width: 46rem) {
   .ex-controls { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: center; }
@@ -972,7 +979,7 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
   background: transparent; color: var(--muted);
   border: 2px solid var(--line); border-radius: 2px;
 }
-.ex-layer-tog.on { color: var(--fg); border-color: var(--accent); }
+.ex-layer-tog.on { color: var(--foreground); border-color: var(--accent); }
 
 .ex-legend-wrap { border-top: 2px solid var(--line); padding: .9rem 1rem 1.1rem; }
 .ex-legend-head { margin: 0 0 .7rem; font-size: .8rem; }
@@ -982,7 +989,7 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 .ex-block {
   display: grid; gap: .15rem; text-align: left; cursor: pointer;
   padding: .5rem .6rem; font: inherit;
-  background: var(--panel-2); color: var(--fg);
+  background: var(--subtle); color: var(--foreground);
   border: 2px solid var(--line); border-radius: 2px;
 }
 .ex-block:hover { border-color: var(--accent); }
@@ -994,7 +1001,7 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
   background: var(--block-color, var(--muted)); box-shadow: 0 0 0 1px rgba(0,0,0,.5) inset; }
 .ex-b-meta { font-family: var(--font-mono); font-size: .64rem; color: var(--accent); }
 .ex-b-blurb { font-size: .72rem; color: var(--muted); }
-.ex-b-drives { font-size: .7rem; color: var(--fg); margin-top: .3rem;
+.ex-b-drives { font-size: .7rem; color: var(--foreground); margin-top: .3rem;
   border-top: 1px dashed var(--line); padding-top: .3rem; }
 .ex-b-drives .muted { font-size: .66rem; }
 .ex-block.logic { border-style: dashed; grid-column: span 2; }
@@ -1008,7 +1015,7 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 /* --- The schematic ------------------------------------------------------- */
 
 .sch-controls { display: grid; gap: .6rem .9rem; padding: .8rem 1rem;
-  border-bottom: 2px solid var(--line); background: var(--panel); }
+  border-bottom: 2px solid var(--line); background: var(--surface); }
 @media (min-width: 46rem) { .sch-controls { grid-template-columns: 1fr 1fr 1fr; align-items: end; } }
 .sch-controls .field { min-width: 0; }
 .sch-controls select, .sch-controls input[type=search] { width: 100%; min-width: 0; font-size: 16px; }
@@ -1048,7 +1055,7 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 .sch-differ { color: #ffd166; }
 .sch-same { color: #6ee7a8; }
 #sch-compare-out { margin: 0 1rem 1rem; }
-#sch-compare-out code { font-size: .68rem; background: var(--panel-2);
+#sch-compare-out code { font-size: .68rem; background: var(--subtle);
   border: 1px solid var(--line); border-radius: 2px; padding: .05rem .3rem; }
 .sch-rail { stroke: #6b7a99; stroke-width: 2.4; }
 .sch-rail-label { fill: #6b7a99; font: 500 8.5px var(--font-mono); text-anchor: middle; }
@@ -1063,7 +1070,7 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
 .sch-key-item { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: .5rem;
   align-items: center; margin: 0; padding: .35rem .45rem;
-  background: var(--panel-2); border: 2px solid var(--line); border-radius: 2px; }
+  background: var(--subtle); border: 2px solid var(--line); border-radius: 2px; }
 .sch-key-svg { width: 70px; height: 44px; background: #080c15; border-radius: 2px; }
 .sch-key-item figcaption { display: grid; gap: .1rem; min-width: 0; }
 .sch-key-item b { font-size: .76rem; }
@@ -1121,5 +1128,29 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 .console.immersive { display: flex; flex-direction: column; }
 .console.immersive .sch-stage { flex: 1; max-height: none; }
 .console.faux { position: fixed; inset: 0; z-index: 80; border-radius: 0;
-  background: var(--panel); overflow: auto; }
+  background: var(--surface); overflow: auto; }
 body.no-scroll #view { z-index: 70; }
+
+
+/* --- Console toolbars ------------------------------------------------------ */
+
+/* The console bar is a toolbar, not a call to action: the page-level .btn size
+   is built for the hero and looks oversized sitting next to a tag and a note. */
+.console-bar .btn {
+  min-height: 2.2rem; padding: .35rem .7rem;
+  font-size: .8rem; font-weight: 700; border-radius: .3rem;
+}
+.console-bar .btn-icon { min-width: 2.2rem; padding: .35rem .5rem; line-height: 1; }
+.console-bar select { font-size: .82rem; padding: .3rem .5rem; }
+
+@media (max-width: 46rem) {
+  .console-bar .btn { min-height: 2rem; padding: .3rem .55rem; font-size: .76rem; }
+  .console-bar { gap: .3rem; }
+}
+
+/* The fallback fullscreen must be opaque. The console is normally 92% and
+   relies on a solid page behind it; covering the viewport removes that page,
+   and a translucent panel then shows whatever it is floating over. This was
+   invisible until the background token was corrected -- the declaration named a
+   token that does not exist, so there was no background at all. */
+.console.faux { background: var(--surface); }
