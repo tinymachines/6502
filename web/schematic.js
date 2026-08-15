@@ -50,14 +50,11 @@ const state = {
   suppress: 0,
   camG: null,
   dragged: false,
-  // The walk, as islands still on screen. An entry is `{node, from}` -- the
-  // signal, and the index of the island whose pill was clicked to reach it, so
-  // the thread joining them starts where the reader actually pressed. `from` is
-  // -1 when there is no such island: the first entry, or one whose anchor has
-  // since been dropped off the end.
+  // The walk: the signals stepped through, oldest first. The drawing is the
+  // union of their circuits, merged so that each node appears exactly once.
   trail: [],
-  islands: [],     // laid-out geometry, one per trail entry
-  world: null,     // the union of them, which is what "fit" fits
+  nodeBox: new Map(),   // where each signal ended up, for flying to one
+  world: null,          // the whole drawing, which is what "fit" fits
   // The study view's console: which tab is showing, the object that paints it,
   // and where the reader dragged the panel to.
   tab: 'signal',
@@ -73,14 +70,12 @@ const state = {
 
 const HISTORY_MAX = 200;
 
-// How many islands stay on screen. The walk is the point of the study view, so
-// the last few steps of it are worth keeping -- but a ribbon that grows without
-// limit ends up too small to read at any zoom that shows all of it. The cap is
-// declared on the Walk tab rather than applied quietly.
+// How many steps of the walk stay on the bench. The walk is the point of the
+// study view, so the last several steps of it are worth keeping -- but a drawing
+// that grows without limit ends up too small to read at any zoom that shows all
+// of it. The cap is declared on the Walk tab rather than applied quietly.
 const TRAIL_MAX = 6;
 
-// Space between one island and the next, in drawing units.
-const TRAIL_GAP = 90;
 
 const nameOf = (n) => state.data.names[n] ?? `#${n}`;
 const isNamed = (n) => state.data.names[n] != null;
@@ -251,10 +246,9 @@ function frameOn(box, maxScale = Infinity) {
   place(k, { x: box.x + box.w / 2, y: box.y + box.h / 2 }, { x: vb.w / 2, y: vb.h / 2 });
 }
 
-/** The signal being studied, fitted to the portal. */
+/** The drawing, fitted to the portal on arrival. */
 function focusCurrent() {
-  const cur = state.islands[state.islands.length - 1];
-  if (cur) frameOn(cur.box, MAX_FIT);
+  if (state.world) frameOn(state.world, MAX_FIT);
 }
 
 /** Everything you have walked through, however small that makes it. */
@@ -561,14 +555,13 @@ function layout(c) {
 }
 
 /**
- * Draw one cone into its own group.
+ * Draw the graph: signals, the elements between them, and the wires.
  *
- * The island keeps its local coordinates and is positioned by a transform on
- * the group, so every raw `x`/`y` written here stays inside the island's own
- * box -- which is what the layout harness checks, and what would stop being
- * true if the offset were baked into the numbers instead.
+ * It used to draw one cone per island and take an index to tell them apart.
+ * There is one drawing now -- every node appears exactly once -- so there is
+ * nothing to distinguish and nothing to offset.
  */
-function drawIsland(host, c, L, index) {
+function drawGraph(host, c, L) {
   const { place, items, flip } = L;
   const wires = el('g', { class: 'sch-wires' }, host);
   const parts = el('g', { class: 'sch-parts' }, host);
@@ -652,14 +645,14 @@ function drawIsland(host, c, L, index) {
     // A drag that ends on a signal is panning, not choosing. `state.dragged` is
     // set by the camera on release and cleared on the next press, and click
     // fires straight after release, so this reads the gesture that just ended.
-    g.addEventListener('click', () => { if (!state.dragged) setRoot(node, index); });
+    g.addEventListener('click', () => { if (!state.dragged) setRoot(node); });
   }
 
   host.querySelectorAll('.sch-ctrl').forEach((t) => {
     if (!t.dataset.node) return;
     t.style.cursor = 'pointer';
     t.addEventListener('click', () => {
-      if (!state.dragged) setRoot(Number(t.dataset.node), index);
+      if (!state.dragged) setRoot(Number(t.dataset.node));
     });
   });
 }
@@ -674,202 +667,159 @@ function drawIsland(host, c, L, index) {
  * that joined them.
  */
 /**
- * Which island a step was taken from.
+ * The walk, as one drawing.
  *
- * The reader's own click, when that island is still on screen; the one before,
- * when it is not. Both the layout and the thread ask this, and they have to
- * agree or the thread would start somewhere the island is not.
- */
-function anchorOf(i) {
-  const from = state.trail[i] ? state.trail[i].from : -1;
-  return from >= 0 && from < i ? from : i - 1;
-}
-
-/**
- * Where on an island the step to `node` was taken from.
+ * Every step is a cone, and the cones overlap: walk from `sb0` to `alua0` and
+ * both of them appear in both. Laying each one out separately put a second copy
+ * of every shared signal on the bench, which is exactly the thing this page is
+ * for undoing -- a reader tracing a value found two `#844`s and no way to tell
+ * which was which. So the cones are merged into a single graph first and every
+ * node is drawn once.
  *
- * A pill if that signal is drawn there, its label if `node` is a control line
- * on one of its switches, and nothing if the island has neither -- which is a
- * real case, since an island can be dropped off the end of the walk. Both the
- * layout and the thread ask this, so they cannot disagree about where the step
- * came from.
+ * A node's column is where it *first* appeared, measured from the signal the
+ * walk started on. That is what makes the arrangement stable as it grows: the
+ * columns are "how far back from where I began", they are assigned once, and a
+ * later step that reaches an already-placed signal joins to it where it already
+ * is rather than moving it. It also copes with feedback, which a strict
+ * topological layering would not -- this chip is full of it.
  */
-function anchorIn(L, node) {
-  const pill = L.place.get(node);
-  if (pill) return { x: L.flip ? pill.boxR : pill.boxL, y: pill.y, kind: 'wire' };
-  const label = L.ctrl.get(node);
-  if (label) return { x: label.x, y: label.y, kind: 'control' };
-  return null;
-}
+function merge() {
+  const col = new Map();          // node -> column
+  const seen = [];                // insertion order, for a stable tie-break
+  const elements = new Map();     // key -> element, first sighting wins
+  let truncated = 0;
+  let last = null;
 
-function arrange(layouts) {
-  const offs = [];
-  for (let i = 0; i < layouts.length; i++) {
-    if (i === 0) { offs.push({ x: 0, y: 0 }); continue; }
-    const L = layouts[i];
-    const sgn = L.flip ? 1 : -1;               // which way this walk grows
-    const root = L.place.get(L.root);
-    const anchorIsland = anchorOf(i);
-    const anchor = anchorIsland >= 0 ? anchorIn(layouts[anchorIsland], L.root) : null;
-
-    let x, y;
-    if (root && anchor) {
-      const a = offs[anchorIsland];
-      // Whatever was clicked -- the near edge of a pill, or a control's label --
-      // plus a gutter, is where the new island's own root pill goes.
-      x = a.x + anchor.x + (sgn < 0 ? -TRAIL_GAP - root.boxR : TRAIL_GAP - root.boxL);
-      y = a.y + anchor.y - root.y;
-    } else {
-      // Nothing to hang it on -- the anchor island has been dropped off the end
-      // of the walk. Put it beside the one before, which is at least a walk.
-      const p = offs[i - 1], P = layouts[i - 1];
-      x = sgn < 0 ? p.x - TRAIL_GAP - L.width : p.x + P.width + TRAIL_GAP;
-      y = p.y;
+  state.trail.forEach((t, i) => {
+    if (!col.has(t.node)) {
+      // A step onto something not already drawn -- following a control line
+      // does this, since a control is never a signal on the drawing. It goes
+      // one column further back than where the reader was.
+      const prev = i > 0 ? col.get(state.trail[i - 1].node) : 0;
+      col.set(t.node, i === 0 ? 0 : (prev ?? 0) + 1);
+      seen.push(t.node);
     }
-
-    // Push it clear of anything already placed. Islands are displaced sideways
-    // from their anchor, so this rarely fires -- but a walk that doubles back
-    // on itself would otherwise draw one island on top of another.
-    const boxOf = (j, o) => ({ x: o.x, y: o.y, w: layouts[j].width, h: layouts[j].height });
-    const hits = (b) => offs.some((o, j) => {
-      const q = boxOf(j, o);
-      return b.x < q.x + q.w && q.x < b.x + b.w && b.y < q.y + q.h && q.y < b.y + b.h;
+    const base = col.get(t.node);
+    const c = cone(t.node, state.depth, state.dir);
+    truncated += c.truncated;
+    last = c;
+    c.levels.forEach((nodes, k) => {
+      for (const n of nodes) {
+        if (col.has(n)) continue;
+        col.set(n, base + k);
+        seen.push(n);
+      }
     });
-    for (let guard = 0; guard < 24 && hits({ x, y, w: L.width, h: L.height }); guard++) {
-      y += L.height + TRAIL_GAP / 2;
+    for (const e of c.elements) {
+      // A switch reached from its far side is the same transistor, so it is
+      // keyed by the pair it joins rather than by which end was expanded first.
+      const key = e.kind === 'switch'
+        ? `s:${e.control}:${Math.min(e.out, e.inputs[0])}:${Math.max(e.out, e.inputs[0])}`
+        : `g:${e.out}`;
+      if (!elements.has(key)) elements.set(key, e);
     }
-    offs.push({ x, y });
+  });
+
+  const depth = Math.max(0, ...col.values());
+  const levels = Array.from({ length: depth + 1 }, () => []);
+  for (const n of seen) levels[col.get(n)].push(n);
+
+  const els = [...elements.values()].map((e) => ({ ...e, level: col.get(e.out) ?? 0 }));
+
+  // Order each column by the average row of what it connects to in the column
+  // before it. Without this the rows follow insertion order and the wires cross
+  // for no reason -- one merged drawing has far more of them to cross than a
+  // single cone ever did.
+  for (let c = 1; c < levels.length; c++) {
+    const above = new Map(levels[c - 1].map((n, i) => [n, i]));
+    const near = new Map();
+    const note = (n, i) => {
+      if (!near.has(n)) near.set(n, []);
+      near.get(n).push(i);
+    };
+    for (const e of els) {
+      for (const input of e.inputs) {
+        if (col.get(input) === c && above.has(e.out)) note(input, above.get(e.out));
+        if (col.get(e.out) === c && above.has(input)) note(e.out, above.get(input));
+      }
+    }
+    const mean = (n) => {
+      const list = near.get(n);
+      return list && list.length ? list.reduce((a, b) => a + b, 0) / list.length : Infinity;
+    };
+    levels[c] = levels[c]
+      .map((n, i) => ({ n, i }))
+      .sort((a, b) => (mean(a.n) - mean(b.n)) || (a.i - b.i))
+      .map((x) => x.n);
   }
-  return offs;
+
+  return {
+    root: state.trail.length ? state.trail[state.trail.length - 1].node : state.root,
+    levels, elements: els, dir: state.dir, truncated, current: last,
+  };
 }
 
 /**
- * Draw a whole walk: the current island, and the ones it came from.
+ * Draw the walk.
  *
- * The viewBox stays the size of the *current* island, not of the walk. That is
- * what keeps a signal at reading size however far you have walked -- the world
- * grows around it and the camera moves within it, rather than the browser
- * scaling everything down to fit an ever-wider ribbon.
+ * One layout, one pass, one copy of everything. The viewBox stays a fixed
+ * workbench in the study view so that redrawing does not move the world under
+ * the camera -- the drawing itself reflows as it grows, which is the point, but
+ * the space it grows in does not.
  */
-function drawTrail(cones) {
+function drawWalk(c) {
   const svg = $('sch-svg');
   svg.replaceChildren();
 
-  const layouts = cones.map((c) => Object.assign(layout(c), { root: c.root }));
-  const offs = arrange(layouts);
-  const cur = layouts.length - 1;
-
-  // The page proper is sized to its one drawing; the study view is a fixed
-  // workbench the camera moves around in. Anything else and adding an island
-  // would move everything already on the bench.
-  const vb = state.solo ? WORKBENCH : { w: layouts[cur].width, h: layouts[cur].height };
+  const L = layout(c);
+  const vb = state.solo ? WORKBENCH : { w: L.width, h: L.height };
   state.viewBox = vb;
   svg.setAttribute('viewBox', `0 0 ${vb.w} ${vb.h}`);
   svg.setAttribute('width', vb.w);
   svg.setAttribute('height', vb.h);
 
-  // Everything drawn lives under one group, which is what the camera moves.
   const camG = el('g', { class: 'sch-cam' }, svg);
   state.camG = camG;
-
   if (state.solo) drawGrid(svg, camG);
 
-  // The bench card: a shaded patch under the island being studied.
-  //
-  // Marking the current one is better than dimming the others, which is what
-  // this did first. Every island on the bench is live -- the state overlay
-  // paints all of them -- so fading the ones you walked through was saying
-  // "these are less real" when what was meant is "this is the one you are on".
-  // Drawn before the islands and after the grid, so it reads as bench rather
-  // than as part of any circuit.
-  // Only on the bench: the page proper draws one island, and a card around the
-  // only thing on screen marks nothing.
-  const card = state.solo ? el('rect', { class: 'sch-bench-card', rx: 10 }, camG) : null;
+  // The card marks where the reader is. There are no islands to shade any more
+  // -- that was the price of the duplicates -- so it goes round the subject
+  // itself, which is the thing the rest of the drawing is arranged around.
+  const card = state.solo ? el('rect', { class: 'sch-bench-card', rx: 8 }, camG) : null;
 
-  // Threads next, so they pass behind the pills they join.
-  const threads = el('g', { class: 'sch-threads' }, camG);
+  const g = el('g', { class: 'sch-graph' }, camG);
+  drawGraph(g, c, L);
 
-  state.islands = [];
-  layouts.forEach((L, i) => {
-    const o = offs[i];
-    const g = el('g', {
-      class: 'sch-island' + (i === cur ? ' current' : ' past'),
-      'data-island': i,
-      transform: `translate(${o.x},${o.y})`,
-    }, camG);
-    drawIsland(g, cones[i], L, i);
-    state.islands.push({ box: { x: o.x, y: o.y, w: L.width, h: L.height }, root: L.root });
-  });
-
-  // The click that joined two islands, drawn as the thread it was.
-  //
-  // Every island after the first is joined to the one it came from. It used to
-  // give up when the new subject had no pill on the anchoring island and drew
-  // nothing at all -- which happens on the most ordinary move there is, clicking
-  // a control line, since a control is never a pill. The result was a ribbon in
-  // two halves with no sign of why, so the join now always exists and says which
-  // kind it is: a wire that was followed, or a jump.
-  for (let i = 1; i < layouts.length; i++) {
-    const from = anchorOf(i);
-    const b = layouts[i].place.get(layouts[i].root);
-    if (!b) continue;
-    const flip = layouts[i].flip;
-    const bx = offs[i].x + (flip ? b.boxL : b.boxR);
-    const by = offs[i].y + b.y;
-
-    const a = from >= 0 ? anchorIn(layouts[from], layouts[i].root) : null;
-    let ax, ay, kind;
-    if (a) {
-      ax = offs[from].x + a.x;
-      ay = offs[from].y + a.y;
-      kind = a.kind;
-    } else {
-      // The island it came from is no longer on the bench. Come off the edge of
-      // the one before, at the height of where you landed.
-      const j = i - 1;
-      const box = { x: offs[j].x, y: offs[j].y, w: layouts[j].width, h: layouts[j].height };
-      ax = flip ? box.x + box.w : box.x;
-      ay = Math.min(Math.max(by, box.y), box.y + box.h);
-      kind = 'gone';
-    }
-    const mid = (ax + bx) / 2;
-    el('path', {
-      d: `M ${ax} ${ay} C ${mid} ${ay}, ${mid} ${by}, ${bx} ${by}`,
-      class: 'sch-thread' + (kind === 'wire' ? '' : ' sch-jump'),
-    }, threads);
+  // Where every signal ended up, so the Walk drawer can fly to one and the
+  // camera can be told to keep the subject in view.
+  state.nodeBox = new Map();
+  for (const [node, p] of L.place) {
+    state.nodeBox.set(node, {
+      x: p.boxL, y: p.y - NODE_H / 2, w: p.boxR - p.boxL, h: NODE_H,
+    });
   }
 
-  // Sized to the island it marks, once that island has a position. The layout
-  // already carries PAD inside its box, so this only adds enough for the card
-  // to read as something the circuit is sitting on.
-  if (card) {
-    const on = state.islands[cur];
-    const bleed = 12;
+  const here = state.nodeBox.get(c.root);
+  if (card && here) {
+    const bleed = 9;
     for (const [k, v] of Object.entries({
-      x: on.box.x - bleed, y: on.box.y - bleed,
-      width: on.box.w + bleed * 2, height: on.box.h + bleed * 2,
+      x: here.x - bleed, y: here.y - bleed,
+      width: here.w + bleed * 2, height: here.h + bleed * 2,
     })) card.setAttribute(k, v);
+  } else if (card) {
+    card.setAttribute('width', 0);
   }
 
-  // The world, which is what "fit everything" fits.
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const isl of state.islands) {
-    x0 = Math.min(x0, isl.box.x); y0 = Math.min(y0, isl.box.y);
-    x1 = Math.max(x1, isl.box.x + isl.box.w); y1 = Math.max(y1, isl.box.y + isl.box.h);
-  }
-  state.world = Number.isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+  state.world = { x: 0, y: 0, w: L.width, h: L.height };
 
-  // The camera is *not* reset here. Adding an island to a bench should leave
-  // everything else on the bench where it was -- and it can, because the space
-  // is fixed. The new island lands next to the pill that was clicked, so it
-  // arrives in view without anything having to move. Only entering the mode,
-  // and asking, frame anything.
   if (state.solo) saveConfig();
 
+  // The camera is not reset as the drawing grows: a bench keeps what is put on
+  // it. It is only nudged, and only when the signal just walked to would
+  // otherwise be off screen.
   if (state.solo && state.framed) {
     applyCam();
-    const cur = state.islands[state.islands.length - 1];
-    if (cur) ensureVisible(cur.box);
+    if (here) ensureVisible(here, 60);
   } else {
     focusCurrent();
     state.framed = state.solo;
@@ -1136,7 +1086,7 @@ function saveConfig() {
       // put every thread on the wrong side.
       dir: state.dir,
       root: state.root,
-      trail: state.trail.map((t) => ({ node: t.node, from: t.from })),
+      trail: state.trail.map((t) => ({ node: t.node })),
     }));
   } catch { /* private mode: the page works, it just forgets */ }
 }
@@ -1162,10 +1112,7 @@ function restoreTrail(cfg) {
     .filter((t) => t && Number.isInteger(t.node) && t.node >= 0 && t.node < n)
     .slice(-TRAIL_MAX);
   if (!clean.length || clean[clean.length - 1].node !== state.root) return false;
-  state.trail = clean.map((t, i) => ({
-    node: t.node,
-    from: Number.isInteger(t.from) && t.from < i ? t.from : i - 1,
-  }));
+  state.trail = clean.map((t) => ({ node: t.node }));
   return true;
 }
 
@@ -1244,14 +1191,14 @@ const PANELS = {
       <div class="sp-actions">
         <button class="solo-btn sp-wide" id="sp-clear" type="button">start again from here</button>
       </div>
-      <p class="sp-note">The last ${TRAIL_MAX} islands stay on screen and older
-        ones are dropped, because a ribbon that grows without limit is too small
+      <p class="sp-note">The last ${TRAIL_MAX} steps stay on the bench and older
+        ones are dropped, because a drawing that grows without limit is too small
         to read at any zoom that shows all of it. Click a step to fly to it;
         <b>⌾</b> fits the whole walk.</p>
-      <p class="sp-note">A <b class="sp-key-wire">solid thread</b> is a wire you
-        followed. A <b class="sp-key-jump">faint one</b> is a step that was not
-        along a wire — following a control line, which is never drawn as a
-        signal, or coming off an island that has since dropped off the end.</p>`;
+      <p class="sp-note">The steps are merged into one drawing, so a signal two
+        of them share is drawn once and joined to both. That is the whole point:
+        a second copy of a wire is the fastest way to lose track of which one you
+        were following.</p>`;
     host.querySelector('#sp-clear').addEventListener('click', () => {
       resetTrail();
       render();
@@ -1276,8 +1223,8 @@ const PANELS = {
         </button>`).join('');
       for (const b of list.querySelectorAll('.sp-step')) {
         b.addEventListener('click', () => {
-          const isl = state.islands[Number(b.dataset.i)];
-          if (isl) frameOn(isl.box);
+          const box = state.nodeBox.get(state.trail[Number(b.dataset.i)].node);
+          if (box) ensureVisible(box, 120);
         });
       }
     };
@@ -1797,16 +1744,16 @@ function setDepth(n) {
 /**
  * Make `node` the subject.
  *
- * `from` is the island the reader clicked in, when there was one. In the study
- * view this appends to the walk rather than replacing it: the island you came
- * from stays on screen, dimmed, with a thread from the pill you pressed. On the
- * page proper there is one drawing and it is replaced, because that view sits
- * in a scrolling stage with no camera to find a second island with.
+ * In the study view this *extends* the drawing rather than replacing it: the
+ * signals already on the bench stay where they are and the new step's circuit is
+ * merged in beside them, joining to anything it has in common. On the page
+ * proper the drawing is replaced, because that view sits in a scrolling stage
+ * with no camera to find the rest of a walk with.
  */
-function setRoot(node, from = -1) {
+function setRoot(node) {
   if (node !== state.root) remember('root');
   state.root = node;
-  if (state.solo) walkTo(node, from);
+  if (state.solo) walkTo(node);
   renderSignal(node);
   clearCompare();
   paintPicker();
@@ -1814,29 +1761,23 @@ function setRoot(node, from = -1) {
   syncUrl();
 }
 
-/** Append to the walk, dropping the oldest island once it is full. */
-function walkTo(node, from) {
+/** Append to the walk, dropping the oldest step once it is full. */
+function walkTo(node) {
   const last = state.trail[state.trail.length - 1];
   if (last && last.node === node) return;
-  state.trail.push({ node, from });
-  while (state.trail.length > TRAIL_MAX) {
-    state.trail.shift();
-    // Every island moved down one, and anything that pointed at the one just
-    // dropped now points at nothing -- which `arrange` reads as "no anchor".
-    for (const t of state.trail) t.from -= 1;
-  }
+  state.trail.push({ node });
+  while (state.trail.length > TRAIL_MAX) state.trail.shift();
 }
 
 /** Start the walk again from where you are. */
 function resetTrail() {
-  state.trail = state.root == null ? [] : [{ node: state.root, from: -1 }];
+  state.trail = state.root == null ? [] : [{ node: state.root }];
 }
 
 function render() {
   if (!state.solo || !state.trail.length) resetTrail();
-  const cones = state.trail.map((t) => cone(t.node, state.depth, state.dir));
-  drawTrail(cones);
-  const c = cones[cones.length - 1];
+  const c = merge();
+  drawWalk(c);
   const gates = c.elements.filter((e) => e.kind !== 'switch').length;
   const sw = c.elements.length - gates;
   const way = c.dir === 'fwd' ? 'levels forward' : 'levels back';

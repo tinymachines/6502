@@ -67,18 +67,25 @@ async function enter(src) {
     d.querySelector('.sp-icon[data-tab="mem"]').click();
     await sleep(80);
     const svg = $('sch-svg');
-    const island = () => svg.querySelector('.sch-island.current');
+    const graph = () => svg.querySelector('.sch-graph');
     for (let i = 0; i < 2; i++) {
-      const n = [...island().querySelectorAll('.sch-node')]
+      const n = [...graph().querySelectorAll('.sch-node')]
         .find((x) => !x.classList.contains('root'))
         || [...svg.querySelectorAll('.sch-node')].find((x) => !x.classList.contains('root'));
       if (!n) break;
       n.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
       await sleep(160);
     }
-    const walked = svg.querySelectorAll('.sch-island').length;
-    const subject = island().querySelector('.sch-node.root').dataset.node;
-    ok('a walk is on the bench', walked >= 2, `${walked} islands`);
+    // The walk is one drawing now, so its size is a count of steps rather than
+    // of islands -- the Walk drawer's own list.
+    const steps = () => d.querySelectorAll('#sp-walk .sp-step').length;
+    const subject = graph().querySelector('.sch-node.root').dataset.node;
+    d.querySelector('.sp-icon[data-tab="walk"]').click();
+    await sleep(80);
+    const walked = steps();
+    d.querySelector('.sp-icon[data-tab="mem"]').click();
+    await sleep(80);
+    ok('a walk is on the bench', walked >= 2, `${walked} steps`);
 
     const pt = (type, id, x, y, target) => target.dispatchEvent(
       new w.PointerEvent(type, { pointerId: id, clientX: x, clientY: y,
@@ -103,26 +110,32 @@ async function enter(src) {
     // gesture dropped the reader out of fullscreen and they pressed the button
     // again. Everything else has to come back on its own.
     ({ w, d, $, con } = await enter(`schematic?signal=${
-      encodeURIComponent(d.querySelector('.sch-island.current .sch-node.root')
+      encodeURIComponent(d.querySelector('.sch-graph .sch-node.root')
         .querySelector('text').textContent)}`));
     const pal2 = $('solo-palette');
     ok('the drawer comes back on the tab it was left on',
        pal2.dataset.open === 'mem' && pal2.dataset.drawer === 'open', pal2.dataset.open);
     ok('the console comes back where it was put',
        pal2.style.left === movedTo, `${pal2.style.left} vs ${movedTo}`);
-    const back = $('sch-svg').querySelectorAll('.sch-island').length;
+    d.querySelector('.sp-icon[data-tab="walk"]').click();
+    await sleep(80);
+    const back = d.querySelectorAll('#sp-walk .sp-step').length;
     ok('and the walk is still on the bench', back === walked, `${back} vs ${walked}`);
     ok('with the same signal in front of you',
-       $('sch-svg').querySelector('.sch-island.current .sch-node.root').dataset.node === subject);
+       $('sch-svg').querySelector('.sch-graph .sch-node.root').dataset.node === subject);
 
     // --- but a different subject starts a new walk ---------------------------
     //
     // Restoring somebody else's islands around a signal that was asked for by
     // name would be the page overruling the URL.
     ({ w, d, $, con } = await enter('schematic?signal=sync'));
-    const fresh = $('sch-svg').querySelectorAll('.sch-island').length;
+    d.querySelector('.sp-icon[data-tab="walk"]').click();
+    await sleep(80);
+    const fresh = d.querySelectorAll('#sp-walk .sp-step').length;
     ok('a different subject starts again rather than inheriting a walk',
-       fresh === 1, `${fresh} islands`);
+       fresh === 1, `${fresh} steps`);
+    d.querySelector('.sp-icon[data-tab="mem"]').click();
+    await sleep(80);
     ok('though the console still remembers where it goes',
        $('solo-palette').dataset.open === 'mem'
        && $('solo-palette').style.left === movedTo);

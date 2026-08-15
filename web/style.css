@@ -1240,35 +1240,16 @@ body.no-scroll #view { z-index: 70; }
    followed by a thread from the pill that was clicked. They are still live --
    the state overlay paints every island -- so they fade rather than grey out. */
 
-/* The bench. Zoom is invisible on an empty field -- a circuit drawn twice as
-   large on black looks like a circuit, not like a closer one -- so the dots ride
-   inside the camera group and scale with everything else. Two grids an order of
-   magnitude apart mean one of them is always at a useful density. */
-.sch-grid { pointer-events: none; }
-.sch-dot { fill: #1c2740; }
-.sch-dot-coarse { fill: #2b3b5c; }
-
-/* Every island on the bench is live -- the state overlay paints all of them --
-   so the one being studied is marked by what it sits on rather than by fading
-   the others out. Dimming them said "these are less real" when what was meant
-   is "this is the one you are on". */
+/* Every island on the bench used to be a separate cone, and a signal in two of
+   them was drawn twice. Threads joined the copies. Both are gone: the walk is
+   merged into one drawing where each node appears exactly once, so there is
+   nothing to join and nothing to tell apart. What is left is marking where the
+   reader is. */
 .sch-bench-card {
   fill: rgba(34, 211, 238, .055);
   stroke: rgba(34, 211, 238, .22);
   stroke-width: 2;
   pointer-events: none;
-}
-.sch-thread {
-  fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5;
-  opacity: .5;
-}
-/* A step that was not taken along a wire: following a control line, or coming
-   off an island that has since dropped off the end of the walk. It is still a
-   step and still gets a thread -- drawing nothing left the ribbon in two halves
-   with no sign of why -- but it is not a connection on the die, so it does not
-   get to look like one. */
-.sch-thread.sch-jump {
-  stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 6; opacity: .45;
 }
 
 /* --- Schematic: the study view's console -----------------------------------
@@ -1615,7 +1596,3 @@ body.no-scroll #view { z-index: 70; }
 
 #pr-statbar [data-fact] { color: var(--foreground); font-weight: 700; }
 
-/* The two kinds of thread, named in the Walk drawer with the same colours the
-   drawing uses -- a key that cannot drift from what it documents. */
-.sp-key-wire { color: var(--accent); }
-.sp-key-jump { color: var(--muted); }

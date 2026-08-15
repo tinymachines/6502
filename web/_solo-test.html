@@ -43,18 +43,33 @@ f.addEventListener('load', async () => {
 
     const con = d.querySelector('.console');
     const svg = $('sch-svg');
-    // The walk leaves earlier islands on screen, and each marks its own root --
-    // so "the signal being studied" is the root of the *current* island, not the
-    // first `.root` in the document, which is the oldest one.
-    const island = () => svg.querySelector('.sch-island.current');
-    const rootNow = () => island().querySelector('.sch-node.root').dataset.node;
-    // A cone can be a single node -- plenty of signals have nothing behind
-    // them at one level -- so fall back to any island. Clicking a pill in an
-    // earlier island is a legitimate move and the walk threads from there.
-    const pickOther = () => [...island().querySelectorAll('.sch-node')]
-      .find((n) => !n.classList.contains('root'))
-      || [...svg.querySelectorAll('.sch-node')].find((n) => !n.classList.contains('root'));
-    const islands = () => svg.querySelectorAll('.sch-island').length;
+    // The walk is one merged drawing: every signal appears exactly once, however
+    // many of the steps reached it.
+    const graph = () => svg.querySelector('.sch-graph');
+    const rootNow = () => graph().querySelector('.sch-node.root').dataset.node;
+    const pickOther = () => [...svg.querySelectorAll('.sch-node')]
+      .find((n) => !n.classList.contains('root'));
+
+    // The invariant the merge exists for. A signal drawn twice is the fastest
+    // way to lose track of which one you were following, and drawing every step
+    // as its own island produced one copy per step that reached it.
+    const dupes = () => {
+      const seen = new Map();
+      for (const n of svg.querySelectorAll('.sch-node')) {
+        seen.set(n.dataset.node, (seen.get(n.dataset.node) || 0) + 1);
+      }
+      return [...seen].filter(([, n]) => n > 1).map(([id]) => id);
+    };
+
+    // How far the walk has gone, read off the Walk drawer's own list -- the
+    // drawing itself no longer says, which is the point.
+    const steps = () => {
+      const open = $('solo-palette').dataset.open;
+      if (open !== 'walk') d.querySelector('.sp-icon[data-tab="walk"]').click();
+      const n = d.querySelectorAll('#sp-walk .sp-step').length;
+      if (open !== 'walk') d.querySelector(`.sp-icon[data-tab="${open}"]`).click();
+      return n;
+    };
     // Jump to a named signal through the page's own picker. The filter narrows
     // it to one entry first, because the list is capped at 400 and a name is
     // not guaranteed to be in the first 400 alphabetically.
@@ -97,8 +112,8 @@ f.addEventListener('load', async () => {
        `${cs.width} x ${cs.height}`);
     ok('there is a way out', vis($('sch-solo-exit')));
 
-    // Walking the islands: click a signal, stay in the mode, stay at one level.
-    ok('one island to begin with', islands() === 1, `${islands()}`);
+    // Walking: click a signal, stay in the mode, stay at one level.
+    ok('one step to begin with', steps() === 1, `${steps()}`);
     const next = pickOther();
     const want = next.dataset.node;
     next.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
@@ -107,48 +122,57 @@ f.addEventListener('load', async () => {
        con.classList.contains('solo') && rootNow() === want, con.className);
     ok('and it is still a single level', $('sch-depth').value === '1');
 
-    // --- the walk stays on screen -------------------------------------------
+    // --- the walk stays on the bench, as one drawing -------------------------
     //
-    // The island you came from is the context for the one you are looking at,
-    // and throwing it away on every click is what made the study view a series
-    // of unrelated pictures rather than a walk.
-    ok('the island you came from is still there', islands() === 2, `${islands()}`);
-    ok('and it is drawn as past, not current',
-       svg.querySelectorAll('.sch-island.past').length === 1
-       && svg.querySelectorAll('.sch-island.current').length === 1);
-    // The one being studied is marked by what it sits on. Both islands stay
-    // fully drawn -- the state overlay paints all of them, so fading the ones
-    // you walked through would say they were less real than they are.
+    // Where you came from is the context for where you are, and throwing it away
+    // on every click made the study view a series of unrelated pictures. But
+    // keeping each step as its own island drew every shared signal twice, which
+    // is worse than either: tracing a value, a reader found two copies of it and
+    // no way to tell which was which. The steps are merged instead.
+    ok('the step you came from is still on the bench', steps() === 2, `${steps()}`);
+    ok('and every signal is drawn exactly once', dupes().length === 0,
+       `${dupes().length} duplicated: ${dupes().slice(0, 4).join(', ')}`);
+    // ...and that assertion can tell. An invariant nothing could violate is not
+    // an invariant, and this one passed vacuously until the selector was right.
+    const twin = graph().querySelector('.sch-node');
+    twin.parentElement.append(twin.cloneNode(true));
+    ok('the check would notice a second copy',
+       dupes().length === 1 && dupes()[0] === twin.dataset.node, dupes().join(', '));
+    twin.parentElement.lastElementChild.remove();
+    ok('and it is clean again once that copy is gone', dupes().length === 0);
+    ok('the signal it came from among them',
+       [...svg.querySelectorAll('.sch-node')]
+         .filter((n) => n.dataset.node === want).length === 1);
+
+    // The subject is marked by what it sits on, there being no island to shade.
     const card = svg.querySelector('.sch-bench-card');
     const cardBox = () => card.getBoundingClientRect();
-    const curBox = () => island().getBoundingClientRect();
-    ok('the current island sits on a shaded card',
-       !!card && cardBox().width >= curBox().width
-       && cardBox().left <= curBox().left + 1 && cardBox().top <= curBox().top + 1,
-       card ? `card ${cardBox().width.toFixed(0)} vs island ${curBox().width.toFixed(0)}` : 'none');
-    ok('a thread joins them', svg.querySelectorAll('.sch-thread').length === 1);
+    const rootBox = () => graph().querySelector('.sch-node.root').getBoundingClientRect();
+    ok('the signal being studied sits on a shaded card',
+       !!card && cardBox().width >= rootBox().width
+       && cardBox().left <= rootBox().left + 1 && cardBox().top <= rootBox().top + 1,
+       card ? `card ${cardBox().width.toFixed(0)} vs pill ${rootBox().width.toFixed(0)}` : 'none');
 
-    // The invariant, and it was not held. A step taken by clicking a *control
-    // line* has no pill to hang a thread on -- a control is never drawn as a
-    // signal, deliberately -- so the thread was silently skipped and the ribbon
-    // came apart in the middle with no sign of why. Every island after the
-    // first is joined to something, always.
-    const joined = () => svg.querySelectorAll('.sch-thread').length === islands() - 1;
-    const ctrlLabel = () => [...island().querySelectorAll('.sch-ctrl')]
+    // Following a *control line* is the awkward case: a control is never drawn
+    // as a signal, deliberately, so the step lands on something that has no pill
+    // anywhere on the drawing. Under the old ribbon that produced an island
+    // joined to nothing; here it has to merge in like any other step.
+    const ctrlLabel = () => [...graph().querySelectorAll('.sch-ctrl')]
       .find((t) => t.dataset.node);
     if (ctrlLabel()) {
-      const was = islands();
+      const was = steps();
+      const which = ctrlLabel().dataset.node;
       ctrlLabel().dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
       await sleep(200);
-      ok('following a control line adds an island', islands() === was + 1,
-         `${was} -> ${islands()}`);
-      ok('and it is joined to the island it came from', joined(),
-         `${svg.querySelectorAll('.sch-thread').length} threads, ${islands()} islands`);
-      ok('joined as a jump, since a control line is not a wire on the die',
-         svg.querySelectorAll('.sch-thread.sch-jump').length === 1,
-         `${svg.querySelectorAll('.sch-thread.sch-jump').length} jumps`);
+      ok('following a control line takes a step', steps() === was + 1,
+         `${was} -> ${steps()}`);
+      ok('and it becomes the subject, drawn once',
+         rootNow() === which && [...svg.querySelectorAll('.sch-node')]
+           .filter((n) => n.dataset.node === which).length === 1, rootNow());
+      ok('with everything else still drawn once too', dupes().length === 0,
+         dupes().slice(0, 4).join(', '));
     } else {
-      ok('there was a control line to follow', false, 'none drawn on this island');
+      ok('there was a control line to follow', false, 'none drawn');
     }
 
     // Reading size is the claim, and a pill measures it directly: every pill is
@@ -157,7 +181,7 @@ f.addEventListener('load', async () => {
     // which is what keeps that height steady however long the ribbon gets --
     // fitting the world into the viewBox instead would shrink it by the length
     // of the walk.
-    const pillH = () => island().querySelector('.sch-pill').getBoundingClientRect().height;
+    const pillH = () => graph().querySelector('.sch-pill').getBoundingClientRect().height;
     ok('the new island is framed at reading size', pillH() > 10, `${pillH().toFixed(1)}px pills`);
 
     // A bench keeps what is put on it. Adding an island must not move the
@@ -176,13 +200,14 @@ f.addEventListener('load', async () => {
     ok('adding an island does not rescale the view', zoomOf() === parked,
        `${parked} -> ${zoomOf()}`);
     const inView = () => {
-      const a = island().getBoundingClientRect(), b = svg.getBoundingClientRect();
+      const a = graph().querySelector('.sch-node.root').getBoundingClientRect();
+      const b = svg.getBoundingClientRect();
       return a.left >= b.left - 1 && a.right <= b.right + 1
           && a.top >= b.top - 1 && a.bottom <= b.bottom + 1;
     };
-    ok('and the island it added is on screen', inView());
+    ok('and the signal it walked to is on screen', inView());
     ok('and the bench itself does not move either',
-       svg.getAttribute('viewBox') === `0 0 1200 800`, svg.getAttribute('viewBox'));
+       svg.getAttribute('viewBox') === '0 0 1200 800', svg.getAttribute('viewBox'));
 
     // The dots are the only thing that makes zoom visible on an empty field,
     // and they have to be *inside* the camera group or they would not move.
@@ -196,11 +221,10 @@ f.addEventListener('load', async () => {
       await sleep(160);
     }
     ok('the walk is capped rather than growing without limit',
-       islands() === 6, `${islands()} islands after 8 clicks`);
-    ok('and every island on it is still joined to the one before',
-       svg.querySelectorAll('.sch-thread').length === islands() - 1,
-       `${svg.querySelectorAll('.sch-thread').length} threads, ${islands()} islands`);
-    ok('and the subject is still at reading size six islands in',
+       steps() === 6, `${steps()} steps after 8 clicks`);
+    ok('and still no signal is drawn twice', dupes().length === 0,
+       dupes().slice(0, 4).join(', '));
+    ok('and the subject is still at reading size six steps in',
        pillH() > 10, `${pillH().toFixed(1)}px pills`);
 
     // --- the clock, pinned to one island ------------------------------------
@@ -284,7 +308,7 @@ f.addEventListener('load', async () => {
     other.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
     await sleep(200);
     ok('following a signal moves the subject', rootNow() === otherId, rootNow());
-    const afterClick = islands();
+    const afterClick = steps();
 
     $('solo-back-nav').click();
     await sleep(200);
@@ -292,7 +316,7 @@ f.addEventListener('load', async () => {
     // Going back to a signal still on the ribbon walks back up it rather than
     // starting a new one -- the island beyond it is the step being undone.
     ok('and it un-walks rather than starting again',
-       islands() === afterClick - 1, `${islands()} vs ${afterClick}`);
+       steps() === afterClick - 1, `${steps()} vs ${afterClick}`);
     // The study view is one level by definition, so back restores *where* you
     // were and not how deep. Otherwise stepping back past the moment you went
     // fullscreen would quietly undo the one thing this mode promises.
@@ -315,7 +339,7 @@ f.addEventListener('load', async () => {
     await sleep(200);
     pickOther().dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
     await sleep(200);
-    ok('there is a ribbon to aim the camera at', islands() >= 2, `${islands()}`);
+    ok('there is a walk to aim the camera at', steps() >= 2, `${steps()}`);
 
     const camT = () => svg.querySelector('.sch-cam').getAttribute('transform');
     const camNums = () => (camT().match(/-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi) || []).map(Number);
@@ -371,13 +395,13 @@ f.addEventListener('load', async () => {
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: '0', bubbles: true }));
     await sleep(60);
     const sb = svg.getBoundingClientRect();
-    const outside = [...svg.querySelectorAll('.sch-island')].filter((g) => {
+    const outside = [...svg.querySelectorAll('.sch-node')].filter((g) => {
       const r = g.getBoundingClientRect();
       return r.left < sb.left - 1 || r.right > sb.right + 1
           || r.top < sb.top - 1 || r.bottom > sb.bottom + 1;
     });
     ok('0 fits the whole walk on screen', outside.length === 0,
-       `${outside.length} of ${islands()} islands off screen`);
+       `${outside.length} signals off screen`);
     // Fitting a two-island world into a 1200x800 bench can legitimately magnify,
     // so "k < 1" would be asserting the arithmetic rather than the behaviour.
     // What is being claimed is that it pulled back from wherever the reader was.

@@ -786,74 +786,55 @@ activity.
     median forward fan-out is 1 and only 19 of 707 signals exceed 20 — but
     `cclk` opens 273 switches. Showing sixteen of those silently would be a
     claim about the chip rather than a limit of the page.
-- **The walk stays on screen.** Following a signal appends an island rather than
-  replacing the drawing: the last six sit side by side, older ones dimmed, joined
-  by a thread from the pill that was clicked to the root it produced. Replacing
-  it made the study view a series of unrelated pictures, when the thing being
-  studied is the path between them.
+- **The walk stays on the bench, as one drawing.** Following a signal extends
+  what is drawn rather than replacing it — but the steps are **merged**, not laid
+  out side by side. Each step is a cone and the cones overlap, so drawing each
+  one separately put a second copy of every shared signal on the bench, which is
+  worse than either alternative: tracing a value, a reader found two `#844`s and
+  no way to tell which was which. `merge()` unions them and every node is drawn
+  exactly once.
+  - **A node's column is where it first appeared**, measured from the signal the
+    walk began on. That is what keeps the arrangement stable as it grows —
+    columns mean "how far back from where I started", they are assigned once, and
+    a later step reaching an already-placed signal joins to it where it is rather
+    than moving it. It also survives **feedback**, which a strict topological
+    layering would not, and this chip is full of it.
+  - **A switch reached from its far side is the same transistor**, so elements
+    are keyed by the pair they join rather than by which end was expanded first.
+    Without that, walking both ends of a pass transistor drew it twice.
+  - **Columns are ordered by the average row of what they connect to** in the
+    column before. One merged drawing has far more wires to cross than a single
+    cone ever did, and insertion order crossed them for no reason.
+  - **`_solo-test.html` asserts no signal is drawn twice, and proves the check
+    can tell** by cloning a pill and watching the assertion fire. An invariant
+    nothing could violate is not an invariant.
   - **The study view's coordinate space is fixed** (`WORKBENCH`, 1200x800) and
-    only the camera moves in it. This is what makes it a bench rather than a
-    viewer, and the obvious alternative is wrong twice over: a viewBox sized to
-    what is currently drawn lets the browser scale the ribbon to fit, so every
-    step shrinks the signal you are reading — *and* it moves the world under the
-    camera on every append, so nothing you put down stays where you put it. The
-    page proper keeps the sized-to-its-drawing behaviour, because it has one
-    drawing and no camera.
-  - **Adding an island does not re-frame.** It never rescales, and it pans only
-    when it has to: `ensureVisible()` nudges the new island into view by the
-    least it can, because a walk long enough does reach the edge of the screen
-    and the island you just clicked into being has to be somewhere you can see.
-    The harness asserts both halves — zoom unchanged, island on screen — since
-    "the camera did not move at all" would fail the day the walk got long.
-  - **The initial framing is capped at 2×** (`MAX_FIT`). Fitting a four-signal
-    cone to the portal otherwise draws one inverter the size of a hand and leaves
-    no room for the island you walk to next.
+    only the camera moves in it. The drawing reflows as it grows — that is what
+    merging means — but the space it grows in does not, so a redraw cannot move
+    the world under the camera.
+  - **Adding a step does not re-frame.** It never rescales, and it pans only when
+    it has to: `ensureVisible()` nudges the signal just walked to into view by
+    the least it can. The initial framing is capped at 2× (`MAX_FIT`), or a
+    four-signal cone fills the screen with one hand-sized inverter.
   - **A pill is the readout for zoom.** Every pill is a constant 22 units tall,
-    so its height on screen *is* the effective scale, which is what
-    `_solo-test.html` measures rather than reasoning about the transform.
+    so its height on screen *is* the effective scale, which is what the harness
+    measures rather than reasoning about the transform.
   - **`0` fits the whole walk**, and therefore no longer means k = 1 — with a
-    fixed bench it can even magnify. `MIN_K` had to drop from 0.4 to 0.05 for a
-    six-island ribbon to be reachable at all.
-  - **The island being studied is marked by what it sits on**, a shaded card
-    behind it, rather than by fading the ones you walked through. Every island on
-    the bench is live — the state overlay paints all of them — so dimming them
-    said "these are less real" when what was meant is "this is the one you are
-    on". The card is drawn only in the study view: on the page proper it would
-    ring the only thing on screen.
+    fixed bench it can even magnify. `MIN_K` had to drop from 0.4 to 0.05.
+  - **The card marks the subject**, not a region. There are no islands to shade
+    any more; that was the price of the duplicates.
   - **The bench is dotted, and the dots are inside the camera group.** Zoom is
     invisible on an empty field: a circuit drawn twice as large on black looks
     like a circuit, not like a closer one. Two grids an order of magnitude apart
     (40 and 200 units) mean one of them is always at a useful density.
   - **The camera listens on the stage, not on the drawing.** An `<svg>` only
-    hit-tests where it has been painted, and a bench is mostly empty space — so
-    a finger landing between two islands reached nothing and the pinch never
-    started, which on a phone is most pinches. `touch-action: none` had to move
-    with it, or that gesture scrolls the page instead.
-  - **An island is positioned by a transform on its group**, with its own
-    coordinates left alone. Baking the offset into the numbers would put raw
-    negative values back in the drawing, which is what the layout harness reads
-    to catch labels outside the viewBox.
-  - **The anchor is the island the reader clicked in**, carried on the trail
-    entry as `from`, not "the one before". Both the layout and the thread ask
-    `anchorOf()` for it, because a thread that starts somewhere the island is
-    not is worse than no thread.
-  - **Every island after the first is joined to something, always.** The first
-    version gave up when the new subject had no *pill* on the anchoring island
-    and drew nothing at all — and that is the most ordinary move there is:
-    clicking a **control line**, which by deliberate design is never drawn as a
-    signal. So following one produced a ribbon in two halves with no sign of
-    why, and it took a reader's screenshot to notice. `layout()` now records
-    where each control's label was written, `anchorIn()` answers "where on this
-    island was this step taken from" for both cases, and the join always exists.
-  - **A jump is drawn differently from a wire.** Following a control line, or
-    coming off an island that has since dropped off the end of the walk, is still
-    a step and still gets a thread — but it is not a connection on the die, so it
-    does not get to look like one. The Walk drawer names both, in the colours the
-    drawing uses.
+    hit-tests where it has been painted, and a bench is mostly empty space — so a
+    finger landing between two parts of the drawing reached nothing and the pinch
+    never started, which on a phone is most pinches. `touch-action: none` had to
+    move with it.
   - Flipping direction or changing depth starts the walk again: both axes of the
-    layout mirror, so a ribbon drawn one way round cannot be extended the other.
-    Going *back* to a signal still on the ribbon truncates to it instead —
-    un-walking, which is what back means here.
+    layout mirror. Going *back* to a signal still on the walk truncates to it
+    instead — un-walking, which is what back means here.
 - **The study view has its own clock**, because the point of pinning to one
   island is watching an edge happen on it. Back / run / step plus arrow keys and
   space, with a readout of half-cycle, phase, T-state and `sync`.

@@ -33,7 +33,7 @@ f.addEventListener('load', async () => {
   await sleep(400);
   const svg = $('sch-svg');
   for (let i = 0; i < Number(p.get('walk') || 3); i++) {
-    const cur = svg.querySelector('.sch-island.current');
+    const cur = svg.querySelector('.sch-graph');
     // `ctrl=1` follows a control line rather than a signal on alternate steps,
     // which is the move that used to break the ribbon in two.
     const wantCtrl = p.get('ctrl') && i % 2 === 1;
