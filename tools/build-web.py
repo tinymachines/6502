@@ -294,6 +294,14 @@ def main() -> None:
                       f"fetch('{b.ref('schematic.json')}')", where="trace.js")
     b.emit("trace.js", tr.encode())
 
+    # 3g. primer.js: no wasm, no geometry -- it reads the three published
+    #     measurement files and fills the numbers into the prose, so an
+    #     explanatory page cannot drift away from what it explains.
+    pr = b.read("primer.js").decode()
+    for original in ["schematic.json", "decode.json", "timing.json"]:
+        pr = replace_once(pr, f"'{original}'", f"'{b.ref(original)}'", where="primer.js")
+    b.emit("primer.js", pr.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -346,6 +354,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         trh = replace_once(trh, f'"{original}"', f'"{b.ref(original)}"', where="trace.html")
     b.emit("trace.html", trh.encode(), hashed=False)
+
+    prh = b.read("primer.html").decode()
+    for original in ["style.css", "primer.js", "version-footer.js", "site-nav.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        prh = replace_once(prh, f'"{original}"', f'"{b.ref(original)}"', where="primer.html")
+    b.emit("primer.html", prh.encode(), hashed=False)
 
     timh = b.read("timing.html").decode()
     for original in ["style.css", "timing.js", "version-footer.js", "site-nav.js",

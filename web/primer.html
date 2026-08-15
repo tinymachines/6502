@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Primer — how the 6502 actually works</title>
+<meta name="description" content="What the MOS 6502's pins are, what the clock does, what an opcode does and does not do, and where the usual mental model of a processor stops being true.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav">
+        <a href="./#explorer">Explorer</a>
+        <a href="primer" aria-current="page">Primer</a>
+        <a href="./#lab">Lab</a>
+        <a href="trace">Trace</a>
+        <a href="exploded">Exploded</a>
+        <a href="schematic">Schematic</a>
+        <a href="blueprint">Blueprint</a>
+        <a href="decode">Decode</a>
+        <a href="timing">Timing</a>
+        <a href="./#credit">Credit</a>
+        <a href="archive/">Archive</a>
+      </div>
+      <a class="btn btn-primary nav-cta" href="./#explorer">Run it</a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">The mental model · and where it stops</p>
+    <h1>An opcode does not<br><span class="hl">drive anything.</span></h1>
+    <p class="lede">
+      The usual picture of a processor is a clock that ticks, an instruction that
+      is read, and a machine that steps forward. It is close enough to write
+      software against and it is not what the silicon does. This page is the
+      difference, one correction at a time — and every number on it is read out
+      of the same measurements the rest of this site is built from, rather than
+      typed into a sentence and left to rot.
+    </p>
+    <div class="statbar" id="pr-statbar">
+      <span data-fact="nodes">…</span> nodes ·
+      <span data-fact="transistors">…</span> transistors ·
+      <span data-fact="terms">…</span> decode terms ·
+      <span data-fact="opcodes">…</span> opcodes measured
+    </div>
+  </section>
+
+  <div id="pr-boot" class="bp-boot wrap"><p id="pr-status">Loading the measurements…</p></div>
+
+  <div id="pr-main" hidden>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">Question one</p>
+      <h2>Is there a fixed set of inputs and outputs?</h2>
+    </div>
+    <p class="lede">
+      There is, and the die names all of it. Everything the chip can be told and
+      everything it can say goes through these wires; the other
+      <span data-fact="nodes">…</span> nodes are internal and cannot be observed
+      from outside at all.
+    </p>
+
+    <div class="pr-table-wrap">
+      <table class="pr-table">
+        <thead><tr><th>Pin</th><th>Direction</th><th>What it is</th></tr></thead>
+        <tbody id="pr-pins"></tbody>
+      </table>
+    </div>
+
+    <p>
+      Two things in that table are worth stopping on.
+    </p>
+    <p>
+      <strong><span class="mono">clk0</span> is an input.</strong> The 6502 has
+      no oscillator. You feed it a square wave, and it hands back the two phases
+      it derived from it — <span class="mono">clk1out</span> and
+      <span class="mono">clk2out</span> — so the rest of the board can stay in
+      step with the chip rather than the other way round.
+    </p>
+    <p>
+      <strong>The data pins point both ways, and a pin is not a wire.</strong>
+      A pad is an output <em>driver</em>: every one of the data pin's terminals
+      goes to a power rail, so nothing enters this chip from a pin through a
+      pass transistor. The way in is the input receiver, which is a gate. A trace
+      that follows only switches can never leave the pad ring — which is exactly
+      what happened the first time one was written here, and is why the wire
+      watch list on the Trace page starts at
+      <span class="mono">idl</span>/<span class="mono">idb</span> rather than at
+      <span class="mono">db</span>.
+    </p>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">Correction one</p>
+      <h2>Two edges, not one blip.</h2>
+    </div>
+    <p class="lede">
+      The chip does work on <em>both</em> clock edges. One phase precharges,
+      the other evaluates, and the state is held in between as charge on a wire.
+      So a cycle is two events, not one, and counting whole cycles throws away
+      half of what happened.
+    </p>
+    <p>
+      That is why the fundamental unit everywhere on this site is the
+      <strong>half-cycle</strong>. It is not a simulation convenience; it is the
+      grain the chip actually works at. Bus reads are serviced as the clock
+      falls, writes as it rises.
+    </p>
+    <p>
+      It also explains a property that surprises people: the 6502 has a
+      <strong>minimum</strong> clock speed as well as a maximum. Stop it too
+      long and the charge — which <em>is</em> the state — leaks away. There is no
+      static storage holding your registers between phases.
+    </p>
+    <p class="pr-seealso">
+      See it: <a href="trace">Trace</a> lists every half-cycle of an instruction
+      and marks which fields changed on each.
+    </p>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">Correction two</p>
+      <h2>The opcode selects switches. It does not drive anything.</h2>
+    </div>
+    <p class="lede">
+      The fetched byte lands in the instruction register,
+      <span class="mono">ir0</span>…<span class="mono">ir7</span>. Those eight
+      wires are inputs to a <strong>PLA</strong>: <span data-fact="terms">…</span>
+      product terms, combinational, no microcode ROM anywhere on this chip. Each
+      term is a NOR that matches some pattern of IR bits <em>and</em> a timing
+      state.
+    </p>
+    <p>
+      Fire a term and it asserts control lines. A control line's entire job is to
+      hold open a pass transistor between two wires. So
+      <span class="mono">dpc23_SBAC</span> does not <em>mean</em> "load the
+      accumulator" — it is a wire that, while it is high, shorts the special bus
+      to the accumulator's storage nodes. The value moves because a switch is
+      open, and for no other reason.
+    </p>
+    <p>
+      The die names <span data-fact="termsNamed">…</span> of the
+      <span data-fact="terms">…</span> terms, after the T-state and the
+      instructions they serve. Of <span data-fact="lines">…</span> control lines,
+      <span data-fact="linesFitted">…</span> have been traced back to the terms
+      that assert them; <span data-fact="linesUnresolved">…</span> have not, and
+      ship as unresolved rather than as guesses.
+    </p>
+    <p class="pr-seealso">
+      See it: <a href="decode">Decode</a> has every product term and the opcodes
+      that fire it. <a href="schematic">Schematic</a> shows the gate behind any
+      one of them.
+    </p>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">Correction three</p>
+      <h2>Nothing counts the cycles.</h2>
+    </div>
+    <p class="lede">
+      There is no state counter being incremented. There is a <strong>timing
+      chain</strong> — a shift register of clocked latches, active low — and an
+      instruction ends when a product term <em>resets</em> it. A cycle count is
+      stored nowhere. It is however many cycles went by before something fired.
+    </p>
+    <p>
+      Which means the counts are free to be wrong, and that is what makes them
+      evidence rather than a tautology. Measured over all
+      <span data-fact="opcodes">…</span> opcodes:
+      <span data-fact="terminating">…</span> terminate, taking between
+      <span data-fact="cycleLow">…</span> and <span data-fact="cycleHigh">…</span>
+      cycles.
+    </p>
+    <p>
+      And <strong><span data-fact="jams">…</span> never terminate at all</strong>
+      — <span class="mono" data-fact="jamList">…</span>, the JAM opcodes. The
+      chain stops advancing and no further fetch ever happens. Nobody designed
+      that behaviour; it is what the wiring does when no term arrives to reset
+      it. They are recorded as unterminated rather than timed out, because a
+      timeout reported as a cycle count would put a plausible number beside
+      twelve opcodes that do not have one.
+    </p>
+    <p>
+      Which term ends an instruction is reported as <em>arriving</em>: high in
+      the final cycle and not high in any earlier one.
+      <span data-fact="endOnT0">…</span> of the terminating opcodes end on their
+      own <span class="mono">op-T0-…</span> term.
+      <span data-fact="endOnNothing">…</span> have nothing arriving at all. Both
+      numbers are on the page, because two thirds is the honest figure.
+    </p>
+    <p class="pr-seealso">
+      See it: <a href="timing">Timing</a> has every instruction's length and what
+      ended it.
+    </p>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">Where the model breaks</p>
+      <h2>There is no state, separate from the wires.</h2>
+    </div>
+    <p class="lede">
+      Register contents mostly do not steer the sequence. The decode sees the
+      opcode and the T-state, plus a handful of condition inputs — a branch being
+      taken, a page being crossed. This is why one product term,
+      <span class="mono">op-branch-done</span>, needs a branch that is taken
+      <em>and</em> crosses a page before it will fire at all: it took three
+      separate program runs before it was ever observed.
+    </p>
+    <p>
+      The deeper correction is this. A register is a set of nodes holding charge.
+      A level is not even a property of a node — it belongs to the
+      <strong>group</strong> of nodes shorted together at that instant, and the
+      group changes every time a switch opens. Ask what
+      <span class="mono">idb0</span> is, and the honest answer is a list of the
+      other wires it is currently joined to.
+    </p>
+    <p>
+      The sharpest demonstration is an addition. Trace
+      <span class="mono">ADC</span> and at the end of the instruction the
+      accumulator still holds its old value. The sum exists — it is sitting in
+      the adder's hold register — and arrives in the accumulator during the
+      <em>next</em> instruction's opcode fetch. For most of a cycle the answer is
+      in no register at all.
+    </p>
+    <p>
+      A behavioural emulator has to hide that, because it has nowhere to put a
+      value that is not in a register. Here it falls out of simulating
+      <span data-fact="transistors">…</span> switches, and so does every cycle
+      count on this site.
+    </p>
+    <p class="pr-seealso">
+      See it: <a href="trace">Trace</a>, with the wire panel open — the "shorted
+      together right now" list has no equivalent in any software model of a 6502.
+      Or <a href="./?lab=adc&amp;step=4">the Lab at ADC step 4</a>, which is the
+      exact half-cycle where the adder holds the answer and the accumulator does
+      not.
+    </p>
+  </section>
+
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="primer.js"></script>
+<script type="module" src="site-nav.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

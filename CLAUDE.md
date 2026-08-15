@@ -23,6 +23,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Simulation | Complete. 79 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
+| Primer | The mental model, corrected one step at a time. Every number derived. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
@@ -99,6 +100,7 @@ cargo run -p v6502-netlist --bin export-blocks -- web/blocks.json
 cargo run -p v6502-netlist --bin export-schematic -- web/schematic.json
 cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
+# (primer.html needs no export of its own: it reads schematic/decode/timing.json)
 python3 tools/serve.py web 8777                    # http://localhost:8777/
 
 # Web app, production shape: content-hashed bundle + service worker into dist/
@@ -209,6 +211,7 @@ _handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320&page=trace   # what pushes a page wider than the viewport
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
+_primer-test.html      # every number on the primer, re-derived from the JSON
 _trace-test.html       # cycle counts counted, and ADC landing after the end
 _schematic-test.html   # does the drawing contain everything the caption claims?
 _solo-test.html        # the study view, driven against the REAL page in an iframe
@@ -1138,6 +1141,37 @@ back somewhere unrelated.
 - **The lag is per line.** The pipeline latch puts one to two half-cycles between
   a term and its line, but the depth is not uniform — fitting one global lag
   understated the result. Fitted lags run 0–4, mostly 1.
+
+### The Primer (`primer.html`, `primer.js`)
+
+The page for the question every reader of this site eventually asks: *is there a
+fixed set of inputs and outputs, and does the clock step the machine forward
+based on the opcode?* Close enough to write software against, and not what the
+silicon does. The page is that difference, one correction at a time — the pins,
+two edges rather than one, what an opcode actually selects, that nothing counts
+the cycles, and that there is no state separate from the wires.
+
+It is meant to grow. The thing to preserve as it does:
+
+- **No number is typed into the page.** Every figure is a `data-fact` slot filled
+  from `schematic.json`, `decode.json` and `timing.json` — the same published
+  files the other pages read. Prose is the part of this site most likely to go
+  quietly wrong: it is written once against what was true that afternoon and
+  nothing checks it afterwards. `_primer-test.html` asserts both halves — that
+  every slot was filled, and that what went into it matches the JSON — and it
+  also **scans the prose for stray digits**, so the next paragraph cannot
+  reintroduce the problem by writing "122 terms" into a sentence.
+- **A missing fact fails the page rather than blanking a word.** A number that
+  silently does not appear reads as a design choice, not a fault.
+- **The pin table is built from the die's own name table.** Which pins exist is
+  derived; only the one-line *role* of each is authored, because the die says
+  `rdy`, not "low stalls the chip on a read cycle". A row that does not resolve
+  through the names is dropped rather than printed as hardware this chip does not
+  have.
+- **Every section ends by linking to the page that demonstrates it** — Trace for
+  the half-cycles, Decode for the PLA, Timing for the chain. The primer explains;
+  it does not become a fourth place that owns a fact.
+- It loads no wasm and runs no simulation. Three fetches and some text.
 
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 

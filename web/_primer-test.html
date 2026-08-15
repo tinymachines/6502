@@ -1,0 +1,141 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The primer is prose, and prose is the thing on this site most likely to go
+  quietly wrong: it is written once against whatever was true that afternoon and
+  nothing checks it afterwards. So every figure on the page is a `data-fact` slot
+  filled from the published measurements, and this harness checks two things --
+  that every slot was filled, and that what went into it matches the JSON the
+  other pages are drawn from.
+
+  The second half matters more than it looks. A page could fill every slot from
+  a number it invented; these assertions re-derive the interesting ones straight
+  out of decode.json and timing.json, which is what makes the page a reading of
+  the measurements rather than a claim beside them.
+
+    http://localhost:8777/_primer-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1100px;height:700px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="primer.html"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 200 && $('pr-main').hidden; i++) await sleep(50);
+    ok('the page booted', !$('pr-main').hidden, $('pr-status').textContent);
+
+    const [sch, dec, tim] = await Promise.all(
+      ['schematic.json', 'decode.json', 'timing.json'].map((x) => fetch(x).then((r) => r.json())));
+
+    // --- every slot filled ---------------------------------------------------
+    const slots = [...d.querySelectorAll('[data-fact]')];
+    ok('the page has facts to fill', slots.length >= 15, `${slots.length} slots`);
+    const empty = slots.filter((s) => !s.textContent.trim() || s.textContent.trim() === '…');
+    ok('and every one of them was filled', empty.length === 0,
+       empty.map((s) => s.dataset.fact).join(', '));
+
+    // A number typed into the prose is one nothing checks. There should be no
+    // bare digits in the body text outside a fact slot, a code span or a link.
+    const body = $('pr-main');
+    const stray = [];
+    for (const p of body.querySelectorAll('p')) {
+      const clone = p.cloneNode(true);
+      for (const kill of clone.querySelectorAll('[data-fact], .mono, code, a')) kill.remove();
+      // "6502" is the chip's name, not a figure -- nothing measures it and
+      // nothing can make it drift.
+      const m = clone.textContent.replace(/\b6502\b/g, '').match(/\b\d[\d,]*\b/g);
+      if (m) stray.push(`${m.join('/')} in "${clone.textContent.trim().slice(0, 40)}…"`);
+    }
+    ok('and no number was typed into the prose instead', stray.length === 0,
+       stray.slice(0, 3).join(' | '));
+
+    // --- and the filled values are the measurements --------------------------
+    const fact = (name) => d.querySelector(`[data-fact="${name}"]`).textContent.trim();
+    const num = (name) => Number(fact(name));
+
+    ok('the node and transistor counts are the netlist',
+       num('nodes') === sch.names.length && num('transistors') === sch.counts.transistors,
+       `${fact('nodes')} nodes, ${fact('transistors')} transistors`);
+
+    ok('the term count is the decode PLA',
+       num('terms') === dec.rows.length
+       && num('termsNamed') === dec.rows.filter((r) => r.name).length,
+       `${fact('terms')} terms, ${fact('termsNamed')} named`);
+
+    ok('the control-line counts are what was fitted and what was not',
+       num('lines') === dec.outputs.length
+       && num('linesFitted') === dec.links.length
+       && num('linesUnresolved') === dec.unresolvedLines.length,
+       `${fact('lines')} lines, ${fact('linesFitted')} fitted, ${fact('linesUnresolved')} not`);
+
+    const jams = tim.opcodes.filter((o) => o.jam);
+    const cyc = tim.opcodes.filter((o) => !o.jam).map((o) => o.cycles);
+    ok('the jam count is measured, not remembered', num('jams') === jams.length,
+       `${fact('jams')} vs ${jams.length}`);
+    ok('and it names them all', fact('jamList').split(/\s+/).length === jams.length,
+       fact('jamList'));
+    ok('the cycle range is the measured range',
+       num('cycleLow') === Math.min(...cyc) && num('cycleHigh') === Math.max(...cyc),
+       `${fact('cycleLow')}–${fact('cycleHigh')}`);
+    ok('and the opcode totals add up',
+       num('opcodes') === tim.opcodes.length
+       && num('terminating') + num('jams') === num('opcodes'),
+       `${fact('terminating')} + ${fact('jams')} = ${fact('opcodes')}`);
+
+    // The honest pair: how many instructions end on their own T0 term, and how
+    // many have nothing arriving at all. Reporting only the first would make
+    // two thirds sound like all of them.
+    const t0 = tim.opcodes.filter((o) => !o.jam
+      && o.arrived.some((i) => (tim.terms[i] || '').startsWith('op-T0-'))).length;
+    const none = tim.opcodes.filter((o) => !o.jam && !o.arrived.length).length;
+    ok('the ending-term figures are both stated, and both right',
+       num('endOnT0') === t0 && num('endOnNothing') === none,
+       `${fact('endOnT0')} on T0, ${fact('endOnNothing')} on nothing`);
+
+    // --- the pin table -------------------------------------------------------
+    //
+    // Built from the die's own name table. A row for a pin this chip does not
+    // have would be the page inventing hardware.
+    const rows = [...$('pr-pins').querySelectorAll('tr')];
+    ok('the pin table was built', rows.length >= 8, `${rows.length} rows`);
+    const names = new Set(sch.names.filter(Boolean));
+    const unknown = rows
+      .map((r) => r.querySelector('.pr-pin').textContent.trim())
+      .filter((n) => !/[…,]/.test(n))
+      .filter((n) => !names.has(n.replace(/\d+$/, '0')) && !names.has(n));
+    ok('and every pin in it is one the die names', unknown.length === 0, unknown.join(', '));
+
+    const busRow = rows.find((r) => /^ab0/.test(r.querySelector('.pr-pin').textContent));
+    const abBits = sch.names.filter((n) => n && /^ab\d+$/.test(n)).length;
+    ok('the address bus is as wide as the die says',
+       busRow && busRow.textContent.includes(String(abBits)),
+       busRow && busRow.querySelector('.pr-pin').textContent);
+
+    // --- it is part of the site ----------------------------------------------
+    const nav = [...d.querySelectorAll('#site-nav a')].map((a) => a.getAttribute('href'));
+    ok('it links on to the pages that demonstrate each claim',
+       ['trace', 'decode', 'timing', 'schematic'].every((p) =>
+         [...body.querySelectorAll('a')].some((a) => a.getAttribute('href') === p)),
+       [...body.querySelectorAll('a')].map((a) => a.getAttribute('href')).join(' '));
+    ok('and the nav marks it as the page you are on',
+       d.querySelector('#site-nav a[aria-current="page"]').getAttribute('href') === 'primer',
+       nav.join(' '));
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
+  }
+  document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+});
+</script>
+</body></html>
