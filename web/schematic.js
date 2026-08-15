@@ -544,7 +544,20 @@ function layout(c) {
     p.x += dx; p.y += dy; p.boxL += dx; p.boxR += dx; p.wireIn += dx; p.wireOut += dx;
   }
   for (const it of items) { it.x += dx; it.y += dy; }
-  return { place, items, flip, width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 };
+
+  // Where each control line's *name* was written. A control is never a pill --
+  // it rides on the edge of a switch and is deliberately not expanded -- but
+  // clicking one is a first-class way to change the subject, so the walk needs
+  // somewhere on this island to hang the next thread from. Without it, following
+  // a control line produced an island joined to nothing.
+  const ctrl = new Map();
+  for (const it of items) {
+    if (it.e.kind !== 'switch' || it.e.control == null) continue;
+    if (!ctrl.has(it.e.control)) ctrl.set(it.e.control, { x: it.x, y: it.y - EL_H / 2 - 12 });
+  }
+
+  return { place, ctrl, items, flip,
+           width: maxX - minX + PAD * 2, height: maxY - minY + PAD * 2 };
 }
 
 /**
@@ -672,6 +685,23 @@ function anchorOf(i) {
   return from >= 0 && from < i ? from : i - 1;
 }
 
+/**
+ * Where on an island the step to `node` was taken from.
+ *
+ * A pill if that signal is drawn there, its label if `node` is a control line
+ * on one of its switches, and nothing if the island has neither -- which is a
+ * real case, since an island can be dropped off the end of the walk. Both the
+ * layout and the thread ask this, so they cannot disagree about where the step
+ * came from.
+ */
+function anchorIn(L, node) {
+  const pill = L.place.get(node);
+  if (pill) return { x: L.flip ? pill.boxR : pill.boxL, y: pill.y, kind: 'wire' };
+  const label = L.ctrl.get(node);
+  if (label) return { x: label.x, y: label.y, kind: 'control' };
+  return null;
+}
+
 function arrange(layouts) {
   const offs = [];
   for (let i = 0; i < layouts.length; i++) {
@@ -680,15 +710,14 @@ function arrange(layouts) {
     const sgn = L.flip ? 1 : -1;               // which way this walk grows
     const root = L.place.get(L.root);
     const anchorIsland = anchorOf(i);
-    const anchor = anchorIsland >= 0 ? layouts[anchorIsland].place.get(L.root) : null;
+    const anchor = anchorIsland >= 0 ? anchorIn(layouts[anchorIsland], L.root) : null;
 
     let x, y;
     if (root && anchor) {
       const a = offs[anchorIsland];
-      // The far edge of the clicked pill, plus a gutter, is where the new
-      // island's own root pill goes.
-      x = a.x + (sgn < 0 ? anchor.boxL - TRAIL_GAP - root.boxR
-                         : anchor.boxR + TRAIL_GAP - root.boxL);
+      // Whatever was clicked -- the near edge of a pill, or a control's label --
+      // plus a gutter, is where the new island's own root pill goes.
+      x = a.x + anchor.x + (sgn < 0 ? -TRAIL_GAP - root.boxR : TRAIL_GAP - root.boxL);
       y = a.y + anchor.y - root.y;
     } else {
       // Nothing to hang it on -- the anchor island has been dropped off the end
@@ -773,21 +802,40 @@ function drawTrail(cones) {
   });
 
   // The click that joined two islands, drawn as the thread it was.
+  //
+  // Every island after the first is joined to the one it came from. It used to
+  // give up when the new subject had no pill on the anchoring island and drew
+  // nothing at all -- which happens on the most ordinary move there is, clicking
+  // a control line, since a control is never a pill. The result was a ribbon in
+  // two halves with no sign of why, so the join now always exists and says which
+  // kind it is: a wire that was followed, or a jump.
   for (let i = 1; i < layouts.length; i++) {
     const from = anchorOf(i);
-    if (from < 0) continue;
-    const a = layouts[from].place.get(layouts[i].root);
     const b = layouts[i].place.get(layouts[i].root);
-    if (!a || !b) continue;
+    if (!b) continue;
     const flip = layouts[i].flip;
-    const ax = offs[from].x + (flip ? a.boxR : a.boxL);
-    const ay = offs[from].y + a.y;
     const bx = offs[i].x + (flip ? b.boxL : b.boxR);
     const by = offs[i].y + b.y;
+
+    const a = from >= 0 ? anchorIn(layouts[from], layouts[i].root) : null;
+    let ax, ay, kind;
+    if (a) {
+      ax = offs[from].x + a.x;
+      ay = offs[from].y + a.y;
+      kind = a.kind;
+    } else {
+      // The island it came from is no longer on the bench. Come off the edge of
+      // the one before, at the height of where you landed.
+      const j = i - 1;
+      const box = { x: offs[j].x, y: offs[j].y, w: layouts[j].width, h: layouts[j].height };
+      ax = flip ? box.x + box.w : box.x;
+      ay = Math.min(Math.max(by, box.y), box.y + box.h);
+      kind = 'gone';
+    }
     const mid = (ax + bx) / 2;
     el('path', {
       d: `M ${ax} ${ay} C ${mid} ${ay}, ${mid} ${by}, ${bx} ${by}`,
-      class: 'sch-thread',
+      class: 'sch-thread' + (kind === 'wire' ? '' : ' sch-jump'),
     }, threads);
   }
 
@@ -1199,7 +1247,11 @@ const PANELS = {
       <p class="sp-note">The last ${TRAIL_MAX} islands stay on screen and older
         ones are dropped, because a ribbon that grows without limit is too small
         to read at any zoom that shows all of it. Click a step to fly to it;
-        <b>⌾</b> fits the whole walk.</p>`;
+        <b>⌾</b> fits the whole walk.</p>
+      <p class="sp-note">A <b class="sp-key-wire">solid thread</b> is a wire you
+        followed. A <b class="sp-key-jump">faint one</b> is a step that was not
+        along a wire — following a control line, which is never drawn as a
+        signal, or coming off an island that has since dropped off the end.</p>`;
     host.querySelector('#sp-clear').addEventListener('click', () => {
       resetTrail();
       render();

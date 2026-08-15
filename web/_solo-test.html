@@ -128,6 +128,29 @@ f.addEventListener('load', async () => {
        card ? `card ${cardBox().width.toFixed(0)} vs island ${curBox().width.toFixed(0)}` : 'none');
     ok('a thread joins them', svg.querySelectorAll('.sch-thread').length === 1);
 
+    // The invariant, and it was not held. A step taken by clicking a *control
+    // line* has no pill to hang a thread on -- a control is never drawn as a
+    // signal, deliberately -- so the thread was silently skipped and the ribbon
+    // came apart in the middle with no sign of why. Every island after the
+    // first is joined to something, always.
+    const joined = () => svg.querySelectorAll('.sch-thread').length === islands() - 1;
+    const ctrlLabel = () => [...island().querySelectorAll('.sch-ctrl')]
+      .find((t) => t.dataset.node);
+    if (ctrlLabel()) {
+      const was = islands();
+      ctrlLabel().dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+      await sleep(200);
+      ok('following a control line adds an island', islands() === was + 1,
+         `${was} -> ${islands()}`);
+      ok('and it is joined to the island it came from', joined(),
+         `${svg.querySelectorAll('.sch-thread').length} threads, ${islands()} islands`);
+      ok('joined as a jump, since a control line is not a wire on the die',
+         svg.querySelectorAll('.sch-thread.sch-jump').length === 1,
+         `${svg.querySelectorAll('.sch-thread.sch-jump').length} jumps`);
+    } else {
+      ok('there was a control line to follow', false, 'none drawn on this island');
+    }
+
     // Reading size is the claim, and a pill measures it directly: every pill is
     // the same 22 drawing units tall, so its height on screen *is* the effective
     // zoom. The viewBox is one island and the camera moves the world within it,
@@ -174,6 +197,9 @@ f.addEventListener('load', async () => {
     }
     ok('the walk is capped rather than growing without limit',
        islands() === 6, `${islands()} islands after 8 clicks`);
+    ok('and every island on it is still joined to the one before',
+       svg.querySelectorAll('.sch-thread').length === islands() - 1,
+       `${svg.querySelectorAll('.sch-thread').length} threads, ${islands()} islands`);
     ok('and the subject is still at reading size six islands in',
        pillH() > 10, `${pillH().toFixed(1)}px pills`);
 

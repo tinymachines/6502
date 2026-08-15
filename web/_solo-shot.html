@@ -34,7 +34,11 @@ f.addEventListener('load', async () => {
   const svg = $('sch-svg');
   for (let i = 0; i < Number(p.get('walk') || 3); i++) {
     const cur = svg.querySelector('.sch-island.current');
-    const n = [...cur.querySelectorAll('.sch-node')].find((x) => !x.classList.contains('root'))
+    // `ctrl=1` follows a control line rather than a signal on alternate steps,
+    // which is the move that used to break the ribbon in two.
+    const wantCtrl = p.get('ctrl') && i % 2 === 1;
+    const n = (wantCtrl && [...cur.querySelectorAll('.sch-ctrl')].find((x) => x.dataset.node))
+      || [...cur.querySelectorAll('.sch-node')].find((x) => !x.classList.contains('root'))
       || [...svg.querySelectorAll('.sch-node')].find((x) => !x.classList.contains('root'));
     if (!n) break;
     n.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));

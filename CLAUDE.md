@@ -837,6 +837,19 @@ activity.
     entry as `from`, not "the one before". Both the layout and the thread ask
     `anchorOf()` for it, because a thread that starts somewhere the island is
     not is worse than no thread.
+  - **Every island after the first is joined to something, always.** The first
+    version gave up when the new subject had no *pill* on the anchoring island
+    and drew nothing at all — and that is the most ordinary move there is:
+    clicking a **control line**, which by deliberate design is never drawn as a
+    signal. So following one produced a ribbon in two halves with no sign of
+    why, and it took a reader's screenshot to notice. `layout()` now records
+    where each control's label was written, `anchorIn()` answers "where on this
+    island was this step taken from" for both cases, and the join always exists.
+  - **A jump is drawn differently from a wire.** Following a control line, or
+    coming off an island that has since dropped off the end of the walk, is still
+    a step and still gets a thread — but it is not a connection on the die, so it
+    does not get to look like one. The Walk drawer names both, in the colours the
+    drawing uses.
   - Flipping direction or changing depth starts the walk again: both axes of the
     layout mirror, so a ribbon drawn one way round cannot be extended the other.
     Going *back* to a signal still on the ribbon truncates to it instead —

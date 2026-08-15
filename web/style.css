@@ -1262,6 +1262,14 @@ body.no-scroll #view { z-index: 70; }
   fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 5;
   opacity: .5;
 }
+/* A step that was not taken along a wire: following a control line, or coming
+   off an island that has since dropped off the end of the walk. It is still a
+   step and still gets a thread -- drawing nothing left the ribbon in two halves
+   with no sign of why -- but it is not a connection on the die, so it does not
+   get to look like one. */
+.sch-thread.sch-jump {
+  stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 6; opacity: .45;
+}
 
 /* --- Schematic: the study view's console -----------------------------------
    One floating panel rather than three clusters pinned to three corners. It is
@@ -1606,3 +1614,8 @@ body.no-scroll #view { z-index: 70; }
 .pr-seealso a { color: var(--accent); }
 
 #pr-statbar [data-fact] { color: var(--foreground); font-weight: 700; }
+
+/* The two kinds of thread, named in the Walk drawer with the same colours the
+   drawing uses -- a key that cannot drift from what it documents. */
+.sp-key-wire { color: var(--accent); }
+.sp-key-jump { color: var(--muted); }
