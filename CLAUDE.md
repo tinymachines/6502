@@ -244,6 +244,7 @@ _navfit-test.html      # the header, at 12 widths x 4 pages: does it fit, and is
                        # the program picker still wide enough to read?
 _contrast-test.html    # every button, every state, checked for readable text
 _persist-test.html     # the console's configuration, across a second page load
+_pinio-test.html       # pinned I/O chains, vs an independent search of the netlist
 _asm-test.html         # the assembler round-trips, the old programs are byte-
                        # identical, and each new one is RUN until its answer lands
 _programs-test.html    # the Programs page vs the assembler, timing.json and the chip
@@ -1048,6 +1049,79 @@ Two things the panels are careful not to claim:
   the module dynamically afterwards, so it cannot drift again. What is left is
   the reason the stub existed: this harness needs the elements at *top level*,
   because it measures geometry with `getBBox`.
+
+#### Pinning the chip's I/O, and colouring by block
+
+Two additions that answer "where does this wire sit in the chip", from opposite
+ends: one shows how far it is from the outside world, the other which part of
+the die it belongs to.
+
+**The pin chain is a search, not a deeper cone, and the measurement is why.**
+Measured over `schematic.json`, the median named signal is **eight** hops from
+the nearest pin, p90 is ten, and the depth control stops at six. Pins drawn by
+growing the cone would therefore sit disconnected on almost every walk — a rail
+of pills wired to nothing, which is decoration. `pinChain()` runs a
+breadth-first search under exactly `cone()`'s neighbour rules instead, and the
+pin lands at a column the walk cannot reach on its own and stays there. Anything
+the walk later discovers between the two lands in the columns between them,
+which is the point: the ends are fixed and the middle fills in.
+
+- **`null` is an answer, not a gap.** Every named signal reaches an input pin
+  going backward — all 705. But **97 of 705 never reach an output pin forward**,
+  `dpc3_SBX` among them, and that is correct: a control line's forward reach
+  ends at the switches it opens, because opening a switch is not driving a value
+  through it. The caption says "no path to a chip output from here" rather than
+  drawing nothing, which would read as a broken feature.
+- **The pad ring is written out rather than taken from the `Pads & I/O` block.**
+  That block is a *region of the die* and holds the drivers and receivers too;
+  what is wanted is the twenty-eight places the chip meets the outside world.
+  `db0-7` is in both lists because it genuinely is both.
+- **Off by default**, and persisted with the rest of the console configuration.
+  It adds eight or so elements, which is a lot to arrive to uninvited.
+  `setPinIO()` is the only place it changes and `paintPinIO()` the only place it
+  is shown — two checkboxes, the same arrangement depth already has. It does
+  *not* reset the walk: the pin is an anchor added to what is on the bench, not
+  a change to how big each step is.
+- **The bug it shipped with is the instructive part.** The search seeded its
+  parent map with `null` for the root, then dereferenced it while reconstructing
+  the path — one iteration *after* the last useful one. So it threw only when a
+  chain was actually found, the exception escaped `render()`, and the page went
+  on showing the **previous drawing**. That reads as "the toggle does nothing",
+  not as a crash, and it is the third time this project has been bitten by a
+  throw inside a refresh leaving plausible stale output on screen.
+
+**`_pinio-test.html` re-runs the search itself**, straight out of
+`schematic.json`, and compares hop counts with what the page reports. Asserting
+only "a pin appeared" would pass on a chain that wandered through the clock tree
+and came back; an independent search is what makes the drawing a measurement.
+All seven cases agree — `idb0` 5, `sb0` 6, `a0` 7, `pcl0` 6, `abl0` 2 forward,
+and `dpc3_SBX` unreachable. Verified by reintroducing the null seed and watching
+it go red.
+
+- **The witness for a stale render is the caption, not the node count.** A short
+  chain can already be on the bench — `abl0` reaches `ab0` in two hops, both
+  already drawn — so requiring the drawing to grow reports a working case as a
+  failure. It did, first time out.
+- **Scope diagram queries to `#sch-svg`.** The key draws its sample symbols with
+  the same `.sch-node` class and no block of their own, so an unscoped
+  `querySelectorAll` counts them and the region key looks short by exactly one.
+
+**The block colour follows the exploded view, from one file.** `BLOCK_COLOR`
+moved out of `exploded-gl.js` into `block-palette.js`, because the schematic
+draws the same blocks in SVG and cannot import a WebGL renderer to find out what
+colour they are — and a second copy would drift, leaving two pages disagreeing
+about what colour the ALU is.
+
+- **It is a CSS custom property, not a `stroke`.** An inline stroke would
+  outrank the `.root` and `:hover` rules and quietly kill both.
+- **The key lists only the blocks on screen.** A fixed list of thirteen would be
+  mostly irrelevant on any given walk, and a key you have to search is not a key.
+- Membership is `blocks.rs`'s measurement — the same answer the signal panel
+  reports as its region. The hue is only a second way of saying it, so the key
+  is not tagged `measured`: the colour is presentation, the block is not.
+- `exploded-gl.js` names the palette's path **once**, and the comment says why:
+  `build-web.py` rewrites it with `replace_once`, whose entire value is failing
+  when there is more than one.
 
 #### Explaining it to a reader
 

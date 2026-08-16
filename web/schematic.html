@@ -98,6 +98,15 @@
               <button id="dir-fwd" class="sch-dir-btn" type="button">what it drives</button>
             </div>
           </div>
+          <!-- Off by default. It adds a chain of eight or so elements to the
+               drawing, which is a lot to arrive to uninvited. -->
+          <div class="field">
+            <span>Chip I/O</span>
+            <label class="check inline sch-pinio">
+              <input type="checkbox" id="sch-pinio">
+              <span>pin the nearest pin</span>
+            </label>
+          </div>
           <div class="field">
             <span>Where you have been</span>
             <div class="sch-dir" role="group" aria-label="History">
@@ -174,6 +183,11 @@
           </div>
         </div>
         <p class="sch-caption mono" id="sch-caption"></p>
+
+        <!-- Only the blocks that are actually on screen. A fixed list of
+             thirteen would be mostly irrelevant on any given walk, and a key
+             you have to search is not a key. -->
+        <div class="sch-blockkey" id="sch-blockkey" hidden></div>
 
         <div class="panel-box" id="sch-signal-info"></div>
 

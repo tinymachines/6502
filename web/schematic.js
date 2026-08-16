@@ -12,6 +12,7 @@
 import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
+import { blockCss } from './block-palette.js';
 import { setupFullscreen } from './fullscreen.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +28,10 @@ const state = {
   dir: 'back',            // 'back' = what makes it, 'fwd' = what it drives
   root: null,
   depth: 3,
+  // Lock the chip's own I/O to the far end of the drawing and show the chain
+  // between. Off by default: it adds eight or so elements, which is a lot to
+  // arrive to uninvited.
+  pinIO: false,
   compare: null,          // [nodeA, nodeB] when comparing two signals
   diffControls: null,     // control names that differ, ringed in the drawing
   solo: false,            // fullscreen: one level, centred, nothing else
@@ -633,12 +638,24 @@ function drawGraph(host, c, L) {
   }
 
   // Signals last, so they sit above the wiring.
+  const blocksHere = new Set();
   for (const [node, p] of place) {
     const g = el('g', {
-      class: 'sch-node' + (node === c.root ? ' root' : '') + (isNamed(node) ? '' : ' anon'),
+      class: 'sch-node' + (node === c.root ? ' root' : '') + (isNamed(node) ? '' : ' anon')
+        + (c.pinned && node === c.pinned.pin ? ' pin' : ''),
       'data-node': node,
       transform: `translate(${p.x},${p.y})`,
     }, parts);
+    // The outline says which part of the chip this wire belongs to, in the same
+    // colours the exploded view uses -- one palette, in block-palette.js, so
+    // the two pages cannot come to disagree about what colour the ALU is.
+    //
+    // It is a custom property rather than a `stroke`, because an inline stroke
+    // would outrank the `.root` and `:hover` rules and quietly kill both.
+    const block = state.data.nodeBlock[node] & 0x7f;
+    g.style.setProperty('--block', blockCss(block));
+    g.dataset.block = String(block);
+    blocksHere.add(block);
     el('rect', { x: p.flip ? 0 : -p.w, y: -NODE_H / 2, width: p.w, height: NODE_H,
                  rx: 3, class: 'sch-pill' }, g);
     const t = el('text', { x: (p.flip ? 1 : -1) * p.w / 2, y: 4, class: 'sch-name' }, g);
@@ -649,6 +666,8 @@ function drawGraph(host, c, L) {
     g.addEventListener('click', () => { if (!state.dragged) setRoot(node); });
   }
 
+  paintBlockKey(blocksHere);
+
   host.querySelectorAll('.sch-ctrl').forEach((t) => {
     if (!t.dataset.node) return;
     t.style.cursor = 'pointer';
@@ -656,6 +675,43 @@ function drawGraph(host, c, L) {
       if (!state.dragged) setRoot(Number(t.dataset.node));
     });
   });
+}
+
+/**
+ * The block key, for the blocks that are on screen and no others.
+ *
+ * Which block a signal belongs to is `blocks.rs`'s answer, measured and
+ * published in `schematic.json` -- the same one the signal panel reports as its
+ * region. The colour is only a second way of saying it, so the key is labelled
+ * `measured` for the membership and not for the hue.
+ *
+ * Static logic and the unaccounted residue are named plainly rather than
+ * dressed up: they are where the gates that no functional block claimed live,
+ * and that is worth seeing on a walk rather than hiding.
+ */
+function paintBlockKey(blocks) {
+  const host = $('sch-blockkey');
+  if (!host) return;
+  const names = state.data.blockNames;
+  const shown = [...blocks].filter((b) => names[b]).sort((a, b) => a - b);
+  host.hidden = shown.length === 0;
+  if (host.hidden) { host.replaceChildren(); return; }
+
+  // Nothing changed? Then do not touch the DOM -- this runs on every redraw.
+  const signature = shown.join(',');
+  if (host.dataset.signature === signature) return;
+  host.dataset.signature = signature;
+
+  host.replaceChildren();
+  const label = el('span', { class: 'sch-blockkey-label' }, host);
+  label.textContent = 'Region';
+  for (const b of shown) {
+    const item = el('span', { class: 'sch-blockkey-item' }, host);
+    const dot = el('i', {}, item);
+    dot.style.background = blockCss(b);
+    const t = el('span', {}, item);
+    t.textContent = names[b];
+  }
 }
 
 /**
@@ -684,6 +740,113 @@ function drawGraph(host, c, L) {
  * is rather than moving it. It also copes with feedback, which a strict
  * topological layering would not -- this chip is full of it.
  */
+// The pad ring, split by which way a signal crosses it.
+//
+// Written out rather than taken from the `Pads & I/O` block, because that block
+// is a *region of the die* -- it holds the drivers and receivers as well as the
+// pads -- and what is wanted here is the twenty-eight places the chip meets the
+// outside world. The data bus is in both lists because it genuinely is both.
+const IO_IN = ['clk0', 'rdy', 'irq', 'nmi', 'res', 'so'];
+const IO_OUT = ['rw', 'sync', 'clk1out', 'clk2out'];
+const IO_BUS = Array.from({ length: 8 }, (_, i) => `db${i}`);
+const IO_ADDR = Array.from({ length: 16 }, (_, i) => `ab${i}`);
+
+/** Pin node ids, resolved once against the die's own name table. */
+function ioNodes(dir) {
+  const names = dir === 'back' ? [...IO_IN, ...IO_BUS] : [...IO_OUT, ...IO_ADDR, ...IO_BUS];
+  const out = new Map();
+  for (const n of names) {
+    const id = state.byName.get(n);
+    if (id != null) out.set(id, n);
+  }
+  return out;
+}
+
+/**
+ * The shortest chain of real circuit elements between `root` and a pin.
+ *
+ * Why a search rather than a deeper cone: measured against `schematic.json`, the
+ * median named signal is **eight** hops from the nearest pin and the depth
+ * control stops at six. Pins drawn by growing the cone would therefore sit
+ * disconnected on almost every walk, which is decoration rather than a feature.
+ *
+ * The neighbour rules are exactly `cone()`'s, and have to be: a control line
+ * rides on a switch as a label and is never expanded, or `cclk` -- which gates
+ * 273 transistors -- turns every chain into a trip through the clock tree.
+ *
+ * Two measured facts the caller has to respect. Every named signal reaches an
+ * input pin backward, all 705 of them. But **97 of 705 never reach an output
+ * pin forward**, `dpc3_SBX` among them, and that is correct rather than a
+ * failure: a control line's forward reach ends at the switches it opens,
+ * because opening a switch is not the same as driving a value through it. So
+ * `null` here is an answer, and the page says so instead of drawing nothing.
+ */
+function pinChain(root, dir) {
+  const { vss, vcc } = state.data;
+  const isRail = (n) => n === vss || n === vcc;
+  const targets = ioNodes(dir);
+  if (targets.has(root)) return null;          // already a pin: nothing between
+
+  // The root's entry is a real object, not null. Seeding it with `null` reads
+  // fine and then throws in the reconstruction below, on `from.get(at).element`,
+  // one iteration *after* the last useful one -- so it threw only when a chain
+  // was actually found, the exception escaped render(), and the page went on
+  // showing the previous drawing. Which looks exactly like a feature that does
+  // nothing rather than one that crashed.
+  const from = new Map([[root, { prev: null, element: null }]]);
+  let frontier = [root];
+
+  for (let hop = 0; hop < 24 && frontier.length; hop++) {
+    const next = [];
+    for (const node of frontier) {
+      const step = (n, element) => {
+        if (isRail(n) || from.has(n)) return false;
+        from.set(n, { prev: node, element });
+        next.push(n);
+        return true;
+      };
+
+      if (dir === 'back') {
+        const g = state.gateOf.get(node);
+        if (g) {
+          const inputs = [...new Set(g.terms.flat())];
+          for (const i of inputs) {
+            step(i, { kind: g.kind, out: node, inputs, terms: g.terms,
+                      precharge: g.precharge });
+          }
+        }
+      } else {
+        for (const g of state.gatesUsing.get(node) || []) {
+          step(g.out, { kind: g.kind, out: g.out, inputs: [node], terms: g.terms,
+                        precharge: g.precharge, forward: true });
+        }
+      }
+      // A pass transistor conducts both ways and so belongs to either reading.
+      for (const w of state.switchesOn.get(node) || []) {
+        const far = w.a === node ? w.b : w.a;
+        step(far, { kind: 'switch', out: node, inputs: [far], control: w.control });
+      }
+
+      for (const n of next) {
+        if (!targets.has(n)) continue;
+        // Walk the parent pointers back and hand the chain over root-first.
+        const nodes = [];
+        const elements = [];
+        for (let at = n; at != null; at = from.get(at).prev) {
+          nodes.push(at);
+          const e = from.get(at).element;
+          if (e) elements.push(e);
+          if (at === root) break;
+        }
+        nodes.reverse();
+        return { pin: n, pinName: targets.get(n), nodes, elements, hops: nodes.length - 1 };
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}
+
 function merge() {
   const col = new Map();          // node -> column
   const seen = [];                // insertion order, for a stable tie-break
@@ -721,6 +884,41 @@ function merge() {
     }
   });
 
+  // The chip's own I/O, locked to the far end of the drawing.
+  //
+  // The chain is placed from wherever its first node already sits, so the pin
+  // ends up at a column the walk cannot reach on its own -- and stays there.
+  // Anything the walk later discovers between the two lands in the columns
+  // between them, which is the whole point: the ends are fixed and the middle
+  // fills in.
+  let pinned = null;
+  if (state.pinIO && state.trail.length) {
+    const subject = state.trail[state.trail.length - 1].node;
+    const chain = pinChain(subject, state.dir);
+    if (chain) {
+      const base = col.get(chain.nodes[0]) ?? 0;
+      chain.nodes.forEach((n, k) => {
+        // First appearance still wins, exactly as it does for the walk: a
+        // signal already on the bench joins where it is rather than moving.
+        if (col.has(n)) return;
+        col.set(n, base + k);
+        seen.push(n);
+      });
+      for (const e of chain.elements) {
+        const key = e.kind === 'switch'
+          ? `s:${e.control}:${Math.min(e.out, e.inputs[0])}:${Math.max(e.out, e.inputs[0])}`
+          : `g:${e.out}`;
+        if (!elements.has(key)) elements.set(key, e);
+      }
+      pinned = chain;
+    } else {
+      // Not a gap in the drawing -- an answer about the chip. 97 of 705 signals
+      // never reach an output pin, because a control line's forward reach ends
+      // at the switches it opens.
+      pinned = { pin: null, pinName: null, nodes: [], elements: [], hops: -1 };
+    }
+  }
+
   const depth = Math.max(0, ...col.values());
   const levels = Array.from({ length: depth + 1 }, () => []);
   for (const n of seen) levels[col.get(n)].push(n);
@@ -756,7 +954,7 @@ function merge() {
 
   return {
     root: state.trail.length ? state.trail[state.trail.length - 1].node : state.root,
-    levels, elements: els, dir: state.dir, truncated, current: last,
+    levels, elements: els, dir: state.dir, truncated, current: last, pinned,
   };
 }
 
@@ -1089,6 +1287,7 @@ function saveConfig() {
       // layout mirrors: restoring a backward ribbon into a forward view would
       // put every thread on the wrong side.
       dir: state.dir,
+      pinIO: state.pinIO,
       root: state.root,
       trail: state.trail.map((t) => ({ node: t.node })),
     }));
@@ -1195,6 +1394,10 @@ const PANELS = {
         <button class="sp-dirbtn" id="solo-dir-back" type="button">what makes it</button>
         <button class="sp-dirbtn" id="solo-dir" type="button">what it drives</button>
       </div>
+      <label class="sp-check">
+        <input type="checkbox" id="solo-pinio"${state.pinIO ? ' checked' : ''}>
+        <span>pin the chip's I/O</span>
+      </label>
       <div class="sp-walk" id="sp-walk"></div>
       <div class="sp-actions">
         <button class="solo-btn sp-wide" id="sp-clear" type="button">start again from here</button>
@@ -1220,7 +1423,12 @@ const PANELS = {
     // starts again from here -- the same rule the page's own slider follows.
     host.querySelector('#solo-depth').addEventListener('input', (e) =>
       setDepth(Number(e.target.value)));
+    // Unlike depth, this does not reset the walk: the pin is an anchor added to
+    // what is already on the bench, not a change to how big each step is.
+    host.querySelector('#solo-pinio').addEventListener('change', (e) =>
+      setPinIO(e.currentTarget.checked));
     paintDir();
+    paintPinIO();
     const list = host.querySelector('#sp-walk');
     let last = null;
     return () => {
@@ -1703,6 +1911,31 @@ function paintDir() {
   if (backBtn) backBtn.classList.toggle('on', state.dir === 'back');
 }
 
+/**
+ * The one place the I/O pinning changes, and `paintPinIO` the one place it is
+ * shown -- the same arrangement depth has, and for the same reason: there are
+ * two checkboxes for it and they must not be able to disagree.
+ *
+ * The walk is not reset. The pin is an anchor added to whatever is already on
+ * the bench, so turning it on mid-walk should extend the drawing rather than
+ * throw away where you have been.
+ */
+function setPinIO(on) {
+  const next = !!on;
+  if (next === state.pinIO) return;
+  state.pinIO = next;
+  paintPinIO();
+  saveConfig();
+  render();
+}
+
+function paintPinIO() {
+  for (const id of ['sch-pinio', 'solo-pinio']) {
+    const box = $(id);
+    if (box) box.checked = state.pinIO;
+  }
+}
+
 function paintDepth() {
   // Both sliders: the page's, and the study view's own -- which exists only
   // while the Walk drawer is built.
@@ -1796,9 +2029,17 @@ function render() {
   const capped = c.truncated
     ? ` · ${c.truncated} more not shown (fan-out capped at ${MAX_FAN})`
     : '';
+  // The pin, and the honest answer when there is not one. A count that quietly
+  // omitted the unreachable case would read as "no pins are ever involved".
+  let io = '';
+  if (c.pinned) {
+    io = c.pinned.pin != null
+      ? ` · pinned to ${nameOf(c.pinned.pin)}, ${c.pinned.hops} elements away`
+      : ` · no path to a ${c.dir === 'back' ? 'chip input' : 'chip output'} from here`;
+  }
   $('sch-caption').textContent =
     `${nameOf(state.root)} — ${c.levels.reduce((a, l) => a + l.length, 0)} signals, `
-    + `${gates} gates, ${sw} switches, ${c.levels.length} ${way}${capped}`;
+    + `${gates} gates, ${sw} switches, ${c.levels.length} ${way}${capped}${io}`;
 }
 
 /** Turn a signature entry into something a reader can act on. */
@@ -1961,6 +2202,8 @@ async function boot() {
 
     const want = q.get('signal');
     const byName = new Map(data.names.map((n, i) => [n, i]).filter(([n]) => n));
+    // Shared, because the pin chains resolve the pad ring through it too.
+    state.byName = byName;
     state.root = byName.get(want) ?? byName.get('dpc3_SBX') ?? byName.get('a0') ?? 0;
 
     // Changing the program here restarts the chip on the new one and leaves the
@@ -1976,6 +2219,14 @@ async function boot() {
         render();
       },
     });
+
+    // The saved I/O choice, read up front with the rest of the configuration.
+    // Reading it later would find whatever the first render just wrote -- the
+    // same trap the console's tab fell into.
+    const saved = loadConfig();
+    if (saved && typeof saved.pinIO === 'boolean') state.pinIO = saved.pinIO;
+    $('sch-pinio').checked = state.pinIO;
+    $('sch-pinio').addEventListener('change', (e) => setPinIO(e.currentTarget.checked));
 
     buildPicker();
     $('sch-filter').addEventListener('input', buildPicker);

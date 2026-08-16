@@ -1,0 +1,211 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  Pinning the chip's I/O to the end of a walk.
+
+  The assertion that matters is the cross-check. This harness computes the
+  shortest chain from each signal to the pad ring *itself*, straight out of
+  schematic.json with its own breadth-first search, and then compares that
+  against what the page reports. Asserting only "a pin appeared" would pass on a
+  chain that wanders through the clock tree and comes back; asserting the hop
+  count against an independent search is what makes the drawing a measurement.
+
+  It also pins the case that is not a failure. 97 of 705 named signals never
+  reach an output pin going forward -- dpc3_SBX among them -- because a control
+  line's forward reach ends at the switches it opens. The page has to say so
+  rather than drawing nothing, and a harness that only checked the happy path
+  would let a silent blank through.
+
+  The chain search once threw while reconstructing its own path: the exception
+  escaped render(), and the page went on showing the PREVIOUS drawing -- which
+  reads as "the toggle does nothing", not as a crash. So the caption has to
+  *change* when the toggle is thrown. Node count would not do: a short chain can
+  already be on the bench (abl0 reaches ab0 in two hops, both already drawn),
+  so counting nodes reports a working case as a failure.
+
+    http://localhost:8777/_pinio-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1400px;height:820px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const CFG = 'v6502.schematic.console';
+
+const load = (src) => new Promise((r) => {
+  f.addEventListener('load', r, { once: true });
+  f.src = src;
+});
+
+(async () => {
+  try {
+    const d0 = await fetch('schematic.json').then((r) => r.json());
+    const id = new Map(d0.names.map((n, i) => [n, i]).filter(([n]) => n));
+    const rail = new Set([d0.vss, d0.vcc]);
+
+    // --- an independent search, so the comparison means something ------------
+    //
+    // Same neighbour rules the page uses, and they have to be the same: a gate
+    // joins its output to its inputs, a switch joins its two terminals, and a
+    // control line rides on the edge and is never expanded. cclk alone gates
+    // 273 transistors -- follow controls and every chain goes via the clock.
+    const gateOf = new Map(), usedBy = new Map(), onNode = new Map();
+    for (const g of d0.gates) {
+      const [out, , , terms] = g;
+      gateOf.set(out, terms);
+      for (const t of terms) for (const i of t) {
+        if (!usedBy.has(i)) usedBy.set(i, []);
+        usedBy.get(i).push(out);
+      }
+    }
+    for (const [, c1, c2] of d0.switches) {
+      for (const [a, b] of [[c1, c2], [c2, c1]]) {
+        if (!onNode.has(a)) onNode.set(a, []);
+        onNode.get(a).push(b);
+      }
+    }
+    const bus = (p, n) => Array.from({ length: n }, (_, i) => `${p}${i}`);
+    const PINS = {
+      back: ['clk0', 'rdy', 'irq', 'nmi', 'res', 'so', ...bus('db', 8)],
+      fwd: ['rw', 'sync', 'clk1out', 'clk2out', ...bus('ab', 16), ...bus('db', 8)],
+    };
+    const hopsTo = (root, dir) => {
+      const targets = new Set(PINS[dir].map((n) => id.get(n)).filter((n) => n != null));
+      if (targets.has(root)) return 0;
+      const seen = new Set([root]);
+      let frontier = [root];
+      for (let hop = 1; hop <= 24 && frontier.length; hop++) {
+        const next = [];
+        for (const n of frontier) {
+          const step = (m) => {
+            if (rail.has(m) || seen.has(m)) return;
+            seen.add(m); next.push(m);
+          };
+          if (dir === 'back') { for (const t of gateOf.get(n) || []) for (const i of t) step(i); }
+          else { for (const o of usedBy.get(n) || []) step(o); }
+          for (const far of onNode.get(n) || []) step(far);
+        }
+        if (next.some((m) => targets.has(m))) return hop;
+        frontier = next;
+      }
+      return -1;
+    };
+
+    // --- and what the page says ---------------------------------------------
+    const CASES = [
+      ['idb0', 'back'], ['a0', 'back'], ['sb0', 'back'], ['pcl0', 'back'],
+      ['abl0', 'fwd'], ['sb0', 'fwd'], ['dpc3_SBX', 'fwd'],
+    ];
+    const wrong = [], noRedraw = [], rows = [];
+
+    for (const [signal, dir] of CASES) {
+      // Always start from off: the setting persists, so a stale one would flip
+      // the toggle the wrong way and every assertion after it would invert.
+      localStorage.removeItem(CFG);
+      await load(`schematic?signal=${signal}&depth=3${dir === 'fwd' ? '&dir=fwd' : ''}`);
+      const d = f.contentDocument, w = f.contentWindow;
+      for (let i = 0; i < 400 && !d.getElementById('sch-caption').textContent; i++) await sleep(50);
+
+      const before = d.querySelectorAll('#sch-svg .sch-node').length;
+      const captionBefore = d.getElementById('sch-caption').textContent;
+      const box = d.getElementById('sch-pinio');
+      if (!box) { wrong.push(`${signal}: no toggle`); continue; }
+      box.checked = true;
+      box.dispatchEvent(new w.Event('change', { bubbles: true }));
+      await sleep(500);
+
+      const after = d.querySelectorAll('#sch-svg .sch-node').length;
+      const caption = d.getElementById('sch-caption').textContent;
+      const pill = d.querySelector('#sch-svg .sch-node.pin');
+      const want = hopsTo(id.get(signal), dir);
+      const said = /pinned to (\S+), (\d+) elements away/.exec(caption);
+      const none = /no path to a chip (input|output)/.test(caption);
+
+      rows.push(`     ${signal.padEnd(10)} ${dir.padEnd(5)} `
+        + `harness ${String(want).padStart(3)}  page ${said ? said[2].padStart(3) : (none ? ' --' : '  ?')}`
+        + `  pill ${pill ? pill.querySelector('text').textContent : 'none'}  ${before}->${after} nodes`);
+
+      if (want < 0) {
+        // Not a gap in the drawing: an answer about the chip.
+        if (!none) wrong.push(`${signal}/${dir}: unreachable, but the page did not say so`);
+        if (pill) wrong.push(`${signal}/${dir}: unreachable, but a pin was drawn`);
+      } else {
+        if (!said) { wrong.push(`${signal}/${dir}: no pin reported (${caption.slice(-60)})`); continue; }
+        if (Number(said[2]) !== want) {
+          wrong.push(`${signal}/${dir}: page ${said[2]} hops, search ${want}`);
+        }
+        if (!pill) wrong.push(`${signal}/${dir}: reported a pin but drew none`);
+        else if (pill.querySelector('text').textContent !== said[1]) {
+          wrong.push(`${signal}/${dir}: caption says ${said[1]}, pill says `
+            + pill.querySelector('text').textContent);
+        }
+        // A throw inside render leaves the PREVIOUS picture on screen, which
+        // looks like a toggle that does nothing -- exactly how this shipped
+        // broken once. The caption is the direct witness: it must have changed.
+        // Node count is not, because a short chain can already be on the bench
+        // (abl0 reaches ab0 in two hops, both of them already drawn).
+        if (caption === captionBefore) {
+          noRedraw.push(`${signal}/${dir}: the caption never changed`);
+        }
+      }
+    }
+
+    ok('every pinned chain is the length an independent search finds',
+       wrong.length === 0, wrong.join(' | '));
+    ok('and turning it on actually redrew the bench',
+       noRedraw.length === 0, noRedraw.join(' | ') || 'every case repainted');
+
+    // --- the toggle is off unless asked for, and survives a reload ----------
+    localStorage.removeItem(CFG);
+    await load('schematic?signal=idb0');
+    let d = f.contentDocument;
+    for (let i = 0; i < 400 && !d.getElementById('sch-caption').textContent; i++) await sleep(50);
+    ok('it is off by default', !d.getElementById('sch-pinio').checked
+       && !/pinned to/.test(d.getElementById('sch-caption').textContent));
+
+    d.getElementById('sch-pinio').checked = true;
+    d.getElementById('sch-pinio').dispatchEvent(
+      new f.contentWindow.Event('change', { bubbles: true }));
+    await sleep(400);
+    await load('schematic?signal=idb0');
+    d = f.contentDocument;
+    for (let i = 0; i < 400 && !d.getElementById('sch-caption').textContent; i++) await sleep(50);
+    ok('and once turned on it is still on next time',
+       d.getElementById('sch-pinio').checked
+       && /pinned to/.test(d.getElementById('sch-caption').textContent),
+       d.getElementById('sch-caption').textContent.slice(-40));
+
+    // --- the region key names only what is on screen ------------------------
+    const key = d.getElementById('sch-blockkey');
+    const items = [...key.querySelectorAll('.sch-blockkey-item')].map((i) => i.textContent);
+    const drawn = new Set([...d.querySelectorAll('#sch-svg .sch-node')]
+      .map((n) => n.dataset.block));
+    ok('the region key lists exactly the blocks that are drawn',
+       items.length > 0 && items.length === drawn.size,
+       `${items.length} in the key, ${drawn.size} on the diagram: ${items.join(', ')}`);
+
+    // Every pill carries its block colour, and it is the shared palette's.
+    const { blockCss } = await import('./block-palette.js');
+    const miscoloured = [...d.querySelectorAll('#sch-svg .sch-node')].filter((n) =>
+      n.style.getPropertyValue('--block').trim() !== blockCss(Number(n.dataset.block)));
+    ok('and every pill is outlined in that block’s colour',
+       miscoloured.length === 0, `${miscoloured.length} wrong`);
+
+    results.push('', ...rows);
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 2).join(' | ') : e));
+  }
+  localStorage.removeItem(CFG);
+  const lines = results.filter((r) => r.startsWith('PASS') || r.startsWith('FAIL'));
+  document.title = lines.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>

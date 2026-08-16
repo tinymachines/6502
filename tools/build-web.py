@@ -186,7 +186,7 @@ def main() -> None:
     b.copy_hashed("version-footer.js")
     b.copy_hashed("site-nav.js")
     b.copy_hashed("fullscreen.js")
-    b.copy_hashed("exploded-gl.js")
+    b.copy_hashed("block-palette.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
     b.copy_hashed("blueprint.json")
@@ -206,6 +206,14 @@ def main() -> None:
         where="pkg/v6502_wasm.js",
     )
     b.emit("pkg/v6502_wasm.js", glue.encode())
+
+    # 2a. exploded-gl.js takes the block palette from block-palette.js rather
+    #     than defining it, because the schematic draws the same blocks in SVG
+    #     and cannot import a WebGL renderer to find out what colour they are.
+    exgl = b.read("exploded-gl.js").decode()
+    exgl = replace_once(exgl, "'./block-palette.js'", f"'./{b.ref('block-palette.js')}'",
+                        where="exploded-gl.js")
+    b.emit("exploded-gl.js", exgl.encode())
 
     # 2b. The program chain, which has to be hashed in dependency order:
     #
@@ -301,6 +309,7 @@ def main() -> None:
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./block-palette.js", "./" + b.ref("block-palette.js")),
     ]:
         sch = replace_once(sch, f"'{original}'", f"'{resolved}'", where="schematic.js")
     sch = replace_once(sch, "'./fullscreen.js'", f"'./{b.ref('fullscreen.js')}'",

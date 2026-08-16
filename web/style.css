@@ -1117,7 +1117,10 @@ a.chip:hover { border-color: var(--accent); color: var(--accent); }
 .sch-ctrl { fill: #8fa3c8; font: 500 8.5px var(--font-mono); text-anchor: middle; }
 .sch-ctrl:hover { fill: var(--accent); }
 
-.sch-pill { fill: #101829; stroke: #2c3a55; stroke-width: 1.4; }
+/* The outline carries the functional block, in the exploded view's colours.
+   A custom property rather than an inline stroke, so the .root and :hover
+   rules below still win -- an inline stroke would outrank both. */
+.sch-pill { fill: #101829; stroke: var(--block, #2c3a55); stroke-width: 1.4; }
 .sch-node { cursor: pointer; }
 .sch-node:hover .sch-pill { stroke: var(--accent); }
 .sch-node.root .sch-pill { stroke: var(--accent); stroke-width: 2.2; fill: #14243c; }
@@ -1845,3 +1848,32 @@ body.no-scroll #view { z-index: 70; }
   .pg-main { padding: 1.2rem 1.2rem 1.6rem; }
   .pg-go-links { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
 }
+
+/* The region key, drawn only for the blocks currently on the diagram. Same
+   palette as the exploded view -- one file, block-palette.js, so the two pages
+   cannot come to disagree about what colour the ALU is. */
+.sch-blockkey {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem;
+  margin: .1rem 0 .8rem; font-family: var(--font-mono); font-size: .68rem;
+}
+.sch-blockkey-label {
+  color: var(--muted); letter-spacing: .1em; text-transform: uppercase;
+  font-size: .6rem; font-weight: 700;
+}
+.sch-blockkey-item { display: inline-flex; align-items: center; gap: .35rem; color: var(--muted); }
+.sch-blockkey-item i {
+  width: .7rem; height: .7rem; border-radius: 2px; display: inline-block;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5) inset;
+}
+
+/* The pinned pin: an anchor, not a step. Gold rather than the accent, so it
+   reads as "the edge of the chip" rather than "the signal you are on". */
+.sch-node.pin .sch-pill { stroke: var(--gold); stroke-width: 2.2; fill: #2a2210; }
+.sch-node.pin .sch-name { fill: var(--gold); font-weight: 700; }
+
+.sp-check {
+  display: flex; align-items: center; gap: .5rem; margin: .1rem 0 .6rem;
+  font-size: .78rem; color: var(--muted); cursor: pointer;
+}
+.sp-check input { width: 1rem; height: 1rem; accent-color: var(--accent); }
+.sch-pinio { font-size: .8rem; }
