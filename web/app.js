@@ -123,7 +123,9 @@ function loadProgram(index) {
 
 /**
  * Deep links, in the spirit of the original's query parameters:
- *   ?program=1&run=1&speed=64&find=sync
+ *   ?program=1&run=1&speed=20&find=sync
+ *
+ * `speed` is the simulated clock in Hz (0 for max), not a frame multiplier.
  * so a particular view of a particular signal can be shared.
  */
 function applyUrlParams() {

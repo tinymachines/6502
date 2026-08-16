@@ -20,9 +20,11 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 79 tests, bit-exact against the original. |
+| Simulation | Complete. 80 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
+| Controls | Program, transport and clock live in the header and drive every page. The rate is the simulated clock in Hz. |
+| Menu | One grouped list with sub-heads and a line per entry, shared by the simulator and the archive. |
 | Programs | Seven programs as **source**, assembled in the page, annotated, run on the chip. One choice, shared by every page. |
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
@@ -49,6 +51,18 @@ Known gaps, all deliberate:
   SwiftShader software rasterisation (~2–5 fps), which says nothing about a real
   device.
 - No CI. The tests and checks below are run by hand.
+- **The header transport is verified headlessly, never on a device.** The
+  clock's blink and the run/pause swap are asserted through discrete steps
+  because animation frames are throttled to nearly zero in an iframe, so what
+  is checked is that the state is right at each step rather than that the
+  blink *looks* like a blink at 1 Hz. Same class of gap as tap slop.
+- **The menu's desktop inline row is gone, deliberately.** There is one
+  organized panel behind the button at every width. The alternative worth
+  keeping in mind is a short inline row of primaries beside it, generated from
+  the same list so the two cannot drift.
+- **No `screenshots` in the manifest**, so desktop Chrome shows its small
+  install dialog rather than the rich one. It would need a browser at deploy
+  time; see the PWA section.
 - **The trace shows one bit at a time and says so.** The wire panel watches a
   single bit because the eight are different circuits; a reader who wants the
   whole byte has to move the slider eight times. Showing all eight at once
@@ -87,7 +101,7 @@ running under systemd's environment, not yours** — check the version, do not
 assume the binary.
 
 ```bash
-cargo test --workspace              # 79 tests: netlist, functional, golden,
+cargo test --workspace              # 80 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode, blocks
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p v6502-sim --test functional  # vs the documented ISA
@@ -321,9 +335,10 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Four pages prefixed `_` that are **never shipped** — `build-web.py` copies only
-the files it names, so they cannot reach `dist/`. They exist because the front
-end has no other test route and screenshots do not catch this class of bug.
+Twenty-one harnesses plus two probes, all prefixed `_` and **never shipped** —
+`build-web.py` copies only the files it names, so they cannot reach `dist/`.
+They exist because the front end has no other test route and screenshots do not
+catch this class of bug.
 
 ```bash
 _camera-test.html      # zoom limits and pan clamping, asserted
