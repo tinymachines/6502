@@ -18,6 +18,11 @@
   overflow, and the picker must still be big enough to read a program name in.
   Either alone passes while the other is broken.
 
+  The header now carries a transport and a clock select as well, which is three
+  controls competing for a row that already held a wordmark and a menu button.
+  They are checked the same way and for the same reason: a tap target that has
+  been squeezed to nothing still renders, and still looks like a control.
+
     http://localhost:8777/_navfit-test.html
 -->
 <html lang="en"><head><meta charset="utf-8"><title>pending</title>
@@ -34,16 +39,31 @@ const f = document.getElementById('f');
 // 320 is the narrowest common phone; 1280 and 1400 are where the links come
 // inline beside the picker, which is the pair that broke.
 const WIDTHS = [320, 360, 390, 430, 480, 700, 992, 1180, 1280, 1400, 1600, 1920];
-const PAGES = ['index.html', 'programs', 'schematic', 'timing'];
+// `chip` says whether this page registers a driver and therefore grows a
+// transport. Timing runs nothing -- it is a table of measurements -- so its
+// slot stays empty, and waiting for a control that is never coming would only
+// slow the harness down.
+const PAGES = [
+  { path: 'index.html', chip: true },
+  { path: 'programs', chip: true },
+  { path: 'schematic', chip: true },
+  { path: 'timing', chip: false },
+];
 
 // Narrow enough to be tight, wide enough to read "Fill page $0300".
 const MIN_SELECT = 96;
+// A finger, roughly. Below this the button is present and unusable, which is
+// the failure mode this harness exists for.
+const MIN_TAP = 30;
+// Enough to tell "100 Hz" from "1 kHz".
+const MIN_CLOCK = 56;
 
 (async () => {
   try {
     const rows = [];
     const overflowing = [];
     const collapsed = [];
+    const squeezed = [];
 
     for (const page of PAGES) {
       for (const w of WIDTHS) {
@@ -51,27 +71,54 @@ const MIN_SELECT = 96;
         f.style.height = '240px';
         await new Promise((r) => {
           f.addEventListener('load', r, { once: true });
-          f.src = `${page}?w=${w}`;
+          f.src = `${page.path}?w=${w}`;
         });
-        // Wait for the picker rather than for a fixed delay. The schematic
+        // Wait for the controls rather than for a fixed delay. The schematic
         // builds its header inside boot(), behind a JSON fetch and the wasm, so
         // a flat 400ms measured an empty header on a slow run -- and reported a
         // missing control as a failing width, which is a harness bug wearing a
         // page bug's clothes.
+        //
+        // The transport arrives later still: the programs page builds it after
+        // the wasm has loaded, so waiting only for the picker measured two
+        // widths before it existed and quietly skipped them.
         const d = f.contentDocument;
         for (let i = 0; i < 200 && !d.querySelector('.nav-prog-select'); i++) await sleep(50);
+        let waited = 0;
+        if (page.chip) {
+          for (; waited < 400 && !d.querySelector('.nav-tbtn'); waited++) await sleep(50);
+        }
         await sleep(120);
         const wrap = d.querySelector('.site-head .wrap');
         const sel = d.querySelector('.nav-prog-select');
         const over = wrap.scrollWidth - wrap.clientWidth;
         const doc = d.documentElement.scrollWidth - d.documentElement.clientWidth;
         const selW = sel ? Math.round(sel.getBoundingClientRect().width) : -1;
-        const name = page.replace('.html', '');
+        const name = page.path.replace('.html', '');
+
+        // Timing runs no chip, so it has no transport. That is the intended
+        // answer, not a missing control, so it is skipped rather than failed.
+        const tbtns = [...d.querySelectorAll('.nav-tbtn')];
+        const clock = d.querySelector('.nav-clock-select');
+        const tapW = tbtns.length
+          ? Math.round(Math.min(...tbtns.map((b) => b.getBoundingClientRect().width)))
+          : -1;
+        const clockW = clock ? Math.round(clock.getBoundingClientRect().width) : -1;
+
         rows.push(`     ${name.padEnd(10)} ${String(w).padStart(5)}px  `
           + `picker ${String(selW).padStart(3)}px  `
+          + `tap ${String(tapW).padStart(3)}px  clock ${String(clockW).padStart(3)}px  `
           + `header ${over > 0 ? '+' + over : 'fits'}  doc ${doc > 0 ? '+' + doc : 'fits'}`);
         if (over > 0 || doc > 0) overflowing.push(`${name}@${w} +${Math.max(over, doc)}`);
         if (selW < MIN_SELECT) collapsed.push(`${name}@${w} ${selW}px`);
+        // Distinguish "never arrived" from "the page is still booting". Under
+        // load this wait has timed out once, and a boot that outran the harness
+        // reads exactly like a page with no transport unless it says so.
+        if (page.chip && !tbtns.length) {
+          squeezed.push(`${name}@${w} no transport after ${(waited * 50) / 1000}s`);
+        }
+        if (tbtns.length && tapW < MIN_TAP) squeezed.push(`${name}@${w} button ${tapW}px`);
+        if (clock && clockW < MIN_CLOCK) squeezed.push(`${name}@${w} clock ${clockW}px`);
       }
     }
 
@@ -80,6 +127,11 @@ const MIN_SELECT = 96;
     ok('and the program picker is legible at every one of them',
        collapsed.length === 0,
        collapsed.length ? collapsed.join(', ') : `never below ${MIN_SELECT}px`);
+
+    ok('and the transport is still a tap target, not a sliver',
+       squeezed.length === 0,
+       squeezed.length ? squeezed.join(', ')
+         : `buttons never below ${MIN_TAP}px, clock never below ${MIN_CLOCK}px`);
 
     // The picker must be reachable at 320px, where the CTA it replaced was
     // dropped entirely. It is the only way to change what is running.

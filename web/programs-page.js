@@ -16,6 +16,7 @@ import {
   PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram, programFromUrl,
 } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
+import { setupChipNav } from './chip-nav.js';
 import {
   createChip, transport, readout, el, hex2, hex4, lamps, runWhileVisible,
 } from './demos.js';
@@ -122,7 +123,7 @@ function renderBinary(program) {
   $('prog-dump').textContent = lines.join('\n');
   $('prog-binary-note').textContent =
     `${b.length} bytes, loaded at $${hex4(org)}. The reset vector is pointed here `
-    + 'before the chip is powered up — without that it comes out of reset at '
+    + 'before the chip is powered up. Without that it comes out of reset at '
     + '$0000 and runs a BRK loop against itself.';
 }
 
@@ -172,11 +173,11 @@ function buildRunPanel(program) {
       Machine,
       program: program.bytes,
       loadAddr: program.asm.org,
-      // The slowest rate anything on this site runs at. A program page is for
-      // reading what happened, not for watching a blur.
-      rate: 2,
     });
     state.chip = chip;
+    // The chip registered itself with the store, so the header transport runs
+    // it. This panel's own transport is a second view of the same thing.
+    setupChipNav();
   }
 
   transport(host, chip, { label: 'chip' });
@@ -259,7 +260,7 @@ function show(index, { save = false } = {}) {
   $('prog-name').textContent = program.name;
   $('prog-blurb').textContent = program.blurb;
   $('prog-bar-note').textContent =
-    `${program.name} — ${program.bytes.length} bytes at $${hex4(program.asm.org)}`;
+    `${program.name}: ${program.bytes.length} bytes at $${hex4(program.asm.org)}`;
 
   renderListing(program);
   renderBinary(program);

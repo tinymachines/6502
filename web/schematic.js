@@ -14,6 +14,11 @@ import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './prog
 import { setupProgramNav } from './program-nav.js';
 import { blockCss } from './block-palette.js';
 import { setupFullscreen } from './fullscreen.js';
+import { setupChipNav } from './chip-nav.js';
+import {
+  CLOCKS, clockHz, isRunning, setClock, toggleRunning,
+  step as stepChip, stepBack, reset as resetChip, subscribe, halfCyclesFor,
+} from './chip-controls.js';
 
 const $ = (id) => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -35,14 +40,9 @@ const state = {
   compare: null,          // [nodeA, nodeB] when comparing two signals
   diffControls: null,     // control names that differ, ringed in the drawing
   solo: false,            // fullscreen: one level, centred, nothing else
-  // Half-cycles per second while running in the study view. The page loop does
-  // eight per animation frame, which is ~480/s -- fine for watching a die light
-  // up, useless for watching six wires change. The point of this mode is to see
-  // an edge happen, so it is paced in time rather than in frames.
-  soloRate: 4,
-  soloAcc: 0,
+  // Whether it is running and how fast are in chip-controls.js, set from the
+  // header and from the study view's own drawer.
   lastFrame: 0,
-  running: false,
   raf: 0,
   // Where you have been. An entry is `{root, dir, depth}` -- which is exactly
   // what the deep link carries, so a history entry *is* a URL you could have
@@ -87,7 +87,7 @@ const nameOf = (n) => state.data.names[n] ?? `#${n}`;
 const isNamed = (n) => state.data.names[n] != null;
 
 // ---------------------------------------------------------------------------
-// Cone extraction — the same walk as `Schematic::cone`, in the page so that
+// Cone extraction -- the same walk as `Schematic::cone`, in the page so that
 // re-rooting and changing depth cost nothing.
 // ---------------------------------------------------------------------------
 
@@ -172,7 +172,7 @@ function cone(root, depth, dir = 'back') {
  *
  * This is what makes "is bit 0 the same circuit as bit 7" answerable at all.
  * The control line's *name* is part of the shape, because a switch opened by
- * ADDSB7 is a different element from one opened by ADDSB06 — that difference
+ * ADDSB7 is a different element from one opened by ADDSB06 -- that difference
  * is the shifter, and erasing it would erase the finding.
  */
 function signature(c) {
@@ -197,7 +197,7 @@ function diff(a, b) {
 }
 
 // ---------------------------------------------------------------------------
-// The camera — pinch, drag and wheel over the drawing
+// The camera -- pinch, drag and wheel over the drawing
 // ---------------------------------------------------------------------------
 //
 // Live in the study view only. On the page proper the drawing sits in a
@@ -1135,14 +1135,14 @@ function signalHtml(node) {
       + `<span class="muted">The suffix <span class="mono">${dpc[2]}</span> is the die's own `
       + `shorthand for what it opens.</span>`);
   } else if (bit && STEMS[bit[0]]) {
-    add('Name', `bit <b>${bit[1]}</b> of <span class="mono">${bit[0]}</span> — ${STEMS[bit[0]]}`);
+    add('Name', `bit <b>${bit[1]}</b> of <span class="mono">${bit[0]}</span>: ${STEMS[bit[0]]}`);
   } else if (STEMS[name]) {
     add('Name', STEMS[name]);
   } else if (/^op-/.test(name)) {
     add('Name', 'a decode PLA product term. '
       + `<span class="muted">The die names these after the T-state and the instructions they serve.</span>`);
   } else if (!named) {
-    add('Name', 'unnamed. <span class="muted">An internal node the die trace did not label — '
+    add('Name', 'unnamed. <span class="muted">An internal node the die trace did not label; '
       + 'most gate outputs are unnamed, because nobody needed to refer to them.</span>');
   }
 
@@ -1161,13 +1161,13 @@ function signalHtml(node) {
         + (g.precharge >= 0 ? `, precharged by <span class="mono">${nameOf(g.precharge)}</span>` : ''));
   } else {
     add('Driven by <span class="tagm">measured</span>',
-        '<span class="muted">no gate — it is fed through switches only</span>');
+        '<span class="muted">no gate: it is fed through switches only</span>');
   }
 
   const fan = d.nodeFanout[node];
   add('Gates <span class="tagm">measured</span>',
       `${fan} transistor${fan === 1 ? '' : 's'}`
-      + (fan === 0 ? ' <span class="muted">— it drives nothing</span>' : ''));
+      + (fan === 0 ? ' <span class="muted">(it drives nothing)</span>' : ''));
 
   // The blueprint measured which two units a control line joins. This is the
   // part that turns a name like SBX into a fact rather than an expansion.
@@ -1216,8 +1216,8 @@ function buildLegend() {
   };
 
   item('Inverter', 'out is low when its one input is high', gate('1', 'sch-inverter'));
-  item('NOR ≥1', 'low if <em>any</em> input is high — transistors in parallel', gate('≥1', 'sch-nor'));
-  item('NAND &', 'low only if <em>all</em> inputs are high — in series', gate('&', 'sch-nand'));
+  item('NOR ≥1', 'low if <em>any</em> input is high: transistors in parallel', gate('≥1', 'sch-nor'));
+  item('NAND &', 'low only if <em>all</em> inputs are high: in series', gate('&', 'sch-nand'));
   item('And-or-invert', 'a mix of both, in one gate', gate('&≥', 'sch-aoi'));
   item('Precharged φ', 'no pullup: a clock charges it, the network drains it',
        gate('φ', 'sch-dynamic'));
@@ -1228,7 +1228,7 @@ function buildLegend() {
     el('line', { x1: 39, y1: 17, x2: 39, y2: 35, class: 'sch-sw-plate' }, g);
     el('line', { x1: 35, y1: 6, x2: 35, y2: 17, class: 'sch-sw-gate' }, g);
   });
-  item('Power rail', 'Vcc above, Vss below — where a gate pulls to', (svg) => {
+  item('Power rail', 'Vcc above, Vss below: where a gate pulls to', (svg) => {
     el('path', { d: 'M 20 22 H 60', class: 'sch-wire' }, svg);
     el('line', { x1: 20, y1: 12, x2: 20, y2: 32, class: 'sch-rail' }, svg);
     const t = el('text', { x: 20, y: 42, class: 'sch-rail-label' }, svg);
@@ -1340,11 +1340,11 @@ function bitStrip(v, n) {
 // and a button that called that "asserted" would be reporting a polarity it had
 // assumed instead of the level it measured.
 const PINS = [
-  ['res', 'RES', 'setRes', 'reset — active low'],
-  ['irq', 'IRQ', 'setIrq', 'interrupt request, active low — masked by the I flag'],
+  ['res', 'RES', 'setRes', 'reset, active low'],
+  ['irq', 'IRQ', 'setIrq', 'interrupt request, active low, masked by the I flag'],
   ['nmi', 'NMI', 'setNmi', 'non-maskable interrupt, active low'],
-  ['rdy', 'RDY', 'setRdy', 'ready — low stalls the chip on a read cycle'],
-  ['so', 'SO', 'setSo', 'set overflow — held low out of reset'],
+  ['rdy', 'RDY', 'setRdy', 'ready: low stalls the chip on a read cycle'],
+  ['so', 'SO', 'setSo', 'set overflow, held low out of reset'],
 ];
 
 const pinHigh = (name) => {
@@ -1453,12 +1453,12 @@ const PANELS = {
   /** The chip's edge: what is on the pads, and the five pins that drive it. */
   io(host) {
     host.innerHTML = `<dl class="sp-kv" id="sp-io"></dl>
-      <p class="sp-sub">Input pins — the level on each. Click to flip it.</p>
+      <p class="sp-sub">Input pins: the level on each. Click to flip it.</p>
       <div class="sp-pins" id="sp-pins"></div>
       <p class="sp-note">Everything above is read off the pads: the address and
         data buses are the levels on <span class="mono">ab0…15</span> and
         <span class="mono">db0…7</span>, not a number kept beside them. Four of
-        the pins are active low, so 0 means asserted — <b>SO</b> is the
+        the pins are active low, so 0 means asserted. <b>SO</b> is the
         exception and comes out of reset low. Holding <b>RDY</b> low stops the
         chip without stopping its clock; pulling <b>IRQ</b> low with no handler
         installed vectors through <span class="mono">$FFFE</span> to
@@ -1489,7 +1489,7 @@ const PANELS = {
           ${rw ? `read <span class="mono">$${hex4(ab)}</span> → <span class="mono">$${hex2(db)}</span>`
                : `write <span class="mono">$${hex2(db)}</span> → <span class="mono">$${hex4(ab)}</span>`}
         </dd>
-        <dt>Phase</dt><dd class="mono">${m.clk0() ? 'φ1' : 'φ2'} · ${m.timingStates() || '—'}${m.sync() ? ' · SYNC' : ''}</dd>`;
+        <dt>Phase</dt><dd class="mono">${m.clk0() ? 'φ1' : 'φ2'} · ${m.timingStates() || 'none'}${m.sync() ? ' · SYNC' : ''}</dd>`;
       if (html !== last) { last = html; kv.innerHTML = html; }
       for (const b of pins.children) {
         const high = pinHigh(b.dataset.pin);
@@ -1515,7 +1515,7 @@ const PANELS = {
                  inputmode="latin" aria-label="Address"></label>
       </div>
       <div class="sp-dump mono" id="sp-dump"></div>
-      <p class="sp-note">The bus the chip is talking to, not a copy of it — so
+      <p class="sp-note">The bus the chip is talking to, not a copy of it, so
         stepping back takes the bytes back with it, writes and all. The cell the
         address bus is pointing at is ringed; the byte under the program counter
         is lit.</p>`;
@@ -1566,7 +1566,7 @@ const PANELS = {
    * The stack: where S points, and what a pull would return.
    *
    * Deliberately *not* "how many bytes are on the stack". That would be
-   * `$FF - S`, which assumes the stack began empty at the top — and the 6502
+   * `$FF - S`, which assumes the stack began empty at the top -- and the 6502
    * does not clear S at reset. It decrements it by three and nothing else, so
    * out of a power-on it holds whatever its storage nodes came up as, exactly as
    * this simulator reproduces. How much is on the stack is not something the
@@ -1576,12 +1576,12 @@ const PANELS = {
   stack(host) {
     host.innerHTML = `<div id="sp-stack"></div>
       <p class="sp-note">S is read out of its storage nodes like every other
-        register, and it points at the <em>next free byte</em> — so a push writes
+        register, and it points at the <em>next free byte</em>, so a push writes
         to $0100+S and then decrements, and the stack grows downward. The bytes
         below the list are whatever was pushed and pulled earlier: still in
         memory, still on the Memory tab, and no longer the chip's business.</p>
       <p class="sp-note">There is no count here on purpose. The 6502 does not
-        reset its stack pointer — reset only decrements it by three — so how deep
+        reset its stack pointer (reset only decrements it by three) so how deep
         the stack is is not a fact the chip holds.</p>`;
     const box = host.querySelector('#sp-stack');
     const DEEP = 12;
@@ -1782,10 +1782,8 @@ function refreshPalette() {
  * necessarily zero; a refusal at the start of history is normal, not an error.
  */
 function step(dir) {
-  setRunning(false);
-  if (dir > 0) state.machine.halfStep();
-  else state.machine.stepBack();
-  refresh();
+  if (dir > 0) stepChip();
+  else stepBack();
 }
 
 // ---------------------------------------------------------------------------
@@ -1962,10 +1960,14 @@ function setDir(dir) {
   syncUrl();
 }
 
-/** The only place run state changes, so the two transports cannot disagree. */
-function setRunning(on) {
-  state.running = on;
-  state.soloAcc = 0;
+/**
+ * Paint the transports from the store.
+ *
+ * Three of them now: this page's, the study view's, and the header's. None of
+ * them holds run state, so none of them can disagree about it.
+ */
+function paintTransport() {
+  const on = isRunning();
   const a = $('sch-run');
   if (a) a.textContent = on ? 'Pause' : 'Run';
   const b = $('solo-run');
@@ -1974,6 +1976,8 @@ function setRunning(on) {
     b.setAttribute('aria-label', on ? 'Pause' : 'Run');
     b.classList.toggle('on', on);
   }
+  const c = $('solo-clock-select');
+  if (c && c.value !== String(clockHz())) c.value = String(clockHz());
 }
 
 /** The only place depth changes, so the slider and solo mode cannot disagree. */
@@ -2038,7 +2042,7 @@ function render() {
       : ` · no path to a ${c.dir === 'back' ? 'chip input' : 'chip output'} from here`;
   }
   $('sch-caption').textContent =
-    `${nameOf(state.root)} — ${c.levels.reduce((a, l) => a + l.length, 0)} signals, `
+    `${nameOf(state.root)}: ${c.levels.reduce((a, l) => a + l.length, 0)} signals, `
     + `${gates} gates, ${sw} switches, ${c.levels.length} ${way}${capped}${io}`;
 }
 
@@ -2076,7 +2080,7 @@ function runCompare(a, b) {
 
   const list = (items) => items.length
     ? `<ul class="cmp-list">${items.map((x) => `<li>${describe(x)}</li>`).join('')}</ul>`
-    : '<p class="muted">nothing — every element here has a partner</p>';
+    : '<p class="muted">nothing: every element here has a partner</p>';
 
   const same = !d.onlyA.length && !d.onlyB.length;
   const total = d.shared.length + d.onlyA.length + d.onlyB.length;
@@ -2099,7 +2103,7 @@ function runCompare(a, b) {
     <p class="cmp-note">
       Compared as <em>shape</em>: how many elements of each kind sit at each level
       behind the signal, with a switch identified by the control line that opens
-      it. Two bits of one bus use different wires by definition — the question is
+      it. Two bits of one bus use different wires by definition; the question is
       whether they are wired the <em>same way</em>, and mostly they are not.
       ${state.diffControls.size
         ? 'The differing controls are ringed in the drawing below.'
@@ -2190,7 +2194,7 @@ async function boot() {
 
     const c = data.counts;
     $('sch-stats').textContent =
-      `${c.gates} gates — ${c.inverter} inverters, ${c.nor} NOR, ${c.nand} NAND, ${c.aoi} AOI, `
+      `${c.gates} gates: ${c.inverter} inverters, ${c.nor} NOR, ${c.nand} NAND, ${c.aoi} AOI, `
       + `${c.dynamic} precharged · ${c.switches} switches · `
       + `${c.absorbed} of ${c.transistors} transistors inside a symbol · ${c.unresolved} unresolved`;
 
@@ -2232,8 +2236,22 @@ async function boot() {
     $('sch-filter').addEventListener('input', buildPicker);
     $('sch-signal').addEventListener('change', (e) => setRoot(Number(e.target.value)));
     $('sch-depth').addEventListener('input', (e) => setDepth(Number(e.target.value)));
-    $('sch-run').addEventListener('click', () => setRunning(!state.running));
-    $('solo-run').addEventListener('click', () => setRunning(!state.running));
+    // The header owns the transport; this page's own buttons and the study
+    // view's are two more views of it. The study view is fullscreen, with no
+    // header to reach, so it carries the clock select as well.
+    setupChipNav({
+      step: () => { state.machine.halfStep(); refresh(); },
+      back: () => { state.machine.stepBack(); refresh(); },
+      reset: () => { state.machine.powerCycle(); refresh(); },
+    });
+    const soloClock = $('solo-clock-select');
+    for (const c of CLOCKS) soloClock.add(new Option(c.label, String(c.hz)));
+    soloClock.addEventListener('change', () => setClock(Number(soloClock.value)));
+    subscribe(paintTransport);
+
+    $('sch-run').addEventListener('click', () => toggleRunning());
+    $('sch-reset').addEventListener('click', () => resetChip());
+    $('solo-run').addEventListener('click', () => toggleRunning());
     $('solo-step').addEventListener('click', () => step(+1));
     $('solo-back').addEventListener('click', () => step(-1));
 
@@ -2256,7 +2274,7 @@ async function boot() {
       if (ev.key === ']') { goForward(); ev.preventDefault(); return; }
       if (!state.solo) return;
       if (ev.key === '0') { fitAll(); ev.preventDefault(); }
-      else if (ev.key === ' ') { setRunning(!state.running); ev.preventDefault(); }
+      else if (ev.key === ' ') { toggleRunning(); ev.preventDefault(); }
       else if (ev.key === 'ArrowRight') { step(+1); ev.preventDefault(); }
       else if (ev.key === 'ArrowLeft') { step(-1); ev.preventDefault(); }
       else if (ev.key === 'p' || ev.key === 'P') {
@@ -2394,7 +2412,7 @@ function refresh() {
   const m = state.machine;
   const out = $('solo-clock');
   if (state.solo && out) {
-    const parts = [`½cyc ${m.halfCycle()}`, m.clk0() ? 'φ1' : 'φ2', m.timingStates() || '—'];
+    const parts = [`½cyc ${m.halfCycle()}`, m.clk0() ? 'φ1' : 'φ2', m.timingStates() || 'none'];
     if (m.sync()) parts.push('sync');
     const text = parts.join(' · ');
     if (out.textContent !== text) out.textContent = text;
@@ -2405,16 +2423,12 @@ function refresh() {
 
 function tick(now = 0) {
   const m = state.machine;
-  if (state.running) {
-    if (state.solo) {
-      // Paced in wall-clock time so an edge is watchable.
-      const dt = state.lastFrame ? Math.min(now - state.lastFrame, 250) : 0;
-      state.soloAcc += (dt / 1000) * state.soloRate;
-      while (state.soloAcc >= 1) { m.halfStep(); state.soloAcc -= 1; }
-    } else {
-      for (let i = 0; i < 8; i++) m.halfStep();
-    }
-  }
+  // The page and the study view ran at different rates: eight half-cycles a
+  // frame here, four a second there. That difference existed because the page
+  // had no rate control, and it does now -- one clock, paced in wall-clock time
+  // so the reader chooses how fast an edge arrives.
+  const n = halfCyclesFor(now);
+  for (let i = 0; i < n; i++) m.halfStep();
   state.lastFrame = now;
   refresh();
   state.raf = requestAnimationFrame(tick);

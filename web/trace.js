@@ -146,7 +146,7 @@ function sampleRow(prev) {
     half: m.halfCycle(),
     phase: m.phase(),
     sync: m.sync(),
-    tstates: m.timingStates() || '—',
+    tstates: m.timingStates() || 'none',
     ab: m.addressBus(), db: m.dataBus(), read: m.isRead(),
     a: m.a(), x: m.x(), y: m.y(), s: m.s(), p: m.p(), pc: m.pc(), ir: m.ir(),
     flags: m.flagsString(),
@@ -256,7 +256,7 @@ function mnemonic(opcode) {
 function subjectText() {
   const e = OPCODES[state.opcode];
   const bytes = [state.opcode, ...state.operand].map(hex2).join(' ');
-  if (!e) return `$${hex2(state.opcode)} — undocumented · ${bytes}`;
+  if (!e) return `$${hex2(state.opcode)} undocumented · ${bytes}`;
   const [mn, mode] = e;
   const o = state.operand;
   // Each formatter is a function, and only the one for this mode is called.
@@ -310,7 +310,7 @@ function renderHead(row) {
     + `<span class="tr-sep">·</span><span>φ${row.phase}</span>`
     + `<span class="tr-sep">·</span><span class="mono">${row.tstates}</span>`
     + (row.sync ? '<span class="tr-flag">sync</span>' : '')
-    + (row.tail ? '<span class="tr-flag tr-tail">tail — next fetch already begun</span>' : '');
+    + (row.tail ? '<span class="tr-flag tr-tail">tail: next fetch already begun</span>' : '');
 }
 
 function renderJoins(row, prevRow) {
@@ -324,7 +324,7 @@ function renderJoins(row, prevRow) {
       return `<li class="${fresh ? 'fresh' : ''}">${names.join('<span class="tr-eq">=</span>')}
         <span class="tr-lvl ${g.high ? 'hi' : 'lo'}">${g.high ? '1' : '0'}</span></li>`;
     }).join('')
-    : '<li class="muted">nothing joined — every watched wire is on its own</li>';
+    : '<li class="muted">nothing joined: every watched wire is on its own</li>';
   $('tr-joins').innerHTML = html;
   prevJoinKeys = now.map((g) => g.key);
 }

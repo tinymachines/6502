@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Visual 6502 — the chip, switch by switch</title>
+<title>Visual 6502: a transistor-level simulation of the MOS 6502</title>
 <meta name="description" content="A transistor-level simulation of the MOS 6502, rendered from the real die. 1725 nodes, 3510 transistors, no instruction decoder.">
 <meta name="theme-color" content="#0b1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -47,7 +47,10 @@
           <a href="#credit">Credit</a>
           <a href="archive/">Archive</a>
         </div>
+        <div class="nav-ctl">
         <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
         <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
           <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
           <span class="mtxt">Menu</span>
@@ -61,16 +64,16 @@
     <!-- ── hero ─────────────────────────────────────────────── -->
     <section class="hero wrap">
       <p class="eyebrow">Transistor-level · from the real die</p>
-      <h1>The 6502,<br><span class="hl">switch by switch.</span></h1>
+      <h1>The MOS 6502,<br><span class="hl">simulated switch by switch.</span></h1>
       <p class="lede">
-        Nothing here models the 6502's behaviour. There are wires and switches,
-        simulated from the real die, and the behaviour falls out of them. Every
-        register you see is read back out of storage nodes; every cycle count is
-        emergent.
+        Nothing here models the 6502's behaviour. The simulation holds 1725
+        nodes and 3510 transistors taken from the die, and the behaviour is what
+        those switches do. Register values are read back out of storage nodes;
+        cycle counts are counted, not looked up.
       </p>
       <div class="cta-row">
         <a class="btn btn-primary" href="#explorer">Run the chip</a>
-        <a class="btn btn-ghost" href="#looking-at">What am I looking at?</a>
+        <a class="btn btn-ghost" href="#looking-at">What is on screen</a>
       </div>
       <div class="statbar" id="chip-facts">…</div>
     </section>
@@ -130,7 +133,7 @@
               <div class="flags" id="flags"></div>
               <div class="disasm">
                 <span class="disasm-label">executing</span>
-                <span id="disasm">—</span>
+                <span id="disasm">none</span>
               </div>
             </section>
 
@@ -164,7 +167,7 @@
             </section>
 
             <section class="panel" data-tab="lab">
-              <h2>Lab — one instruction, end to end</h2>
+              <h2>Lab: one instruction, end to end</h2>
               <label class="field lab-pick">
                 <span>Instruction</span>
                 <select id="lab-pick"></select>
@@ -200,7 +203,7 @@
                 <div class="key-row">
                   <span class="key-dot hot"></span>
                   <div><b>Glowing</b><p>The node is logically high at this instant.
-                  Not an animation — 3,510 switches solved to a fixed point, twice
+                  Not an animation: 3,510 switches solved to a fixed point, twice
                   per clock cycle, then painted.</p></div>
                 </div>
                 <div class="key-row">
@@ -213,7 +216,7 @@
                   <span class="key-dot dim"></span>
                   <div><b>Dim</b><p>Inactive, or one of the two power rails. vss and
                   vcc blanket the die, so they are deliberately muted rather than
-                  drawn live — otherwise every trace would light the whole chip.</p></div>
+                  drawn live, or every trace would light the whole chip.</p></div>
                 </div>
               </div>
 
@@ -223,7 +226,7 @@
               <h2>Transistors</h2>
               <p class="key-note">There is no transistor layer to switch on. A
               transistor <em>is</em> the crossing: polysilicon passing over
-              diffusion, 3,510 times. That is the whole of the logic — no gates, no
+              diffusion, 3,510 times. That is the whole of the logic: no gates, no
               decoder, nothing above the switches.</p>
 
               <h2>Pins</h2>
@@ -251,28 +254,21 @@
         <div class="console-foot">
           <div class="transport">
             <button id="btn-reset" class="iconbtn" type="button" title="Power cycle (R)" aria-label="Power cycle">⏻</button>
-            <button id="btn-back" class="iconbtn" type="button" title="Back one half-cycle (,)" aria-label="Step back">◀|</button>
+            <button id="btn-back" class="iconbtn" type="button" title="Back one half-cycle (,)" aria-label="Step back">◀</button>
             <button id="btn-run" class="iconbtn primary" type="button" title="Run / pause (space)" aria-label="Run">▶</button>
-            <button id="btn-half" class="iconbtn" type="button" title="One half-cycle (.)" aria-label="Step half-cycle">|▶</button>
+            <button id="btn-half" class="iconbtn" type="button" title="One half-cycle (.)" aria-label="Step half-cycle">▶❙</button>
             <button id="btn-cycle" class="iconbtn" type="button" title="One cycle (C)" aria-label="Step cycle">▶|</button>
             <button id="btn-instr" class="iconbtn" type="button" title="One instruction (I)" aria-label="Step instruction">▶▶</button>
           </div>
+          <!-- Filled from CLOCKS in chip-controls.js, so the steps here and the
+               steps in the header are one list. -->
           <label class="field speed">
-            <span>Speed</span>
-            <select id="speed">
-              <option value="0.1" selected>0.1×</option>
-              <option value="0.25">0.25×</option>
-              <option value="0.5">0.5×</option>
-              <option value="1">1×</option>
-              <option value="4">4×</option>
-              <option value="16">16×</option>
-              <option value="64">64×</option>
-              <option value="0">max</option>
-            </select>
+            <span>Clock</span>
+            <select id="speed"></select>
           </label>
           <div class="timeline">
             <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Timeline">
-            <span id="scrub-label">—</span>
+            <span id="scrub-label">0</span>
           </div>
         </div>
 
@@ -282,27 +278,29 @@
     <!-- ── explanatory sections ─────────────────────────────── -->
     <section class="wrap sec" id="looking-at">
       <div class="sec-head">
-        <p class="eyebrow">What you're looking at</p>
-        <h2>A photograph of a chip, running.</h2>
+        <p class="eyebrow">The die view</p>
+        <h2>What is on screen</h2>
       </div>
       <div class="cards">
         <article class="card">
           <h3>The die is real</h3>
           <p>Every polygon comes from the visual6502 team's trace of a decapped
-          6502 — 8,233 shapes across six mask layers, triangulated into 83,227
-          triangles. Metal sits translucent on top, exactly as it does on silicon.</p>
+          6502: 8,233 shapes across six mask layers, triangulated into 83,227
+          triangles. Metal is drawn translucent on top, in the order the mask
+          layers sit on silicon.</p>
         </article>
         <article class="card">
-          <h3>The glow is the simulation</h3>
-          <p>A node lights up when it is logically high. That is not an
-          animation: it is 3,510 switches being solved to a fixed point, twice
-          per clock cycle, and then painted.</p>
+          <h3>Brightness is node level</h3>
+          <p>A node is drawn lit when it is high. Nothing is animated: 3,510
+          switches are solved to a fixed point twice per clock cycle, and the
+          resulting levels are uploaded to the GPU as a 1725-byte texture.</p>
         </article>
         <article class="card">
-          <h3>Wires move</h3>
-          <p>Tap any trace to see what it is connected to <em>at that instant</em>.
-          The connected group changes as transistors open and close — which is
-          the whole idea. A wire is not a fixed thing.</p>
+          <h3>A wire is not a fixed set of nodes</h3>
+          <p>Tap any trace to see what it is connected to <em>at that
+          instant</em>. The connected group is recomputed as transistors open and
+          close, because a level belongs to the group a node is joined to rather
+          than to the node.</p>
         </article>
       </div>
     </section>
@@ -310,44 +308,45 @@
     <section class="wrap sec" id="lab">
       <div class="sec-head">
         <p class="eyebrow">The Lab</p>
-        <h2>Watch one instruction happen.</h2>
+        <h2>One instruction, half-cycle by half-cycle</h2>
       </div>
       <p class="lede">
         The 6502 has no instruction decoder in the sense a textbook means. An
         opcode is a byte that lands in a latch; a PLA turns those eight bits into
         about forty control lines; those lines open and close switches that
         connect registers to buses. There is no microcode and nothing to step
-        through — the decode is combinational, a pure function of what is in the
-        instruction register right now.
+        through: the decode is combinational, a pure function of what is in the
+        instruction register at that moment.
       </p>
       <p class="lede">
         The Lab follows a single instruction through that, a half-cycle at a
         time, framing the die on whichever part is doing the work. The control
-        lines it lists are read out of the running chip at that instant, not
-        written down here — so you can check the story against the silicon.
+        lines it lists are read out of the running chip at that instant rather
+        than written down here, so the narration can be checked against the
+        silicon.
       </p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="?lab=lda#explorer">LDA — a byte into a register</a>
-        <a class="btn btn-ghost" href="?lab=adc&amp;step=4#explorer">ADC — the accumulator lag</a>
-        <a class="btn btn-ghost" href="?lab=inx#explorer">INX — adding one, the hard way</a>
-        <a class="btn btn-ghost" href="?lab=sta#explorer">STA — out through the pins</a>
+        <a class="btn btn-primary" href="?lab=lda#explorer">LDA: a byte into a register</a>
+        <a class="btn btn-ghost" href="?lab=adc&amp;step=4#explorer">ADC: the accumulator lag</a>
+        <a class="btn btn-ghost" href="?lab=inx#explorer">INX: adding one, the hard way</a>
+        <a class="btn btn-ghost" href="?lab=sta#explorer">STA: out through the pins</a>
       </div>
       <p class="fineprint">
-        The ADC link opens on the step worth arguing about: the adder holds the
-        answer, and the accumulator does not have it yet.
+        The ADC link opens at +5 half-cycles, where the adder holds the sum and
+        the accumulator still holds the old value.
       </p>
     </section>
 
     <section class="wrap sec" id="blueprint">
       <div class="sec-head">
         <p class="eyebrow">The Blueprint</p>
-        <h2>The same chip, without the geometry.</h2>
+        <h2>The datapath with the geometry removed</h2>
       </div>
       <p class="lede">
-        The die view is honest and nearly unreadable: 3510 switches where they
-        actually sit. The Blueprint is the datapath drawn as a block diagram —
-        buses as lines, registers as boxes, a switch wherever the silicon has
-        one — running live off the same engine.
+        The die view shows 3510 switches where they actually sit, which is
+        accurate and hard to read. The Blueprint draws the datapath as a block
+        diagram instead: buses as lines, registers as boxes, a switch wherever
+        the silicon has one, running off the same engine.
       </p>
       <p class="lede">
         Nobody drew it. Every unit and every path was found by asking which
@@ -364,7 +363,7 @@
     <section class="wrap sec" id="try-this">
       <div class="sec-head">
         <p class="eyebrow">Try this</p>
-        <h2>Watch the accumulator lag.</h2>
+        <h2>The accumulator lags the ALU</h2>
       </div>
       <p class="lede">
         The 6502 does not put an ALU result into the accumulator when the
@@ -376,14 +375,14 @@
       </p>
       <p class="lede">
         An emulator that commits results at instruction boundaries cannot show
-        you this, because it isn't true of the silicon.
+        this, because the boundary it commits at does not exist on the die.
       </p>
     </section>
 
     <section class="wrap sec" id="verification">
       <div class="sec-head">
         <p class="eyebrow">Verification</p>
-        <h2>Two oracles, because one proves nothing.</h2>
+        <h2>Two oracles, either alone insufficient</h2>
       </div>
       <div class="cards">
         <article class="card">
@@ -402,10 +401,11 @@
           pass the first test and fail this one.</p>
         </article>
         <article class="card">
-          <h3>Fast enough to feel</h3>
-          <p>About 28,500 half-cycles per second natively — roughly 94× the
-          original JavaScript — and the renderer redraws in six draw calls
-          regardless of zoom, because the layout never changes.</p>
+          <h3>Throughput</h3>
+          <p>About 28,500 half-cycles per second natively, roughly 94× the
+          original JavaScript. The renderer redraws in six draw calls at any
+          zoom, because the layout never changes and only a 1725-byte level
+          array is uploaded per frame.</p>
         </article>
       </div>
     </section>
@@ -413,7 +413,7 @@
     <section class="wrap sec" id="credit">
       <div class="sec-head">
         <p class="eyebrow">Credit</p>
-        <h2>Someone had to trace every polygon.</h2>
+        <h2>Where the die data came from</h2>
       </div>
       <p class="lede">
         This exists because the <a href="http://visual6502.org">visual6502</a>
@@ -422,11 +422,11 @@
         Segher Boessenkool, Achim Breidenbach, and everyone else who contributed.
       </p>
       <p class="lede">
-        Their site is coming apart. The wiki — a decade of research on the 6502 —
-        returns a server error on every page, and the 2.3&nbsp;GB of die
-        photography is still served but nothing links to it any more. We mirrored
-        all of it, rebuilt the wiki from the Internet Archive, and
-        <a href="archive/">put it back online</a>.
+        That site is failing. Its wiki, a decade of research on the 6502,
+        returns HTTP 500 on all 169 pages, and the 2.3&nbsp;GB of die photography
+        is still served correctly but nothing links to it any more. All of it is
+        mirrored here, with the wiki rebuilt from Internet Archive captures:
+        <a href="archive/">the archive</a>.
       </p>
       <div class="cta-row">
         <a class="btn" href="archive/">The visual6502 archive</a>
@@ -434,8 +434,8 @@
         <a class="btn btn-ghost" href="http://visual6502.org">visual6502.org</a>
       </div>
       <p class="fineprint">
-        Code is MIT. The die geometry is CC BY-NC-SA 3.0 — attribution to Greg
-        James and www.visual6502.org — and those terms carry to this deployment.
+        Code is MIT. The die geometry is CC BY-NC-SA 3.0, attributed to Greg
+        James and www.visual6502.org, and those terms carry to this deployment.
       </p>
     </section>
 

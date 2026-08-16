@@ -18,7 +18,7 @@ import { setupProgramNav } from './program-nav.js';
 const $ = (id) => document.getElementById(id);
 const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
 const documented = (op) => Object.prototype.hasOwnProperty.call(OPCODES, op);
-const mnemonic = (op) => (documented(op) ? OPCODES[op][0] : '—');
+const mnemonic = (op) => (documented(op) ? OPCODES[op][0] : '??');
 
 const state = { data: null, byOp: [], opcode: null };
 
@@ -43,7 +43,7 @@ function buildGrid() {
     cell.dataset.op = String(op);
     cell.innerHTML = `<span class="op-hex">${hex2(op)}</span>`
       + `<span class="op-mn">${rec.jam ? '∞' : rec.cycles}</span>`;
-    cell.title = `$${hex2(op)} ${mnemonic(op)} — `
+    cell.title = `$${hex2(op)} ${mnemonic(op)}: `
       + (rec.jam ? 'never reaches another fetch' : `${rec.cycles} cycles`);
     cell.onclick = () => select(op);
     grid.append(cell);
@@ -59,7 +59,7 @@ function select(op) {
   const last = rec.states.length - 1;
   const steps = rec.states.map((s, i) =>
     `<tr class="${i === last && !rec.jam ? 'final' : ''}">`
-    + `<td class="hc">cycle ${i}</td><td class="mono">${s || '—'}</td></tr>`).join('');
+    + `<td class="hc">cycle ${i}</td><td class="mono">${s || 'none'}</td></tr>`).join('');
 
   const name = (i) => state.data.terms[i];
   const chip = (i) => `<a class="chip" href="decode?term=`
@@ -72,7 +72,7 @@ function select(op) {
     <h3>$${hex2(op)} <span class="mn">${mnemonic(op)}</span></h3>
     <p class="muted">${rec.jam
       ? 'The chain stops advancing and no further opcode is ever fetched. '
-        + 'This is not a hang in the simulation — it is what the silicon does.'
+        + 'This is not a hang in the simulation; it is what the silicon does.'
       : `${rec.cycles} cycles, measured from this opcode's fetch to the next one.`}</p>
     <div class="table-scroll"><table class="hc-table">
       <thead><tr><th>Cycle</th><th>Timing chain</th></tr></thead>
@@ -80,7 +80,7 @@ function select(op) {
     ${rec.jam ? '' : `
     <dl class="ends">
       <dt>Arrives in the last cycle</dt>
-      <dd>${arrived || '<span class="muted">nothing new — every term that is '
+      <dd>${arrived || '<span class="muted">nothing new: every term that is '
         + 'high at the end was already high earlier</span>'}</dd>
       ${alsoHigh ? `<dt>Also high</dt><dd>${alsoHigh}</dd>` : ''}
     </dl>`}`;

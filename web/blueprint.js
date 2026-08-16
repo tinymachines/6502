@@ -15,6 +15,11 @@
 import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
+import { setupChipNav } from './chip-nav.js';
+import {
+  CLOCKS, clockHz, isRunning, setClock, setRunning, toggleRunning,
+  step as stepChip, reset as resetChip, subscribe, halfCyclesFor,
+} from './chip-controls.js';
 
 const $ = (id) => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -37,11 +42,9 @@ const state = {
   machine: null,
   bp: null,
   layout: null,
-  running: false,
-  // The slowest setting the control offers. Watching a switch open is the point
-  // of this diagram, and it is not visible at eight half-cycles a frame.
-  speed: 0.1,
-  speedDebt: 0,
+  // Whether it is running and how fast are in chip-controls.js, set from the
+  // header. Watching a switch open is the point of this diagram, so it starts
+  // at the slowest step like everything else on the site.
   raf: 0,
   selected: null,        // control name of a pinned link
   lastHalfCycle: -1,
@@ -275,7 +278,7 @@ function draw(svg, bp, layout) {
   for (const u of layout.rails) {
     const p = layout.pos.get(u.i);
     const g = el('g', { class: 'bp-rail', 'data-unit': u.name });
-    g.append(el('title', {}, `${label(u)} — ${longLabel(u)}`));
+    g.append(el('title', {}, `${label(u)}: ${longLabel(u)}`));
     g.append(el('line', { x1: p.x0, y1: p.y, x2: p.x1, y2: p.y, class: 'rail-line' }));
     // In the left gutter, clear of the rail itself: above the line it collided
     // with the first switch's label on every rail that starts near a block.
@@ -291,7 +294,7 @@ function draw(svg, bp, layout) {
   for (const u of layout.blocks) {
     const p = layout.pos.get(u.i);
     const g = el('g', { class: 'bp-block', 'data-unit': u.name });
-    g.append(el('title', {}, `${label(u)} — ${longLabel(u)}`));
+    g.append(el('title', {}, `${label(u)}: ${longLabel(u)}`));
     g.append(el('rect', {
       x: p.x - BLOCK_W / 2, y: p.y, width: BLOCK_W, height: BLOCK_H, rx: 4, class: 'block-box',
     }));
@@ -313,7 +316,7 @@ function draw(svg, bp, layout) {
       role: 'button',
       'aria-label': `${l.control}: ${bp.units[l.a].name} to ${bp.units[l.b].name}`,
     });
-    g.append(el('title', {}, `${l.control} — ${bp.units[l.a].name} ↔ ${bp.units[l.b].name}, `
+    g.append(el('title', {}, `${l.control}: ${bp.units[l.a].name} ↔ ${bp.units[l.b].name}, `
       + `${l.switches.length} switches`));
     g.append(el('line', { x1: e.x, y1: e.y0, x2: e.x, y2: e.y1, class: 'edge-line' }));
 
@@ -526,27 +529,38 @@ function wireUp(svg) {
   select.onchange = () => choose(Number(select.value));
   state.nav = setupProgramNav({ onChange: (i) => choose(i, { fromNav: true }) });
 
-  $('bp-run').onclick = (ev) => {
-    state.running = !state.running;
-    ev.currentTarget.textContent = state.running ? 'Pause' : 'Run';
-    ev.currentTarget.classList.toggle('btn-primary', !state.running);
-  };
-  $('bp-step').onclick = () => {
-    state.machine.halfStep();
+  // The header owns run/pause, the step, the power cycle and the clock rate.
+  // These buttons are a second view of the same store, painted from it.
+  const paint = () => {
     refresh(svg, state.bp, state.machine);
     updateReadout();
   };
+  setupChipNav({
+    step: () => { state.machine.halfStep(); paint(); },
+    back: () => { state.machine.stepBack(); paint(); },
+    reset: () => { loadProgram(Number(select.value)); paint(); },
+  });
+
+  $('bp-run').onclick = () => toggleRunning();
+  $('bp-step').onclick = () => stepChip();
   $('bp-cycle').onclick = () => {
+    setRunning(false);
     state.machine.stepCycle();
-    refresh(svg, state.bp, state.machine);
-    updateReadout();
+    paint();
   };
-  $('bp-reset').onclick = () => {
-    loadProgram(Number(select.value));
-    refresh(svg, state.bp, state.machine);
-    updateReadout();
-  };
-  $('bp-speed').onchange = (ev) => { state.speed = Number(ev.currentTarget.value); };
+  $('bp-reset').onclick = () => resetChip();
+
+  const speed = $('bp-speed');
+  for (const c of CLOCKS) speed.add(new Option(c.label, String(c.hz)));
+  speed.onchange = () => setClock(Number(speed.value));
+
+  subscribe(() => {
+    const on = isRunning();
+    $('bp-run').textContent = on ? 'Pause' : 'Run';
+    $('bp-run').classList.toggle('btn-primary', !on);
+    const hz = String(clockHz());
+    if (speed.value !== hz) speed.value = hz;
+  });
 
   const pick = (control) => {
     state.selected = control;
@@ -590,16 +604,10 @@ function updateReadout() {
     + `${m.flagsString()}`;
 }
 
-function tick() {
+function tick(now) {
   state.raf = requestAnimationFrame(tick);
-  if (state.running) {
-    // Sub-1x speeds carry a fractional debt between frames, so 0.25x means one
-    // half-cycle every fourth frame rather than a rounding error.
-    state.speedDebt += state.speed;
-    const n = Math.floor(state.speedDebt);
-    state.speedDebt -= n;
-    if (n > 0) state.machine.runHalfCycles(n);
-  }
+  const n = halfCyclesFor(now);
+  if (n > 0) state.machine.runHalfCycles(n);
   const hc = state.machine.halfCycle();
   if (hc !== state.lastHalfCycle) {
     state.lastHalfCycle = hc;

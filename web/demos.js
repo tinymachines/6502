@@ -11,6 +11,11 @@
 // the recording -- so the waveform is measured rather than illustrated, the same
 // rule the rest of the site follows.
 
+import {
+  isRunning, setRunning, step as stepChip, stepBack, reset as resetChip,
+  registerDriver, subscribe, halfCyclesFor,
+} from './chip-controls.js';
+
 const NS = 'http://www.w3.org/2000/svg';
 
 export const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
@@ -52,7 +57,7 @@ function svgEl(tag, attrs, parent) {
  * arrangement and also the cheap one. Anything that wants to be told when the
  * chip moves subscribes.
  */
-export function createChip({ Machine, program, loadAddr, rate = 2 }) {
+export function createChip({ Machine, program, loadAddr }) {
   const m = new Machine();
   m.load(loadAddr, new Uint8Array(program));
   // Without this the chip resets to $0000, reads $00 -- a BRK -- and runs a BRK
@@ -61,19 +66,25 @@ export function createChip({ Machine, program, loadAddr, rate = 2 }) {
   m.powerCycle();
 
   const listeners = new Set();
-  const state = { running: false, awake: true, acc: 0, last: 0 };
+  const state = { awake: true };
 
   const announce = () => { for (const fn of listeners) fn(m); };
 
   const advance = () => { m.halfStep(); announce(); };
 
+  // Whether it is running and how fast are the header's, not this chip's. It
+  // does know how to step, though, so it registers itself as what the header
+  // drives -- and repaints its own transports whenever the store moves.
+  registerDriver({
+    step: advance,
+    back: () => { m.stepBack(); announce(); },
+    reset: () => { m.powerCycle(); announce(); },
+  });
+  subscribe(announce);
+
   function frame(now) {
-    if (state.running && state.awake) {
-      const dt = state.last ? Math.min(now - state.last, 250) : 0;
-      state.acc += (dt / 1000) * rate;
-      while (state.acc >= 1) { advance(); state.acc -= 1; }
-    }
-    state.last = now;
+    const n = halfCyclesFor(now);
+    if (state.awake) for (let i = 0; i < n; i++) advance();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -81,15 +92,11 @@ export function createChip({ Machine, program, loadAddr, rate = 2 }) {
   return {
     machine: m,
     on(fn) { listeners.add(fn); fn(m); return () => listeners.delete(fn); },
-    get running() { return state.running; },
-    setRunning(on) {
-      state.running = !!on;
-      state.acc = 0;
-      announce();
-    },
+    get running() { return isRunning(); },
+    setRunning(on) { setRunning(on); },
     /** Whether anything is on screen to watch. Off screen, nothing runs. */
-    setAwake(on) { state.awake = !!on; state.last = 0; },
-    step() { state.running = false; advance(); },
+    setAwake(on) { state.awake = !!on; },
+    step() { stepChip(); },
     /**
      * Run forward before anybody is looking.
      *
@@ -102,12 +109,8 @@ export function createChip({ Machine, program, loadAddr, rate = 2 }) {
     warm(n) {
       for (let i = 0; i < n; i++) advance();
     },
-    back() { state.running = false; m.stepBack(); announce(); },
-    reset() {
-      state.running = false;
-      m.powerCycle();
-      announce();
-    },
+    back() { stepBack(); },
+    reset() { resetChip(); },
     announce,
   };
 }
@@ -132,7 +135,7 @@ export function transport(host, chip, { label = '' } = {}) {
   mk('◀', 'Back one half-cycle', () => chip.back());
   const run = mk('▶', 'Run', () => chip.setRunning(!chip.running));
   mk('▶❙', 'Forward one half-cycle', () => chip.step());
-  mk('↺', 'Power-cycle the chip', () => chip.reset());
+  mk('⏻', 'Power cycle', () => chip.reset());
   const clock = el('span', { class: 'dm-clock mono' }, bar);
 
   chip.on((m) => {

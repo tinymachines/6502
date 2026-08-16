@@ -1,0 +1,215 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The transport in the site header, and the pages that defer to it.
+
+  Two halves, deliberately split, because they need different things:
+
+  1. The pacing arithmetic, driven at top level with synthetic timestamps. The
+     control claims a rate in Hz, and a claim about a rate is only worth
+     anything if something checks it against a clock. Doing it with made-up
+     timestamps rather than real frames also makes it exact instead of flaky --
+     and it is the only way to check it at all, since headless throttles
+     animation frames in an iframe to nearly zero.
+
+  2. The wiring, driven against the real pages in an iframe. Those assertions
+     need no frames: every control applies its action immediately rather than
+     waiting for one, which is an invariant this site already holds elsewhere
+     and the reason it is worth holding.
+
+  What this is really guarding is the thing that made a shared control worth
+  building: two transports on one page that each keep their own copy of "is it
+  running" will eventually disagree, and the disagreement is silent.
+
+    http://localhost:8777/_chipnav-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1280px;height:760px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script type="module">
+import {
+  CLOCKS, DEFAULT_HZ, clockHz, isRunning, setClock, setRunning, halfCyclesFor,
+  resetControls,
+} from './chip-controls.js';
+
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const load = (src) => new Promise((r) => {
+  f.addEventListener('load', r, { once: true });
+  f.src = src;
+});
+
+// --------------------------------------------------------------------------
+// 1. The rate is a rate
+// --------------------------------------------------------------------------
+
+/** Run `seconds` of wall clock past the pacer in `frameMs` steps. */
+function pace(seconds, frameMs) {
+  let total = 0;
+  let t = 1000;                   // a nonzero start: the first call has no dt
+  halfCyclesFor(t);
+  for (let e = 0; e < seconds * 1000; e += frameMs) {
+    t += frameMs;
+    total += halfCyclesFor(t);
+  }
+  return total;
+}
+
+(async () => {
+  try {
+    localStorage.removeItem('v6502.clock');
+
+    // A cycle is two half-cycles, so N Hz is 2N half-cycles a second. Checked
+    // at 60 fps and at 4 fps: the whole reason the rate is paced against the
+    // clock rather than counted in frames is that those must agree.
+    const wrong = [];
+    for (const hz of [1, 2, 5, 20, 100]) {
+      for (const [fps, frameMs] of [[60, 16.7], [4, 250]]) {
+        resetControls();
+        setClock(hz);
+        setRunning(true);
+        const got = pace(4, frameMs);
+        const want = hz * 2 * 4;
+        // One frame's worth of rounding at either end, and never zero.
+        if (Math.abs(got - want) > Math.max(2, hz * 2 * (frameMs / 1000) + 1)) {
+          wrong.push(`${hz}Hz@${fps}fps: ${got} half-cycles over 4s, wanted ${want}`);
+        }
+      }
+    }
+    ok('the clock rate is delivered in half-cycles per second, at any frame rate',
+       wrong.length === 0, wrong.join(' | ') || 'five rates, two frame rates');
+
+    // Below one half-cycle a frame the shortfall has to be carried. Without the
+    // debt every slow setting rounds to "every frame" and they all look alike.
+    resetControls(); setClock(1); setRunning(true);
+    const slow = pace(10, 16.7);
+    ok('a rate below one half-cycle per frame still advances the chip',
+       slow >= 18 && slow <= 22, `${slow} half-cycles in 10s at 1 Hz`);
+
+    // A paused chip advances by nothing, and does not bank the pause.
+    resetControls(); setClock(20);
+    const stopped = pace(3, 16.7);
+    setRunning(true);
+    const afterPause = halfCyclesFor(9e6);      // a very late frame
+    ok('a pause banks nothing, however long it lasts',
+       stopped === 0 && afterPause === 0,
+       `${stopped} while paused, ${afterPause} on the frame after resuming`);
+
+    // A backgrounded tab must not come back and run for ten minutes at once.
+    resetControls(); setClock(1000); setRunning(true);
+    halfCyclesFor(1000);
+    const lurch = halfCyclesFor(1000 + 600000);   // ten minutes later
+    ok('a backgrounded tab does not lurch on its first frame back',
+       lurch <= 1000, `${lurch} half-cycles asked for after 10 minutes away`);
+
+    resetControls();
+
+    // --------------------------------------------------------------------
+    // 2. The wiring
+    // --------------------------------------------------------------------
+
+    // The header on a page that runs a chip, and no header transport on a page
+    // that does not. Decode is 768 recorded runs, not something you can start,
+    // and a run button with nothing behind it is worse than no button.
+    await load('index.html');
+    let d = f.contentDocument;
+    for (let i = 0; i < 400 && !d.querySelector('.nav-transport'); i++) await sleep(50);
+    ok('the explorer carries a transport in its header',
+       !!d.querySelector('.nav-transport') && !!d.querySelector('.nav-clock-select'));
+
+    // Both transports are views of one store: press either, both repaint.
+    const headRun = d.querySelector('.nav-tbtn.is-run');
+    const consoleRun = d.getElementById('btn-run');
+    headRun.click();
+    const bothOn = headRun.classList.contains('on') && consoleRun.textContent === '❚❚';
+    consoleRun.click();
+    const bothOff = !headRun.classList.contains('on') && consoleRun.textContent === '▶';
+    ok('the header transport and the console transport cannot disagree',
+       bothOn && bothOff,
+       `after the header: ${bothOn}, after the console: ${bothOff}`);
+
+    // The step has to land now rather than on the next animation frame. That is
+    // a real responsiveness bug on its own and it is invisible until the page
+    // is driven somewhere frames are throttled, which is exactly here.
+    const before = Number(d.getElementById('b-half').textContent);
+    d.querySelectorAll('.nav-tbtn')[1].click();
+    const after = Number(d.getElementById('b-half').textContent);
+    ok('the header step advances the chip immediately',
+       after === before + 1, `half-cycle ${before} -> ${after}`);
+
+    // And the two clock selects are one setting shown twice.
+    const headClock = d.querySelector('.nav-clock-select');
+    const footClock = d.getElementById('speed');
+    ok('the console clock offers exactly the steps the header does',
+       headClock.options.length === CLOCKS.length
+       && footClock.options.length === CLOCKS.length
+       && [...footClock.options].every((o, i) => o.value === String(CLOCKS[i].hz)),
+       `${headClock.options.length} in the header, ${footClock.options.length} in the console`);
+
+    headClock.value = '20';
+    headClock.dispatchEvent(new f.contentWindow.Event('change', { bubbles: true }));
+    const followed = footClock.value === '20';
+    footClock.value = '100';
+    footClock.dispatchEvent(new f.contentWindow.Event('change', { bubbles: true }));
+    const followedBack = headClock.value === '100';
+    ok('changing either clock changes the other',
+       followed && followedBack,
+       `header -> console: ${followed}, console -> header: ${followedBack}`);
+
+    // The rate survives a reload, and a link that names one wins over it. Same
+    // precedence as the program picker, for the same reason: a saved preference
+    // overruling a link would be the page arguing with whoever sent it.
+    await load('blueprint.html');
+    d = f.contentDocument;
+    for (let i = 0; i < 400 && !d.querySelector('.nav-clock-select'); i++) await sleep(50);
+    ok('the rate is remembered on the next page',
+       d.querySelector('.nav-clock-select').value === '100',
+       d.querySelector('.nav-clock-select').value);
+
+    await load('blueprint.html?speed=2');
+    d = f.contentDocument;
+    for (let i = 0; i < 400 && !d.querySelector('.nav-clock-select'); i++) await sleep(50);
+    ok('a link that names a rate outranks the saved one',
+       d.querySelector('.nav-clock-select').value === '2',
+       d.querySelector('.nav-clock-select').value);
+
+    // Every page that runs a chip gets one; no page that does not.
+    const withChip = ['index.html', 'schematic.html', 'exploded.html',
+                      'blueprint.html', 'primer.html', 'programs.html'];
+    const without = ['decode.html', 'timing.html', 'trace.html'];
+    const missing = [], spurious = [];
+    for (const page of withChip) {
+      await load(page);
+      d = f.contentDocument;
+      for (let i = 0; i < 400 && !d.querySelector('.nav-transport'); i++) await sleep(50);
+      if (!d.querySelector('.nav-transport')) missing.push(page);
+    }
+    for (const page of without) {
+      await load(page);
+      d = f.contentDocument;
+      await sleep(1200);
+      // The slot is in every header; it collapses when nothing fills it.
+      if (d.querySelector('.nav-transport')) spurious.push(page);
+      else if (!d.querySelector('[data-chip-nav]')) spurious.push(`${page}: no slot at all`);
+    }
+    ok('every page that runs a chip has the transport',
+       missing.length === 0, missing.join(', ') || withChip.join(', '));
+    ok('and no page that only reports measurements has one',
+       spurious.length === 0, spurious.join(', ') || without.join(', '));
+
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e));
+  }
+  localStorage.removeItem('v6502.clock');
+  const lines = results.filter((r) => r.startsWith('PASS') || r.startsWith('FAIL'));
+  document.title = lines.length && lines.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>

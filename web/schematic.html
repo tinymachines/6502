@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Schematic — the 6502 as a circuit</title>
+<title>Schematic: the 6502 as a circuit</title>
 <meta name="description" content="Every static gate on the MOS 6502, recognised from the switch network rather than drawn: pick a signal and see the circuit that makes it.">
 <meta name="theme-color" content="#0b1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -33,7 +33,10 @@
         <a href="./#credit">Credit</a>
         <a href="archive/">Archive</a>
       </div>
-      <div class="nav-prog" data-program-nav></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
         <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="mtxt">Menu</span>
@@ -46,13 +49,13 @@
 
   <section class="hero wrap">
     <p class="eyebrow">Recognised · not drawn</p>
-    <h1>There is only<br><span class="hl">one gate.</span></h1>
+    <h1>One gate shape,<br><span class="hl">1160 times.</span></h1>
     <p class="lede">
       NMOS builds logic exactly one way. A weak pullup holds a wire high, and a
-      network of transistors to ground can beat it. So the output goes
-      <em>low</em> when the network conducts — and every static gate on this die
-      is therefore an inverted sum of products. Transistors in parallel are the
-      ORs; transistors in series are the ANDs.
+      network of transistors to ground can beat it. The output is therefore
+      <em>low</em> when the network conducts, which makes every static gate on
+      this die an inverted sum of products. Transistors in parallel are the ORs;
+      transistors in series are the ANDs.
     </p>
     <p class="lede">
       There is no AND gate on the 6502, and no OR. The inversion is not a
@@ -70,6 +73,7 @@
         <div class="bar-spacer"></div>
         <button id="sch-run" class="btn btn-primary" type="button">Run</button>
         <button id="sch-step" class="btn" type="button">Step</button>
+        <button id="sch-reset" class="btn" type="button">Reset</button>
         <button id="sch-fullscreen" class="btn btn-icon" type="button"
                 aria-label="Fullscreen" title="Fullscreen">⛶</button>
       </div>
@@ -80,7 +84,7 @@
         <div class="sch-controls">
           <label class="field">
             <span>Signal</span>
-            <input id="sch-filter" type="search" placeholder="filter — try “dpc”"
+            <input id="sch-filter" type="search" placeholder="filter, e.g. dpc"
                    aria-label="Filter signals">
           </label>
           <label class="field">
@@ -133,15 +137,15 @@
                    aria-hidden="true">⠿</div>
 
               <button class="sp-icon" type="button" data-tab="signal"
-                      aria-label="Signal" title="Signal — what this wire is">◈</button>
+                      aria-label="Signal" title="Signal: what this wire is">◈</button>
               <button class="sp-icon" type="button" data-tab="walk"
-                      aria-label="Walk" title="Walk — where you have been">⇢</button>
+                      aria-label="Walk" title="Walk: where you have been">⇢</button>
               <button class="sp-icon" type="button" data-tab="io"
-                      aria-label="I/O" title="I/O — the pads and the input pins">⇄</button>
+                      aria-label="I/O" title="I/O: the pads and the input pins">⇄</button>
               <button class="sp-icon" type="button" data-tab="mem"
-                      aria-label="Memory" title="Memory — the bus the chip is talking to">▦</button>
+                      aria-label="Memory" title="Memory: the bus the chip is talking to">▦</button>
               <button class="sp-icon" type="button" data-tab="stack"
-                      aria-label="Stack" title="Stack — where S points">≣</button>
+                      aria-label="Stack" title="Stack: where S points">≣</button>
 
               <span class="sp-strip-sep" aria-hidden="true"></span>
 
@@ -162,6 +166,10 @@
               <div class="sp-drawer-head">
                 <span class="sp-title" id="sp-drawer-title">Signal</span>
                 <span class="solo-clock mono" id="solo-clock"></span>
+                <!-- The header is gone in this mode, so the rate has to be
+                     reachable here. Same store, so the two cannot disagree. -->
+                <select id="solo-clock-select" class="solo-clock-select"
+                        aria-label="Simulated clock rate"></select>
                 <button id="solo-back-nav" class="solo-btn" type="button" disabled
                         aria-label="Back to the last signal" title="Back ([)">↩</button>
                 <button id="solo-fwd-nav" class="solo-btn" type="button" disabled
@@ -192,7 +200,7 @@
         <div class="panel-box" id="sch-signal-info"></div>
 
         <details class="sch-keybox" open>
-          <summary>Key — what the shapes mean</summary>
+          <summary>Key: what the shapes mean</summary>
           <div id="sch-key" class="sch-key"></div>
           <p class="sch-key-note">
             Every gate here inverts. NMOS has no AND and no OR: a pulldown network
@@ -229,13 +237,13 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">What a symbol is</p>
-      <h2>Nothing here was drawn by hand.</h2>
+      <h2>Nothing here was drawn by hand</h2>
     </div>
     <p class="lede">
       Every gate on this page was found by looking at what a node is wired to.
       A pullup with one transistor to ground is an inverter. With several in
-      parallel, a NOR. With several in series, a NAND. With both, and-or-invert —
-      which NMOS builds as easily as the simple cases, and which is why the
+      parallel, a NOR. With several in series, a NAND. With both, and-or-invert,
+      which NMOS builds as easily as the simple cases and which is why the
       decode PLA is so compact.
     </p>
     <p>
@@ -246,20 +254,20 @@
 
     <div class="sec-head">
       <p class="eyebrow">The half with no pullup</p>
-      <h2>The interesting signals are not held up at all.</h2>
+      <h2>150 signals have no pullup</h2>
     </div>
     <p>
       Keyed on pullups alone, the most interesting signals on the chip come back
       empty. <span class="mono">dpc3_SBX</span>,
       <span class="mono">dpc23_SBAC</span> and <span class="mono">sync</span>
       have no pullup, and the first version of this page showed them as dead
-      ends — a control line with nothing behind it.
+      ends: a control line with nothing behind it.
     </p>
     <p>
       They are <strong>precharged</strong>. A clocked transistor pulls the node
       up, and the pulldown network either discharges it or leaves it holding its
       charge for the rest of the cycle. Same sum-of-products shape, different way
-      of being held high, and <strong>150 nodes work this way</strong> — including
+      of being held high, and <strong>150 nodes work this way</strong>, including
       every control line the datapath obeys. It is the same dynamic storage the
       simulator models as a charged node, and the reason this chip has a
       <em>minimum</em> clock speed as well as a maximum: stop it too long and the
@@ -268,7 +276,7 @@
 
     <div class="sec-head">
       <p class="eyebrow">The thing we expected and did not find</p>
-      <h2>The bit slice is a lie.</h2>
+      <h2>There is no bit slice to collapse</h2>
     </div>
     <p class="lede">
       A datapath is supposed to be eight copies of one circuit. This one looks
@@ -278,7 +286,7 @@
     </p>
     <p>
       It does not survive contact with the wiring. Running structural refinement
-      over the whole netlist — pure graph shape, no names — puts
+      over the whole netlist, on pure graph shape with no names, puts
       <strong>every bit of every bus in its own class</strong>. Not one bus
       collapses. Compare any two bits above and the differences have names:
       bit 7 of the special bus is opened by <span class="mono">ADDSB7</span>
@@ -296,23 +304,23 @@
 
     <div class="sec-head">
       <p class="eyebrow">Coverage</p>
-      <h2>What this accounts for.</h2>
+      <h2>Coverage of the 3510 transistors</h2>
     </div>
     <p>
       <strong>1160 symbols absorb 2637 of 3510 transistors</strong>; the
-      remaining 873 stay as switches, because that is what they are — the die
+      remaining 873 stay as switches, because that is what they are: the die
       uses them to steer signals, not to compute with them. The two numbers add
       to exactly 3510, which is checked rather than assumed.
     </p>
     <p>
       One rule earns its place there. Two switches in a row really do pull an
       output down, so a chain of them reads as a single gate with a two-input
-      series leg — and that reading is electrically true wherever it fires. But
+      series leg, and that reading is electrically true wherever it fires. But
       it is only the right reading when the node in the middle is a junction.
       The ALU's A input sits between the special bus and ground, fed through
       <span class="mono">SBADD</span> and forced low through
       <span class="mono">0ADD</span>, and reading it as a series leg swallowed
-      both of its transistors — leaving
+      both of its transistors, leaving
       <span class="mono">alua0</span>…<span class="mono">alua7</span> with no
       visible circuit at all, on a page whose entire job is to show what makes a
       signal. A gate's internal junction drives nothing; a node that gates
@@ -329,13 +337,13 @@
 
     <div class="sec-head">
       <p class="eyebrow">Both directions</p>
-      <h2>What makes it, and what it changes.</h2>
+      <h2>What makes it, and what it changes</h2>
     </div>
     <p>
       The same walk runs either way. Backwards it asks what produces a value:
       the gate that drives it, and the wires a switch could bring to it.
       Forwards it asks what the value changes: the gates it is an input to, and
-      the switches it opens — which, for a control line, is the entire reason it
+      the switches it opens, which for a control line is the entire reason it
       exists.
     </p>
     <p>
@@ -346,7 +354,7 @@
     </p>
     <p>
       <strong>Fan-out is capped at 16 and the cap is declared.</strong> Most
-      signals drive one or two things — the median is one — but
+      signals drive one or two things (the median is one) but
       <span class="mono">cclk</span> opens 273 switches and the instruction
       register's bits feed dozens of product terms. A picture that quietly
       showed sixteen of those would be a claim about the chip rather than a limit

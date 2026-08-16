@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Primer — how the 6502 actually works</title>
+<title>Primer: how the 6502 actually works</title>
 <meta name="description" content="What the MOS 6502's pins are, what the clock does, what an opcode does and does not do, and where the usual mental model of a processor stops being true.">
 <meta name="theme-color" content="#0b1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -33,7 +33,10 @@
         <a href="./#credit">Credit</a>
         <a href="archive/">Archive</a>
       </div>
-      <div class="nav-prog" data-program-nav></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
         <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="mtxt">Menu</span>
@@ -51,7 +54,7 @@
       The usual picture of a processor is a clock that ticks, an instruction that
       is read, and a machine that steps forward. It is close enough to write
       software against and it is not what the silicon does. This page is the
-      difference, one correction at a time — and every number on it is read out
+      difference, one correction at a time. Every number on it is read out
       of the same measurements the rest of this site is built from, rather than
       typed into a sentence and left to rot.
     </p>
@@ -91,7 +94,7 @@
       <figcaption class="dm-head">
         <span class="dm-tag">live</span>
         <span class="dm-title">The edge of the chip</span>
-        <span class="dm-sub">every pin above, live — and the five you can pull yourself</span>
+        <span class="dm-sub">every pin above, live, plus the five you can pull yourself</span>
       </figcaption>
       <div class="dm-body" data-demo="pins">
         <p class="dm-note">Starting the chip…</p>
@@ -103,8 +106,8 @@
     <p>
       <strong><span class="mono">clk0</span> is an input.</strong> The 6502 has
       no oscillator. You feed it a square wave, and it hands back the two phases
-      it derived from it — <span class="mono">clk1out</span> and
-      <span class="mono">clk2out</span> — so the rest of the board can stay in
+      it derived from it (<span class="mono">clk1out</span> and
+      <span class="mono">clk2out</span>) so the rest of the board can stay in
       step with the chip rather than the other way round.
     </p>
     <p>
@@ -112,7 +115,7 @@
       A pad is an output <em>driver</em>: every one of the data pin's terminals
       goes to a power rail, so nothing enters this chip from a pin through a
       pass transistor. The way in is the input receiver, which is a gate. A trace
-      that follows only switches can never leave the pad ring — which is exactly
+      that follows only switches can never leave the pad ring, which is exactly
       what happened the first time one was written here, and is why the wire
       watch list on the Trace page starts at
       <span class="mono">idl</span>/<span class="mono">idb</span> rather than at
@@ -123,7 +126,7 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">Correction one</p>
-      <h2>Two edges, not one blip.</h2>
+      <h2>Two edges, not one blip</h2>
     </div>
     <p class="lede">
       The chip does work on <em>both</em> clock edges. One phase precharges,
@@ -140,7 +143,7 @@
     <p>
       It also explains a property that surprises people: the 6502 has a
       <strong>minimum</strong> clock speed as well as a maximum. Stop it too
-      long and the charge — which <em>is</em> the state — leaks away. There is no
+      long and the charge, which <em>is</em> the state, leaks away. There is no
       static storage holding your registers between phases.
     </p>
 
@@ -163,7 +166,7 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">Correction two</p>
-      <h2>The opcode selects switches. It does not drive anything.</h2>
+      <h2>The opcode selects switches; it drives nothing</h2>
     </div>
     <p class="lede">
       The fetched byte lands in the instruction register,
@@ -177,7 +180,7 @@
       Fire a term and it asserts control lines. A control line's entire job is to
       hold open a pass transistor between two wires. So
       <span class="mono">dpc23_SBAC</span> does not <em>mean</em> "load the
-      accumulator" — it is a wire that, while it is high, shorts the special bus
+      accumulator". It is a wire that, while it is high, shorts the special bus
       to the accumulator's storage nodes. The value moves because a switch is
       open, and for no other reason.
     </p>
@@ -210,11 +213,11 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">Correction three</p>
-      <h2>Nothing counts the cycles.</h2>
+      <h2>Nothing counts the cycles</h2>
     </div>
     <p class="lede">
       There is no state counter being incremented. There is a <strong>timing
-      chain</strong> — a shift register of clocked latches, active low — and an
+      chain</strong>, a shift register of clocked latches, active low, and an
       instruction ends when a product term <em>resets</em> it. A cycle count is
       stored nowhere. It is however many cycles went by before something fired.
     </p>
@@ -228,7 +231,7 @@
     </p>
     <p>
       And <strong><span data-fact="jams">…</span> never terminate at all</strong>
-      — <span class="mono" data-fact="jamList">…</span>, the JAM opcodes. The
+      <span class="mono" data-fact="jamList">…</span>, the JAM opcodes. The
       chain stops advancing and no further fetch ever happens. Nobody designed
       that behaviour; it is what the wiring does when no term arrives to reset
       it. They are recorded as unterminated rather than timed out, because a
@@ -263,11 +266,11 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">Where the model breaks</p>
-      <h2>There is no state, separate from the wires.</h2>
+      <h2>There is no state separate from the wires</h2>
     </div>
     <p class="lede">
       Register contents mostly do not steer the sequence. The decode sees the
-      opcode and the T-state, plus a handful of condition inputs — a branch being
+      opcode and the T-state, plus a handful of condition inputs: a branch being
       taken, a page being crossed. This is why one product term,
       <span class="mono">op-branch-done</span>, needs a branch that is taken
       <em>and</em> crosses a page before it will fire at all: it took three
@@ -275,7 +278,7 @@
     </p>
     <p>
       The deeper correction is this. A register is a set of nodes holding charge.
-      A level is not even a property of a node — it belongs to the
+      A level is not even a property of a node. It belongs to the
       <strong>group</strong> of nodes shorted together at that instant, and the
       group changes every time a switch opens. Ask what
       <span class="mono">idb0</span> is, and the honest answer is a list of the
@@ -284,8 +287,8 @@
     <p>
       The sharpest demonstration is an addition. Trace
       <span class="mono">ADC</span> and at the end of the instruction the
-      accumulator still holds its old value. The sum exists — it is sitting in
-      the adder's hold register — and arrives in the accumulator during the
+      accumulator still holds its old value. The sum exists, sitting in
+      the adder's hold register, and arrives in the accumulator during the
       <em>next</em> instruction's opcode fetch. For most of a cycle the answer is
       in no register at all.
     </p>
@@ -307,7 +310,7 @@
       </div>
     </figure>
     <p class="pr-seealso">
-      See it: <a href="trace">Trace</a>, with the wire panel open — the "shorted
+      See it: <a href="trace">Trace</a>, with the wire panel open. The "shorted
       together right now" list has no equivalent in any software model of a 6502.
       Or <a href="./?lab=adc&amp;step=4">the Lab at ADC step 4</a>, which is the
       exact half-cycle where the adder holds the answer and the accumulator does

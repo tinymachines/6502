@@ -49,7 +49,7 @@ bump:   INX             ; X and Y are never initialised -- they hold
           + 'visits page $01 twice before the jump happens.',
       bump: 'The subroutine. INC $0F is a read-modify-write, and the 6502 '
           + 'performs it by writing the *old* value back before writing the new '
-          + 'one — a quirk of the silicon that behavioural emulators hide and '
+          + 'one, a quirk of the silicon that behavioural emulators hide and '
           + 'the Trace page shows.',
     },
   },
@@ -81,7 +81,7 @@ step:   LDA $F0
         STA $F1         ; sum becomes second
         JMP step`,
     notes: {
-      step: 'The CLC matters. There is no "add without carry" on a 6502 — ADC '
+      step: 'The CLC matters. There is no "add without carry" on a 6502: ADC '
           + 'always adds the carry flag, so clearing it first is part of the '
           + 'addition rather than housekeeping.',
       start: 'Zero page is not a cache; it is simply the first 256 bytes, and '
@@ -143,7 +143,7 @@ sum:    CLC             ; the carry in is part of the sum
     id: 'multiply',
     name: 'Multiply by adding',
     blurb: 'There is no multiply instruction. Seven sixes is six added seven '
-         + 'times, counted down in X — which is how every 6502 multiply '
+         + 'times, counted down in X, which is how every 6502 multiply '
          + 'routine ever written begins.',
     watch: [{ addr: 0x0090, name: 'product' }],
     source: `        .org $0200
@@ -160,7 +160,7 @@ again:  CLC
     notes: {
       again: 'A loop on this chip is a flag and a branch. DEX writes Z, BNE '
            + 'reads it, and the branch itself costs an extra cycle when it is '
-           + 'taken and another when it crosses a page — both measured on the '
+           + 'taken and another when it crosses a page, both measured on the '
            + 'Timing page rather than assumed here.',
     },
   },
@@ -168,7 +168,7 @@ again:  CLC
     id: 'bits',
     name: 'Count the set bits',
     blurb: 'Shifts a byte through the carry flag eight times and counts the '
-         + 'ones. The carry is not a spare bit here — it is the ninth bit of '
+         + 'ones. The carry is not a spare bit here: it is the ninth bit of '
          + 'the accumulator, and the shifter is the only part of the datapath '
          + 'that is not eight identical slices.',
     watch: [{ addr: 0x0091, name: 'ones' }],
@@ -189,7 +189,7 @@ skip:   DEX
     notes: {
       shift: 'LSR A shifts the accumulator itself rather than a byte in memory. '
            + 'On the die, bit 7 is opened onto the special bus by its own '
-           + 'control line — dpc19_ADDSB7 — while bits 0 to 6 share '
+           + 'control line, dpc19_ADDSB7, while bits 0 to 6 share '
            + 'dpc20_ADDSB06. That single asymmetry is the shifter.',
     },
   },
@@ -214,7 +214,7 @@ done:   JMP start
 text:   .byte "HELLO", 0`,
     notes: {
       copy: 'LDA sets Z from the byte it just loaded, so the test for the '
-          + 'terminator is free — there is no compare instruction here at all.',
+          + 'terminator is free: there is no compare instruction here at all.',
       text: 'The text is *inside* the program. There is no separation between '
           + 'code and data on this chip: these six bytes are fetched as data '
           + 'here and would be executed as instructions if the program counter '

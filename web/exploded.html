@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Exploded — the 6502, taken apart</title>
+<title>Exploded: the 6502, taken apart</title>
 <meta name="description" content="The MOS 6502's own polygons, pulled apart along two axes: the three physical layers of the die, and the functional blocks derived from its wiring.">
 <meta name="theme-color" content="#0b1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -33,7 +33,10 @@
         <a href="./#credit">Credit</a>
         <a href="archive/">Archive</a>
       </div>
-      <div class="nav-prog" data-program-nav></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
         <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="mtxt">Menu</span>
@@ -50,7 +53,7 @@
     <p class="lede">
       The 6502 is three layers of material. Diffusion is doped silicon that
       conducts. Polysilicon is a second conducting layer laid on top, separated
-      by a whisker of oxide. Metal is the aluminium wiring above both — and
+      by a whisker of oxide. Metal is the aluminium wiring above both, and
       there is only one layer of it, which is why the die looks hand-packed.
     </p>
     <p class="lede">
@@ -73,7 +76,10 @@
           <button id="ex-zoom-in" class="btn btn-icon" type="button" aria-label="Zoom in">+</button>
           <button id="ex-zoom-reset" class="btn" type="button">Reset view</button>
         </div>
-        <select id="ex-program" class="mono" aria-label="Program"></select>
+        <label class="field prog">
+          <span>Program</span>
+          <select id="ex-program"></select>
+        </label>
         <button id="ex-run" class="btn btn-primary" type="button">Run</button>
         <button id="ex-step" class="btn" type="button">Step</button>
         <button id="ex-reset" class="btn" type="button">Reset</button>
@@ -106,7 +112,7 @@
 
         <div class="ex-legend-wrap">
           <p class="ex-legend-head">
-            Functional blocks — click one to isolate it.
+            Functional blocks. Click one to isolate it.
             <span class="muted">Derived from the names on the die and grown along the wiring.</span>
           </p>
           <div id="ex-legend" class="ex-legend"></div>
@@ -118,11 +124,11 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">The vertical axis</p>
-      <h2>Three layers, not six.</h2>
+      <h2>Three layers, not six</h2>
     </div>
     <p class="lede">
-      The die data distinguishes six kinds of polygon, but three of them —
-      switched, grounded and powered diffusion — are the same physical layer,
+      The die data distinguishes six kinds of polygon, but three of them
+      (switched, grounded and powered diffusion) are the same physical layer,
       coloured by what it happens to be tied to. Green is ground, red is power,
       amber is everything doing work. So the layer slider lifts three heights
       apart, not six.
@@ -145,11 +151,11 @@
 
     <div class="sec-head">
       <p class="eyebrow">The horizontal axis</p>
-      <h2>The parts, and the part that has no name.</h2>
+      <h2>Twelve blocks, and the part with no name</h2>
     </div>
     <p>
       The second slider slides the functional blocks apart. Each keeps its real
-      polygons and its real place — they move outward from the middle of the die
+      polygons and its real place. They move outward from the middle of the die
       in the direction they already lie, then nudge each other until they stop
       overlapping, so the arrangement stays recognisable as the chip.
     </p>
@@ -165,7 +171,7 @@
     <p>
       Growth follows the wiring, never the gates. A node gated by a decode line
       is being <em>told what to do</em> by the decoder, which is the opposite of
-      belonging to it — follow gates and the PLA swallows the chip in three
+      belonging to it. Follow gates and the PLA swallows the chip in three
       rounds.
     </p>
     <p>
@@ -176,18 +182,18 @@
 
     <div class="sec-head">
       <p class="eyebrow">The remainder</p>
-      <h2>The rest is the logic.</h2>
+      <h2>The remainder is the static logic</h2>
     </div>
     <p class="lede">
       Twelve functional blocks account for 2448 transistors. The other 1060 are
-      not a ragged edge that resisted classification — they are one thing, and
+      not a ragged edge that resisted classification. They are one thing, and
       the chip is built out of them: <strong>the static gates</strong>. Inverters
       and NORs, the part of the 6502 that is not pass transistors.
     </p>
     <p>
       They stayed outside the blocks for a structural reason rather than by
       accident. A static gate's output touches nothing but its pullup to +5V and
-      its pulldown to ground, and the growth rule refuses to cross a power rail —
+      its pulldown to ground, and the growth rule refuses to cross a power rail,
       a rail touches hundreds of transistors, and crossing one would merge the
       whole chip into a single block. So no path exists from a named wire to a
       gate output, however close together they sit. The bus fabric is connected
@@ -196,7 +202,7 @@
     </p>
     <p>
       Which is what a logic gate looks like. They are identified here by the
-      electrical signature that defines one — a pullup, or a terminal on ground —
+      electrical signature that defines one (a pullup, or a terminal on ground)
       and 856 of their 1060 transistors are pulldowns, which is the other half of
       the same fact.
     </p>
@@ -211,7 +217,7 @@
       gates they were embedded in.
     </p>
     <p>
-      After all that, <strong>two transistors and four nodes are left</strong> —
+      After all that, <strong>two transistors and four nodes are left</strong>,
       and they are the most interesting thing here, because they do nothing at
       all.
     </p>
@@ -220,14 +226,14 @@
       is a transistor whose gate connects to nothing else on the chip: no wire
       can drive it, so it can never switch, and its channel ties a dead-end node
       to +5V. The second is a real transistor, gated by the pipeline clock, that
-      genuinely opens and closes every cycle — joining two nodes that connect to
+      genuinely opens and closes every cycle, joining two nodes that connect to
       nothing and gate nothing.
     </p>
     <p>
       A node influences this chip in exactly one way: by gating a transistor.
       Every node in both structures either gates nothing, or has no connection
       through which anything could drive it. So they are not
-      <em>unclassified</em> so much as <strong>inert</strong> — present in the
+      <em>unclassified</em> so much as <strong>inert</strong>: present in the
       photograph, absent from the computer. They are still drawn, still fading in
       the middle at full explode, because a thing that cannot be explained is
       worth more on the page than off it.
@@ -235,7 +241,7 @@
     <p>
       It is worth being plain about what this is not: nobody has MOS's original
       floorplan, and this is an inference from a photograph of a chip. A boundary
-      here is where the names and the wiring say one part stops — not where a
+      here is where the names and the wiring say one part stops, not where a
       draughtsman drew a line in 1975.
     </p>
   </section>

@@ -12,6 +12,7 @@
 import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
+import { setupChipNav } from './chip-nav.js';
 import {
   hex2, hex4, lamps, el, createChip, transport, createScope, readout, runWhileVisible,
 } from './demos.js';
@@ -72,10 +73,10 @@ const PINS = {
   in: [
     ['clk0', 'φ0, the clock. The chip has no oscillator of its own'],
     ['res', 'reset, active low'],
-    ['irq', 'interrupt request, active low — masked by the I flag'],
+    ['irq', 'interrupt request, active low, masked by the I flag'],
     ['nmi', 'non-maskable interrupt, active low'],
-    ['rdy', 'ready — low stalls the chip on a read cycle'],
-    ['so', 'set overflow — sets the V flag directly'],
+    ['rdy', 'ready: low stalls the chip on a read cycle'],
+    ['so', 'set overflow: sets the V flag directly'],
   ].map(([name, role]) => ({ name, role })),
   out: [
     ['rw', 'read or write: which way the data pins are pointing'],
@@ -94,9 +95,9 @@ function pinRows(sch) {
   const ab = bitsOf(sch, 'ab');
   const db = bitsOf(sch, 'db');
   return [
-    row(`ab0…ab${ab - 1}`, 'out', `the address bus — ${ab} lines, so ${
+    row(`ab0…ab${ab - 1}`, 'out', `the address bus: ${ab} lines, so ${
       FACTS.addressRange({ sch })} of address space`),
-    row(`db0…db${db - 1}`, 'both', `the data bus — ${db} lines, pointing whichever way `
+    row(`db0…db${db - 1}`, 'both', `the data bus: ${db} lines, pointing whichever way `
       + `<span class="mono">rw</span> says`),
     ...PINS.out.filter((p) => named(sch, p.name)).map((p) => row(p.name, 'out', p.role)),
     ...PINS.in.filter((p) => named(sch, p.name)).map((p) => row(p.name, 'in', p.role)),
@@ -139,7 +140,7 @@ function demoPins(host, chip, data) {
   });
   el('p', { class: 'dm-note', html:
     'Pull <b>RDY</b> low and the chip stops on its next read without its clock '
-    + 'stopping — the half-cycles keep counting. Pull <b>IRQ</b> low and it '
+    + 'stopping; the half-cycles keep counting. Pull <b>IRQ</b> low and it '
     + 'vectors through <span class="mono">$FFFE</span>, which this program never '
     + 'filled in, so it lands on <span class="mono">$00</span> and pushes the '
     + 'stack down forever. Both are the silicon doing exactly as it is told.' }, host);
@@ -154,7 +155,7 @@ function demoPins(host, chip, data) {
         : `<span class="dm-write">write <span class="mono">$${hex2(db)}</span> → `
           + `<span class="mono">$${hex4(ab)}</span></span>`,
       phase: `<span class="mono">${m.clk0() ? 'φ1' : 'φ2'}</span>`
-        + `${m.sync() ? ' · <b>SYNC</b> — this is an opcode fetch' : ''}`,
+        + `${m.sync() ? ' · <b>SYNC</b>, an opcode fetch' : ''}`,
     });
     for (const [name, label, b] of buttons) {
       const on = high(name);
@@ -182,7 +183,7 @@ function demoClock(host, chip) {
   el('p', { class: 'dm-note', html:
     'The trace is a recording, not a diagram: it is what these three pins '
     + 'actually did, sampled once per half-cycle as the chip ran. Each faint '
-    + 'divider is one <em>cycle</em> — and there are two samples between them, '
+    + 'divider is one <em>cycle</em>, and there are two samples between them, '
     + 'which is the whole of the point.' }, host);
 
   let seen = -1;
@@ -200,7 +201,7 @@ function demoClock(host, chip) {
       seen = at;
     }
     paint({
-      at: `<b class="mono">${at}</b> — cycle <span class="mono">${Math.floor(at / 2)}</span>`,
+      at: `<b class="mono">${at}</b> · cycle <span class="mono">${Math.floor(at / 2)}</span>`,
       edge: m.clk0()
         ? 'clock high: the write half. A store lands here'
         : 'clock low: the read half. A fetch is serviced here',
@@ -216,7 +217,7 @@ function demoDecode(host, chip, data) {
   el('p', { class: 'dm-note', html:
     'The terms are read out of the die: each one is a node, and it is listed '
     + 'here when that node is high. Nothing consults a table of what the '
-    + 'instruction is supposed to do — the pattern of <span class="mono">ir</span> '
+    + 'instruction is supposed to do: the pattern of <span class="mono">ir</span> '
     + 'bits and the timing state are the only inputs the plane has.' }, host);
 
   const rows = data.dec.rows.filter((r) => r.name);
@@ -228,7 +229,7 @@ function demoDecode(host, chip, data) {
       terms: firing.length
         ? `<span class="dm-terms">${firing
             .map((r) => `<i>${r.name}</i>`).join('')}</span>`
-        : '<span class="muted">nothing — between instructions</span>',
+        : '<span class="muted">nothing: between instructions</span>',
     });
   });
 }
@@ -244,7 +245,7 @@ function demoTiming(host, chip) {
   el('p', { class: 'dm-note', html:
     'Nothing on the chip is holding that number. The chain shifts along until a '
     + 'product term resets it, <span class="mono">sync</span> goes high, and the '
-    + 'next opcode is fetched — so the count is however many cycles went by, '
+    + 'next opcode is fetched, so the count is however many cycles went by, '
     + 'measured after the fact, here and on the Timing page alike.' }, host);
 
   let sinceSync = 0;
@@ -267,7 +268,7 @@ function demoTiming(host, chip) {
     }
     seen = at;
     paint({
-      state: `<b class="mono">${m.timingStates() || '—'}</b>`,
+      state: `<b class="mono">${m.timingStates() || 'none'}</b>`,
       since: `<span class="mono">${Math.floor(sinceSync / 2)}</span>`,
       took: took
         ? `<b class="mono">${took.n}</b> cycle${took.n === 1 ? '' : 's'}`
@@ -327,8 +328,12 @@ async function bootDemos(data) {
     await init();
     const chip = createChip({
       Machine, program: PROGRAMS[selectedProgram(location.search)].bytes,
-      loadAddr: LOAD_ADDR, rate: 2,
+      loadAddr: LOAD_ADDR,
     });
+    // The chip registered itself with the store on the way up, so the header
+    // transport drives all five examples at once. They are five views of one
+    // piece of silicon; a sixth control changes nothing about that.
+    setupChipNav();
     for (const host of hosts) {
       const build = DEMOS[host.dataset.demo];
       if (!build) continue;

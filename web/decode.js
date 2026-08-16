@@ -34,13 +34,13 @@ const state = {
 
 // `op-T0-cpx/cpy/inx/iny` -> the T-state and the rest, for display.
 function splitTerm(name) {
-  if (!name) return { stage: '—', label: 'the irline3 generator' };
+  if (!name) return { stage: 'any', label: 'the irline3 generator' };
   const m = /^op-(T[0-9+]+)-(.*)$/.exec(name);
   return m ? { stage: m[1], label: m[2] } : { stage: '', label: name.replace(/^op-/, '') };
 }
 
 const documented = (op) => Object.prototype.hasOwnProperty.call(OPCODES, op);
-const mnemonic = (op) => (documented(op) ? OPCODES[op][0] : '—');
+const mnemonic = (op) => (documented(op) ? OPCODES[op][0] : '??');
 const mode = (op) => (documented(op) ? OPCODES[op][1] : 'undocumented');
 
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ function buildGrid() {
     cell.dataset.op = String(op);
     cell.innerHTML =
       `<span class="op-hex">${hex2(op)}</span><span class="op-mn">${mnemonic(op)}</span>`;
-    cell.title = `$${hex2(op)} — ${mnemonic(op)} (${mode(op)}), `
+    cell.title = `$${hex2(op)} ${mnemonic(op)} (${mode(op)}), `
       + `${state.data.opcodes[op].any.length} terms`;
     cell.onclick = () => selectOpcode(op);
     grid.append(cell);
@@ -138,9 +138,9 @@ function renderOpcodeDetail(op) {
     if (!r.length && !o.length) continue;
     lines.push(
       `<tr><td class="hc">+${hc}</td>`
-      + `<td>${r.map(rowName).join(' ') || '<span class="muted">—</span>'}</td>`
+      + `<td>${r.map(rowName).join(' ') || '<span class="muted">none</span>'}</td>`
       + `<td class="ctl">${o.map((j) => state.data.outputs[j].name.replace(/^dpc-?\d*_?/, ''))
-          .join(' ') || '<span class="muted">—</span>'}</td></tr>`
+          .join(' ') || '<span class="muted">none</span>'}</td></tr>`
     );
   }
   el.innerHTML = `
@@ -197,19 +197,19 @@ function renderTermDetail(i) {
     <h3>${row.name || 'unnamed term'}</h3>
     ${row.name ? '' : '<p class="muted">The die names every product term but this one. '
       + 'Its inputs are IR bits 0 and 1, both required low, and it is what drives '
-      + '<span class="mono">irline3</span> — the line that lets other terms '
+      + '<span class="mono">irline3</span>, the line that lets other terms '
       + 'constrain the low two opcode bits without gating them directly.</p>'}
     <dl>
       <dt>IR pattern</dt><dd class="mono">${bits.join(' ')} <span class="muted">(7→0, · = free)</span></dd>
       <dt>Other inputs</dt><dd class="mono">${gates}</dd>
-      <dt>Fires for</dt><dd>${ops.length} opcodes${names.length ? ' — ' + names.join(', ') : ''}</dd>
+      <dt>Fires for</dt><dd>${ops.length} opcodes${names.length ? ': ' + names.join(', ') : ''}</dd>
       ${und.length ? `<dt>Undocumented</dt><dd class="undoc-list">${und.map((o) => '$' + hex2(o)).join(' ')}</dd>` : ''}
       <dt>Node</dt><dd class="mono">#${row.node}${row.irOnly ? '' : ' · has inputs beyond the IR'}</dd>
       ${lineRows}
     </dl>
     ${links.length ? '<p class="bp-detail-note">A term reaches a control line through '
       + 'the OR plane and a <span class="mono">cclk</span> pipeline latch, so the line '
-      + 'responds a half-cycle or two later — the lag shown is measured, not assumed. '
+      + 'responds a half-cycle or two later; the lag shown is measured, not assumed. '
       + '<em>Overrides</em> means the line is asserted by default and this term takes it '
       + 'away: that is how the hold lines work.</p>' : ''}`;
 }

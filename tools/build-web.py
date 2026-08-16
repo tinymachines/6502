@@ -187,6 +187,7 @@ def main() -> None:
     b.copy_hashed("site-nav.js")
     b.copy_hashed("fullscreen.js")
     b.copy_hashed("block-palette.js")
+    b.copy_hashed("chip-controls.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
     b.copy_hashed("blueprint.json")
@@ -236,6 +237,15 @@ def main() -> None:
                        where="program-nav.js")
     b.emit("program-nav.js", nav.encode())
 
+    # 2c. The transport chain: chip-controls.js holds whether the chip is running
+    #     and how fast, chip-nav.js is the header's view of it. Every page that
+    #     runs a chip reads the store rather than keeping its own copy, which is
+    #     what stops two transports on one page disagreeing.
+    cnav = b.read("chip-nav.js").decode()
+    cnav = replace_once(cnav, "'./chip-controls.js'", f"'./{b.ref('chip-controls.js')}'",
+                        where="chip-nav.js")
+    b.emit("chip-nav.js", cnav.encode())
+
     # 3. app.js: six module imports plus one runtime fetch.
     app = b.read("app.js").decode()
     for original, resolved in [
@@ -245,6 +255,8 @@ def main() -> None:
         ("./lab.js", "./" + b.ref("lab.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
     ]:
         app = replace_once(app, f"'{original}'", f"'{resolved}'", where="app.js")
     app = replace_once(app, "fetch('layout.bin')", f"fetch('{b.ref('layout.bin')}')", where="app.js")
@@ -258,6 +270,8 @@ def main() -> None:
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
     ]:
         bp = replace_once(bp, f"'{original}'", f"'{resolved}'", where="blueprint.js")
     bp = replace_once(bp, "fetch('blueprint.json')",
@@ -275,6 +289,8 @@ def main() -> None:
         ("./exploded-gl.js", "./" + b.ref("exploded-gl.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
     ]:
         exp = replace_once(exp, f"'{original}'", f"'{resolved}'", where="exploded.js")
     exp = replace_once(exp, "fetch('layout.bin')",
@@ -310,6 +326,8 @@ def main() -> None:
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./block-palette.js", "./" + b.ref("block-palette.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
     ]:
         sch = replace_once(sch, f"'{original}'", f"'{resolved}'", where="schematic.js")
     sch = replace_once(sch, "'./fullscreen.js'", f"'./{b.ref('fullscreen.js')}'",
@@ -335,7 +353,10 @@ def main() -> None:
     # 3g. demos.js: the pieces the primer's runnable examples are built from.
     #     Shared so that a lamp strip on one page cannot come to disagree with a
     #     lamp strip on another about which end bit 7 is on.
-    b.emit("demos.js", b.read("demos.js"))
+    dm = b.read("demos.js").decode()
+    dm = replace_once(dm, "'./chip-controls.js'", f"'./{b.ref('chip-controls.js')}'",
+                      where="demos.js")
+    b.emit("demos.js", dm.encode())
 
     # 3h. primer.js: the three published measurement files fill the prose, and
     #     the wasm runs the examples underneath it. An explanatory page is the
@@ -347,6 +368,7 @@ def main() -> None:
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
     ]:
         pr = replace_once(pr, f"'{original}'", f"'{resolved}'", where="primer.js")
     for original in ["schematic.json", "decode.json", "timing.json"]:
@@ -363,6 +385,7 @@ def main() -> None:
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
     ]:
         pg = replace_once(pg, f"'{original}'", f"'{resolved}'", where="programs-page.js")

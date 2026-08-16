@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Timing — the 6502 counts nothing</title>
+<title>Timing: the 6502 counts nothing</title>
 <meta name="description" content="Every 6502 instruction's length, measured from sync to sync with no instruction table involved. The chip has no cycle counter; the counts are emergent.">
 <meta name="theme-color" content="#0b1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -32,7 +32,10 @@
         <a href="timing" aria-current="page">Timing</a>
         <a href="archive/">Archive</a>
       </div>
-      <div class="nav-prog" data-program-nav></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
         <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="mtxt">Menu</span>
@@ -88,12 +91,12 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">What the chain is</p>
-      <h2>A shift register with an off switch.</h2>
+      <h2>A shift register with an off switch</h2>
     </div>
     <p class="lede">
       The timing nodes are stages of a shift register clocked by the same
       two-phase clock as everything else, and each stage is a latch built from a
-      pass transistor and an inverter — structurally identical to the pipeline
+      pass transistor and an inverter, structurally identical to the pipeline
       latches that carry the decode PLA's output to the control lines.
     </p>
     <p>
@@ -105,7 +108,7 @@
     <p>
       What ends an instruction is a product term. The chain would happily keep
       advancing; something has to stop it. Pick any opcode above and the panel
-      lists the terms that <em>arrive</em> in its final cycle — high then, and
+      lists the terms that <em>arrive</em> in its final cycle: high then, and
       not before. For 161 of the 244 instructions that is the instruction's own
       <span class="mono">op-T0-…</span> term, named for the state it ends:
       <span class="mono">$20</span> ends on <span class="mono">op-T0-jsr</span>,
@@ -127,7 +130,7 @@
     </p>
     <p>
       The remaining 83 split two ways. For 62 of them nothing new arrives at
-      all — every term high in the last cycle was already high earlier.
+      all, because every term high in the last cycle was already high earlier.
       Read-modify-write instructions like <span class="mono">$FE</span> and
       returns like <span class="mono">$60</span> are in this group, and whatever
       ends them is not a term that appears at the end. The other 21 do have
@@ -137,7 +140,7 @@
 
     <div class="sec-head">
       <p class="eyebrow">The cross-check</p>
-      <h2>Thirty-three numbers nobody typed in.</h2>
+      <h2>Thirty-three cycle counts, none typed in</h2>
     </div>
     <p>
       A measurement that agrees with the datasheet is only interesting if it
@@ -151,8 +154,8 @@
     <p>
       The undocumented opcodes are where it gets more interesting, because there
       is no published answer to agree with. Twelve of them run for
-      <strong>eight</strong> cycles — one longer than any documented
-      instruction — and they are exactly the twelve read-modify-write forms
+      <strong>eight</strong> cycles, one longer than any documented
+      instruction, and they are exactly the twelve read-modify-write forms
       using indexed indirect addressing. Nothing special was built for them;
       they take eight cycles because that is how long it takes the chain to get
       to a term that stops it.
@@ -160,12 +163,12 @@
 
     <div class="sec-head">
       <p class="eyebrow">The twelve that never stop</p>
-      <h2>∞ is a measurement too.</h2>
+      <h2>Twelve opcodes never finish</h2>
     </div>
     <p>
       Twelve opcodes never reach another <span class="mono">sync</span>. They
       are marked <span class="mono">∞</span> in the grid, and they are not a
-      failure of the simulation or a timeout — the chain simply stops advancing
+      failure of the simulation or a timeout. The chain stops advancing
       and the chip sits there. These are the opcodes usually called
       <span class="mono">JAM</span> or <span class="mono">KIL</span>, and the
       list falls straight out of the measurement:

@@ -82,6 +82,6 @@ for (const [id, want] of Object.entries(HISTORICAL)) {
 
 if (!process.exitCode) {
   console.log(`  ${PROGRAMS.length} programs, ${instructions} instructions, `
-    + `${PROGRAMS.reduce((n, p) => n + p.bytes.length, 0)} bytes — all assembled and `
+    + `${PROGRAMS.reduce((n, p) => n + p.bytes.length, 0)} bytes, all assembled and `
     + 'round-tripped');
 }

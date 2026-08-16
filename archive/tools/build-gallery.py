@@ -190,7 +190,7 @@ def shell(title: str, body: str, *, depth: int) -> str:
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{html.escape(title)} — visual6502 die photography (archived)</title>
+<title>{html.escape(title)} · visual6502 die photography (archived)</title>
 <link rel="stylesheet" href="{root}gallery.css">
 </head><body>
 {site_header(archive, SITE_LINKS, active="Die photos")}

@@ -41,7 +41,7 @@ export function setupProgramNav({ onChange, root = document } = {}) {
     select.id = host.id ? `${host.id}-select` : 'nav-program';
     select.setAttribute('aria-label', onChange
       ? 'Program to run'
-      : 'Program to run — this page shows measurements rather than running one');
+      : 'Program to run. This page shows measurements rather than running one.');
     if (!onChange) {
       select.title = 'Chosen here, run on the pages that drive the chip.';
     }

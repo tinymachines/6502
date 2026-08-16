@@ -199,13 +199,36 @@ Expect ~2–5 fps: that is software rasterisation, not the renderer.
 3. **Measurements.** Add `--dump-dom` and have the page write values into the DOM
    (e.g. `document.title`). This is how the canvas-sizing bug was diagnosed.
 
-**Two headless artifacts that look exactly like catastrophic bugs:**
+**Four headless artifacts that look exactly like catastrophic bugs:**
 
 - A screenshot taken after a programmatic scroll to a `#hash`, with a sticky
   header, can come back **blank or with a huge blank band**. Re-capture without
   the hash before believing it.
 - `--screenshot=/dev/null` logs an "Unsupported screenshot image file type"
   error. Harmless.
+- **`--window-size` below roughly 500px does not narrow the layout, only the
+  photograph.** A 390px screenshot of the header came back with the clock select
+  off the right edge and the menu button on a third row, while an iframe at a
+  real 390px viewport showed everything fitting. The page had been laid out
+  wider and then cropped. **Measure narrow layouts in an iframe** (which is what
+  `_navfit-test.html` and `_overflow-test.html` do); to *photograph* one, put
+  the page in a 390px iframe and screenshot the host.
+- **Snap `chromium` cannot write a screenshot outside its confinement.** It fails
+  with "No such file or directory" on a path that plainly exists, including
+  anything under `/tmp/claude-*`. Write to `$HOME` instead.
+
+Two more things about driving it, both of which cost a round:
+
+- **A persistent `--user-data-dir` often stops `--dump-dom` and `--screenshot`
+  returning at all** — the process hangs past any virtual-time budget and
+  `timeout` kills it with no output, which reads exactly like a page that failed
+  to render offline. It is not reliable enough to distinguish the two. Warm and
+  test under a **remappable hostname** (`MAP offline.test 127.0.0.1`, then
+  `127.0.0.2`) rather than by stopping the server; that path returns cleanly.
+- **Check what is actually listening before believing a result.** A stale
+  `python3 -m http.server` from an earlier session held port 8778 and answered
+  every request from an old `dist/`; the new server's bind failure was in a log
+  nobody read. The tell was the page title being one revision behind.
 
 **"Run it" runs it.** The hero button points at `#explorer`, so the browser does
 the scrolling and `app.js` only has to start the chip on click — every
@@ -229,6 +252,29 @@ runs whatever was last chosen anywhere on the site.
 `blueprint.html` takes `?program=N&run=1&path=CONTROL` — e.g.
 `blueprint.html?path=dpc23_SBAC` pins the accumulator's path to the special bus.
 
+`?speed=` is the **simulated clock in Hz** (0 for max), not a frame multiplier.
+See the transport section.
+
+### House style for shipped text
+
+Two rules, both about the same thing: the page should read as a measurement
+report rather than as a pitch.
+
+- **No em dashes in anything shipped.** Not in prose, not in a `title=`, not as
+  a placeholder in a readout. Use a colon where the second half explains the
+  first, a comma where it qualifies, brackets where it is an aside, and a real
+  word (`none`, `any`, `??`) where a readout has nothing to show. Code comments
+  use `--`, which is the existing style throughout. `grep -c '—' web/*.js
+  web/*.html` should print nothing but zeroes.
+- **Headings state a fact, not a promise.** "Coverage of the 3510 transistors",
+  not "What this accounts for."; "Twelve opcodes never finish", not "∞ is a
+  measurement too." Section headings carry no trailing full stop; the hero `h1`
+  on each page is the one exception, because it is a sentence.
+
+The same discipline the numbers already follow: prose is the part of this site
+most likely to go quietly wrong, because nothing checks it afterwards. The
+primer's stray-digit scan exists for exactly that reason.
+
 ### Development harnesses in `web/`
 
 Four pages prefixed `_` that are **never shipped** — `build-web.py` copies only
@@ -240,8 +286,10 @@ _camera-test.html      # zoom limits and pan clamping, asserted
 _resize-test.html      # resize the renderer, then read back pixels: is it drawn?
 _handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320&page=trace   # what pushes a page wider than the viewport
-_navfit-test.html      # the header, at 12 widths x 4 pages: does it fit, and is
-                       # the program picker still wide enough to read?
+_navfit-test.html      # the header, at 12 widths x 4 pages: does it fit, and are
+                       # the picker, transport and clock still usable sizes?
+_chipnav-test.html     # the shared transport: the rate is a rate (paced with
+                       # synthetic timestamps), and every control is one store
 _contrast-test.html    # every button, every state, checked for readable text
 _persist-test.html     # the console's configuration, across a second page load
 _pinio-test.html       # pinned I/O chains, vs an independent search of the netlist
@@ -451,7 +499,8 @@ plus the transistor bounding boxes for hit-testing.
 Plain ES modules, no build step, no framework: `renderer.js` (WebGL2),
 `app.js` (glue + UI), `disasm.js`, `lab.js`, `asm.js` (the 6502 assembler),
 `programs.js` (the shared program set, assembled at load), `program-nav.js`
-(the header picker), `blueprint.js`, `decode.js`, `timing.js`,
+(the header picker), `chip-controls.js` (run state and clock rate) and
+`chip-nav.js` (the header transport), `blueprint.js`, `decode.js`, `timing.js`,
 `programs-page.js` and `trace.js` (five further pages, see
 below), `index.html`,
 `style.css`, plus
@@ -1382,12 +1431,58 @@ arguing with whoever sent it.
   Explorer's, which is the reason both pages exist, silently compared two
   different programs.
 
-**Speed now defaults to the slowest setting everywhere.** The Explorer was 16×,
-the Blueprint 8×, the Exploded view a fixed twelve half-cycles per frame. At
-those rates the die is a flicker and the registers are a blur; the point of a
-transistor-level view is watching one edge happen. The exploded view gained the
-fractional-debt accumulator the other two already had, or a sub-1 rate rounds to
-zero and the chip never advances at all.
+### The transport (`chip-controls.js`, `chip-nav.js`)
+
+Whether the chip is running, and how fast, live in **one store**, and the site
+header is its primary view. Four pages ran the chip and each carried its own
+copy: three different transports, two speed lists with different steps, and the
+exploded view with no rate control at all — so "the same program at the same
+speed on two pages", which is the reason several of those pages exist, was not
+something the site could do.
+
+**The rate is the simulated clock in Hz, paced against wall-clock time.** Every
+one of those old numbers was *half-cycles per animation frame*, which is a fact
+about the browser rather than about the chip: the same setting ran at a
+different rate on a 60 Hz display, a 120 Hz display, and the software rasteriser
+the headless checks use. Hz is what the readouts were already trying to report.
+A cycle is two half-cycles, so 1 Hz is two half-cycles a second.
+
+- **One setter per thing, every control a view.** `setRunning`, `setClock`,
+  `step`, `reset`; controls repaint from `subscribe()`. Same arrangement as the
+  program picker's `choose()`, for the same reason.
+- **`?speed=` is now in Hz**, and still beats the saved value, which still beats
+  the slowest step. Same precedence as `?program=`.
+- **The header slot stays empty on a page with no chip.** Decode and Timing are
+  tables of 768 recorded runs; a run button there would have nothing behind it.
+  `.nav-chip:empty { display: none }` collapses it, and `_chipnav-test.html`
+  asserts both directions — every chip page has one, no measurement page does.
+- **The pacing clamp is 500ms, not something tighter.** It stops a backgrounded
+  tab returning and running a million half-cycles in one frame, but a clamp
+  shorter than a frame silently caps the rate — and the software rasteriser
+  manages 2–5 fps, so the page would then be slower than the control says.
+- **The study view keeps a clock select of its own**, because it is fullscreen
+  and there is no header to reach. Same store, so they cannot disagree. Its
+  4/s pacing is gone: that existed only because the page had no rate control.
+- `demos.js`'s `createChip` registers *itself* as the driver, so the primer's
+  five examples and the programs page's run panel are driven by the header too.
+  `setupChipNav()` is then called with no argument.
+
+**A discrete step must apply immediately, and the explorer was not doing it.**
+Its panels only repainted inside the frame loop, so a step landed on the next
+animation frame. That is a real responsiveness bug on its own and it is
+invisible until the page is driven somewhere frames are throttled — which is
+what an iframe does, and how it was found. `syncToChip()` is now called from the
+frame loop *and* after every discrete step. The schematic and the study view
+already worked this way; this is the third time this exact bug has appeared here.
+
+**Rate is measured, not read back off the control.** The explorer's readout
+counts half-cycles over the window and divides. What the setting asks for and
+what the machine delivered are two different claims, and on a slow GPU they are
+two different numbers.
+
+**Speed defaults to the slowest step everywhere.** At anything faster the die is
+a flicker and the registers are a blur; the point of a transistor-level view is
+watching one edge happen.
 
 **`web/package.json` is not shipped.** It exists so node reads `web/*.js` as ES
 modules, which is what lets `tools/check-programs.mjs` assemble every program
@@ -1646,13 +1741,30 @@ Layout breakpoints:
 | < 68rem | canvas above, panels behind a tab bar (`#panels[data-active]`) |
 | ≥ 68rem | canvas beside a persistent sidebar; the tab bar is hidden and CSS ignores `data-active` |
 
-The header has its own three, and they are independent of the explorer's:
+The header has its own four, and they are independent of the explorer's:
 
 | Width | Header |
 |---|---|
-| ≤ 34rem | picker narrowed, "Menu" label dropped for the hamburger alone |
+| ≤ 34rem | picker and clock narrowed, "Menu" label dropped for the hamburger alone |
+| ≤ 52rem | the control group takes a row of its own, below the wordmark |
 | < 80rem | nav links behind the disclosure menu |
-| ≥ 80rem | links inline beside the picker; ≥ 96rem gives both more room |
+| ≥ 80rem | links inline beside the controls; ≥ 96rem gives both more room |
+
+**The control group wraps as one thing, and the menu button is reordered with
+it.** Program, transport and clock are three controls competing for a row that
+already held a wordmark and a menu button; at 320px they want about 90px more
+than the viewport has, and a header that overflows scrolls the whole page
+sideways rather than clipping. Given a row of its own the group has the full
+width to divide up. Source order puts the menu button *after* the group, so
+without `order` it wraps to a third row and the header eats 144px of a phone
+screen to show three things.
+
+- **Filling the row is not the same as being usable.** With no cap the picker
+  grew to 645px on a page whose slot has no transport beside it. It is capped at
+  18rem in the wrapped row and floored at 6rem in the narrow one.
+- `_navfit-test.html` measures the transport and the clock the same way it
+  measures the picker, and for the same reason: a tap target squeezed to nothing
+  still renders and still looks like a control.
 
 Touch-specific behaviour that is easy to break:
 

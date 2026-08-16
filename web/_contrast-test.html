@@ -198,7 +198,7 @@ f.addEventListener('load', async () => {
         const r = ratio(c, b);
         seen.push([label, state, r]);
         if (r < FLOOR) {
-          bad.push(`${label}${state}: ${r.toFixed(2)} — ${token(fg ? fg.value : '?')} on ${bgVal}`);
+          bad.push(`${label}${state}: ${r.toFixed(2)}: ${token(fg ? fg.value : '?')} on ${bgVal}`);
         }
       }
     }

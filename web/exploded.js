@@ -14,6 +14,11 @@ import { ExplodedRenderer, HEIGHT_NAMES, BLOCK_COLOR, applyZoom, wireOrbit }
   from './exploded-gl.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
+import { setupChipNav } from './chip-nav.js';
+import {
+  isRunning, toggleRunning, step as stepChip, reset as resetChip,
+  subscribe, halfCyclesFor,
+} from './chip-controls.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,13 +26,6 @@ const state = {
   machine: null,
   renderer: null,
   blocks: null,
-  running: false,
-  // Half-cycles per frame, and the slowest useful value: one edge per frame.
-  // This page used to run at twelve, which is a chip flickering rather than a
-  // chip working -- and the filaments it draws are per-transistor, so the whole
-  // reason to watch is to see individual gates open.
-  speed: 1,
-  speedDebt: 0,
   focus: -1,
   raf: 0,
 };
@@ -201,16 +199,25 @@ function wireControls() {
     v < 0.02 ? 'assembled' : `${Math.round(v * 100)}%`);
   bindSlider('ex-stalks', (v) => { r.stalkAmount = v; });
 
-  $('ex-run').addEventListener('click', () => {
-    state.running = !state.running;
-    $('ex-run').textContent = state.running ? 'Pause' : 'Run';
-    $('ex-run').classList.toggle('btn-primary', !state.running);
+  // The header owns run/pause, the step, the power cycle and the clock rate.
+  // This page had no rate control at all before, and ran at twelve half-cycles
+  // a frame -- a chip flickering rather than a chip working, on the one page
+  // whose filaments are per-transistor and whose whole point is watching an
+  // individual gate open.
+  setupChipNav({
+    step: () => state.machine.halfStep(),
+    back: () => state.machine.stepBack(),
+    reset: () => loadProgram(Number($('ex-program').value)),
   });
-  $('ex-step').addEventListener('click', () => {
-    state.machine.halfStep();
-  });
-  $('ex-reset').addEventListener('click', () => {
-    loadProgram(Number($('ex-program').value));
+
+  $('ex-run').addEventListener('click', () => toggleRunning());
+  $('ex-step').addEventListener('click', () => stepChip());
+  $('ex-reset').addEventListener('click', () => resetChip());
+
+  subscribe(() => {
+    const on = isRunning();
+    $('ex-run').textContent = on ? 'Pause' : 'Run';
+    $('ex-run').classList.toggle('btn-primary', !on);
   });
 
   const sel = $('ex-program');
@@ -286,24 +293,17 @@ function applyQuery() {
     const b = state.blocks.blocks.find((x) => x.name.toLowerCase() === want);
     if (b) setFocus(b.id);
   }
-  if (q.get('run') === '1') $('ex-run').click();
+  if (q.get('run') === '1') toggleRunning();
 }
 
 // ---------------------------------------------------------------------------
 // Frame loop
 // ---------------------------------------------------------------------------
 
-function tick() {
+function tick(now) {
   const { machine, renderer } = state;
-  if (state.running) {
-    // Sub-1 speeds carry a fractional debt between frames, so 0.1 means one
-    // half-cycle every tenth frame rather than a rounding error that never
-    // advances the chip at all.
-    state.speedDebt += state.speed;
-    const n = Math.floor(state.speedDebt);
-    state.speedDebt -= n;
-    for (let i = 0; i < n; i++) machine.halfStep();
-  }
+  const n = halfCyclesFor(now);
+  for (let i = 0; i < n; i++) machine.halfStep();
   renderer.setNodeLevels(machine.nodeLevels());
   renderer.render();
 

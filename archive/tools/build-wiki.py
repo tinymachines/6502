@@ -525,7 +525,7 @@ def shell(title: str, body: str, *, banner: str, desc: str = "") -> str:
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{html.escape(title)} — visual6502 wiki (archived)</title>
+<title>{html.escape(title)} · visual6502 wiki (archived)</title>
 <meta name="description" content="{html.escape(desc)}">
 <link rel="stylesheet" href="wiki.css">
 </head><body>

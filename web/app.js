@@ -6,19 +6,21 @@ import { disassemble } from './disasm.js';
 import { createLab } from './lab.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
+import { setupChipNav } from './chip-nav.js';
+import {
+  CLOCKS, clockHz, isMaxClock, isRunning, setClock, setRunning, toggleRunning,
+  step as stepChip, stepBack, reset as resetChip, subscribe, halfCyclesFor,
+} from './chip-controls.js';
 
 const $ = (id) => document.getElementById(id);
 const hex = (v, n) => v.toString(16).padStart(n, '0').toUpperCase();
 
+// Whether the chip is running, and how fast, live in chip-controls.js. They are
+// set from the header and read here, so the console's transport and the
+// header's cannot disagree about either.
 const state = {
   machine: null,
   renderer: null,
-  running: false,
-  // The slowest setting, deliberately. At 16x the die is a flicker and the
-  // registers are a blur; the point of a transistor-level view is that you can
-  // watch one edge happen. Anyone who wants speed can reach for it.
-  speed: 0.1,
-  speedDebt: 0,      // fractional half-cycles carried between frames below 1x
   invertZoom: false,
   selection: null,     // { node, group: number[] }
   traceGroup: true,
@@ -27,6 +29,7 @@ const state = {
   scrubbing: false,
   frames: 0,
   fpsTime: 0,
+  rateFrom: 0,       // half-cycle the current rate window started at
   lastHalfCycle: -1,
   rails: [],
 };
@@ -134,14 +137,7 @@ function applyUrlParams() {
   if (state.nav) state.nav.set(index);
   loadProgram(index);
 
-  if (p.has('speed')) {
-    const speed = Number(p.get('speed'));
-    if (Number.isFinite(speed) && speed >= 0) {
-      state.speed = speed;
-      const sel = $('speed');
-      if ([...sel.options].some((o) => Number(o.value) === speed)) sel.value = String(speed);
-    }
-  }
+  // ?speed= is read by chip-controls.js, which owns the rate.
 
   // Advance to a specific half-cycle before showing anything, so a link can
   // point at one moment in the chip's life. Capped: this runs synchronously
@@ -249,13 +245,36 @@ function setupUI() {
     a.addEventListener('click', () => setRunning(true));
   }
 
-  $('btn-run').onclick = () => setRunning(!state.running);
-  $('btn-half').onclick = () => { setRunning(false); state.machine.halfStep(); };
-  $('btn-cycle').onclick = () => { setRunning(false); state.machine.stepCycle(); };
-  $('btn-instr').onclick = () => { setRunning(false); state.machine.stepInstruction(400); };
-  $('btn-back').onclick = () => { setRunning(false); state.machine.stepBack(); };
-  $('btn-reset').onclick = () => { setRunning(false); resetMachine(); };
-  $('speed').onchange = (e) => { state.speed = Number(e.target.value); state.speedDebt = 0; };
+  // The header owns run/pause, the half-cycle step, the power cycle and the
+  // clock rate. This console has its own copies plus two steps the header has
+  // no room for, and all of them act through the same store.
+  setupChipNav({
+    step: () => { state.machine.halfStep(); syncToChip(); },
+    back: () => { state.machine.stepBack(); syncToChip(); },
+    reset: () => { resetMachine(); syncToChip(); },
+  });
+
+  $('btn-run').onclick = () => toggleRunning();
+  $('btn-half').onclick = () => stepChip();
+  $('btn-cycle').onclick = () => { setRunning(false); state.machine.stepCycle(); syncToChip(); };
+  $('btn-instr').onclick = () => {
+    setRunning(false);
+    state.machine.stepInstruction(400);
+    syncToChip();
+  };
+  $('btn-back').onclick = () => stepBack();
+  $('btn-reset').onclick = () => resetChip();
+
+  const speed = $('speed');
+  for (const c of CLOCKS) speed.add(new Option(c.label, String(c.hz)));
+  speed.onchange = () => setClock(Number(speed.value));
+
+  subscribe(() => {
+    $('btn-run').textContent = isRunning() ? '❚❚' : '▶';
+    $('btn-run').setAttribute('aria-label', isRunning() ? 'Pause' : 'Run');
+    const hz = String(clockHz());
+    if (speed.value !== hz) speed.value = hz;
+  });
 
   // -- scrubber --
   const scrub = $('scrub');
@@ -293,7 +312,7 @@ function setupUI() {
  */
 const LAYER_NOTES = [
   'Aluminium, on top of everything. Translucent here for the same reason it ' +
-  'looks that way on a die photograph — you see the silicon through it. Carries ' +
+  'looks that way on a die photograph: you see the silicon through it. Carries ' +
   'power and the long-distance signals.',
   'Doped silicon whose conductivity a gate can switch off: the source and drain ' +
   'of a transistor. Where polysilicon crosses it, there is a switch.',
@@ -362,7 +381,7 @@ function focusPanel(name) {
  * So the API is treated as an optimisation rather than a requirement. Try it;
  * if it is missing, throws, or silently does not take effect, cover the viewport
  * with position:fixed instead. The layout is identical either way because both
- * paths set `.immersive` — only `.faux` adds the covering.
+ * paths set `.immersive` -- only `.faux` adds the covering.
  */
 function setupFullscreen() {
   const consoleEl = $('console');
@@ -500,7 +519,7 @@ function setupCanvasInput() {
    * This used to be constructed twice, and the two spellings disagreed: seeding
    * spread `midpoint()` in as `{x, y}` while the move handler read `.cx`/`.cy`.
    * The first move after a second finger landed therefore computed
-   * `mid.x - undefined`, and NaN went straight into the camera — where it stuck,
+   * `mid.x - undefined`, and NaN went straight into the camera -- where it stuck,
    * because every clamp propagates NaN rather than rejecting it. The die
    * vanished for good. One constructor means the shapes cannot drift again.
    */
@@ -629,12 +648,12 @@ function setupKeyboard() {
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
     switch (e.key) {
-      case ' ': e.preventDefault(); setRunning(!state.running); break;
-      case '.': setRunning(false); state.machine.halfStep(); break;
-      case ',': setRunning(false); state.machine.stepBack(); break;
+      case ' ': e.preventDefault(); toggleRunning(); break;
+      case '.': stepChip(); break;
+      case ',': stepBack(); break;
       case 'c': setRunning(false); state.machine.stepCycle(); break;
       case 'i': setRunning(false); state.machine.stepInstruction(400); break;
-      case 'r': setRunning(false); resetMachine(); break;
+      case 'r': resetChip(); break;
       case 'f': $('btn-fullscreen').click(); break;
       case 'z': state.renderer.resetView(); break;
       case 'Escape': clearSelection(); break;
@@ -646,11 +665,6 @@ function setupKeyboard() {
 function resetMachine() {
   state.machine.powerCycle();
   state.lastHalfCycle = -1;
-}
-
-function setRunning(on) {
-  state.running = on;
-  $('btn-run').textContent = on ? '❚❚' : '▶';
 }
 
 // ---------------------------------------------------------------------------
@@ -728,61 +742,75 @@ function escapeHtml(s) {
 // Per-frame
 // ---------------------------------------------------------------------------
 
+/**
+ * Push the chip into everything that shows it, if it has moved.
+ *
+ * Called from the frame loop and directly after any discrete step. A step that
+ * waits for the next animation frame is a real responsiveness bug on its own,
+ * and it is invisible until the page is driven somewhere frames are throttled
+ * -- which is exactly what an iframe does, and how this one was found. The
+ * schematic and the study view already worked this way; the explorer did not.
+ */
+function syncToChip() {
+  const m = state.machine;
+  const r = state.renderer;
+  const hc = m.halfCycle();
+  if (hc === state.lastHalfCycle) return;
+  r.setNodeLevels(m.nodeLevels());
+  updatePanels();
+  // A live selection's connected group changes as transistors switch.
+  if (state.selection && state.traceGroup) {
+    const group = Array.from(m.nodeGroup(state.selection.node));
+    state.selection.group = group;
+    r.setHighlight(group);
+  }
+  state.lastHalfCycle = hc;
+}
+
 function frame(now) {
   const m = state.machine;
   const r = state.renderer;
 
-  if (state.running && !state.scrubbing) {
-    if (state.speed === 0) {
+  // The pacing clock has to advance every frame, running or not, or the first
+  // frame after a pause carries the whole pause as elapsed time.
+  const want = halfCyclesFor(now);
+  if (want && !state.scrubbing) {
+    if (isMaxClock()) {
       // Time-budgeted: keep stepping until we would miss the frame.
       const deadline = performance.now() + 9;
       do { m.runHalfCycles(8); } while (performance.now() < deadline);
-    } else if (state.speed < 1) {
-      // Below one half-cycle per frame the chip has to idle through frames, so
-      // the shortfall is carried rather than dropped -- otherwise 0.1x and 0.5x
-      // would both round to "every frame" and look identical.
-      state.speedDebt += state.speed;
-      if (state.speedDebt >= 1) {
-        const n = Math.floor(state.speedDebt);
-        state.speedDebt -= n;
-        m.runHalfCycles(n);
-      }
     } else {
-      m.runHalfCycles(state.speed);
+      m.runHalfCycles(want);
     }
   }
 
-  // The chip only needs re-uploading when it has actually advanced.
   const hc = m.halfCycle();
-  if (hc !== state.lastHalfCycle) {
-    r.setNodeLevels(m.nodeLevels());
-    updatePanels();
-    // A live selection's connected group changes as transistors switch.
-    if (state.selection && state.traceGroup) {
-      const group = Array.from(m.nodeGroup(state.selection.node));
-      state.selection.group = group;
-      r.setHighlight(group);
-    }
-    state.lastHalfCycle = hc;
-  }
+  syncToChip();
 
   r.render();
   updateHover();
 
   state.frames++;
   if (now - state.fpsTime > 500) {
-    const fps = (state.frames * 1000) / (now - state.fpsTime);
-    const hz = state.running ? ` · ${(fps * currentSpeed() / 2).toFixed(0)} Hz` : '';
+    const elapsed = (now - state.fpsTime) / 1000;
+    const fps = state.frames / elapsed;
+    // The clock rate is measured over the window rather than read back off the
+    // select. What the setting asks for and what the machine delivered are two
+    // different claims, and on a slow GPU they are different numbers.
+    const cycles = (hc - state.rateFrom) / 2;
+    const hz = isRunning() ? ` · ${fmtHz(cycles / elapsed)}` : '';
     $('fps').textContent = `${fps.toFixed(0)} fps${hz}`;
     state.frames = 0;
     state.fpsTime = now;
+    state.rateFrom = hc;
   }
 
   requestAnimationFrame(frame);
 }
 
-function currentSpeed() {
-  return state.speed === 0 ? 64 : state.speed;
+function fmtHz(hz) {
+  if (hz >= 1000) return `${(hz / 1000).toFixed(1)} kHz`;
+  return `${hz < 10 ? hz.toFixed(1) : hz.toFixed(0)} Hz`;
 }
 
 function updateHover() {
@@ -875,7 +903,7 @@ function updatePanels() {
     el.textContent = `${hex(fetchAddr, 4)}  ${d.text}`;
     el.classList.toggle('undoc', d.undocumented);
   } else {
-    el.textContent = '—';
+    el.textContent = 'none';
     el.classList.remove('undoc');
   }
 

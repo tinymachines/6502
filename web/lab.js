@@ -68,7 +68,7 @@ export const LESSONS = [
       { d: 0, region: 'ab', title: 'Fetch',
         text: 'SYNC is high, which is the chip announcing that the byte it is ' +
               'reading is an opcode. The address bus holds $0200 and memory ' +
-              'returns A9. Nothing has decoded yet — the instruction register ' +
+              'returns A9. Nothing has decoded yet: the instruction register ' +
               'still holds the previous instruction.' },
       { d: 1, region: 'pd', title: 'Predecode',
         text: 'The byte reaches the predecode latch before the instruction ' +
@@ -78,12 +78,12 @@ export const LESSONS = [
               'before the opcode has finished decoding.' },
       { d: 2, region: 'ir', title: 'Into the instruction register',
         text: 'IR now holds A9. The address bus has already moved on to $0201 ' +
-              'and the operand 42 is on the data bus — the 6502 fetches the ' +
+              'and the operand 42 is on the data bus. The 6502 fetches the ' +
               'next byte while it decodes this one.' },
       { d: 2, region: 'decode', title: 'Decode',
         text: 'This block is the whole instruction decoder: a PLA whose inputs ' +
               'are the eight IR bits and the timing state, and whose outputs are ' +
-              'the control lines listed below. It is combinational — there is no ' +
+              'the control lines listed below. It is combinational: there is no ' +
               'microcode, no sequencer, nothing to step through. The lines below ' +
               'are simply a function of what is in IR right now.' },
       { d: 4, region: 'a', title: 'Into the accumulator',
@@ -103,7 +103,7 @@ export const LESSONS = [
     steps: [
       { d: 0, region: 'ab', title: 'Fetch',
         text: 'A = $40 and carry is clear, set up by the two instructions ' +
-              'before this one. SYNC is high and 69 — ADC immediate — is on the ' +
+              'before this one. SYNC is high and 69, ADC immediate, is on the ' +
               'data bus.' },
       { d: 2, region: 'ir', title: 'Into the instruction register',
         text: 'IR holds 69 and the operand 02 is on the data bus. From here the ' +
@@ -112,7 +112,7 @@ export const LESSONS = [
       { d: 4, region: 'alu', title: 'Both operands reach the adder',
         text: 'dpc24_ACSB gates the accumulator onto the special bus, which ' +
               'feeds one adder input; the operand arrives at the other. Both ' +
-              'inputs are now loaded — and A still reads $40. Nothing has been ' +
+              'inputs are now loaded, and A still reads $40. Nothing has been ' +
               'added yet.' },
       { d: 5, region: 'alu', title: 'The sum appears',
         text: 'The adder now holds $42. The accumulator still holds $40. This is ' +
@@ -120,7 +120,7 @@ export const LESSONS = [
               'exists, in the adder, and is not in any register.' },
       { d: 6, region: 'a', title: 'And only now, into A',
         text: 'dpc23_SBAC finally connects the special bus to the accumulator ' +
-              'and A becomes $42 — three cycles after the opcode fetch, one ' +
+              'and A becomes $42: three cycles after the opcode fetch, one ' +
               'cycle later than LDA managed. That extra cycle is the adder. Step ' +
               'back one and watch A change under you.' },
     ],
@@ -143,11 +143,11 @@ export const LESSONS = [
               'it at $0203 is simply the next opcode, read and then re-read.' },
       { d: 4, region: 'alu', title: 'X onto the bus, into the adder',
         text: 'dpc2_XSB puts X on the special bus and into one adder input. The ' +
-              'other input is driven by dpc8_nDBADD — the data bus *inverted*. ' +
+              'other input is driven by dpc8_nDBADD, the data bus *inverted*. ' +
               'There is no increment unit on this chip; adding one is done by ' +
               'the adder like everything else.' },
       { d: 5, region: 'alu', title: 'The adder increments',
-        text: 'The adder holds 6. X still holds 5 — the same one-cycle gap as ' +
+        text: 'The adder holds 6. X still holds 5: the same one-cycle gap as ' +
               'ADC, for the same reason: this went through the adder.' },
       { d: 6, region: 'x', title: 'Back into X',
         text: 'dpc3_SBX writes the special bus into X, and X becomes 6. The ' +
@@ -164,7 +164,7 @@ export const LESSONS = [
     asm: ['LDA #$42', 'STA $10', 'NOP', 'NOP'],
     steps: [
       { d: 0, region: 'ab', title: 'Fetch',
-        text: 'A = $42, loaded by the instruction before. 85 — STA zero page — ' +
+        text: 'A = $42, loaded by the instruction before. 85, STA zero page, ' +
               'is on the data bus.' },
       { d: 2, region: 'ir', title: 'Into the instruction register',
         text: 'IR holds 85, and the operand 10 follows on the data bus. That ' +
@@ -176,7 +176,7 @@ export const LESSONS = [
               'high byte is not fetched or computed, it is tied to zero by two ' +
               'control lines.' },
       { d: 4, region: 'dor', title: 'The write',
-        text: 'The address bus holds $0010 and R/W has gone low — this is the ' +
+        text: 'The address bus holds $0010 and R/W has gone low: this is the ' +
               'only step in the Lab where the chip is driving the data pins ' +
               'rather than reading them. dpc26_ACDB connects the accumulator to ' +
               'the data bus.' },
@@ -295,7 +295,7 @@ export function createLab({ machine, renderer, els, onTakeOver }) {
     els.body.innerHTML = `
       <p class="lab-intro">Follow one instruction from the opcode byte on the
       pins, through the latch that holds it, through the PLA that turns it into
-      control lines, and into the register it changes — a step at a time, with
+      control lines, and into the register it changes, a step at a time, with
       the die framed on whichever part is doing the work.</p>
       <p class="lab-intro lab-warn">Loading a lesson replaces the current
       program and power-cycles the chip.</p>
@@ -306,7 +306,7 @@ export function createLab({ machine, renderer, els, onTakeOver }) {
   }
 
   els.pick.innerHTML = LESSONS
-    .map((l) => `<option value="${l.id}">${l.name} — ${l.blurb}</option>`)
+    .map((l) => `<option value="${l.id}">${l.name}: ${l.blurb}</option>`)
     .join('');
   // Changing the instruction is itself a request to run it; only the very first
   // load needs the button.

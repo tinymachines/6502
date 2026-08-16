@@ -197,7 +197,10 @@ code {
   border-bottom: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
 }
 .site-head .wrap { position: relative; }
-.site-head nav { display: flex; align-items: center; gap: .9rem; height: 4.25rem; }
+.site-head nav {
+  display: flex; flex-wrap: wrap; align-items: center;
+  column-gap: .9rem; row-gap: .5rem; min-height: 4.25rem; padding: .5rem 0;
+}
 
 .mark {
   font-weight: 900; font-size: 1.1rem; letter-spacing: -.02em;
@@ -216,10 +219,53 @@ code {
    had -- so the control was unusable while the header still *looked* fine, and
    the 320px overflow harness could not see it because the links are behind the
    menu button at that width. Measure the desktop widths too. */
-.nav-prog {
+/* Program, transport and clock as one group, so there is one thing to place
+   rather than three competing for the end of the row. Below 52rem the group
+   takes a row of its own: at 320px the three controls plus a wordmark and a
+   menu button want about 90px more than the viewport has, and a header that
+   overflows scrolls the whole page sideways. */
+.nav-ctl {
   margin-left: auto; display: flex; align-items: center; gap: .5rem;
+  flex: 0 0 auto; min-width: 0;
+}
+.nav-prog {
+  display: flex; align-items: center; gap: .5rem;
   flex: 0 0 auto;
 }
+.nav-chip { display: flex; align-items: center; gap: .4rem; flex: 0 0 auto; }
+/* A page with no chip registers no driver, so the slot stays empty. Decode and
+   Timing are measurements taken over 768 runs, not something you can start. */
+.nav-chip:empty { display: none; }
+
+.nav-transport { display: inline-flex; gap: 2px; }
+.nav-tbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 2.2rem; min-height: 2.75rem; padding: .4rem .45rem;
+  border: 2px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: .375rem; background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--foreground); cursor: pointer;
+  font-family: var(--font-mono); font-size: .8rem; line-height: 1;
+  transition: .15s;
+}
+.nav-tbtn:hover { border-color: var(--gold); color: var(--gold); }
+.nav-tbtn:active { transform: translate(1px, 1px); }
+.nav-tbtn.is-run { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.nav-tbtn.is-run.on {
+  border-color: var(--accent); color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.nav-tbtn.is-run.on:hover { border-color: var(--gold); color: var(--gold); }
+
+.nav-clock-select {
+  min-width: 0; width: 5.1rem; min-height: 2.75rem; padding: .4rem .35rem;
+  border: 2px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: .375rem;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--foreground);
+  font-family: var(--font-mono); font-size: .72rem; font-weight: 600;
+  cursor: pointer; transition: .15s;
+}
+.nav-clock-select:hover { border-color: var(--gold); color: var(--gold); }
 .nav-prog-label {
   display: none;
   font-family: var(--font-mono); font-size: .65rem; font-weight: 700;
@@ -801,11 +847,33 @@ body.no-scroll #explorer { z-index: 70; }
    so a 390px phone -- the most common width there is -- fell through every one
    of these rules and overflowed its header by 29px. Write the breakpoint for
    the devices, not for the round number. */
+/* The control group takes a row of its own before it has to fight the wordmark
+   for space. Three controls beside a brand and a menu button want about 90px
+   more than a 320px viewport has, and a header that overflows scrolls the whole
+   page sideways rather than clipping -- so the failure is the page, not the
+   header. Given its own row the group has the full width to divide up. */
+@media (max-width: 52rem) {
+  /* Two rows, not three. Source order puts the menu button after the controls,
+     so without reordering it wraps to a row of its own and the header eats
+     144px of a phone screen to show three things. `order` costs nothing and
+     leaves the tab sequence alone. */
+  .menu-btn { order: 1; margin-left: auto; }
+  .nav-ctl { order: 2; flex: 1 0 100%; margin-left: 0; gap: .4rem; }
+  .nav-prog { flex: 1 1 auto; min-width: 0; }
+  /* Filling the row is not the same as being usable. Given the whole width the
+     picker grew to 645px on a page with no transport beside it, which is a
+     control four times wider than the longest program name. */
+  .nav-prog-select { width: 100%; max-width: 18rem; }
+  .nav-chip { margin-left: auto; }
+}
+
 @media (max-width: 34rem) {
-  .nav-prog-select { max-width: 7.25rem; font-size: .72rem; padding: .4rem .35rem; }
+  .nav-prog-select { min-width: 6rem; font-size: .72rem; padding: .4rem .35rem; }
+  .nav-tbtn { min-width: 2rem; padding: .4rem .3rem; font-size: .72rem; }
+  .nav-clock-select { width: 4.3rem; font-size: .68rem; }
   .menu-btn .mtxt { display: none; }
   .menu-btn { padding: .4rem .55rem; }
-  .site-head nav { gap: .5rem; }
+  .site-head nav { column-gap: .5rem; }
 }
 
 @media (max-width: 24rem) {
@@ -1384,6 +1452,16 @@ body.no-scroll #view { z-index: 70; }
   font-size: .58rem; color: #6f819f; margin-left: auto; padding: 0 .3rem;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* The rate, reachable in a mode that has no header. Same store as the header's,
+   so the two are one setting shown twice. */
+.solo-clock-select {
+  flex: 0 0 auto; min-width: 0; width: 4.4rem;
+  font-family: var(--font-mono); font-size: .58rem; font-weight: 600;
+  padding: .2rem .15rem; cursor: pointer;
+  color: var(--muted); background: var(--subtle);
+  border: 1px solid var(--line); border-radius: .25rem;
+}
+.solo-clock-select:hover { color: var(--accent); border-color: var(--accent); }
 
 /* The direction pair, which is a labelled choice rather than an icon. */
 .sp-dirpair { display: flex; gap: .25rem; margin-bottom: .5rem; }

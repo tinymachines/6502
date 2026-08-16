@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Trace — one instruction, half-cycle by half-cycle</title>
+<title>Trace: one instruction, half-cycle by half-cycle</title>
 <meta name="description" content="Pick any opcode and follow it through the MOS 6502 one half-cycle at a time: the registers as they mutate, every node that changed level, and the wires that are shorted together while it happens.">
 <meta name="theme-color" content="#0b1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -33,7 +33,10 @@
         <a href="./#credit">Credit</a>
         <a href="archive/">Archive</a>
       </div>
-      <div class="nav-prog" data-program-nav></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
         <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="mtxt">Menu</span>
@@ -49,7 +52,7 @@
     <h1>Follow one<br><span class="hl">instruction.</span></h1>
     <p class="lede">
       Pick any of the 256 opcodes. It is assembled into memory, the chip fetches
-      it, and everything below is read back out of the silicon afterwards —
+      it, and everything below is read back out of the silicon afterwards:
       the registers as they mutate, every node that changed level, and the wires
       that are <em>shorted together</em> while it happens.
     </p>
@@ -93,7 +96,7 @@
         </div>
 
         <p id="tr-warn" class="tr-warn" hidden>
-          The chip never fetched that instruction — it jammed before reaching it.
+          The chip never fetched that instruction: it jammed before reaching it.
           Twelve opcodes do this and the Timing page names them.
         </p>
 
@@ -107,7 +110,7 @@
             <p class="tr-note">
               A node's level is a property of the <em>group</em> it is joined to,
               not of the node. When a pass transistor is open the two wires either
-              side of it are not two wires holding the same value — they are one
+              side of it are not two wires holding the same value. They are one
               wire. Freshly joined groups are marked.
             </p>
             <ul class="tr-joins" id="tr-joins"></ul>
@@ -143,19 +146,19 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">Why it runs past the end</p>
-      <h2>The result is not in the register when the instruction ends.</h2>
+      <h2>The result is not in the register when the instruction ends</h2>
     </div>
     <p class="lede">
       The 6502 overlaps the tail of one instruction with the next opcode fetch.
       An ALU result is not in the accumulator when <span class="mono">sync</span>
-      rises — it is sitting in the adder's hold register, and it transfers during
+      rises. It is sitting in the adder's hold register, and it transfers during
       the cycle that belongs to the <em>next</em> instruction.
     </p>
     <p>
       So this trace deliberately runs past the next <span class="mono">sync</span>
       and marks those rows as the tail. Stopping at the boundary would show the
       instruction not having happened, which is the most misleading thing this
-      page could do — and it is exactly what a behavioural emulator hides, because
+      page could do, and it is what a behavioural emulator hides, because
       it writes the register at the end of the instruction where you expect it.
       Trace <span class="mono">ADC</span> and watch the accumulator change a cycle
       after the instruction is over.
@@ -163,12 +166,12 @@
 
     <div class="sec-head">
       <p class="eyebrow">The way in</p>
-      <h2>A pin is not a wire.</h2>
+      <h2>A pin is not a wire</h2>
     </div>
     <p>
       Following the data pins into the chip finds nothing. All eleven of
       <span class="mono">db0</span>'s connections go to a power rail, because a
-      pin is an output <em>driver</em> — nothing enters the chip from a pin
+      pin is an output <em>driver</em>: nothing enters the chip from a pin
       through a pass transistor at all. The way in is the input receiver, which
       is a gate, and the first wire that behaves like a wire is
       <span class="mono">idl</span>, the input data latch.
@@ -182,11 +185,11 @@
 
     <div class="sec-head">
       <p class="eyebrow">Scale</p>
-      <h2>Most of what conducts is not a wire either.</h2>
+      <h2>Most of what conducts is not a wire either</h2>
     </div>
     <p>
       At any instant <strong>1503 of the 3510 transistors are conducting</strong>,
-      and about <strong>165 nodes change level every half-cycle</strong> — a tenth
+      and about <strong>165 nodes change level every half-cycle</strong>, a tenth
       of the chip, at every edge. Lighting up everything that is on would produce
       a picture of the whole chip and tell you nothing.
     </p>
@@ -202,14 +205,14 @@
 
     <div class="sec-head">
       <p class="eyebrow">What is not shown</p>
-      <h2>One bit at a time, and eight are not the same.</h2>
+      <h2>One bit at a time, and the eight differ</h2>
     </div>
     <p>
       The wire panel watches a single bit, because the eight are genuinely
       different circuits and merging them would make a join look wider than it
       is. Bit 7 of the special bus is opened by
       <span class="mono">ADDSB7</span> where bits 0–6 share
-      <span class="mono">ADDSB06</span> — that difference is the shifter. Move the
+      <span class="mono">ADDSB06</span>, and that difference is the shifter. Move the
       bit slider and watch which joins appear and disappear.
     </p>
   </section>

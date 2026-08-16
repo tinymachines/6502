@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Decode — the 6502's PLA, measured</title>
+<title>Decode: the 6502's PLA, measured</title>
 <meta name="description" content="All 122 product terms of the MOS 6502's decode PLA, located in the netlist and measured by running the chip against every one of the 256 opcodes.">
 <meta name="theme-color" content="#0b1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -33,7 +33,10 @@
         <a href="./#credit">Credit</a>
         <a href="archive/">Archive</a>
       </div>
-      <div class="nav-prog" data-program-nav></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
         <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="mtxt">Menu</span>
@@ -51,12 +54,12 @@
       There is no instruction decoder in the 6502 in the sense a textbook means,
       and no microcode to step through. An opcode is eight bits sitting in a
       latch, and a grid of transistors turns them into about forty control lines
-      combinationally — a pure function of what is in the instruction register
+      combinationally, as a pure function of what is in the instruction register
       right now.
     </p>
     <p class="lede">
       That grid has 122 product terms, and the die names 121 of them. This is
-      every one, together with the opcodes that actually fire it — found by
+      every one, together with the opcodes that actually fire it, found by
       running the chip against all 256 opcodes rather than by reading the
       transistors and reasoning.
     </p>
@@ -87,7 +90,7 @@
 
           <div class="decode-right" id="terms">
             <div class="term-head">
-              <input id="term-filter" type="search" placeholder="Filter terms — try “lda”"
+              <input id="term-filter" type="search" placeholder="Filter terms, e.g. lda"
                      aria-label="Filter product terms">
               <span class="muted mono" id="term-shown"></span>
             </div>
@@ -102,7 +105,7 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">What the table shows</p>
-      <h2>Undocumented opcodes are not a mystery.</h2>
+      <h2>Undocumented opcodes share product terms</h2>
     </div>
     <p class="lede">
       Filter the terms for <span class="mono">lda</span> and select
@@ -112,7 +115,7 @@
     </p>
     <p>
       Nothing special happens for them. The PLA is a grid of switches, and the
-      row that means “load the accumulator now” does not test every opcode bit —
+      row that means “load the accumulator now” does not test every opcode bit:
       it tests the ones it needs. Opcodes it was never designed for satisfy the
       same pattern, and the row fires, because there is nothing in the silicon
       whose job is to say no. <span class="mono">LAX</span> loads both A and X
@@ -129,7 +132,7 @@
 
     <div class="sec-head">
       <p class="eyebrow">Why measured</p>
-      <h2>The obvious method was wrong twice.</h2>
+      <h2>Reading the gates gives the wrong answer twice</h2>
     </div>
     <p>
       A product term looks like something you can just read off: it is pulled to
@@ -140,7 +143,7 @@
     <p>
       <strong>It over-matched.</strong> <span class="mono">op-T0-jsr</span> came
       out decoding four opcodes instead of one, because the low two bits are
-      constrained through <span class="mono">irline3</span> — a derived line, not
+      constrained through <span class="mono">irline3</span>, a derived line, not
       an IR bit. Following it means modelling the gate behind it, and the gate
       behind that.
     </p>
@@ -153,21 +156,21 @@
     <p>
       So the structure comes from the netlist and the behaviour comes from the
       engine: every opcode was run, three times each, and the terms were read out
-      of the chip. All 122 fire — the last of them,
+      of the chip. All 122 fire. The last of them,
       <span class="mono">op-branch-done</span>, only once the test crossed a page
       boundary, which is itself the answer to what that term is for.
     </p>
 
     <div class="sec-head">
       <p class="eyebrow">From term to control line</p>
-      <h2>Drive, or get out of the way.</h2>
+      <h2>Two senses: drive, and override</h2>
     </div>
     <p>
       This is the AND plane, plus as much of the path onward as could be
       verified. Selecting a term lists the control lines it was measured to
       explain, and each one is reached the same way: through the OR plane, a
       <span class="mono">cclk</span> pipeline latch, and a couple of inverters.
-      That latch is why a line responds a half-cycle or two after its term —
+      That latch is why a line responds a half-cycle or two after its term,
       the lag shown is measured per line, not assumed.
     </p>
     <p>

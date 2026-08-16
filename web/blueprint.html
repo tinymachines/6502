@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Blueprint — the 6502 datapath, derived</title>
+<title>Blueprint: the 6502 datapath, derived</title>
 <meta name="description" content="An idealised block diagram of the MOS 6502 datapath, derived from switch topology rather than drawn by hand, and driven live by the transistor-level simulation.">
 <meta name="theme-color" content="#0b1120">
 <link rel="manifest" href="manifest.webmanifest">
@@ -34,7 +34,10 @@
         <a href="./#credit">Credit</a>
         <a href="archive/">Archive</a>
       </div>
-      <div class="nav-prog" data-program-nav></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
         <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="mtxt">Menu</span>
@@ -47,12 +50,12 @@
 
   <section class="hero wrap">
     <p class="eyebrow">Derived · not drawn</p>
-    <h1>The datapath,<br><span class="hl">as a diagram.</span></h1>
+    <h1>The datapath,<br><span class="hl">derived from the switches.</span></h1>
     <p class="lede">
-      The die view shows you the 6502 as it is: a photograph's worth of
-      polygons, beautiful and almost unreadable. This is the same chip with the
-      geometry taken away — buses as lines, registers as boxes, and a switch
-      wherever the silicon has one.
+      The die view shows the 6502 as it is: a photograph's worth of polygons,
+      accurate and hard to read. This is the same chip with the geometry taken
+      away, leaving buses as lines, registers as boxes, and a switch wherever
+      the silicon has one.
     </p>
     <p class="lede">
       Nobody drew it. Every unit, every path and every control line below was
@@ -73,16 +76,11 @@
           <select id="bp-program"></select>
         </label>
         <div class="bar-spacer"></div>
+        <!-- Filled from CLOCKS in chip-controls.js: one list of steps for the
+             whole site, so the same setting means the same rate everywhere. -->
         <label class="field">
-          <span>Speed</span>
-          <select id="bp-speed">
-            <option value="0.1" selected>0.10×</option>
-            <option value="0.25">0.25×</option>
-            <option value="0.5">0.5×</option>
-            <option value="1">1×</option>
-            <option value="8">8×</option>
-            <option value="32">32×</option>
-          </select>
+          <span>Clock</span>
+          <select id="bp-speed"></select>
         </label>
       </div>
 
@@ -112,27 +110,25 @@
   <section class="wrap sec bp-prose">
     <div class="sec-head">
       <p class="eyebrow">How to read it</p>
-      <h2>A lit switch is a wire.</h2>
+      <h2>A lit switch is a wire</h2>
     </div>
     <p class="lede">
       Each small square is a group of eight pass transistors, one per bit. When
       the control line named beside it goes high, those eight transistors
-      conduct and the two things they sit between stop being separate wires —
+      conduct and the two things they sit between stop being separate wires:
       for that half-cycle they are one net at one value. That is the whole
       mechanism by which a byte moves inside a 6502. There is no bus arbiter and
-      no data path multiplexer; there are switches, and the decode PLA opens
-      them.
+      no datapath multiplexer, only switches that the decode PLA opens.
     </p>
     <p>
       Watch <span class="mono">SBAC</span> and <span class="mono">ADDSB06</span>
-      during an <span class="mono">ADC</span> and you can see the thing the die
-      view can show but never explain: the adder's result reaches the special
-      bus a full cycle before it reaches the accumulator.
+      during an <span class="mono">ADC</span>: the adder's result reaches the
+      special bus a full cycle before it reaches the accumulator.
     </p>
 
     <div class="sec-head">
       <p class="eyebrow">What it leaves out</p>
-      <h2>Five per cent of the chip.</h2>
+      <h2>159 of 3510 transistors</h2>
     </div>
     <p>
       This diagram accounts for the bus fabric and nothing else. The 6502 is
@@ -144,26 +140,26 @@
     </p>
     <p>
       An idealised picture that hides how much it idealised is worth less than
-      one that shows you. If you want the part this drawing cannot show,
-      <a href="./#explorer">the die view</a> has all 3510 of them.
+      one that states it. For the part this drawing cannot show,
+      <a href="./#explorer">the die view</a> carries all 3510.
     </p>
 
     <div class="sec-head">
       <p class="eyebrow">Where the shapes come from</p>
-      <h2>Order preserved from the silicon.</h2>
+      <h2>Order preserved from the silicon</h2>
     </div>
     <p>
       Columns are ordered by each unit's mean position across the die, so left
       and right mean what they mean on the chip. Rails are ordered by where the
-      wire sits <em>inside</em> a bit row — a bus crosses all eight rows, so its
+      wire sits <em>inside</em> a bit row. A bus crosses all eight rows, so its
       average height says nothing, but its offset against its own row is
-      consistent and is the order you see. Both are order-preserving remaps:
+      consistent, and that offset is the order drawn. Both are order-preserving remaps:
       move something on the die and it moves here.
     </p>
     <p>
       The one place the drawing departs from measurement is the bit rows
       themselves, which come from the bit index in each node's name rather than
-      from its position. On <span class="mono">ADH</span> those two disagree —
+      from its position. On <span class="mono">ADH</span> those two disagree:
       it carries the constant generators for stack access and vector fetches, and
       that extra geometry drags bits 2 and 3 out of order. The names are right
       and the centroids are misleading, so the names win.
