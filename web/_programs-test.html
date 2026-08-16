@@ -1,0 +1,187 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The Programs page, driven against the real page in an iframe.
+
+  What it is for: this page's whole claim is that nothing on it is written down
+  twice -- the address and byte columns come from the assembler, the cycle
+  column from timing.json, and the run panel from the chip's storage nodes. A
+  page can look exactly like that and be showing a stale table, so every column
+  is compared here against the thing it is supposed to be derived from.
+
+  The iframe rule from _solo-test.html applies and is respected: headless
+  throttles animation frames in an iframe to nearly zero, so nothing here
+  asserts on the chip *running*. It asserts on what a synchronous step paints,
+  which needs no frames at all.
+
+    http://localhost:8777/_programs-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1200px;height:800px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
+const hex4 = (v) => v.toString(16).padStart(4, '0').toUpperCase();
+
+// A persisted choice is a hidden input to every assertion after it.
+localStorage.removeItem('v6502.program');
+
+const load = (src) => new Promise((resolve) => {
+  f.addEventListener('load', function once() {
+    f.removeEventListener('load', once);
+    resolve();
+  });
+  f.src = src;
+});
+
+(async () => {
+  try {
+    const { PROGRAMS } = await import('./programs.js');
+    const timing = await fetch('timing.json').then((r) => r.json());
+    const measured = new Map(timing.opcodes.map((o) => [o.op, o]));
+
+    await load('programs');
+    const w = f.contentWindow, d = f.contentDocument;
+    const $ = (id) => d.getElementById(id);
+    for (let i = 0; i < 300 && !$('prog-listing').querySelector('tbody tr'); i++) await sleep(50);
+
+    ok('the page lists every program',
+       d.querySelectorAll('.pg-item').length === PROGRAMS.length,
+       `${d.querySelectorAll('.pg-item').length} of ${PROGRAMS.length}`);
+
+    // --- the listing is the assembler's output, column by column -------------
+    const checkListing = (index) => {
+      const p = PROGRAMS[index];
+      const rows = [...$('prog-listing').querySelectorAll('tbody tr.pg-row')];
+      const bad = [];
+      // Every line that emitted bytes must appear, at its address, with its
+      // bytes. A row missing here is a byte the reader is not being shown.
+      const emitting = p.asm.lines.filter((l) => l.bytes && l.bytes.length);
+      for (const ln of emitting) {
+        const want = ln.bytes.map(hex2).join(' ');
+        const row = rows.find((r) =>
+          r.querySelector('.c-addr').textContent === `$${hex4(ln.addr)}`
+          && r.querySelector('.c-bytes').textContent === want);
+        if (!row) bad.push(`$${hex4(ln.addr)} ${want}`);
+      }
+      return { bad, emitting: emitting.length, rows: rows.length };
+    };
+
+    let r0 = checkListing(0);
+    ok('every assembled line is on screen at its own address with its own bytes',
+       r0.bad.length === 0, `${r0.emitting} lines, missing: ${r0.bad.join(' | ') || 'none'}`);
+
+    // --- the cycle column is the measured one, not a table -------------------
+    const cycleBad = [];
+    for (const row of $('prog-listing').querySelectorAll('tbody tr.pg-row')) {
+      const shown = row.querySelector('.c-cyc').textContent.trim();
+      if (!shown) continue;
+      const bytes = row.querySelector('.c-bytes').textContent.trim().split(' ');
+      const op = parseInt(bytes[0], 16);
+      const m = measured.get(op);
+      const want = m ? (m.jam ? '∞' : String(m.cycles)) : '';
+      if (shown !== want) cycleBad.push(`$${bytes[0]}: page ${shown}, timing.json ${want}`);
+    }
+    ok('every cycle count is the one timing.json measured',
+       cycleBad.length === 0, cycleBad.join(' | ') || 'all match');
+
+    // ...and it is not empty, which is how a broken fetch would look.
+    const withCycles = [...$('prog-listing').querySelectorAll('.c-cyc')]
+      .filter((c) => c.textContent.trim()).length;
+    ok('and the column was actually filled', withCycles >= 8, `${withCycles} rows`);
+
+    // --- the hex dump is the image, byte for byte ----------------------------
+    const dumped = $('prog-dump').textContent.trim().split('\n')
+      .flatMap((l) => l.split(/\s+/).slice(1)).map((h) => parseInt(h, 16));
+    ok('the hex dump is the assembled image and nothing else',
+       dumped.length === PROGRAMS[0].bytes.length
+       && dumped.every((b, i) => b === PROGRAMS[0].bytes[i]),
+       `${dumped.length} vs ${PROGRAMS[0].bytes.length} bytes`);
+
+    // --- the notes are on the rows they name ---------------------------------
+    const noteCount = d.querySelectorAll('.pg-note').length;
+    ok('the notes are rendered beside the code',
+       noteCount === Object.keys(PROGRAMS[0].notes || {}).length && noteCount > 0,
+       `${noteCount} notes`);
+
+    // --- the run panel reads the chip, not the source ------------------------
+    for (let i = 0; i < 200 && !d.querySelector('.pg-regs dd'); i++) await sleep(50);
+    const regOf = (label) => {
+      const dl = d.querySelector('.pg-regs');
+      const dts = [...dl.querySelectorAll('dt')];
+      const i = dts.findIndex((t) => t.textContent.trim() === label);
+      return i < 0 ? null : dl.querySelectorAll('dd')[i].textContent.trim();
+    };
+    ok('the run panel is showing a chip', !!regOf('PC'), regOf('PC'));
+
+    // Stepping has to move it. A dead readout renders a perfectly plausible
+    // panel, which is the failure this is here to catch.
+    const before = regOf('PC') + regOf('A') + regOf('bus');
+    const step = [...d.querySelectorAll('.pg-run-host .dm-btn')]
+      .find((b) => b.title && b.title.includes('Forward'));
+    for (let i = 0; i < 12; i++) step.click();
+    await sleep(60);
+    ok('and stepping it moves what the panel shows',
+       regOf('PC') + regOf('A') + regOf('bus') !== before,
+       `${before} -> ${regOf('PC') + regOf('A') + regOf('bus')}`);
+
+    // --- choosing a program changes all of it --------------------------------
+    const other = PROGRAMS.length - 1;
+    d.querySelector(`.pg-item[data-index="${other}"]`).click();
+    await sleep(200);
+    ok('picking another program retitles the page',
+       $('prog-name').textContent === PROGRAMS[other].name, $('prog-name').textContent);
+    const r1 = checkListing(other);
+    ok('and redraws the listing from that program',
+       r1.bad.length === 0 && r1.rows !== r0.rows,
+       `${r1.emitting} lines, missing: ${r1.bad.join(' | ') || 'none'}`);
+
+    ok('and the header picker follows it',
+       d.querySelector('.nav-prog-select').value === String(other),
+       d.querySelector('.nav-prog-select').value);
+
+    ok('and the choice is written down for the other pages',
+       localStorage.getItem('v6502.program') === String(other),
+       localStorage.getItem('v6502.program'));
+
+    // The address bar names what is being looked at, so a link off this page
+    // carries the program with it.
+    ok('and the URL names it too',
+       new URL(w.location.href).searchParams.get('program') === String(other),
+       w.location.search);
+
+    // --- and the rest of the site picks it up --------------------------------
+    //
+    // The point of one shared choice. Without this the pages each default to
+    // the first program and quietly disagree about what is running.
+    await load('blueprint.html');
+    const d2 = f.contentDocument;
+    for (let i = 0; i < 300 && !d2.getElementById('bp-program').options.length; i++) await sleep(50);
+    ok('the blueprint comes up on the program that was chosen here',
+       d2.getElementById('bp-program').value === String(other),
+       d2.getElementById('bp-program').value);
+
+    // ...unless the URL asks for a different one, which is somebody asking.
+    await load('blueprint.html?program=1');
+    const d3 = f.contentDocument;
+    for (let i = 0; i < 300 && !d3.getElementById('bp-program').options.length; i++) await sleep(50);
+    ok('but a link that names a program still wins',
+       d3.getElementById('bp-program').value === '1',
+       d3.getElementById('bp-program').value);
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 2).join(' | ') : e));
+  }
+  localStorage.removeItem('v6502.program');
+  document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>

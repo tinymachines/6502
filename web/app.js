@@ -4,7 +4,8 @@ import init, { Machine, netlistInfo } from './pkg/v6502_wasm.js';
 import { DieRenderer, parseLayout, LAYER_INFO } from './renderer.js';
 import { disassemble } from './disasm.js';
 import { createLab } from './lab.js';
-import { PROGRAMS, LOAD_ADDR } from './programs.js';
+import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
+import { setupProgramNav } from './program-nav.js';
 
 const $ = (id) => document.getElementById(id);
 const hex = (v, n) => v.toString(16).padStart(n, '0').toUpperCase();
@@ -13,7 +14,10 @@ const state = {
   machine: null,
   renderer: null,
   running: false,
-  speed: 16,
+  // The slowest setting, deliberately. At 16x the die is a flicker and the
+  // registers are a blur; the point of a transistor-level view is that you can
+  // watch one edge happen. Anyone who wants speed can reach for it.
+  speed: 0.1,
   speedDebt: 0,      // fractional half-cycles carried between frames below 1x
   invertZoom: false,
   selection: null,     // { node, group: number[] }
@@ -122,9 +126,12 @@ function loadProgram(index) {
 function applyUrlParams() {
   const p = new URLSearchParams(location.search);
 
-  const programIndex = Number(p.get('program') ?? 0);
-  const index = Number.isInteger(programIndex) && PROGRAMS[programIndex] ? programIndex : 0;
+  // `?program=N` if the link named one, otherwise whatever was chosen last --
+  // walking from the Blueprint to here should not silently change what is
+  // running, since comparing the two views is the reason both pages exist.
+  const index = selectedProgram(location.search);
   $('program-select').value = String(index);
+  if (state.nav) state.nav.set(index);
   loadProgram(index);
 
   if (p.has('speed')) {
@@ -167,15 +174,27 @@ function applyUrlParams() {
 function setupUI() {
   const r = state.renderer;
 
+  // The program is chosen in two places -- the console's own field and the one
+  // in the site header -- and there is exactly one place that changes it. Two
+  // controls that each hold their own copy of a setting are two controls that
+  // will eventually disagree about it.
   const select = $('program-select');
   PROGRAMS.forEach((p, i) => select.add(new Option(p.name, String(i))));
-  select.onchange = () => {
+
+  const choose = (index, { fromNav = false } = {}) => {
     setRunning(false);
-    loadProgram(Number(select.value));
+    select.value = String(index);
+    setSelectedProgram(index);
+    if (!fromNav && state.nav) state.nav.set(index);
+    loadProgram(index);
     // The console just took the machine back; the Lab's step positions were
     // measured against a program that is no longer loaded.
     if (state.lab) state.lab.invalidate();
   };
+  state.choose = choose;
+
+  select.onchange = () => choose(Number(select.value));
+  state.nav = setupProgramNav({ onChange: (i) => choose(i, { fromNav: true }) });
 
   // -- layers --
   const layers = $('layers');

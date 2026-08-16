@@ -1,0 +1,109 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  Does the site header fit, at every width, with the program picker in it?
+
+  This exists because of a bug nothing else here could see. `_overflow-test.html`
+  checks 320px, where the nav links are behind the disclosure menu, so the row
+  that overflows is not on screen. Every desktop width went unchecked -- and the
+  header was overflowing by 88px at 1280 and 359px at 992, while *looking*
+  perfectly fine, because the picker is a flex item and had collapsed to 22px
+  to make room. A control that silently shrinks to nothing is worse than one
+  that visibly overflows: the layout absorbs the problem and hands the reader an
+  unusable widget.
+
+  So this asserts two things at once, and both are needed. The header must not
+  overflow, and the picker must still be big enough to read a program name in.
+  Either alone passes while the other is broken.
+
+    http://localhost:8777/_navfit-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{border:0;display:block}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+// 320 is the narrowest common phone; 1280 and 1400 are where the links come
+// inline beside the picker, which is the pair that broke.
+const WIDTHS = [320, 360, 390, 430, 480, 700, 992, 1180, 1280, 1400, 1600, 1920];
+const PAGES = ['index.html', 'programs', 'schematic', 'timing'];
+
+// Narrow enough to be tight, wide enough to read "Fill page $0300".
+const MIN_SELECT = 96;
+
+(async () => {
+  try {
+    const rows = [];
+    const overflowing = [];
+    const collapsed = [];
+
+    for (const page of PAGES) {
+      for (const w of WIDTHS) {
+        f.style.width = `${w}px`;
+        f.style.height = '240px';
+        await new Promise((r) => {
+          f.addEventListener('load', r, { once: true });
+          f.src = `${page}?w=${w}`;
+        });
+        // Wait for the picker rather than for a fixed delay. The schematic
+        // builds its header inside boot(), behind a JSON fetch and the wasm, so
+        // a flat 400ms measured an empty header on a slow run -- and reported a
+        // missing control as a failing width, which is a harness bug wearing a
+        // page bug's clothes.
+        const d = f.contentDocument;
+        for (let i = 0; i < 200 && !d.querySelector('.nav-prog-select'); i++) await sleep(50);
+        await sleep(120);
+        const wrap = d.querySelector('.site-head .wrap');
+        const sel = d.querySelector('.nav-prog-select');
+        const over = wrap.scrollWidth - wrap.clientWidth;
+        const doc = d.documentElement.scrollWidth - d.documentElement.clientWidth;
+        const selW = sel ? Math.round(sel.getBoundingClientRect().width) : -1;
+        const name = page.replace('.html', '');
+        rows.push(`     ${name.padEnd(10)} ${String(w).padStart(5)}px  `
+          + `picker ${String(selW).padStart(3)}px  `
+          + `header ${over > 0 ? '+' + over : 'fits'}  doc ${doc > 0 ? '+' + doc : 'fits'}`);
+        if (over > 0 || doc > 0) overflowing.push(`${name}@${w} +${Math.max(over, doc)}`);
+        if (selW < MIN_SELECT) collapsed.push(`${name}@${w} ${selW}px`);
+      }
+    }
+
+    ok('the header fits at every width, on every page',
+       overflowing.length === 0, overflowing.join(', '));
+    ok('and the program picker is legible at every one of them',
+       collapsed.length === 0,
+       collapsed.length ? collapsed.join(', ') : `never below ${MIN_SELECT}px`);
+
+    // The picker must be reachable at 320px, where the CTA it replaced was
+    // dropped entirely. It is the only way to change what is running.
+    f.style.width = '320px';
+    await new Promise((r) => {
+      f.addEventListener('load', r, { once: true });
+      f.src = 'schematic?w=320';
+    });
+    const d = f.contentDocument, w = f.contentWindow;
+    for (let i = 0; i < 200 && !d.querySelector('.nav-prog-select'); i++) await sleep(50);
+    await sleep(120);
+    const sel = d.querySelector('.nav-prog-select');
+    const box = sel.getBoundingClientRect();
+    ok('and on the narrowest phone it is on screen rather than off the edge',
+       box.left >= 0 && box.right <= 320 && w.getComputedStyle(sel).display !== 'none',
+       `left ${Math.round(box.left)} right ${Math.round(box.right)}`);
+
+    results.push('', ...rows);
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));
+  }
+  const lines = results.filter((r) => r.startsWith('PASS') || r.startsWith('FAIL'));
+  document.title = lines.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>

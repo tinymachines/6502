@@ -23,6 +23,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Simulation | Complete. 79 tests, bit-exact against the original. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
+| Programs | Seven programs as **source**, assembled in the page, annotated, run on the chip. One choice, shared by every page. |
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
@@ -100,8 +101,16 @@ cargo run -p v6502-netlist --bin export-blocks -- web/blocks.json
 cargo run -p v6502-netlist --bin export-schematic -- web/schematic.json
 cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
-# (primer.html needs no export of its own: it reads schematic/decode/timing.json)
+# (primer.html and programs.html need no export of their own: the primer reads
+#  schematic/decode/timing.json, and the programs are assembled in the page)
 python3 tools/serve.py web 8777                    # http://localhost:8777/
+
+# The programs, checked without a browser: they assemble, they round-trip
+# through the disassembler's table, and the three that predate the rewrite are
+# byte-identical to what they shipped with. deploy.sh runs this and refuses to
+# publish if it fails. (Whether they COMPUTE what they claim needs the chip --
+# that is web/_asm-test.html.)
+node tools/check-programs.mjs
 
 # Web app, production shape: content-hashed bundle + service worker into dist/
 python3 tools/build-web.py web dist
@@ -188,12 +197,13 @@ Expect ~2–5 fps: that is software rasterisation, not the renderer.
 - `--screenshot=/dev/null` logs an "Unsupported screenshot image file type"
   error. Harmless.
 
-**"Run it" runs it.** The header call to action and the hero button both point at
-`#explorer`, so the browser does the scrolling and `app.js` only has to start the
-chip on click. Sub-pages cannot do that — they are a navigation away — so their
-copy of the button carries `?run=1#explorer` instead, which the deep-link reader
-already honours. Two routes, one behaviour, and `_handler-test.html` asserts
-both: the click here, and the href there.
+**"Run it" runs it.** The hero button points at `#explorer`, so the browser does
+the scrolling and `app.js` only has to start the chip on click — every
+`a[href="#explorer"]` is wired to `setRunning(true)`. The header's copy of that
+button is now the program picker (see the Programs section); the sub-pages'
+`?run=1#explorer` link went with it, because on those pages choosing a program
+*is* the way in. `_handler-test.html` asserts the hero click, and that the two
+program controls on the Explorer cannot disagree.
 
 ### Deep links
 
@@ -201,6 +211,10 @@ both: the click here, and the href there.
 mirrors the spirit of the original's query parameters, and is how the app is
 driven in headless checks. `?lab=adc&step=4` opens one moment of a walkthrough,
 which is the only practical way to point someone at a specific half-cycle.
+
+**`?program=N` is now honoured by every page and outranks the saved choice**, so
+a link that names a program gets that program. Without the parameter, the page
+runs whatever was last chosen anywhere on the site.
 
 `blueprint.html` takes `?program=N&run=1&path=CONTROL` — e.g.
 `blueprint.html?path=dpc23_SBAC` pins the accumulator's path to the special bus.
@@ -216,8 +230,13 @@ _camera-test.html      # zoom limits and pan clamping, asserted
 _resize-test.html      # resize the renderer, then read back pixels: is it drawn?
 _handler-test.html     # drive every event handler; report anything that throws
 _overflow-test.html?w=320&page=trace   # what pushes a page wider than the viewport
+_navfit-test.html      # the header, at 12 widths x 4 pages: does it fit, and is
+                       # the program picker still wide enough to read?
 _contrast-test.html    # every button, every state, checked for readable text
 _persist-test.html     # the console's configuration, across a second page load
+_asm-test.html         # the assembler round-trips, the old programs are byte-
+                       # identical, and each new one is RUN until its answer lands
+_programs-test.html    # the Programs page vs the assembler, timing.json and the chip
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _primer-test.html      # the primer's numbers re-derived, and its five examples run
@@ -419,8 +438,10 @@ plus the transistor bounding boxes for hit-testing.
 ## The renderer (`web/`)
 
 Plain ES modules, no build step, no framework: `renderer.js` (WebGL2),
-`app.js` (glue + UI), `disasm.js`, `lab.js`, `programs.js` (shared program list),
-`blueprint.js`, `decode.js`, `timing.js` and `trace.js` (four further pages, see
+`app.js` (glue + UI), `disasm.js`, `lab.js`, `asm.js` (the 6502 assembler),
+`programs.js` (the shared program set, assembled at load), `program-nav.js`
+(the header picker), `blueprint.js`, `decode.js`, `timing.js`,
+`programs-page.js` and `trace.js` (five further pages, see
 below), `index.html`,
 `style.css`, plus
 `site-nav.js` and `version-footer.js` which are **shared verbatim with the
@@ -1119,9 +1140,10 @@ Result: 16 units, 21 paths, 159 switches — the 6502 datapath, computed.
   right; with two, opening `blueprint.html` offline silently served the
   *explorer* — a wrong page that renders perfectly, which is the hardest kind of
   failure to notice.
-- `web/programs.js` is shared by `app.js` and `blueprint.js`. It was inlined in
+- `web/programs.js` is shared by every page that runs the chip. It was inlined in
   `app.js`; two copies would drift, and "Fibonacci" meaning different things on
-  two pages is exactly the difference nobody notices.
+  two pages is exactly the difference nobody notices. It now also owns *which*
+  program is selected — see the Programs section.
 
 The Rust side is tested (`crates/v6502-netlist/tests/blueprint.rs`, 13 tests)
 rather than snapshotted. The important one is
@@ -1203,6 +1225,114 @@ back somewhere unrelated.
 - **The lag is per line.** The pipeline latch puts one to two half-cycles between
   a term and its line, but the depth is not uniform — fitting one global lag
   understated the result. Fitted lags run 0–4, mostly 1.
+
+### The Programs (`programs.html`, `programs-page.js`, `programs.js`, `asm.js`)
+
+Every other page shows a 6502 in the middle of running something. This is the
+something: seven programs as **assembly source**, assembled in the page,
+annotated line by line, and executed on the same simulation the die view draws.
+
+**The bytes are computed from the text on screen.** The programs used to be
+arrays of hex with a comment beside each byte, which has one failure mode and it
+is silent — the comment and the byte are two independent claims and nothing ever
+checks that they still agree. Source removes the possibility rather than
+promising to watch for it.
+
+- **The assembler carries no opcode table of its own.** It inverts `disasm.js`'s,
+  so the two are one table read in opposite directions. That is what makes the
+  round trip in `_asm-test.html` evidence rather than a tautology: if the
+  assembler had its own copy, agreeing with itself would prove nothing.
+- **The three programs that predate the rewrite assemble to exactly the bytes
+  that were typed here before**, and both `_asm-test.html` and
+  `tools/check-programs.mjs` pin it against arrays written out longhand.
+  Deriving the expectation from the source under test is how a test comes to
+  prove nothing, so those arrays are duplicated on purpose.
+- **Assembling is not the same as being right.** Each of the new programs is
+  *run on the chip* until its answer appears in memory — `$2E + $14` reaching
+  `$82` as `$42` at half-cycle 41, page `$0300` filling to its last byte at
+  6137. A program can assemble perfectly and compute nothing.
+- **Zero page is only chosen when the value is known during pass one.** `LDA foo`
+  is two bytes if `foo` is below `$0100` and three if not, so the size depends on
+  something a first pass may not know yet. A forward reference assembles
+  absolute — three bytes that are always correct rather than two that are
+  sometimes wrong — and `copy`'s `LDA text,X` is the case that exercises it.
+- **A gap left by `.org` is filled, not skipped.** It is memory the chip fetches
+  through; an image with holes in it is not an image. `counter` is 24 bytes
+  because eight of them are the `$00`s between `$0208` and `$020F`.
+- **Notes are anchored to labels, never to line numbers.** A note naming a label
+  the program does not define is a page error and a deploy failure, so prose
+  cannot quietly detach from the code it describes. Verified by renaming a label
+  and watching both go red.
+- **Every program loops rather than ending.** There is no operating system to
+  return to and running off the end reaches `$00` — `BRK`, vectoring to `$0000`,
+  which is another `BRK`. That exact bug was live on two pages of this site.
+- **The cycle column is `timing.json`**, measured sync to sync, not a datasheet.
+  Where an instruction can take longer — a taken branch, a page crossed — the
+  shortest is shown, because the rest depends on values the page cannot know
+  without running the program. The page says so.
+
+#### One program, every page
+
+`selectedProgram()` in `programs.js` is the only place the choice is read:
+`?program=N` first, then `localStorage`, then the first program. **A URL that
+names a program wins over a stored preference**, because a link naming a program
+is somebody asking for it, and a saved choice overruling them would be the page
+arguing with whoever sent it.
+
+- **The header's "Run it" call to action became the picker** (`program-nav.js`,
+  `[data-program-nav]`), and inherited its job: choosing a program is how you
+  start the chip on something. The hero button on the front page still says
+  "Run it" and still runs it — which is also why the header's copy could go.
+- **Pages that run the chip apply it in place; pages that do not only record
+  it.** Decode, Timing and Trace are measured tables, so their picker says as
+  much rather than implying something on screen just changed. The Primer
+  reloads, because rebuilding five demos around a new chip in place would be a
+  second boot path to get wrong.
+- **Where two controls name the program, exactly one function changes it.** The
+  Explorer, the Blueprint and the Exploded view each have a console field *and*
+  the header picker; both route through one `choose()`, with a `fromNav` flag so
+  reflecting a change cannot re-fire it. Two controls that each keep their own
+  copy of a setting are two controls that will eventually disagree.
+- Before this, every page defaulted to program 0 and forgot the choice on
+  navigation — so comparing the Blueprint's view of a program with the
+  Explorer's, which is the reason both pages exist, silently compared two
+  different programs.
+
+**Speed now defaults to the slowest setting everywhere.** The Explorer was 16×,
+the Blueprint 8×, the Exploded view a fixed twelve half-cycles per frame. At
+those rates the die is a flicker and the registers are a blur; the point of a
+transistor-level view is watching one edge happen. The exploded view gained the
+fractional-debt accumulator the other two already had, or a sub-1 rate rounds to
+zero and the chip never advances at all.
+
+**`web/package.json` is not shipped.** It exists so node reads `web/*.js` as ES
+modules, which is what lets `tools/check-programs.mjs` assemble every program
+headlessly in the deploy — the only guard here that does not need a browser.
+`build-web.py` copies only the files it names, so it cannot reach `dist/`.
+
+#### What putting a `<select>` in the header cost, and what it taught
+
+Two layout bugs, both invisible to every harness that existed, and the shape of
+each is worth more than the fix.
+
+- **A flex item that shrinks to nothing does not overflow, and that is worse.**
+  The picker is `flex: 0 0 auto` because without it the header *looked* correct
+  at every width while the control had collapsed to **22px** — the layout
+  absorbed the problem and handed the reader an unusable widget. Meanwhile the
+  header really was overflowing by 88px at 1280 and 359px at 992. So
+  `_navfit-test.html` asserts both halves: the header must fit, *and* the picker
+  must stay wide enough to read a program name in. Either assertion alone passes
+  while the other is broken.
+- **`_overflow-test.html` could not have caught it.** It checks 320px, where the
+  nav links are behind the disclosure menu — so the row that overflows is not on
+  screen. Every desktop width had gone unchecked for the life of the project.
+  The links now go inline at **80rem rather than 62rem**, because 62rem was set
+  when the row was shorter and the header carried a 90px button.
+- **Write the breakpoint for the devices, not for the round number.** The narrow
+  rules were at `max-width: 24rem` — 384px — so a **390px phone**, the most
+  common width there is, fell through all of them and overflowed its header by
+  29px. It is 34rem now. The old rule had been there since before this work and
+  was never wrong for the 320px case it was written and tested against.
 
 ### The Primer (`primer.html`, `primer.js`)
 
@@ -1431,6 +1561,14 @@ Layout breakpoints:
 |---|---|
 | < 68rem | canvas above, panels behind a tab bar (`#panels[data-active]`) |
 | ≥ 68rem | canvas beside a persistent sidebar; the tab bar is hidden and CSS ignores `data-active` |
+
+The header has its own three, and they are independent of the explorer's:
+
+| Width | Header |
+|---|---|
+| ≤ 34rem | picker narrowed, "Menu" label dropped for the hamburger alone |
+| < 80rem | nav links behind the disclosure menu |
+| ≥ 80rem | links inline beside the picker; ≥ 96rem gives both more room |
 
 Touch-specific behaviour that is easy to break:
 

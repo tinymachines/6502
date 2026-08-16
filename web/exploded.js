@@ -12,7 +12,8 @@ import init, { Machine } from './pkg/v6502_wasm.js';
 import { parseLayout } from './renderer.js';
 import { ExplodedRenderer, HEIGHT_NAMES, BLOCK_COLOR, applyZoom, wireOrbit }
   from './exploded-gl.js';
-import { PROGRAMS, LOAD_ADDR } from './programs.js';
+import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
+import { setupProgramNav } from './program-nav.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,7 +22,12 @@ const state = {
   renderer: null,
   blocks: null,
   running: false,
-  speed: 12,
+  // Half-cycles per frame, and the slowest useful value: one edge per frame.
+  // This page used to run at twelve, which is a chip flickering rather than a
+  // chip working -- and the filaments it draws are per-transistor, so the whole
+  // reason to watch is to see individual gates open.
+  speed: 1,
+  speedDebt: 0,
   focus: -1,
   raf: 0,
 };
@@ -215,7 +221,19 @@ function wireControls() {
     o.textContent = p.name;
     sel.append(o);
   });
-  sel.addEventListener('change', () => loadProgram(Number(sel.value)));
+
+  // One place changes the program, whichever control was used.
+  const choose = (index, { fromNav = false } = {}) => {
+    sel.value = String(index);
+    setSelectedProgram(index);
+    if (!fromNav && state.nav) state.nav.set(index);
+    loadProgram(index);
+  };
+  sel.addEventListener('change', () => choose(Number(sel.value)));
+  state.nav = setupProgramNav({ onChange: (i) => choose(i, { fromNav: true }) });
+
+  // The URL if it names a program, otherwise the one chosen elsewhere.
+  choose(selectedProgram(location.search), { fromNav: true });
 
   // Layer toggles, named by physical height rather than by segdef index: three
   // heights, not six, because three of the six are the same layer.
@@ -278,7 +296,13 @@ function applyQuery() {
 function tick() {
   const { machine, renderer } = state;
   if (state.running) {
-    for (let i = 0; i < state.speed; i++) machine.halfStep();
+    // Sub-1 speeds carry a fractional debt between frames, so 0.1 means one
+    // half-cycle every tenth frame rather than a rounding error that never
+    // advances the chip at all.
+    state.speedDebt += state.speed;
+    const n = Math.floor(state.speedDebt);
+    state.speedDebt -= n;
+    for (let i = 0; i < n; i++) machine.halfStep();
   }
   renderer.setNodeLevels(machine.nodeLevels());
   renderer.render();

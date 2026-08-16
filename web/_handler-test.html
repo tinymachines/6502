@@ -220,27 +220,55 @@ f.addEventListener('load', async () => {
   con.requestFullscreen = undefined;
   if (con.classList.contains('immersive')) { fsBtn.click(); await settle(); }
 
-  // "Run it" means run it. The header call to action and the hero button both
-  // point at #explorer, so the browser scrolls and the handler only has to start
-  // the chip -- and the assertion is the transport button's own label, which is
-  // the one place run state is painted.
+  // "Run it" means run it. The hero button points at #explorer, so the browser
+  // scrolls and the handler only has to start the chip -- and the assertion is
+  // the transport button's own label, which is the one place run state is
+  // painted.
   const runBtn = d.getElementById('btn-run');
   const running = () => runBtn.textContent !== '\u25b6';
   if (running()) { runBtn.click(); await settle(); }
   ok('the chip starts stopped, for this check', !running(), runBtn.textContent);
-  d.querySelector('.nav-cta').click();
+  const hero = d.querySelector('.hero a[href="#explorer"]');
+  ok('the hero still carries a way in', !!hero, hero && hero.textContent);
+  hero.click();
   await wait(120);
   ok('the call to action starts the chip running', running(), runBtn.textContent);
   runBtn.click();
   await wait(60);
   ok('and it can be stopped again afterwards', !running(), runBtn.textContent);
 
-  // Off the explorer there is nothing to click into -- those buttons carry the
-  // deep link instead, and it has to be the one app.js already reads.
+  // The header's call to action became the program picker, and it inherited the
+  // job: choosing a program is how you start the chip on something. Two
+  // controls now name the program on this page and they must not be able to
+  // disagree, so changing either has to move both.
+  const navSel = d.querySelector('.nav-prog-select');
+  const conSel = d.getElementById('program-select');
+  ok('the header carries a program picker', !!navSel && navSel.options.length > 1,
+     navSel && `${navSel.options.length} options`);
+  ok('and it offers the same programs as the console',
+     !!conSel && navSel.options.length === conSel.options.length,
+     `${navSel && navSel.options.length} vs ${conSel && conSel.options.length}`);
+
+  const other = [...navSel.options].find((o) => o.value !== navSel.value).value;
+  navSel.value = other;
+  navSel.dispatchEvent(new w.Event('change', { bubbles: true }));
+  await wait(150);
+  ok('changing it in the header moves the console with it',
+     conSel.value === other, `console=${conSel.value} header=${other}`);
+
+  const back = [...conSel.options].find((o) => o.value !== conSel.value).value;
+  conSel.value = back;
+  conSel.dispatchEvent(new w.Event('change', { bubbles: true }));
+  await wait(150);
+  ok('and changing it in the console moves the header with it',
+     navSel.value === back, `header=${navSel.value} console=${back}`);
+
+  // Off the explorer there is no chip to start, so the picker is what those
+  // pages carry instead of a dead "Run it" link.
   const away = await (await fetch('primer.html')).text();
-  const cta = /<a class="btn btn-primary nav-cta" href="([^"]+)"/.exec(away);
-  ok('and on another page it arrives already running',
-     !!cta && cta[1].includes('run=1') && cta[1].includes('#explorer'), cta && cta[1]);
+  ok('another page carries the picker rather than the old call to action',
+     away.includes('data-program-nav') && !away.includes('nav-cta'),
+     away.includes('nav-cta') ? 'still has nav-cta' : 'ok');
 
   const src = await (await fetch('app.js')).text();
   const assigns = [...src.matchAll(/lastPinch\s*=\s*([^;]+);/g)].map((m) => m[1].trim());

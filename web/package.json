@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "//": "Not shipped: build-web.py copies only the files it names. This exists so node can import web/*.js as ES modules -- which is what lets tools/check-programs.mjs assemble every program headlessly, without a browser."
+}

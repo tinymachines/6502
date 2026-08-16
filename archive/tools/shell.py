@@ -144,6 +144,7 @@ LINKS: tuple[tuple[str, str], ...] = (
     ("Original site", "full/index.html"),
     # Out to the simulator. Absolute, because the archive nests two deep and a
     # relative path would resolve differently on a wiki page than on the index.
+    ("Programs", "/programs"),
     ("Primer", "/primer"),
     ("Trace", "/trace"),
     ("Schematic", "/schematic"),

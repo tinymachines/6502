@@ -10,7 +10,8 @@
 // The rule to keep: if a number appears in primer.html, it is in the wrong file.
 
 import init, { Machine } from './pkg/v6502_wasm.js';
-import { PROGRAMS, LOAD_ADDR } from './programs.js';
+import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
+import { setupProgramNav } from './program-nav.js';
 import {
   hex2, hex4, lamps, el, createChip, transport, createScope, readout, runWhileVisible,
 } from './demos.js';
@@ -325,7 +326,8 @@ async function bootDemos(data) {
   try {
     await init();
     const chip = createChip({
-      Machine, program: PROGRAMS[0].bytes, loadAddr: LOAD_ADDR, rate: 2,
+      Machine, program: PROGRAMS[selectedProgram(location.search)].bytes,
+      loadAddr: LOAD_ADDR, rate: 2,
     });
     for (const host of hosts) {
       const build = DEMOS[host.dataset.demo];
@@ -353,6 +355,20 @@ async function bootDemos(data) {
 
 async function boot() {
   const status = $('pr-status');
+
+  // The examples share one chip, warmed and already recording, and rebuilding
+  // five of them around a new program in place would be a second boot path to
+  // get wrong. Reloading with the program named in the URL uses the path that
+  // is already tested.
+  setupProgramNav({
+    onChange: (i) => {
+      setSelectedProgram(i);
+      const url = new URL(location.href);
+      url.searchParams.set('program', String(i));
+      location.assign(url);
+    },
+  });
+
   try {
     const [sch, dec, tim] = await Promise.all(
       ['schematic.json', 'decode.json', 'timing.json'].map((f) =>

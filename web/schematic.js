@@ -10,7 +10,8 @@
 // that. Reading right to left is reading backwards in causality.
 
 import init, { Machine } from './pkg/v6502_wasm.js';
-import { PROGRAMS, LOAD_ADDR } from './programs.js';
+import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
+import { setupProgramNav } from './program-nav.js';
 import { setupFullscreen } from './fullscreen.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1930,7 +1931,10 @@ async function boot() {
 
     const m = new Machine();
     state.machine = m;
-    m.load(LOAD_ADDR, new Uint8Array(PROGRAMS[0].bytes));
+    // Whatever was chosen on the Programs page or in the header, so that the
+    // gates on this page belong to the same run the die view was showing.
+    state.program = selectedProgram(location.search);
+    m.load(LOAD_ADDR, new Uint8Array(PROGRAMS[state.program].bytes));
     // Without this the reset vector reads $0000, where memory is $00 -- a BRK,
     // which pushes three bytes and vectors to itself. The chip then runs a BRK
     // loop forever instead of the program, and every gate on the page lights up
@@ -1958,6 +1962,20 @@ async function boot() {
     const want = q.get('signal');
     const byName = new Map(data.names.map((n, i) => [n, i]).filter(([n]) => n));
     state.root = byName.get(want) ?? byName.get('dpc3_SBX') ?? byName.get('a0') ?? 0;
+
+    // Changing the program here restarts the chip on the new one and leaves the
+    // walk where it is: the circuit is a property of the silicon, not of what
+    // happens to be running through it.
+    state.nav = setupProgramNav({
+      onChange: (i) => {
+        state.program = i;
+        setSelectedProgram(i);
+        m.load(LOAD_ADDR, new Uint8Array(PROGRAMS[i].bytes));
+        m.setResetVector(LOAD_ADDR);
+        m.powerCycle();
+        render();
+      },
+    });
 
     buildPicker();
     $('sch-filter').addEventListener('input', buildPicker);

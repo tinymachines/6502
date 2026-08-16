@@ -13,7 +13,8 @@
 // a fact about the chip ever gets hardcoded below, it is in the wrong file.
 
 import init, { Machine } from './pkg/v6502_wasm.js';
-import { PROGRAMS, LOAD_ADDR } from './programs.js';
+import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
+import { setupProgramNav } from './program-nav.js';
 
 const $ = (id) => document.getElementById(id);
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -37,7 +38,9 @@ const state = {
   bp: null,
   layout: null,
   running: false,
-  speed: 8,
+  // The slowest setting the control offers. Watching a switch open is the point
+  // of this diagram, and it is not visible at eight half-cycles a frame.
+  speed: 0.1,
   speedDebt: 0,
   raf: 0,
   selected: null,        // control name of a pinned link
@@ -509,11 +512,19 @@ function loadProgram(index) {
 function wireUp(svg) {
   const select = $('bp-program');
   PROGRAMS.forEach((p, i) => select.add(new Option(p.name, String(i))));
-  select.onchange = () => {
-    loadProgram(Number(select.value));
+
+  // One place changes the program, whichever control was used to change it.
+  const choose = (index, { fromNav = false } = {}) => {
+    select.value = String(index);
+    setSelectedProgram(index);
+    if (!fromNav && state.nav) state.nav.set(index);
+    loadProgram(index);
     refresh(svg, state.bp, state.machine);
     updateReadout();
   };
+  state.choose = choose;
+  select.onchange = () => choose(Number(select.value));
+  state.nav = setupProgramNav({ onChange: (i) => choose(i, { fromNav: true }) });
 
   $('bp-run').onclick = (ev) => {
     state.running = !state.running;
@@ -561,10 +572,12 @@ function wireUp(svg) {
 
   // Deep links, matching the explorer's spirit: ?program=N&run=1&path=CONTROL
   const q = new URLSearchParams(location.search);
-  if (q.has('program')) {
-    const i = Number(q.get('program'));
-    if (PROGRAMS[i]) { select.value = String(i); loadProgram(i); }
-  }
+  // The URL if it names a program, otherwise the one chosen elsewhere on the
+  // site -- arriving here from the Explorer should not change what is running.
+  const chosen = selectedProgram(location.search);
+  select.value = String(chosen);
+  if (state.nav) state.nav.set(chosen);
+  loadProgram(chosen);
   if (q.has('path')) pick(q.get('path'));
   if (q.get('run') === '1') $('bp-run').click();
 }

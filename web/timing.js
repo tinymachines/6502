@@ -8,6 +8,12 @@
 // checking them against the published ones rather than reciting them.
 
 import { OPCODES } from './disasm.js';
+// The header's program picker. This page shows measurements rather than running
+// a program, so the choice made here is recorded for the pages that do -- which
+// is why the control says so instead of implying that something on screen
+// just changed.
+import { setupProgramNav } from './program-nav.js';
+
 
 const $ = (id) => document.getElementById(id);
 const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
@@ -123,4 +129,5 @@ async function boot() {
   }
 }
 
+setupProgramNav();
 boot();

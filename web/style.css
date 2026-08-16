@@ -206,7 +206,35 @@ code {
 .mark span { font-family: var(--font-mono); font-weight: 700; color: var(--accent); }
 
 .navlinks { display: none; }
-.site-head .nav-cta { margin-left: auto; min-height: 2.75rem; padding: .4rem .95rem; font-size: .85rem; }
+
+/* The program picker, which replaced the "Run it" call to action and inherits
+   its job: choosing a program is how you start the chip on something. The
+   names are long enough to blow the header open at any width, so the control
+   is capped and left to clip rather than allowed to size to its content. */
+/* `flex: 0 0 auto` is load-bearing. As a shrinkable flex item the select
+   collapsed to 22px against a nav row that wanted more space than the header
+   had -- so the control was unusable while the header still *looked* fine, and
+   the 320px overflow harness could not see it because the links are behind the
+   menu button at that width. Measure the desktop widths too. */
+.nav-prog {
+  margin-left: auto; display: flex; align-items: center; gap: .5rem;
+  flex: 0 0 auto;
+}
+.nav-prog-label {
+  display: none;
+  font-family: var(--font-mono); font-size: .65rem; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+.nav-prog-select {
+  min-width: 0; max-width: 10.5rem; min-height: 2.75rem; padding: .4rem .55rem;
+  border: 2px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: .375rem;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--foreground);
+  font-family: var(--font-mono); font-size: .78rem; font-weight: 600;
+  cursor: pointer; transition: .15s;
+}
+.nav-prog-select:hover { border-color: var(--gold); color: var(--gold); }
 
 .menu-btn {
   display: inline-flex; align-items: center; gap: .5rem;
@@ -241,11 +269,25 @@ code {
 }
 .navlinks a:hover { color: var(--gold); }
 
-@media (min-width: 62rem) {
+/* The links only go inline once they genuinely fit beside a program picker.
+   This used to be 62rem, from when the row was shorter and the header carried a
+   90px button rather than a 12rem control; at that width fourteen links plus
+   the picker overflowed by 359px. Below this the disclosure menu holds them,
+   which is the behaviour every phone already had. */
+@media (min-width: 80rem) {
   .menu-btn { display: none; }
-  .navlinks { display: flex; align-items: center; gap: 1.4rem; margin-left: 1.5rem; }
-  .navlinks a { border: 0; padding: 0; font-size: .95rem; font-weight: 600; color: var(--muted); }
+  .navlinks { display: flex; align-items: center; gap: .9rem; margin-left: 1rem; min-width: 0; }
+  .navlinks a { border: 0; padding: 0; font-size: .87rem; font-weight: 600; color: var(--muted); }
   .navlinks a:hover { color: var(--foreground); }
+  .nav-prog-label { display: inline; }
+  .nav-prog-select { max-width: 12rem; width: 12rem; }
+}
+
+/* Room to breathe once there is room. */
+@media (min-width: 96rem) {
+  .navlinks { gap: 1.2rem; margin-left: 1.5rem; }
+  .navlinks a { font-size: .92rem; }
+  .nav-prog-select { max-width: 14rem; width: 14rem; }
 }
 
 /* ---------- hero ---------- */
@@ -749,8 +791,24 @@ body.no-scroll #explorer { z-index: 70; }
   #lab .cta-row .btn { white-space: normal; }
 }
 
+/* The wordmark, the picker and the menu button together want more than a phone
+   viewport has. The picker shrinks rather than disappearing: it is the only way
+   to change what is running, and the CTA it replaced could afford to go because
+   the hero carries a second copy of it. What goes instead is the word "Menu" --
+   the hamburger already says it, and the label costs 45px the picker needs.
+
+   This is 34rem, not 24rem, and the difference was a real bug: 24rem is 384px,
+   so a 390px phone -- the most common width there is -- fell through every one
+   of these rules and overflowed its header by 29px. Write the breakpoint for
+   the devices, not for the round number. */
+@media (max-width: 34rem) {
+  .nav-prog-select { max-width: 7.25rem; font-size: .72rem; padding: .4rem .35rem; }
+  .menu-btn .mtxt { display: none; }
+  .menu-btn { padding: .4rem .55rem; }
+  .site-head nav { gap: .5rem; }
+}
+
 @media (max-width: 24rem) {
-  .site-head .nav-cta { display: none; }
   .transport { flex-wrap: wrap; }
   .transport .iconbtn { min-width: 2.5rem; padding: .5rem .35rem; }
 }
@@ -1686,3 +1744,104 @@ body.no-scroll #view { z-index: 70; }
 .dm-scope-trace { fill: none; stroke: var(--accent); stroke-width: 2; }
 .dm-scope-trace.dm-ch-sync { stroke: var(--mint); }
 .dm-scope-trace.dm-ch-rw { stroke: var(--hot); }
+
+/* ---------- the Programs page (programs.html) ---------- */
+
+.pg-cols { display: grid; grid-template-columns: minmax(0, 1fr); }
+.pg-list {
+  display: grid; gap: .4rem; padding: .9rem;
+  border-bottom: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+.pg-item {
+  display: grid; gap: .15rem; text-align: left;
+  padding: .6rem .7rem; cursor: pointer; transition: .15s;
+  border: 2px solid color-mix(in srgb, var(--line) 60%, transparent);
+  border-radius: .375rem;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--foreground);
+}
+.pg-item strong { font-size: .88rem; font-weight: 700; }
+.pg-item-size { font-size: .68rem; color: var(--muted); }
+.pg-item:hover { border-color: var(--gold); }
+.pg-item:hover strong { color: var(--gold); }
+.pg-item.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.pg-item.on strong { color: var(--accent); }
+
+.pg-main { padding: 1rem .9rem 1.4rem; min-width: 0; }
+.pg-head h2 { margin: 0 0 .35rem; font-size: 1.35rem; letter-spacing: -.01em; }
+.pg-blurb { margin: 0 0 1.1rem; color: var(--muted); max-width: 60ch; line-height: 1.65; }
+.pg-main h3 {
+  margin: 1.6rem 0 .5rem; font-family: var(--font-mono); font-size: .78rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--accent);
+}
+
+/* The listing is wider than a phone at any font size that stays readable, so
+   it scrolls inside its own box rather than pushing the page sideways. */
+.pg-listing-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.pg-listing { border-collapse: collapse; width: 100%; min-width: 30rem; font-size: .8rem; }
+.pg-listing th {
+  position: sticky; top: 0; z-index: 1;
+  padding: .35rem .5rem; text-align: left;
+  font-family: var(--font-mono); font-size: .62rem; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+  background: color-mix(in srgb, var(--space) 94%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.pg-listing td { padding: .18rem .5rem; vertical-align: baseline; }
+.pg-listing .c-addr { width: 4.2rem; color: var(--muted); white-space: nowrap; }
+.pg-listing .c-bytes { width: 6.4rem; color: var(--mint); white-space: nowrap; }
+.pg-listing .c-cyc { width: 2.6rem; text-align: right; color: var(--muted); }
+.pg-listing .c-src { width: auto; }
+.pg-src { display: block; white-space: pre; font-size: .8rem; color: var(--muted); }
+.pg-src.has-op { color: var(--foreground); }
+.pg-row.is-org .c-addr { color: var(--gold); }
+
+.pg-note td { padding: .35rem .5rem .7rem; }
+.pg-note p {
+  margin: 0; max-width: 62ch; font-size: .78rem; line-height: 1.65;
+  color: var(--muted);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  padding-left: .7rem;
+}
+
+.pg-binary-note { margin: 0 0 .5rem; font-size: .78rem; line-height: 1.6; max-width: 62ch; }
+.pg-dump {
+  margin: 0; padding: .7rem .8rem; overflow-x: auto;
+  border: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: .375rem;
+  background: color-mix(in srgb, var(--space) 70%, transparent);
+  font-family: var(--font-mono); font-size: .75rem; line-height: 1.7; color: var(--mint);
+}
+
+.pg-run-host {
+  padding: .8rem; border-radius: .375rem;
+  border: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
+  background: color-mix(in srgb, var(--surface) 65%, transparent);
+}
+.pg-regs, .pg-watch { margin-top: .6rem; }
+.pg-watch { padding-top: .6rem; border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent); }
+
+.pg-go-links { display: grid; gap: .5rem; }
+.pg-go-link {
+  display: grid; gap: .1rem; padding: .6rem .7rem; text-decoration: none;
+  border: 2px solid color-mix(in srgb, var(--line) 60%, transparent);
+  border-radius: .375rem; color: var(--foreground); transition: .15s;
+}
+.pg-go-link strong { font-size: .88rem; }
+.pg-go-link span { font-size: .74rem; color: var(--muted); }
+.pg-go-link:hover { border-color: var(--gold); }
+.pg-go-link:hover strong { color: var(--gold); }
+
+@media (min-width: 56rem) {
+  .pg-cols { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); }
+  .pg-list {
+    border-bottom: 0;
+    border-right: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
+    align-content: start;
+  }
+  .pg-main { padding: 1.2rem 1.2rem 1.6rem; }
+  .pg-go-links { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+}

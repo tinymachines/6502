@@ -1,0 +1,195 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The assembler, and the programs it produces.
+
+  Three separate things are checked, and only the first is about the assembler
+  as a piece of code:
+
+    1. It round-trips. Every instruction it emits is disassembled by the shared
+       table and must come back as the same mnemonic in the same addressing
+       mode. This is only evidence because the two directions read *one* table:
+       if the assembler carried its own copy, agreeing with itself would prove
+       nothing.
+
+    2. The three programs that predate the rewrite assemble to exactly the bytes
+       that were typed here before. "We changed how the programs are built" is
+       otherwise a claim with nothing behind it.
+
+    3. The new programs actually compute what their comments say. Assembling is
+       not the same as being right, so each one is run on the real chip until
+       its answer lands in memory.
+
+    http://localhost:8777/_asm-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const hex = (a) => [...a].map((b) => b.toString(16).padStart(2, '0')).join(' ');
+
+(async () => {
+  try {
+    const { assemble, MODE_SIZE } = await import('./asm.js');
+    const { OPCODES } = await import('./disasm.js');
+    const { PROGRAMS, LOAD_ADDR } = await import('./programs.js');
+
+    // --- 1. the round trip ---------------------------------------------------
+    let instructions = 0;
+    const wrong = [];
+    for (const p of PROGRAMS) {
+      for (const ln of p.asm.lines) {
+        if (!ln.mnemonic) continue;
+        instructions++;
+        const entry = OPCODES[ln.opcode];
+        if (!entry || entry[0] !== ln.mnemonic || entry[1] !== ln.mode) {
+          wrong.push(`${p.id}:${ln.n} ${ln.mnemonic}/${ln.mode} -> $${ln.opcode.toString(16)}`);
+        } else if (ln.bytes.length !== 1 + MODE_SIZE[ln.mode]) {
+          wrong.push(`${p.id}:${ln.n} emitted ${ln.bytes.length} bytes for ${ln.mode}`);
+        }
+      }
+    }
+    ok('every assembled instruction disassembles back to itself',
+       wrong.length === 0 && instructions > 40,
+       `${instructions} instructions${wrong.length ? ' — ' + wrong.join(', ') : ''}`);
+
+    // --- 2. the programs that predate the rewrite ----------------------------
+    //
+    // Typed out here on purpose. Deriving the expectation from the same source
+    // the assembler reads would make this assertion vacuous; these are the
+    // literal arrays that were in programs.js before it took source.
+    const HISTORICAL = {
+      counter: [0xa9, 0x00, 0x20, 0x10, 0x02, 0x4c, 0x02, 0x02,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0xe8, 0x88, 0xe6, 0x0f, 0x38, 0x69, 0x02, 0x60],
+      fibonacci: [0xa9, 0x00, 0x85, 0xf0, 0xa9, 0x01, 0x85, 0xf1,
+                  0xa5, 0xf0, 0x18, 0x65, 0xf1, 0x85, 0xf2,
+                  0xa5, 0xf1, 0x85, 0xf0, 0xa5, 0xf2, 0x85, 0xf1,
+                  0x4c, 0x08, 0x02],
+      fill: [0xa2, 0x00, 0x8a, 0x9d, 0x00, 0x03, 0xe8, 0xd0, 0xf9, 0x4c, 0x00, 0x02],
+    };
+    for (const [id, want] of Object.entries(HISTORICAL)) {
+      const p = PROGRAMS.find((x) => x.id === id);
+      ok(`${id} assembles to the bytes it always had`,
+         !!p && hex(p.bytes) === hex(want),
+         p ? `${hex(p.bytes)}\n            want ${hex(want)}` : 'program missing');
+    }
+
+    // --- 3. addresses, labels and the awkward corners ------------------------
+    ok('every program loads at $0200',
+       PROGRAMS.every((p) => p.asm.org === LOAD_ADDR),
+       PROGRAMS.map((p) => `${p.id}@$${p.asm.org.toString(16)}`).join(' '));
+
+    // A gap left by .org is memory the chip fetches through, so it is filled
+    // rather than omitted -- an image with holes in it is not an image.
+    const counter = PROGRAMS.find((p) => p.id === 'counter');
+    ok('a gap left by .org is filled rather than skipped',
+       counter.bytes.length === 24 && counter.bytes.slice(8, 16).every((b) => b === 0),
+       `${counter.bytes.length} bytes`);
+
+    // Backwards and forwards branches, computed rather than typed.
+    const fill = PROGRAMS.find((p) => p.id === 'fill');
+    const bne = fill.asm.lines.find((l) => l.mnemonic === 'BNE');
+    ok('a backward branch is a two’s-complement offset from the next instruction',
+       bne.bytes[1] === 0xf9 && ((bne.addr + 2 + ((bne.bytes[1] << 24) >> 24)) & 0xffff)
+         === fill.asm.labels.get('fill'),
+       `$${bne.bytes[1].toString(16)} from $${bne.addr.toString(16)}`);
+
+    const copy = PROGRAMS.find((p) => p.id === 'copy');
+    const beq = copy.asm.lines.find((l) => l.mnemonic === 'BEQ');
+    ok('and a forward branch reaches a label defined later',
+       ((beq.addr + 2 + ((beq.bytes[1] << 24) >> 24)) & 0xffff) === copy.asm.labels.get('done'),
+       `$${beq.bytes[1].toString(16)}`);
+
+    // A forward reference cannot be known to be zero page during pass one, so
+    // it assembles absolute: three bytes that are always right rather than two
+    // that are sometimes wrong.
+    const lda = copy.asm.lines.find((l) => l.mnemonic === 'LDA');
+    ok('a forward reference assembles absolute rather than guessing zero page',
+       lda.mode === 'abx' && lda.bytes.length === 3, `${lda.mode}`);
+
+    // ...while a literal that is known to fit does narrow.
+    const zp = assemble('        .org $0200\n  LDA $10\n  RTS\n');
+    ok('a zero-page literal still narrows to two bytes',
+       zp.lines[1].mode === 'zp' && zp.lines[1].bytes.length === 2, zp.lines[1].mode);
+
+    // --- 4. errors name the line ---------------------------------------------
+    const BAD = [
+      ['        LDA\n', /addressing mode/, 'an operand a mnemonic cannot take'],
+      ['        FOO #$01\n', /not a documented/, 'an undocumented mnemonic'],
+      ['        LDA #$100\n', /one byte/, 'a byte that does not fit'],
+      ['  BNE far\n' + '  NOP\n'.repeat(200) + 'far: NOP\n', /reaches -128/, 'a branch out of range'],
+      ['        JMP nowhere\n', /never defined/, 'a label that is never defined'],
+    ];
+    const missed = [];
+    for (const [src, pattern, what] of BAD) {
+      let err = null;
+      try { assemble(src); } catch (e) { err = e; }
+      if (!err || !pattern.test(err.detail || err.message) || !err.line) {
+        missed.push(`${what}: ${err ? err.message : 'no error'}`);
+      }
+    }
+    ok('a bad line is refused, with the line number in the message',
+       missed.length === 0, missed.join(' | '));
+
+    // --- 5. every note is anchored to a label that exists --------------------
+    //
+    // The prose on the Programs page hangs off labels rather than line numbers,
+    // so a renamed label has to break loudly instead of quietly dropping a
+    // paragraph. This is the check that makes that true.
+    const orphans = [];
+    for (const p of PROGRAMS) {
+      for (const label of Object.keys(p.notes || {})) {
+        if (!p.asm.lines.some((l) => l.label === label)) orphans.push(`${p.id}:${label}`);
+      }
+    }
+    ok('every note is anchored to a label the program defines',
+       orphans.length === 0, orphans.join(', '));
+
+    // --- 6. and the programs do what they claim ------------------------------
+    //
+    // Assembling is not the same as being right. Each answer is read back out
+    // of the chip's memory after running it, not asserted about the source.
+    const init = (await import('./pkg/v6502_wasm.js')).default;
+    const { Machine } = await import('./pkg/v6502_wasm.js');
+    await init();
+
+    const runUntil = (program, check, limit = 40000) => {
+      const m = new Machine();
+      m.load(LOAD_ADDR, new Uint8Array(program.bytes));
+      m.setResetVector(LOAD_ADDR);
+      m.powerCycle();
+      for (let i = 0; i < limit; i++) {
+        m.halfStep();
+        if (check(m)) return m;
+      }
+      return null;
+    };
+
+    const CLAIMS = [
+      ['add', (m) => m.peek(0x82) === 0x42, '$2E + $14 lands in $82 as $42'],
+      ['multiply', (m) => m.peek(0x90) === 0x2a, 'seven sixes land in $90 as $2A'],
+      ['bits', (m) => m.peek(0x91) === 6, '$B7 has six bits set, and $91 says so'],
+      ['copy', (m) => [...m.memorySlice(0x0400, 5)].map((c) => String.fromCharCode(c))
+                        .join('') === 'HELLO', 'the text is copied to $0400'],
+      ['fibonacci', (m) => m.peek(0xf2) === 0x0d, 'the sums reach 13 in $F2'],
+      ['fill', (m) => m.peek(0x03ff) === 0xff, 'page $0300 fills to its last byte'],
+    ];
+    for (const [id, check, what] of CLAIMS) {
+      const p = PROGRAMS.find((x) => x.id === id);
+      const m = runUntil(p, check);
+      ok(`${id}: ${what}`, !!m, m ? `at half-cycle ${m.halfCycle()}` : 'never happened');
+    }
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 2).join(' | ') : e));
+  }
+  document.title = results.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>

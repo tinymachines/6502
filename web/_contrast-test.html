@@ -169,7 +169,7 @@ f.addEventListener('load', async () => {
     // The buttons worth checking. Ones that are not on this page are reported as
     // skipped rather than silently passing.
     const TARGETS = [
-      ['.nav-cta', 'the header call to action'],
+      ['.nav-prog-select', 'the header program picker'],
       ['.hero .btn-primary', 'the hero button'],
       ['.btn-ghost', 'a ghost button'],
       ['.console-bar .iconbtn', 'a console button'],
@@ -208,7 +208,10 @@ f.addEventListener('load', async () => {
 
     // The specific pair this was written for, stated as its own assertion so a
     // regression names itself instead of arriving as one of a list.
-    const cta = d.querySelector('.nav-cta');
+    // The header's copy of this button became the program picker, so the pair
+    // is pinned on the hero's -- the same `.btn-primary` rule, and the one the
+    // reader actually presses to start the chip.
+    const cta = d.querySelector('.hero .btn-primary');
     const fg = winner(cta, ':hover', 'color');
     const bg = winner(cta, ':hover', 'background-color');
     const r = ratio(rgb(token(fg.value)), rgb(token(bg.value)));

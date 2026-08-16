@@ -26,6 +26,11 @@ iframe{width:1100px;height:760px;border:0}pre{padding:1rem;white-space:pre-wrap}
 // or from somebody using the page in this browser -- would be a hidden input to
 // every assertion below. _persist-test.html is where saving is checked.
 localStorage.removeItem('v6502.schematic.console');
+// The same trap, one page later: the schematic runs whichever program was
+// chosen last anywhere on the site, and the memory assertion below reads the
+// first one's bytes out of the chip. A leftover choice would fail it while
+// nothing was actually wrong.
+localStorage.removeItem('v6502.program');
 document.getElementById('f').src = 'schematic?signal=dpc3_SBX&depth=3';
 
 const results = [];

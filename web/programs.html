@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Programs — assembled, explained, and run on the silicon</title>
+<meta name="description" content="The programs this site runs, as source rather than hex: assembled in the page, annotated line by line, and executed on a transistor-level simulation of the MOS 6502.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav">
+        <a href="./#explorer">Explorer</a>
+        <a href="programs" aria-current="page">Programs</a>
+        <a href="primer">Primer</a>
+        <a href="./#lab">Lab</a>
+        <a href="trace">Trace</a>
+        <a href="exploded">Exploded</a>
+        <a href="schematic">Schematic</a>
+        <a href="blueprint">Blueprint</a>
+        <a href="decode">Decode</a>
+        <a href="timing">Timing</a>
+        <a href="./#credit">Credit</a>
+        <a href="archive/">Archive</a>
+      </div>
+      <div class="nav-prog" data-program-nav></div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Source · assembled here · run on the switches</p>
+    <h1>Something for<br><span class="hl">the chip to do.</span></h1>
+    <p class="lede">
+      Every other page on this site shows you a 6502 in the middle of running
+      something. This is the something. Seven programs, written as assembly
+      rather than as a column of hex, assembled in this page, and executed on
+      the same 3,510-transistor simulation the die view draws.
+    </p>
+    <p class="lede">
+      Whichever one you pick here is the one the Explorer, the Blueprint, the
+      Exploded view and the Schematic will be running when you get there.
+    </p>
+    <div class="statbar" id="prog-stats">…</div>
+  </section>
+
+  <section class="wrap" id="listing">
+    <div class="console">
+      <div class="console-bar">
+        <span class="tag live">assembled · in this page</span>
+        <span class="bar-note" id="prog-bar-note">Pick a program</span>
+        <div class="bar-spacer"></div>
+        <button id="prog-use" class="btn btn-ghost btn-sm" type="button">Use everywhere</button>
+      </div>
+
+      <div class="pg-cols">
+        <nav class="pg-list" id="prog-list" aria-label="Programs"></nav>
+
+        <div class="pg-main">
+          <div class="pg-head">
+            <h2 id="prog-name">…</h2>
+            <p class="pg-blurb" id="prog-blurb"></p>
+          </div>
+
+          <div class="pg-listing-wrap">
+            <table class="pg-listing" id="prog-listing">
+              <thead>
+                <tr>
+                  <th scope="col" class="c-addr">Addr</th>
+                  <th scope="col" class="c-bytes">Bytes</th>
+                  <th scope="col" class="c-src">Source</th>
+                  <th scope="col" class="c-cyc" title="Measured sync to sync by running the chip — see the Timing page">Cyc</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="pg-binary">
+            <h3>The binary</h3>
+            <p class="muted pg-binary-note" id="prog-binary-note"></p>
+            <pre class="pg-dump" id="prog-dump"></pre>
+          </div>
+
+          <div class="pg-run" id="prog-run">
+            <h3>Run it here</h3>
+            <p class="muted">
+              A real chip, not a preview: the same simulation, stepped one
+              half-cycle at a time. Registers and memory are read back out of
+              the storage nodes.
+            </p>
+            <div id="prog-run-host" class="pg-run-host">
+              <p class="muted mono" id="prog-run-status">Loading the simulator…</p>
+            </div>
+          </div>
+
+          <div class="pg-go">
+            <h3>See it somewhere else</h3>
+            <div class="pg-go-links" id="prog-go"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">How this page is built</p>
+      <h2>The bytes come from the text.</h2>
+    </div>
+    <p>
+      These programs used to live in this repository as arrays of hex with a
+      comment beside each byte. That arrangement has one failure mode and it is
+      silent: the comment and the byte are two independent claims, and nothing
+      ever checks that they still agree. A listing assembled from source cannot
+      drift, because the column on the left is <em>computed from</em> the column
+      on the right.
+    </p>
+    <p>
+      The assembler is about three hundred lines and it does not carry an opcode
+      table of its own. It inverts the one the disassembler uses, so the two are
+      the same table read in opposite directions — which is what makes the round
+      trip in the test harness evidence rather than a tautology. Undocumented
+      opcodes are absent from both: the chip executes them, and this simulator
+      will show you exactly what they do, but giving them a mnemonic would imply
+      a canonical meaning they do not have.
+    </p>
+    <p>
+      The cycle counts in the last column are not from a datasheet. They were
+      measured by running each opcode on the silicon from one
+      <span class="mono">sync</span> to the next, which is the same measurement
+      the <a href="timing">Timing</a> page is made of. Where an instruction can
+      take longer — a taken branch, a page crossed — the count shown is the
+      shortest, because the extra cycles depend on values this page cannot know
+      without running the program. The run panel above counts the real ones.
+    </p>
+    <p>
+      Every program loops rather than ending. There is no operating system here
+      to return to, and running off the end reaches <span class="mono">$00</span>,
+      which is <span class="mono">BRK</span>, which vectors through
+      <span class="mono">$FFFE</span> to <span class="mono">$0000</span>, which
+      is another <span class="mono">BRK</span> — a chip climbing down its own
+      stack forever while every gate on the die lights up convincingly. That was
+      a real bug on two pages of this site, and nothing on either could have
+      revealed it until something showed what the chip was <em>reading</em>.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="programs-page.js"></script>
+<script type="module" src="site-nav.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

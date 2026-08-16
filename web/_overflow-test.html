@@ -12,8 +12,11 @@
     http://localhost:8777/_overflow-test.html?w=320&page=trace
 
   `page` defaults to the explorer. It exists because this harness was pointed at
-  one page for a long time while the site grew to seven, so every page but the
-  first was going unchecked at 320px by an accident of the default.
+  one page for a long time while the site grew to nine, so every page but the
+  first was going unchecked at 320px by an accident of the default. The header
+  carries a program picker now, which is a `<select>` where a short button used
+  to be -- exactly the kind of thing that overflows a 320px header, so check
+  every page rather than one.
 
   Elements inside a deliberately scrollable container (the panel tab strip) will
   be listed too -- overflowing a scroller is not a bug. Compare docScrollWidth

@@ -55,7 +55,9 @@ cargo run --release --quiet -p v6502-sim --bin export-timing -- web/timing.json
 # ---------------------------------------------------------------------------
 
 for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
-         web/programs.js web/blueprint.html web/blueprint.js web/blueprint.json \
+         web/programs.js web/asm.js web/program-nav.js \
+         web/programs.html web/programs-page.js \
+         web/blueprint.html web/blueprint.js web/blueprint.json \
          web/exploded.html web/exploded.js web/exploded-gl.js web/blocks.json \
          web/schematic.html web/schematic.js web/schematic.json \
          web/trace.html web/trace.js web/primer.html web/primer.js web/demos.js \
@@ -64,6 +66,14 @@ for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
   [ -s "$f" ] || { echo "deploy: missing or empty $f" >&2; exit 1; }
 done
+
+# The programs are assembled at load rather than typed, which moves the risk
+# rather than removing it: a bad edit to the assembler changes every program at
+# once, silently, and every page still boots. This refuses to publish unless the
+# three that predate the rewrite still assemble to the bytes they shipped with.
+command -v node >/dev/null || {
+  echo "deploy: node is needed to check the programs assemble" >&2; exit 1; }
+node tools/check-programs.mjs || exit 1
 
 # The layout blob is the one artefact whose corruption would not be obvious --
 # a truncated file still "loads" and then renders nothing.

@@ -186,7 +186,6 @@ def main() -> None:
     b.copy_hashed("version-footer.js")
     b.copy_hashed("site-nav.js")
     b.copy_hashed("fullscreen.js")
-    b.copy_hashed("programs.js")
     b.copy_hashed("exploded-gl.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
@@ -208,7 +207,28 @@ def main() -> None:
     )
     b.emit("pkg/v6502_wasm.js", glue.encode())
 
-    # 3. app.js: five module imports plus one runtime fetch.
+    # 2b. The program chain, which has to be hashed in dependency order:
+    #
+    #       disasm.js -> asm.js -> programs.js -> program-nav.js
+    #
+    #     The assembler does not carry an opcode table of its own -- it inverts
+    #     the disassembler's -- so a change to that table has to ripple through
+    #     every program's bytes, and it does, because the bytes are assembled at
+    #     load rather than written down.
+    asm = b.read("asm.js").decode()
+    asm = replace_once(asm, "'./disasm.js'", f"'./{b.ref('disasm.js')}'", where="asm.js")
+    b.emit("asm.js", asm.encode())
+
+    progs = b.read("programs.js").decode()
+    progs = replace_once(progs, "'./asm.js'", f"'./{b.ref('asm.js')}'", where="programs.js")
+    b.emit("programs.js", progs.encode())
+
+    nav = b.read("program-nav.js").decode()
+    nav = replace_once(nav, "'./programs.js'", f"'./{b.ref('programs.js')}'",
+                       where="program-nav.js")
+    b.emit("program-nav.js", nav.encode())
+
+    # 3. app.js: six module imports plus one runtime fetch.
     app = b.read("app.js").decode()
     for original, resolved in [
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
@@ -216,6 +236,7 @@ def main() -> None:
         ("./disasm.js", "./" + b.ref("disasm.js")),
         ("./lab.js", "./" + b.ref("lab.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
     ]:
         app = replace_once(app, f"'{original}'", f"'{resolved}'", where="app.js")
     app = replace_once(app, "fetch('layout.bin')", f"fetch('{b.ref('layout.bin')}')", where="app.js")
@@ -228,6 +249,7 @@ def main() -> None:
     for original, resolved in [
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
     ]:
         bp = replace_once(bp, f"'{original}'", f"'{resolved}'", where="blueprint.js")
     bp = replace_once(bp, "fetch('blueprint.json')",
@@ -244,6 +266,7 @@ def main() -> None:
         ("./renderer.js", "./" + b.ref("renderer.js")),
         ("./exploded-gl.js", "./" + b.ref("exploded-gl.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
     ]:
         exp = replace_once(exp, f"'{original}'", f"'{resolved}'", where="exploded.js")
     exp = replace_once(exp, "fetch('layout.bin')",
@@ -256,6 +279,8 @@ def main() -> None:
     #     only the mnemonics and its own data.
     dec = b.read("decode.js").decode()
     dec = replace_once(dec, "'./disasm.js'", f"'./{b.ref('disasm.js')}'", where="decode.js")
+    dec = replace_once(dec, "'./program-nav.js'", f"'./{b.ref('program-nav.js')}'",
+                      where="decode.js")
     dec = replace_once(dec, "fetch('decode.json')",
                        f"fetch('{b.ref('decode.json')}')", where="decode.js")
     b.emit("decode.js", dec.encode())
@@ -263,6 +288,8 @@ def main() -> None:
     # 3d. timing.js: same shape as decode.js -- a measured table, no wasm.
     tim = b.read("timing.js").decode()
     tim = replace_once(tim, "'./disasm.js'", f"'./{b.ref('disasm.js')}'", where="timing.js")
+    tim = replace_once(tim, "'./program-nav.js'", f"'./{b.ref('program-nav.js')}'",
+                      where="timing.js")
     tim = replace_once(tim, "fetch('timing.json')",
                        f"fetch('{b.ref('timing.json')}')", where="timing.js")
     b.emit("timing.js", tim.encode())
@@ -273,6 +300,7 @@ def main() -> None:
     for original, resolved in [
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
     ]:
         sch = replace_once(sch, f"'{original}'", f"'{resolved}'", where="schematic.js")
     sch = replace_once(sch, "'./fullscreen.js'", f"'./{b.ref('fullscreen.js')}'",
@@ -288,6 +316,7 @@ def main() -> None:
     for original, resolved in [
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./disasm.js", "./" + b.ref("disasm.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
     ]:
         tr = replace_once(tr, f"'{original}'", f"'{resolved}'", where="trace.js")
     tr = replace_once(tr, "fetch('schematic.json')",
@@ -308,11 +337,29 @@ def main() -> None:
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
     ]:
         pr = replace_once(pr, f"'{original}'", f"'{resolved}'", where="primer.js")
     for original in ["schematic.json", "decode.json", "timing.json"]:
         pr = replace_once(pr, f"'{original}'", f"'{b.ref(original)}'", where="primer.js")
     b.emit("primer.js", pr.encode())
+
+    # 3i. programs-page.js: the wasm to run what it shows, the shared program
+    #     set, the header picker, the demo toolkit for its run panel, and
+    #     timing.json for the measured cycle column. Nothing on that page is
+    #     written down twice, which is only true while every one of these
+    #     resolves.
+    pg = b.read("programs-page.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./demos.js", "./" + b.ref("demos.js")),
+    ]:
+        pg = replace_once(pg, f"'{original}'", f"'{resolved}'", where="programs-page.js")
+    pg = replace_once(pg, "fetch('timing.json')",
+                      f"fetch('{b.ref('timing.json')}')", where="programs-page.js")
+    b.emit("programs-page.js", pg.encode())
 
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
@@ -373,6 +420,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         prh = replace_once(prh, f'"{original}"', f'"{b.ref(original)}"', where="primer.html")
     b.emit("primer.html", prh.encode(), hashed=False)
+
+    pgh = b.read("programs.html").decode()
+    for original in ["style.css", "programs-page.js", "version-footer.js", "site-nav.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        pgh = replace_once(pgh, f'"{original}"', f'"{b.ref(original)}"', where="programs.html")
+    b.emit("programs.html", pgh.encode(), hashed=False)
 
     timh = b.read("timing.html").decode()
     for original in ["style.css", "timing.js", "version-footer.js", "site-nav.js",
