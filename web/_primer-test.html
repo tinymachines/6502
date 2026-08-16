@@ -213,8 +213,12 @@ f.addEventListener('load', async () => {
        ['trace', 'decode', 'timing', 'schematic'].every((p) =>
          [...body.querySelectorAll('a')].some((a) => a.getAttribute('href') === p)),
        [...body.querySelectorAll('a')].map((a) => a.getAttribute('href')).join(' '));
+    // By label, not by href. The entry for the page you are already on points
+    // at `#top` rather than at its own filename, because `./` from /primer
+    // means the index -- so the href is no longer the thing that identifies it.
     ok('and the nav marks it as the page you are on',
-       d.querySelector('#site-nav a[aria-current="page"]').getAttribute('href') === 'primer',
+       d.querySelector('#site-nav a[aria-current="page"] .navlink-label')
+         ?.textContent === 'Primer',
        nav.join(' '));
   } catch (e) {
     results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n')[0] : e));

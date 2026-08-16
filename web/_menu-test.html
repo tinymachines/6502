@@ -1,0 +1,218 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The site menu.
+
+  This exists because of the failure it replaced. The nav was hand-copied into
+  ten files and had drifted three ways -- the index carried three About links,
+  most pages carried one, the blueprint carried two, and timing.html had lost
+  "Credit" entirely. Nobody noticed for the life of the project, because a nav
+  missing one link still looks exactly like a nav. So the first assertion here
+  is the one nothing was making: every page offers the same menu.
+
+  The rest is about a menu being usable rather than merely present. Every entry
+  has to say what it is, every href has to reach something (a typo'd page name
+  is a 404 that looks like a link), and the entry for the page you are on has to
+  point at that page rather than at the index -- which it did not, first time
+  out, because "./" is right everywhere except from the page itself.
+
+    http://localhost:8777/_menu-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1280px;height:820px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script type="module">
+import { MENU } from './site-menu.js';
+
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const load = (src) => new Promise((r) => {
+  f.addEventListener('load', r, { once: true });
+  f.src = src;
+});
+
+const PAGES = ['index.html', 'programs', 'primer', 'trace', 'exploded',
+               'schematic', 'blueprint', 'decode', 'timing'];
+
+/** Read the rendered menu out of the iframe. */
+function readMenu(d) {
+  const box = d.querySelector('.navlinks');
+  const groups = [...box.querySelectorAll('.navgroup')].map((g) => ({
+    title: g.querySelector('.navgroup-title')?.textContent || '',
+    items: [...g.querySelectorAll('a')].map((a) => ({
+      label: a.querySelector('.navlink-label')?.textContent || '',
+      hint: a.querySelector('.navlink-hint')?.textContent || '',
+      href: a.getAttribute('href'),
+      current: a.getAttribute('aria-current') === 'page',
+    })),
+  }));
+  return groups;
+}
+
+const shape = (groups) =>
+  groups.map((g) => `${g.title}: ${g.items.map((i) => i.label).join(',')}`).join(' | ');
+
+(async () => {
+  try {
+    // --- the menu is the same menu everywhere ----------------------------
+    let reference = null;
+    const differ = [], noHint = [], rows = [];
+    const currents = {};
+
+    for (const page of PAGES) {
+      await load(page);
+      const d = f.contentDocument;
+      for (let i = 0; i < 300 && !d.querySelector('.navgroup'); i++) await sleep(50);
+      const groups = readMenu(d);
+      const s = shape(groups);
+      if (reference === null) reference = s;
+      else if (s !== reference) differ.push(page);
+
+      const items = groups.flatMap((g) => g.items);
+      for (const it of items) if (!it.hint) noHint.push(`${page}/${it.label}`);
+      const cur = items.filter((i) => i.current).map((i) => i.label);
+      currents[page] = cur;
+      rows.push(`     ${page.padEnd(14)} ${items.length} links, ${groups.length} groups`
+        + `, current ${cur.join(',') || 'none'}`);
+    }
+
+    ok('every page offers the same menu, in the same order',
+       differ.length === 0, differ.join(', ') || `${PAGES.length} pages agree`);
+
+    ok('and it has the groups and headings the source declares',
+       reference === shape(MENU.map((g) => ({ title: g.title, items: g.items }))),
+       reference.slice(0, 90) + '…');
+
+    ok('every entry says what it is', noHint.length === 0,
+       noHint.join(', ') || 'all 14 carry a hint');
+
+    // Exactly one entry marks the current page, and it is the right one. Five
+    // of the entries are sections of the index; marking all five would tell the
+    // reader they are in five places at once.
+    const wrongCurrent = [];
+    const expect = { 'index.html': 'Explorer', programs: 'Programs', primer: 'Primer',
+                     trace: 'Trace', exploded: 'Exploded', schematic: 'Schematic',
+                     blueprint: 'Blueprint', decode: 'Decode', timing: 'Timing' };
+    for (const [page, cur] of Object.entries(currents)) {
+      if (cur.length !== 1 || cur[0] !== expect[page]) {
+        wrongCurrent.push(`${page}: ${cur.join(',') || 'none'}`);
+      }
+    }
+    ok('exactly one entry is marked as the current page, and it is the right one',
+       wrongCurrent.length === 0, wrongCurrent.join(' | ') || 'nine pages');
+
+    // --- the entry for the page you are on points at that page -------------
+    //
+    // "./" is correct from everywhere except the page itself, where it means
+    // the index. That is how this shipped the first time.
+    await load('primer');
+    let d = f.contentDocument;
+    for (let i = 0; i < 300 && !d.querySelector('.navgroup'); i++) await sleep(50);
+    const primerSelf = readMenu(d).flatMap((g) => g.items).find((i) => i.label === 'Primer');
+    ok('the entry for the page you are on does not send you to the index',
+       primerSelf.href === '#top', `Primer -> ${primerSelf.href}`);
+
+    // --- every href reaches something --------------------------------------
+    //
+    // A typo'd page name is a 404 that looks exactly like a working link.
+    await load('schematic');
+    d = f.contentDocument;
+    for (let i = 0; i < 300 && !d.querySelector('.navgroup'); i++) await sleep(50);
+    const hrefs = [...new Set(readMenu(d).flatMap((g) => g.items).map((i) => i.href))];
+    const dead = [];
+    let skipped = 0;
+    for (const h of hrefs) {
+      if (h.startsWith('#')) continue;              // a section of this page
+      // The archive is ~2.5 GB deployed beside the releases, not inside web/,
+      // so it is a 404 here and a real page in production. Checking it against
+      // the dev server would report a working link as broken.
+      if (h.startsWith('archive/')) { skipped++; continue; }
+      const url = new URL(h, f.contentWindow.location.href);
+      const res = await fetch(url, { method: 'GET' });
+      if (!res.ok) dead.push(`${h} -> ${res.status}`);
+    }
+    ok('every link in the menu reaches a real page',
+       dead.length === 0,
+       dead.join(', ')
+         || `${hrefs.length - skipped} checked, ${skipped} deployed separately`);
+
+    // --- it opens, and it closes -------------------------------------------
+    const head = d.querySelector('.site-head');
+    const btn = d.querySelector('.menu-btn');
+    const w = f.contentWindow;
+
+    btn.click();
+    const opened = head.classList.contains('open')
+      && btn.getAttribute('aria-expanded') === 'true'
+      && d.querySelector('.navgroup').getBoundingClientRect().height > 0;
+
+    // A link dismisses it, or the panel stays over the page you just asked for.
+    d.querySelector('.navlinks a').click();
+    const closedByLink = !head.classList.contains('open');
+
+    btn.click();
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const closedByEscape = !head.classList.contains('open');
+
+    ok('the menu opens, and closes on a link and on Escape',
+       opened && closedByLink && closedByEscape,
+       `opened ${opened}, link ${closedByLink}, escape ${closedByEscape}`);
+
+    // --- and it fits the screen it opens on --------------------------------
+    //
+    // Five groups of links is a tall panel. On a phone it has to scroll inside
+    // itself rather than push the page sideways or run off the bottom.
+    const over = [];
+    for (const width of [320, 390, 768, 1280, 1600]) {
+      f.style.width = `${width}px`;
+      await load('schematic');
+      const dd = f.contentDocument;
+      for (let i = 0; i < 300 && !dd.querySelector('.navgroup'); i++) await sleep(50);
+      // Wait for the header to stop changing shape before opening anything.
+      // The transport arrives after the wasm loads and turns a one-row header
+      // into a two-row one on a phone, so a panel measured before that is a
+      // panel sized against a header that no longer exists. This is the same
+      // trap `settle()` exists for in _handler-test.html.
+      for (let i = 0; i < 300 && !dd.querySelector('.nav-tbtn'); i++) await sleep(50);
+      const headEl = dd.querySelector('.site-head');
+      let prev = -1;
+      for (let i = 0; i < 40; i++) {
+        const h = Math.round(headEl.getBoundingClientRect().height);
+        if (h === prev) break;
+        prev = h;
+        await sleep(50);
+      }
+      dd.querySelector('.menu-btn').click();
+      await sleep(150);
+      const panel = dd.querySelector('.navlinks');
+      const r = panel.getBoundingClientRect();
+      const docOver = dd.documentElement.scrollWidth - dd.documentElement.clientWidth;
+      const below = Math.round(r.bottom - dd.documentElement.clientHeight);
+      const cols = new Set([...panel.querySelectorAll('.navgroup')]
+        .map((g) => Math.round(g.getBoundingClientRect().left))).size;
+      rows.push(`     menu @${String(width).padStart(4)}px  ${cols} column(s)`
+        + `, ${Math.round(r.height)}px tall, ${below > 0 ? `${below}px past the fold` : 'fits'}`
+        + `, doc ${docOver > 0 ? `+${docOver}` : 'fits'}`);
+      if (docOver > 0) over.push(`${width}: page +${docOver}px`);
+      if (below > 0) over.push(`${width}: panel ${below}px past the bottom`);
+    }
+    f.style.width = '1280px';
+    ok('the panel fits the viewport at every width, and never widens the page',
+       over.length === 0, over.join(' | ') || 'five widths');
+
+    results.push('', ...rows);
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e));
+  }
+  const lines = results.filter((r) => r.startsWith('PASS') || r.startsWith('FAIL'));
+  document.title = lines.length && lines.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>

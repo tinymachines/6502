@@ -246,6 +246,15 @@ def main() -> None:
                         where="chip-nav.js")
     b.emit("chip-nav.js", cnav.encode())
 
+    # 2d. site-menu.js: the nav itself, grouped, rendered into every header.
+    #     It imports site-nav.js (the disclosure wiring), which the archive also
+    #     loads verbatim -- so the wiring is shared and the link list is not,
+    #     because the archive's menu is a different menu.
+    smenu = b.read("site-menu.js").decode()
+    smenu = replace_once(smenu, "'./site-nav.js'", f"'./{b.ref('site-nav.js')}'",
+                         where="site-menu.js")
+    b.emit("site-menu.js", smenu.encode())
+
     # 3. app.js: six module imports plus one runtime fetch.
     app = b.read("app.js").decode()
     for original, resolved in [
@@ -401,7 +410,7 @@ def main() -> None:
 
     # 5. index.html: the unhashed entry point that points at everything else.
     html = b.read("index.html").decode()
-    for original in ["style.css", "app.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "app.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         html = replace_once(html, f'"{original}"', f'"{b.ref(original)}"', where="index.html")
@@ -412,56 +421,56 @@ def main() -> None:
     #     files it names, which is also why the `_`-prefixed dev harnesses
     #     cannot reach dist/.
     bph = b.read("blueprint.html").decode()
-    for original in ["style.css", "blueprint.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "blueprint.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         bph = replace_once(bph, f'"{original}"', f'"{b.ref(original)}"', where="blueprint.html")
     b.emit("blueprint.html", bph.encode(), hashed=False)
 
     exph = b.read("exploded.html").decode()
-    for original in ["style.css", "exploded.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "exploded.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         exph = replace_once(exph, f'"{original}"', f'"{b.ref(original)}"', where="exploded.html")
     b.emit("exploded.html", exph.encode(), hashed=False)
 
     schh = b.read("schematic.html").decode()
-    for original in ["style.css", "schematic.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "schematic.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         schh = replace_once(schh, f'"{original}"', f'"{b.ref(original)}"', where="schematic.html")
     b.emit("schematic.html", schh.encode(), hashed=False)
 
     dech = b.read("decode.html").decode()
-    for original in ["style.css", "decode.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "decode.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         dech = replace_once(dech, f'"{original}"', f'"{b.ref(original)}"', where="decode.html")
     b.emit("decode.html", dech.encode(), hashed=False)
 
     trh = b.read("trace.html").decode()
-    for original in ["style.css", "trace.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "trace.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         trh = replace_once(trh, f'"{original}"', f'"{b.ref(original)}"', where="trace.html")
     b.emit("trace.html", trh.encode(), hashed=False)
 
     prh = b.read("primer.html").decode()
-    for original in ["style.css", "primer.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "primer.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         prh = replace_once(prh, f'"{original}"', f'"{b.ref(original)}"', where="primer.html")
     b.emit("primer.html", prh.encode(), hashed=False)
 
     pgh = b.read("programs.html").decode()
-    for original in ["style.css", "programs-page.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "programs-page.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         pgh = replace_once(pgh, f'"{original}"', f'"{b.ref(original)}"', where="programs.html")
     b.emit("programs.html", pgh.encode(), hashed=False)
 
     timh = b.read("timing.html").decode()
-    for original in ["style.css", "timing.js", "version-footer.js", "site-nav.js",
+    for original in ["style.css", "timing.js", "version-footer.js", "site-menu.js",
                      "manifest.webmanifest",
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         timh = replace_once(timh, f'"{original}"', f'"{b.ref(original)}"', where="timing.html")

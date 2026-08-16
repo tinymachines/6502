@@ -34,7 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Imported by name: this file defines its own shell(), which would rebind
 # the module-level name. See build-wiki.py for the same note.
-from shell import CSS as HEADER_CSS, LINKS as SITE_LINKS, header as site_header  # noqa: E402
+from shell import CSS as HEADER_CSS, GROUPS as SITE_GROUPS, header as site_header  # noqa: E402
 
 try:
     from PIL import Image, ImageFile
@@ -193,7 +193,7 @@ def shell(title: str, body: str, *, depth: int) -> str:
 <title>{html.escape(title)} · visual6502 die photography (archived)</title>
 <link rel="stylesheet" href="{root}gallery.css">
 </head><body>
-{site_header(archive, SITE_LINKS, active="Die photos")}
+{site_header(archive, SITE_GROUPS, active="Die photos")}
 <div class="wrap">
 {body}
 <footer>Images &copy; the {ATTRIB}, licensed

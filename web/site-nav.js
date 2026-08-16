@@ -18,12 +18,40 @@ function wire(head) {
   const close = () => {
     head.classList.remove('open');
     btn.setAttribute('aria-expanded', 'false');
+    nav.style.maxHeight = '';
+  };
+
+  /**
+   * How much room the panel actually has, measured rather than assumed.
+   *
+   * The panel hangs from the bottom of a sticky header, so the space below it
+   * is the viewport minus that header -- and the header is not a fixed height:
+   * on a phone it wraps its controls onto a second row. A CSS `calc(100vh -
+   * 4.25rem)` was right on a desktop and left the last group 38px past the
+   * bottom of a 320px screen, with no way to reach it.
+   */
+  const fit = () => {
+    if (!head.classList.contains('open')) return;
+    const room = window.innerHeight - head.getBoundingClientRect().bottom;
+    nav.style.maxHeight = `${Math.max(room, 120)}px`;
   };
 
   btn.addEventListener('click', () => {
     const open = head.classList.toggle('open');
     btn.setAttribute('aria-expanded', String(open));
+    if (open) fit(); else nav.style.maxHeight = '';
   });
+
+  window.addEventListener('resize', fit);
+
+  // The header is not a fixed height and does not settle at once: the program
+  // picker and the transport are filled in after the wasm has loaded, and on a
+  // phone that turns a one-row header into a two-row one. Measuring only on
+  // open cached a 70px header and left the panel 38px past the bottom of the
+  // screen. Watching the box is the only way to be right whenever it changes.
+  if (typeof ResizeObserver === 'function') {
+    new ResizeObserver(fit).observe(head);
+  }
 
   // Any navigation dismisses it; so does Escape and a click outside.
   nav.addEventListener('click', (e) => { if (e.target.tagName === 'A') close(); });

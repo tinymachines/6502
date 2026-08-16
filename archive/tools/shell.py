@@ -46,10 +46,19 @@ letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
 border:1px solid color-mix(in srgb,var(--line) 70%,transparent);
 border-radius:.25rem;padding:.15rem .35rem}
 .navlinks{display:none}
-.navlinks a{padding:.7rem .2rem;color:var(--fg);font-weight:700;
-border-bottom:1px solid color-mix(in srgb,var(--line) 35%,transparent)}
-.navlinks a:hover{color:var(--gold)}
-.navlinks a[aria-current=page]{color:var(--accent)}
+.navlinks a{display:block;padding:.5rem .3rem;border-radius:.25rem;color:var(--fg)}
+.navlinks a:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.navlinks a:hover .navlink-label{color:var(--gold)}
+.navgroup{min-width:0;padding-bottom:.5rem}
+.navgroup-title{margin:.35rem 0 .3rem;font-family:var(--mono);font-size:.62rem;
+font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+padding-bottom:.3rem;
+border-bottom:1px solid color-mix(in srgb,var(--line) 45%,transparent)}
+.navlink-label{display:block;font-weight:700;font-size:.95rem}
+.navlink-hint{display:block;margin-top:.1rem;color:var(--muted);font-size:.76rem;
+line-height:1.35}
+.navlinks a[aria-current=page]{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.navlinks a[aria-current=page] .navlink-label{color:var(--accent)}
 .site-head .nav-cta{margin-left:auto;display:inline-flex;align-items:center;
 justify-content:center;min-height:2.75rem;padding:.4rem .95rem;font-size:.85rem;
 font-weight:800;border:2px solid var(--accent);border-radius:.375rem;
@@ -72,17 +81,17 @@ background:color-mix(in srgb,var(--accent) 16%,transparent)}
 .menu-btn[aria-expanded=true] .mi i:nth-child(1){transform:translateY(5px) rotate(45deg)}
 .menu-btn[aria-expanded=true] .mi i:nth-child(2){opacity:0}
 .menu-btn[aria-expanded=true] .mi i:nth-child(3){transform:translateY(-5px) rotate(-45deg)}
+/* One organized panel at every width, matching the simulator. The inline row
+   this replaced could carry neither a heading nor a description, and it meant a
+   phone and a desktop were navigating differently shaped sites. site-nav.js
+   sets max-height from the header's measured bottom. */
 .site-head.open .navlinks{display:grid;position:absolute;top:100%;left:0;right:0;
-z-index:40;padding:.5rem 1.25rem 1rem;
+z-index:40;grid-template-columns:repeat(auto-fit,minmax(12.5rem,1fr));
+gap:.25rem 1.5rem;align-items:start;padding:1rem 1.25rem 1.25rem;
+max-height:100vh;overflow-y:auto;overscroll-behavior:contain;
 background:color-mix(in srgb,var(--space) 96%,transparent);backdrop-filter:blur(12px);
 border-bottom:2px solid color-mix(in srgb,var(--line) 55%,transparent);
 box-shadow:0 14px 24px rgba(2,6,16,.5)}
-@media(min-width:62rem){
-.menu-btn{display:none}
-.navlinks{display:flex;align-items:center;gap:1.4rem;margin-left:1.5rem}
-.navlinks a{border:0;padding:0;font-size:.95rem;font-weight:600;color:var(--muted)}
-.navlinks a:hover{color:var(--fg)}
-.navlinks a[aria-current=page]{color:var(--accent)}}
 /* Below 384px the wordmark, call to action and menu together want more width
    than the viewport has, and the overflow escapes the header rather than being
    clipped. The CTA goes: the menu still lists the simulator. */
@@ -91,15 +100,19 @@ box-shadow:0 14px 24px rgba(2,6,16,.5)}
 """
 
 
-def header(root: str, links: Sequence[tuple[str, str]], active: str = "") -> str:
+def header(root: str, groups: Sequence[tuple[str, Sequence[tuple[str, str, str]]]],
+           active: str = "") -> str:
     """Render the header.
 
     `root` is the relative prefix that reaches archive/public/ from the page
-    being written ("" at the top, "../" inside wiki/ or gallery/). `links` are
-    (label, href) with hrefs already relative to `root`. `active` marks the
-    current section for `aria-current`.
+    being written ("" at the top, "../" inside wiki/ or gallery/). `groups` are
+    (title, items) and each item is (label, href, hint), with hrefs already
+    relative to `root`. `active` marks the current section for `aria-current`.
+
+    Grouped for the same reason the simulator's menu is: a flat list of eight
+    nouns cannot tell a reader that half of them leave the archive entirely.
     """
-    # Built with %-formatting rather than an f-string: the marker contains double
+    # Built with %-formatting rather than an f-string: the markup contains double
     # quotes, and a backslash inside an f-string expression is a syntax error
     # before Python 3.12.
     current = ' aria-current="page"'
@@ -107,16 +120,26 @@ def header(root: str, links: Sequence[tuple[str, str]], active: str = "") -> str
     # prefixed: the archive nests two deep, so "../" in front of "/schematic"
     # would point at a page that does not exist. Only archive-internal links are
     # relative to `root`.
-    items = "\n        ".join(
-        '<a href="%s%s"%s>%s</a>'
-        % (
-            "" if href.startswith(("/", "http://", "https://")) else root,
-            href,
-            current if label == active else "",
-            html.escape(label),
+    blocks = []
+    for title, items in groups:
+        links = "\n          ".join(
+            '<a href="%s%s"%s><span class="navlink-label">%s</span>'
+            '<span class="navlink-hint">%s</span></a>'
+            % (
+                "" if href.startswith(("/", "http://", "https://")) else root,
+                href,
+                current if label == active else "",
+                html.escape(label),
+                html.escape(hint),
+            )
+            for label, href, hint in items
         )
-        for label, href in links
-    )
+        blocks.append(
+            '<div class="navgroup">\n'
+            '          <p class="navgroup-title">%s</p>\n          %s\n        </div>'
+            % (html.escape(title), links)
+        )
+    items = "\n        ".join(blocks)
     return f"""<header class="site-head">
   <div class="wrap">
     <nav aria-label="Site">
@@ -135,17 +158,47 @@ def header(root: str, links: Sequence[tuple[str, str]], active: str = "") -> str
 </header>"""
 
 
-# The links every archive page carries. `build-wiki.py` inserts its own Images
-# entry into a copy of this; nothing else varies.
-LINKS: tuple[tuple[str, str], ...] = (
-    ("Overview", "index.html"),
-    ("Wiki", "wiki/index.html"),
-    ("Die photos", "gallery/index.html"),
-    ("Original site", "full/index.html"),
+# The menu every archive page carries. `build-wiki.py` adds its own Images
+# entry with `with_extra`; nothing else varies.
+#
+# The split is the fact a reader most needs: four of these are the archive and
+# four of them leave it for the simulator. A flat list said nothing about that.
+GROUPS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
+    ("The archive", (
+        ("Overview", "index.html", "what was recovered, and what was lost"),
+        ("Wiki", "wiki/index.html", "127 pages rebuilt from their wikitext"),
+        ("Die photos", "gallery/index.html", "40 chips, 516 photographs"),
+        ("Original site", "full/index.html", "the mirror, exactly as captured"),
+    )),
     # Out to the simulator. Absolute, because the archive nests two deep and a
     # relative path would resolve differently on a wiki page than on the index.
-    ("Programs", "/programs"),
-    ("Primer", "/primer"),
-    ("Trace", "/trace"),
-    ("Schematic", "/schematic"),
+    ("The simulator", (
+        ("Programs", "/programs", "seven programs, assembled in the page"),
+        ("Primer", "/primer", "the mental model, corrected"),
+        ("Trace", "/trace", "one instruction, half-cycle by half-cycle"),
+        ("Schematic", "/schematic", "the chip as a circuit"),
+    )),
 )
+
+
+def with_extra(groups, after: str, item: tuple[str, str, str]):
+    """A copy of `groups` with `item` inserted after the entry labelled `after`.
+
+    By name rather than by index. The wiki used to splice its Images entry in
+    with `LINKS[:2] + ... + LINKS[2:]`, which is correct only for as long as
+    nobody reorders the list above it -- and reordering a menu is exactly the
+    sort of edit that looks safe.
+    """
+    out = []
+    found = False
+    for title, items in groups:
+        new = []
+        for entry in items:
+            new.append(entry)
+            if entry[0] == after:
+                new.append(item)
+                found = True
+        out.append((title, tuple(new)))
+    if not found:
+        raise SystemExit(f"shell: no menu entry labelled {after!r} to insert after")
+    return tuple(out)

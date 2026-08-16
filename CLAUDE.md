@@ -262,6 +262,43 @@ runs whatever was last chosen anywhere on the site.
 `?speed=` is the **simulated clock in Hz** (0 for max), not a frame multiplier.
 See the transport section.
 
+### The site menu (`site-menu.js`)
+
+One grouped list, rendered into every header. It was ten hand-copied lists
+before this, and **they had already drifted three ways**: the index carried
+three About links, most pages carried one, the blueprint carried two, and
+`timing.html` had quietly lost "Credit" altogether. Nobody noticed for the life
+of the project, because a nav missing one link still looks exactly like a nav.
+Same reasoning as `version-footer.js` and `block-palette.js`.
+
+- **The order is a reading order, not a sitemap.** Start here → the chip drawn
+  four ways → one instruction at a time → the measured tables → about. A reader
+  arriving does not know what a decode PLA is, so the tables come after the
+  pages that explain them.
+- **Every entry carries one line of what it is**, and that line is the part a
+  list of nouns cannot do: Exploded, Schematic and Blueprint are three drawings
+  of the same silicon, and the difference is the only thing worth knowing when
+  choosing between them.
+- **One menu at every width.** The inline row of fourteen links was what forced
+  the 80rem breakpoint, so a phone and a desktop were navigating differently
+  shaped sites; it could carry neither a heading nor a description. Dropping it
+  is also where the header found room for the controls.
+- **`./` is right from everywhere except the page itself.** From `/primer` it
+  means the index, so the entry for the page you are on pointed at the wrong
+  page. It resolves to `#top` now, which every page has on its `<main>`.
+- **`site-nav.js` measures the room and sets `max-height`; CSS cannot.** The
+  panel hangs off a sticky header whose height is not fixed — on a phone the
+  controls wrap it onto a second row — and a `calc(100vh - 4.25rem)` left the
+  last group 38px below the fold with no way to reach it. It also needs a
+  `ResizeObserver`: the header grows *after* boot when the picker and transport
+  are filled in, and measuring only on open cached a 70px header.
+- **The archive's menu is grouped the same way but is not the same list.**
+  `shell.py` owns it, split into "The archive" and "The simulator", which is
+  the fact a reader most needs: half of those links leave the archive. The
+  disclosure wiring in `site-nav.js` is shared verbatim; the list is not.
+  `with_extra()` inserts the wiki's Images entry **by label**, replacing an
+  index splice that was correct only until somebody reordered the list.
+
 ### House style for shipped text
 
 Two rules, both about the same thing: the page should read as a measurement
@@ -297,6 +334,8 @@ _navfit-test.html      # the header, at 12 widths x 4 pages: does it fit, and ar
                        # the picker, transport and clock still usable sizes?
 _chipnav-test.html     # the shared transport: the rate is a rate (paced with
                        # synthetic timestamps), and every control is one store
+_menu-test.html        # every page offers the same menu, every link reaches a
+                       # page, and the panel fits the screen it opens on
 _contrast-test.html    # every button, every state, checked for readable text
 _persist-test.html     # the console's configuration, across a second page load
 _pinio-test.html       # pinned I/O chains, vs an independent search of the netlist

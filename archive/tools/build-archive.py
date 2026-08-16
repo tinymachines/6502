@@ -249,7 +249,7 @@ wiki rebuilt from the Internet Archive, and {gb:.1f} GB of die photography made
 browsable again.">
 <link rel="stylesheet" href="archive.css">
 </head><body>
-{shell.header("", shell.LINKS, active="Overview")}
+{shell.header("", shell.GROUPS, active="Overview")}
 <div class="wrap">{body}
 <footer>Mirrored for preservation by
 <a href="https://github.com/tinymachines/6502">tinymachines/6502</a>, which

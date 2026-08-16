@@ -321,38 +321,64 @@ code {
 .menu-btn[aria-expanded="true"] .mi i:nth-child(2) { opacity: 0; }
 .menu-btn[aria-expanded="true"] .mi i:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
 
+/* The menu is one organized panel at every width, rather than a flat row of
+   fourteen links that only appeared on a wide screen. Fourteen nouns is not a
+   menu -- "Blueprint", "Schematic" and "Exploded" are three drawings of the
+   same silicon and the list gave a reader no way to choose between them. It is
+   grouped, each entry carries a line of what it is, and the groups go
+   side by side when there is room for them. */
 .site-head.open .navlinks {
   display: grid; position: absolute; top: 100%; left: 0; right: 0; z-index: 40;
-  padding: .5rem 1.25rem 1rem;
+  /* 12.5rem so all five groups land on one row inside a 78rem wrap. At 15rem
+     the fifth wrapped, which reads as a sixth group that lost its heading. */
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+  gap: .25rem 1.5rem; align-items: start;
+  padding: 1rem 1.25rem 1.25rem;
+  /* site-nav.js measures the real room below the header and sets max-height;
+     this is the floor for the moment before it runs. */
+  max-height: 100vh; overflow-y: auto; overscroll-behavior: contain;
   background: color-mix(in srgb, var(--space) 96%, transparent);
   backdrop-filter: blur(12px);
   border-bottom: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
   box-shadow: 0 14px 24px rgba(2, 6, 16, .5);
 }
-.navlinks a {
-  padding: .7rem .2rem; color: var(--foreground); text-decoration: none;
-  font-weight: 700; border-bottom: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
+.navgroup { min-width: 0; padding-bottom: .5rem; }
+.navgroup-title {
+  margin: .35rem 0 .3rem;
+  font-family: var(--font-mono); font-size: .62rem; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+  padding-bottom: .3rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
 }
-.navlinks a:hover { color: var(--gold); }
+.navlinks a {
+  display: block; padding: .5rem .3rem; border-radius: .25rem;
+  color: var(--foreground); text-decoration: none;
+}
+.navlinks a:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.navlinks a:hover .navlink-label { color: var(--gold); }
+.navlink-label { display: block; font-weight: 700; font-size: .95rem; }
+/* The line that a list of nouns cannot carry: what this one is, and therefore
+   which of the four drawings of the same chip you actually want. */
+.navlink-hint {
+  display: block; margin-top: .1rem;
+  color: var(--muted); font-size: .76rem; line-height: 1.35;
+}
+.navlinks a[aria-current="page"] .navlink-label { color: var(--accent); }
+.navlinks a[aria-current="page"] { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 
-/* The links only go inline once they genuinely fit beside a program picker.
-   This used to be 62rem, from when the row was shorter and the header carried a
-   90px button rather than a 12rem control; at that width fourteen links plus
-   the picker overflowed by 359px. Below this the disclosure menu holds them,
-   which is the behaviour every phone already had. */
+/* The menu button is present at every width now, because there is exactly one
+   menu and it is the organized one. The inline row it replaced could not carry
+   a heading or a description -- and it was what forced the links to be hidden
+   below 80rem, so a phone and a desktop were navigating different sites. What
+   the header gains from dropping fourteen inline links is room, which is why
+   the picker can afford to be legible here. */
 @media (min-width: 80rem) {
-  .menu-btn { display: none; }
-  .navlinks { display: flex; align-items: center; gap: .9rem; margin-left: 1rem; min-width: 0; }
-  .navlinks a { border: 0; padding: 0; font-size: .87rem; font-weight: 600; color: var(--muted); }
-  .navlinks a:hover { color: var(--foreground); }
   .nav-prog-label { display: inline; }
   .nav-prog-select { max-width: 12rem; width: 12rem; }
 }
 
 /* Room to breathe once there is room. */
 @media (min-width: 96rem) {
-  .navlinks { gap: 1.2rem; margin-left: 1.5rem; }
-  .navlinks a { font-size: .92rem; }
   .nav-prog-select { max-width: 14rem; width: 14rem; }
 }
 

@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Imported by name, not as a module: this file defines its own shell()
 # function, which would rebind the module-level name and turn shell.header
 # into an AttributeError at build time.
-from shell import CSS as HEADER_CSS, LINKS as SITE_LINKS, header as site_header  # noqa: E402
+from shell import CSS as HEADER_CSS, GROUPS as SITE_GROUPS, header as site_header, with_extra  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "wiki-raw"
@@ -52,7 +52,8 @@ SAFE_TAGS = ["br", "b", "i", "u", "s", "sub", "sup", "small", "tt", "code", "hr"
 
 # The shared archive nav, plus the wiki's own image contact sheet. Inserted
 # after Wiki so the section a reader is already in keeps its sub-page adjacent.
-WIKI_LINKS = SITE_LINKS[:2] + (("Images", "wiki/images.html"),) + SITE_LINKS[2:]
+WIKI_GROUPS = with_extra(SITE_GROUPS, "Wiki",
+                         ("Images", "wiki/images.html", "all 83 wiki images, as a contact sheet"))
 
 
 # --------------------------------------------------------------------------
@@ -529,7 +530,7 @@ def shell(title: str, body: str, *, banner: str, desc: str = "") -> str:
 <meta name="description" content="{html.escape(desc)}">
 <link rel="stylesheet" href="wiki.css">
 </head><body>
-{site_header("../", WIKI_LINKS, active="Wiki")}
+{site_header("../", WIKI_GROUPS, active="Wiki")}
 <div class="wrap"><article>
 {banner}
 {body}
