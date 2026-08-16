@@ -2243,6 +2243,7 @@ async function boot() {
       step: () => { state.machine.halfStep(); refresh(); },
       back: () => { state.machine.stepBack(); refresh(); },
       reset: () => { state.machine.powerCycle(); refresh(); },
+      halfCycle: () => state.machine.halfCycle(),
     });
     const soloClock = $('solo-clock-select');
     for (const c of CLOCKS) soloClock.add(new Option(c.label, String(c.hz)));

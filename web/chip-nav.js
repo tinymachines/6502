@@ -14,7 +14,7 @@
 
 import {
   CLOCKS, clockHz, isRunning, setClock, toggleRunning, step, reset,
-  subscribe, registerDriver, initClock,
+  subscribe, registerDriver, initClock, chipHalfCycle,
 } from './chip-controls.js';
 
 /**
@@ -57,6 +57,7 @@ export function setupChipNav(driver, { root = document } = {}) {
     };
 
     const run = btn('is-run', '▶', 'Run', () => toggleRunning());
+    run.setAttribute('aria-pressed', 'false');
     btn('', '▶❙', 'One half-cycle', () => step());
     btn('', '⏻', 'Power cycle', () => reset());
     runs.push(run);
@@ -76,11 +77,55 @@ export function setupChipNav(driver, { root = document } = {}) {
       run.textContent = on ? '❚❚' : '▶';
       run.title = on ? 'Pause' : 'Run';
       run.setAttribute('aria-label', run.title);
+      run.setAttribute('aria-pressed', String(on));
       run.classList.toggle('on', on);
       const hz = String(clockHz());
       if (rate.value !== hz) rate.value = hz;
+      paintTick(rate);
     });
+
+    watchTheClock(rate);
   }
 
   return { runButtons: runs };
+}
+
+/**
+ * Blink the rate control on the chip's own phase.
+ *
+ * `.tick` is held while the half-cycle count is even, so the control goes on
+ * and off once per cycle. That is what a cycle *is* here: two half-cycles, the
+ * fact the whole Timing page is about.
+ *
+ * Read off the machine rather than run from a timer. A timer would keep
+ * blinking after the chip stopped, and would go on claiming a rate the machine
+ * was not delivering -- on the software rasteriser the headless checks use, the
+ * requested rate and the delivered one are routinely different numbers. This
+ * cannot show anything the chip is not doing.
+ */
+function paintTick(rate) {
+  const hc = chipHalfCycle();
+  if (hc === null) return;
+  rate.classList.toggle('tick', hc % 2 === 0);
+}
+
+/**
+ * Keep it blinking while the chip free-runs.
+ *
+ * The discrete case is handled by `paintTick` from the subscription instead,
+ * because a step that waits for an animation frame is exactly the
+ * responsiveness bug this file already exists downstream of -- and it is
+ * invisible until the page is driven somewhere frames are throttled, which is
+ * where the harness drives it.
+ *
+ * A page whose driver offers no `halfCycle` never blinks, and the loop stops
+ * rather than spinning for nothing.
+ */
+function watchTheClock(rate) {
+  const frame = () => {
+    if (chipHalfCycle() === null) return;   // nothing to watch; do not reschedule
+    paintTick(rate);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 }

@@ -45,7 +45,14 @@ export function setupProgramNav({ onChange, root = document } = {}) {
     if (!onChange) {
       select.title = 'Chosen here, run on the pages that drive the chip.';
     }
-    PROGRAMS.forEach((p, i) => select.add(new Option(p.name, String(i))));
+    // The short name here, the full one everywhere with room for it. Clipping a
+    // name mid-word is worse than shortening it: the reader cannot tell which
+    // program is selected, which is the one thing this control exists to say.
+    PROGRAMS.forEach((p, i) => {
+      const opt = new Option(p.short || p.name, String(i));
+      opt.title = p.name;
+      select.add(opt);
+    });
     select.value = String(index);
 
     select.addEventListener('change', () => {

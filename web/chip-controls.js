@@ -62,6 +62,20 @@ export function isMaxClock() { return state.hz === 0; }
 export function isRunning() { return state.running; }
 export function hasDriver() { return driver !== null; }
 
+/**
+ * The chip's half-cycle count, or null if the page has not offered one.
+ *
+ * The header's clock indicator blinks on this rather than on a timer. A timer
+ * would keep blinking after the chip had stopped and would go on claiming a
+ * rate the machine was not delivering, which is the kind of decoration this
+ * site exists to avoid.
+ */
+export function chipHalfCycle() {
+  if (!driver || !driver.halfCycle) return null;
+  const hc = driver.halfCycle();
+  return Number.isFinite(hc) ? hc : null;
+}
+
 export function clockLabel(hz = state.hz) {
   const step = CLOCKS.find((c) => c.hz === hz);
   return step ? step.label : `${hz} Hz`;

@@ -79,6 +79,7 @@ export function createChip({ Machine, program, loadAddr }) {
     step: advance,
     back: () => { m.stepBack(); announce(); },
     reset: () => { m.powerCycle(); announce(); },
+    halfCycle: () => m.halfCycle(),
   });
   subscribe(announce);
 

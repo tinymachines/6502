@@ -143,6 +143,82 @@ function pace(seconds, frameMs) {
     ok('the header step advances the chip immediately',
        after === before + 1, `half-cycle ${before} -> ${after}`);
 
+    // Square, and the same square. `width`/`height` rather than `min-*`,
+    // because with `min-*` the glyph decides the shape and three buttons come
+    // out three different widths -- which is what "square" was asked to fix.
+    const boxes = [...d.querySelectorAll('.nav-tbtn')]
+      .map((b) => b.getBoundingClientRect());
+    const square = boxes.every((r) => Math.abs(r.width - r.height) <= 1);
+    const sameSize = boxes.every((r) => Math.abs(r.width - boxes[0].width) <= 1);
+    ok('the transport buttons are square, and all the same square',
+       boxes.length === 3 && square && sameSize,
+       boxes.map((r) => `${Math.round(r.width)}x${Math.round(r.height)}`).join(' '));
+
+    // The run button is a toggle and says so, for a reader and for a screen
+    // reader. `aria-pressed` is the half that cannot be seen in a screenshot.
+    headRun.click();
+    const pressedOn = headRun.getAttribute('aria-pressed') === 'true'
+      && headRun.textContent === '❚❚' && headRun.title === 'Pause';
+    headRun.click();
+    const pressedOff = headRun.getAttribute('aria-pressed') === 'false'
+      && headRun.textContent === '▶' && headRun.title === 'Run';
+    ok('the run button becomes a pause button, and back',
+       pressedOn && pressedOff, `on: ${pressedOn}, off: ${pressedOff}`);
+
+    // The picker shows the short name, and the full one is still reachable as
+    // a tooltip. A name clipped mid-word is worse than a shortened one: the
+    // reader cannot tell which program is selected.
+    const { PROGRAMS } = await import('./programs.js');
+    const picker = d.querySelector('.nav-prog-select');
+    const opts = [...picker.options];
+    const labelled = opts.every((o, i) => o.textContent === PROGRAMS[i].short
+      && o.title === PROGRAMS[i].name);
+    // Every program has one, or the ones without silently fall back to a name
+    // that does not fit.
+    const allShort = PROGRAMS.every((p) => p.short && p.short.length <= 12);
+    ok('the header picker shows a short name for every program',
+       labelled && allShort,
+       allShort ? `${opts.length} options` : PROGRAMS.filter((p) => !p.short).map((p) => p.id).join(', '));
+
+    // The chosen option has to fit the control it is in. This is measured
+    // rather than assumed from the character count, because the font is not
+    // the harness's to know.
+    const probe = d.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+    const cs = d.defaultView.getComputedStyle(picker);
+    probe.style.font = cs.font || `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    d.body.append(probe);
+    const tooWide = opts.filter((o) => {
+      probe.textContent = o.textContent;
+      // Room for the disclosure arrow and the control's own padding.
+      return probe.getBoundingClientRect().width
+        > picker.getBoundingClientRect().width - 34;
+    }).map((o) => o.textContent);
+    probe.remove();
+    ok('and every one of them fits the control without clipping',
+       tooWide.length === 0,
+       tooWide.length ? tooWide.join(', ')
+         : `${Math.round(picker.getBoundingClientRect().width)}px wide`);
+
+    // The clock blinks on the chip's own phase: on while the half-cycle count
+    // is even, off while it is odd, so it goes on and off once per cycle. It is
+    // asserted through discrete steps rather than by waiting, because animation
+    // frames are throttled to nearly zero in an iframe -- and asserted against
+    // the machine's own count, so a blink that had drifted off the chip would
+    // fail rather than merely look busy.
+    const stepBtn = d.querySelectorAll('.nav-tbtn')[1];
+    const clockEl = d.querySelector('.nav-clock-select');
+    const phases = [];
+    for (let i = 0; i < 4; i++) {
+      const hc = Number(d.getElementById('b-half').textContent);
+      phases.push([hc, clockEl.classList.contains('tick')]);
+      stepBtn.click();
+    }
+    const blinks = phases.every(([hc, lit]) => lit === (hc % 2 === 0))
+      && new Set(phases.map(([, lit]) => lit)).size === 2;
+    ok('the clock control blinks on the chip, once per cycle',
+       blinks, phases.map(([hc, lit]) => `${hc}${lit ? '+' : '-'}`).join(' '));
+
     // And the two clock selects are one setting shown twice.
     const headClock = d.querySelector('.nav-clock-select');
     const footClock = d.getElementById('speed');

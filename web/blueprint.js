@@ -539,6 +539,7 @@ function wireUp(svg) {
     step: () => { state.machine.halfStep(); paint(); },
     back: () => { state.machine.stepBack(); paint(); },
     reset: () => { loadProgram(Number(select.value)); paint(); },
+    halfCycle: () => state.machine.halfCycle(),
   });
 
   $('bp-run').onclick = () => toggleRunning();

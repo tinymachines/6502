@@ -208,6 +208,7 @@ function wireControls() {
     step: () => state.machine.halfStep(),
     back: () => state.machine.stepBack(),
     reset: () => loadProgram(Number($('ex-program').value)),
+    halfCycle: () => state.machine.halfCycle(),
   });
 
   $('ex-run').addEventListener('click', () => toggleRunning());

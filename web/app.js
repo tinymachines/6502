@@ -252,6 +252,7 @@ function setupUI() {
     step: () => { state.machine.halfStep(); syncToChip(); },
     back: () => { state.machine.stepBack(); syncToChip(); },
     reset: () => { resetMachine(); syncToChip(); },
+    halfCycle: () => state.machine.halfCycle(),
   });
 
   $('btn-run').onclick = () => toggleRunning();

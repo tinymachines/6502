@@ -216,6 +216,13 @@ Expect ~2–5 fps: that is software rasterisation, not the renderer.
 - **Snap `chromium` cannot write a screenshot outside its confinement.** It fails
   with "No such file or directory" on a path that plainly exists, including
   anything under `/tmp/claude-*`. Write to `$HOME` instead.
+- **The bottom 87px of every screenshot is unpainted white.** `--window-size`
+  is the *window*; the viewport is 87px shorter, and the remainder is left
+  blank. It is exactly 87 at every size, so a fixed footer sits entirely inside
+  it and looks like it failed to render. To photograph anything anchored to the
+  bottom, add 87 to the height and crop at `h - 87`. **Control for it before
+  believing it**: the same band appears on the live site, whose footer is not
+  fixed at all, which is what proved it was the camera rather than the page.
 
 Two more things about driving it, both of which cost a round:
 
@@ -1466,6 +1473,24 @@ A cycle is two half-cycles, so 1 Hz is two half-cycles a second.
 - `demos.js`'s `createChip` registers *itself* as the driver, so the primer's
   five examples and the programs page's run panel are driven by the header too.
   `setupChipNav()` is then called with no argument.
+- **The rate control blinks on the chip's own phase.** `.tick` is held while
+  the half-cycle count is even, so it goes on and off once per *cycle* — which
+  is what a cycle is here, two half-cycles. It reads `halfCycle()` back off the
+  driver rather than running from a timer: a timer would keep blinking after
+  the chip stopped and would go on claiming a rate the machine was not
+  delivering, which on the software rasteriser is routinely a different number
+  from the one requested. Applied from the subscription *and* from a frame
+  loop, for the same reason every other discrete action here is.
+- **The buttons are sized with `width`/`height`, not `min-*`.** With `min-*` the
+  glyph decides the shape and three buttons come out three different widths.
+  36px square, over the 30px `_navfit-test.html` insists on for a tap target.
+- **`programs.js` carries a `short` name, used only by the header picker.** The
+  full name goes everywhere with room for it, and rides on the option's
+  `title`. A name clipped mid-word is worse than a shortened one: the reader
+  cannot tell which program is selected, which is the one thing the control is
+  for. `_chipnav-test.html` measures the rendered text against the control's
+  width rather than counting characters, because the font is not the harness's
+  to know.
 
 **A discrete step must apply immediately, and the explorer was not doing it.**
 Its panels only repainted inside the frame loop, so a step landed on the next
@@ -1863,6 +1888,24 @@ in the repo so they are reproducible, not mystery binaries). nginx has no
 `webmanifest` MIME type, so the site config sets it with `default_type` in a
 location that declares no `add_header` — see the header-inheritance trap above.
 
+**It installs on the desktop, and already did.** Chrome's bar for that is a
+manifest with a name, 192px and 512px icons, a `start_url` in scope,
+`display: standalone`, and a service worker with a fetch handler — all of which
+were in place. What was added is polish rather than the qualification:
+`display_override` for a browser that prefers `minimal-ui`, `launch_handler`
+with `focus-existing` so a second launch raises the open window instead of
+opening a second one, `handle_links` so in-scope links open in the app, and two
+more shortcuts.
+
+- **The remaining gap is `screenshots`.** Without one carrying
+  `form_factor: "wide"`, desktop Chrome shows its small install dialog rather
+  than the rich one. Adding them means capturing the site headlessly at build
+  time, and the deploy runs under systemd where a browser is neither installed
+  nor wanted — so this is deliberately not done, rather than forgotten.
+- The manifest's `name` is a fourth place shipped text lives, and it is not
+  matched by `grep '—' web/*.js web/*.html`. One em dash survived there for a
+  whole pass because of exactly that. Check `web/manifest.webmanifest` too.
+
 ### Hashed bundle and the service worker
 
 `web/` stays directly servable for development — no build step, no worker.
@@ -1924,6 +1967,18 @@ A `#hash` deep link needs re-applying after boot: the target does not exist whil
 `[data-version-footer]` element. Both the simulator and the archive carry it, and
 both stamp separately since they deploy separately. A dirty working tree gets a
 trailing `+`, so a deploy from uncommitted changes says so.
+
+**The simulator's footer is fixed to the viewport, not to the end of the
+document.** It is a status bar: which build this is and when it shipped,
+readable without scrolling to the bottom of a long page. That costs a strip of
+height on every screen, so it is a thin one, and `--foot-h` is *declared* rather
+than measured with `body` reserving exactly that much — a last paragraph hidden
+under a fixed bar reads as a page that was cut off. Everything in it is
+left-aligned and reads in one order: what it is, then which build. The version
+used to be pushed to the far edge with `margin-left: auto`, which on a wide
+screen put the two halves of one sentence a metre apart. `body.no-scroll` hides
+it, as it already hid the header: a footer floating over a fullscreen die is
+worse than either. The archive keeps its own in-flow footer and is unaffected.
 
 - **The elapsed time is computed on the client, and that is the point.** This
   site is served from content-hashed, long-cached files precisely so pages are

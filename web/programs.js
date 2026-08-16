@@ -21,10 +21,16 @@ import { assemble } from './asm.js';
 
 export const LOAD_ADDR = 0x0200;
 
+// `name` is what a page with room shows; `short` is what the header picker
+// shows. The header has one row to hold a wordmark, a transport, a clock and
+// this, so "Counter (visual6502 default)" either overflows it or gets clipped
+// mid-word -- and a name clipped mid-word is worse than a shorter one, because
+// the reader cannot tell which program is selected.
 const SOURCES = [
   {
     id: 'counter',
     name: 'Counter (visual6502 default)',
+    short: 'Counter',
     blurb: 'The program the original visual6502 boots with. It does nothing '
          + 'useful on purpose: it exercises the stack, the ALU and a '
          + 'read-modify-write in eleven instructions, which is what makes the '
@@ -56,6 +62,7 @@ bump:   INX             ; X and Y are never initialised -- they hold
   {
     id: 'fibonacci',
     name: 'Fibonacci (zero page $F0)',
+    short: 'Fibonacci',
     blurb: 'Two numbers, added and shuffled forever. It is nearly all '
          + 'zero-page traffic, so the address bus stays in page $00 and the '
          + 'adder runs on every pass.',
@@ -92,6 +99,7 @@ step:   LDA $F0
   {
     id: 'fill',
     name: 'Fill page $0300',
+    short: 'Fill page',
     blurb: 'Writes 256 bytes with an indexed store, then starts over. Every '
          + 'pass drives a different address onto the bus, so this is the one to '
          + 'run while watching the address pins.',
@@ -112,6 +120,7 @@ fill:   TXA             ; the value written is the index itself
   {
     id: 'add',
     name: 'Add two bytes',
+    short: 'Add',
     blurb: 'The smallest complete thing a processor does: fetch two numbers '
          + 'from memory, add them, put the answer back. If you only run one '
          + 'program on this site, run this one on the Lab.',
@@ -142,6 +151,7 @@ sum:    CLC             ; the carry in is part of the sum
   {
     id: 'multiply',
     name: 'Multiply by adding',
+    short: 'Multiply',
     blurb: 'There is no multiply instruction. Seven sixes is six added seven '
          + 'times, counted down in X, which is how every 6502 multiply '
          + 'routine ever written begins.',
@@ -167,6 +177,7 @@ again:  CLC
   {
     id: 'bits',
     name: 'Count the set bits',
+    short: 'Count bits',
     blurb: 'Shifts a byte through the carry flag eight times and counts the '
          + 'ones. The carry is not a spare bit here: it is the ninth bit of '
          + 'the accumulator, and the shifter is the only part of the datapath '
@@ -196,6 +207,7 @@ skip:   DEX
   {
     id: 'copy',
     name: 'Copy a string',
+    short: 'Copy',
     blurb: 'Walks a list of bytes until it meets a zero, copying as it goes. '
          + 'Indexed addressing, a terminator, and a branch: the shape of almost '
          + 'every loop that touches memory.',
