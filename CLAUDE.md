@@ -76,6 +76,16 @@ Prefix every session:
 export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
 ```
 
+**The same trap again, with node, and it cost a deploy.** `/usr/bin/node` here is
+**v12**, which cannot parse `??`. That is invisible interactively — the shell
+picks up nvm's v24 — but `deploy.sh` runs under systemd, whose `PATH` is
+`/usr/local/sbin:…:/snap/bin` and nothing else. The program check died on a
+`SyntaxError` pointing at a line of perfectly good JavaScript. `deploy.sh` now
+resolves a node ≥ 16 itself (trying `$NODE`, then `PATH`, then `~/.nvm`) and
+says which one it found if it cannot. **Anything the deploy shells out to is
+running under systemd's environment, not yours** — check the version, do not
+assume the binary.
+
 ```bash
 cargo test --workspace              # 79 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode, blocks

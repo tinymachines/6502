@@ -71,9 +71,35 @@ done
 # rather than removing it: a bad edit to the assembler changes every program at
 # once, silently, and every page still boots. This refuses to publish unless the
 # three that predate the rewrite still assemble to the bytes they shipped with.
-command -v node >/dev/null || {
-  echo "deploy: node is needed to check the programs assemble" >&2; exit 1; }
-node tools/check-programs.mjs || exit 1
+# Which node, though. This runs under systemd, whose PATH is not the interactive
+# shell's: `node` there is /usr/bin/node, v12, which cannot parse the `??` in
+# web/programs.js and fails with a bare SyntaxError pointing at a line that is
+# perfectly good JavaScript. Exactly the same trap as the stray /usr/bin/rustc
+# documented in CLAUDE.md, and it cost a deploy to find.
+#
+# The alternative -- writing the site's JavaScript down to whatever node the
+# host happens to ship -- would constrain browser code forever for the sake of
+# one check script, and nothing would ever say so out loud.
+pick_node() {
+  local candidate version major
+  for candidate in "${NODE:-}" node \
+      $(ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -Vr); do
+    [ -n "$candidate" ] || continue
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    version=$("$candidate" --version 2>/dev/null) || continue
+    major=${version#v}; major=${major%%.*}
+    case "$major" in ''|*[!0-9]*) continue ;; esac
+    [ "$major" -ge 16 ] && { command -v "$candidate"; return 0; }
+  done
+  return 1
+}
+NODE_BIN=$(pick_node) || {
+  echo "deploy: need node >= 16 to check that the programs assemble." >&2
+  echo "        found: $(command -v node >/dev/null && node --version || echo none)" >&2
+  echo "        systemd's PATH is not your shell's -- set NODE=/path/to/node." >&2
+  exit 1
+}
+"$NODE_BIN" tools/check-programs.mjs || exit 1
 
 # The layout blob is the one artefact whose corruption would not be obvious --
 # a truncated file still "loads" and then renders nothing.
