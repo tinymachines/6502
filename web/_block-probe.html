@@ -1,0 +1,108 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  What the ALU actually does, half-cycle by half-cycle, so that the prose on the
+  block page can be written from a dump rather than from the datasheet. Same
+  reason `_lab-probe.html` exists, and the same rule: run this before editing
+  any text that claims the chip does something.
+
+  It prints a byte per named bus in the block, the adder's intermediate products
+  as the die itself names them, and the control lines that reach in -- all read
+  back out of the silicon, none of it consulted from a table.
+
+    http://localhost:8777/_block-probe.html?b=alu
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;padding:1rem;background:#0b1120;color:#eaf2ff;
+font:12px/1.5 ui-monospace,monospace}pre{white-space:pre}</style>
+</head><body>
+<pre id="out">running…</pre>
+<script type="module">
+import init, { Machine } from './pkg/v6502_wasm.js';
+import { assemble } from './asm.js';
+
+const out = document.getElementById('out');
+const lines = [];
+const say = (s = '') => lines.push(s);
+const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
+
+// Enough to get an ADC with known inputs, then something for it to land in.
+const SRC = `
+        .org $0200
+start:  lda #$41
+        clc
+here:   adc #$01
+        sta $80
+loop:   jmp loop
+`;
+
+(async () => {
+  try {
+    await init();
+    const img = assemble(SRC);
+    const m = new Machine();
+    m.load(img.org, new Uint8Array(img.bytes));
+    m.setResetVector(img.org);
+    m.powerCycle();
+
+    const id = (n) => m.nodeId(n);
+    const hi = (n) => (id(n) >= 0 ? (m.isNodeHigh(id(n)) ? 1 : 0) : -1);
+    // A bus read back a bit at a time. The eight are different circuits, which
+    // is the whole reason the trace page watches one -- but for a dump, the
+    // byte is what a reader can check against arithmetic they can do.
+    const busOf = (stem) => {
+      let v = 0;
+      for (let i = 0; i < 8; i++) if (hi(`${stem}${i}`) === 1) v |= 1 << i;
+      return v;
+    };
+
+    // Where the ADC is. Found by stepping until the chip fetches from that
+    // address -- never a hardcoded half-cycle, which would break the first time
+    // reset timing moved.
+    const at = img.labels.get('here');
+    say(`ADC is at $${at.toString(16).toUpperCase()}; watching from its fetch.`);
+    let guard = 0;
+    while (!(m.sync() && m.lastFetchAddr() === at) && guard++ < 4000) m.halfStep();
+    if (guard >= 4000) throw new Error('never fetched the ADC');
+    const base = m.halfCycle();
+
+    const CTRL = ['dpc17_SUMS', 'dpc16_ANDS', 'dpc11_EORS', 'dpc12_ORS',
+                  'dpc14_SRS', 'dpc10_DBADD', 'dpc13_SBADD', 'dpc0_ADDSB7',
+                  'dpc20_ADDSB06', 'dpc19_ADDSB7', 'dpc15_0ADD', 'dpc9_DAA'];
+    const present = CTRL.filter((c) => id(c) >= 0);
+    say(`control lines resolved: ${present.length} of ${CTRL.length} -- `
+        + `${CTRL.filter((c) => id(c) < 0).join(' ') || 'all'}`);
+    say();
+    say('  +hc ph sy | alua alub  alu | A+B AxB A.B  #res | cin cout vout | controls');
+    say('  ' + '-'.repeat(96));
+
+    for (let k = 0; k <= 14; k++) {
+      const on = present.filter((c) => hi(c) === 1)
+        .map((c) => c.replace(/^dpc\d*_/, ''));
+      say(`  ${String(k).padStart(3)} ${m.clk0() ? 'φ1' : 'φ2'} ${m.sync() ? ' Y' : ' .'} |`
+        + `  ${hex2(busOf('alua'))}   ${hex2(busOf('alub'))}   ${hex2(busOf('alu'))} |`
+        + `  ${hex2(busOf('A+B'))}  ${hex2(busOf('#(AxB)'))}  ${hex2(busOf('#A.B'))}`
+        + `   ${hex2(busOf('#aluresult'))} |`
+        + `  ${hi('alucin')}    ${hi('alucout')}    ${hi('aluvout')}  | ${on.join(' ')}`);
+      say(`      A=${hex2(m.a())} pc=${m.pc().toString(16).toUpperCase()}`
+        + ` ir=${hex2(m.ir())} T=${m.timingStates()}`);
+      m.halfStep();
+    }
+
+    say();
+    say(`half-cycle at the ADC fetch: ${base}; A after the run: $${hex2(m.a())}`);
+    // Run on to where the result is stored, to show where it lands.
+    for (let i = 0; i < 60; i++) m.halfStep();
+    say(`A once the store has happened: $${hex2(m.a())}, mem[$80]=$${hex2(m.peek(0x80))}`);
+
+    document.title = 'PROBE OK';
+  } catch (e) {
+    say('THREW :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join('\n') : e));
+    document.title = 'PROBE FAILED';
+  }
+  out.textContent = lines.join('\n');
+})();
+</script>
+</body></html>

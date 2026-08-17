@@ -2028,3 +2028,174 @@ body.no-scroll #view { z-index: 70; }
 }
 .sp-check input { width: 1rem; height: 1rem; accent-color: var(--accent); }
 .sch-pinio { font-size: .8rem; }
+
+/* ---------------------------------------------------------------------------
+   The functional block pages (block.html)
+   ---------------------------------------------------------------------------
+   One document serves all twelve, so there is one set of rules here rather than
+   twelve stylesheets that would eventually disagree about what a port looks
+   like. Colours come from the block palette via an inline `background` on the
+   dot, which is the only thing on these pages that is not a token: the hue IS
+   the measurement's identity, and hardcoding thirteen of them in CSS would be a
+   second copy of block-palette.js. */
+
+/* The statbar packs a value and its label into one cell, and without a gap they
+   run together: "290transistors 168signals". The site's own .statbar is a row of
+   plain strings; these are pairs, so they need their own rule. */
+.bk-stat { display: flex; flex-direction: column; gap: .1rem; }
+.bk-stat b { font-size: .92rem; color: var(--foreground); }
+.bk-stat span { font-size: .68rem; color: var(--muted); letter-spacing: .04em; }
+
+.bk-hero-dot {
+  display: inline-block; width: .58em; height: .58em; border-radius: 50%;
+  margin-right: .45em; vertical-align: .06em;
+}
+
+/* The directory ---------------------------------------------------------- */
+
+.bk-grid {
+  display: grid; gap: 1rem; margin: 1.5rem 0;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+.bk-card {
+  display: block; padding: 1rem 1.1rem 1.1rem; text-decoration: none;
+  background: var(--surface); border: 2px solid var(--line);
+  border-radius: .5rem; box-shadow: var(--hard-card); transition: .15s;
+}
+.bk-card:hover { border-color: var(--accent); transform: translate(-2px, -2px); }
+.bk-card-bar { display: block; height: 4px; border-radius: 2px; margin-bottom: .7rem; }
+.bk-card h3 { margin: 0 0 .35rem; font-size: 1.05rem; color: var(--foreground); }
+.bk-card-blurb { margin: 0 0 .6rem; color: var(--muted); font-size: .88rem; line-height: 1.45; }
+.bk-card-stats { display: flex; flex-wrap: wrap; gap: .25rem .8rem; margin: 0;
+  font-size: .72rem; color: var(--muted); }
+.bk-coverage { max-width: 46rem; color: var(--muted); font-size: .88rem; }
+
+/* The interface ---------------------------------------------------------- */
+
+.bk-ports {
+  display: grid; gap: 1.1rem 1.5rem; padding: 1rem 1.1rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+.bk-portgroup { min-width: 0; }
+.bk-portgroup h3 {
+  margin: 0 0 .15rem; font-size: .95rem; color: var(--foreground);
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem;
+}
+.bk-count { font-size: .68rem; font-weight: 500; color: var(--muted); }
+.bk-why { margin: 0 0 .55rem; font-size: .76rem; line-height: 1.4; color: var(--muted); }
+.bk-portlist { display: flex; flex-wrap: wrap; gap: .3rem; }
+.bk-port {
+  display: inline-flex; align-items: center; gap: .35rem; cursor: pointer;
+  padding: .22rem .45rem; font: 500 .74rem var(--font-mono);
+  background: #101829; color: #dce9ff;
+  border: 1.4px solid var(--line); border-radius: .25rem; transition: .12s;
+}
+.bk-port:hover { border-color: var(--accent); color: var(--accent); }
+.bk-port-w { color: var(--muted); }
+.bk-dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; flex: none; }
+.bk-chip { display: inline-flex; align-items: center; gap: .35rem; }
+.bk-foot { padding: 0 1.1rem 1rem; margin: 0; font-size: .76rem; line-height: 1.45; }
+
+/* The circuit ------------------------------------------------------------ */
+
+.bk-stage { max-height: 60vh; }
+.bk-dirs { display: flex; gap: .35rem; }
+.bk-dirs .btn { padding: .35rem .6rem; font-size: .76rem; }
+.bk-dirs .btn.on { border-color: var(--accent); color: var(--accent); }
+.bk-root-line { margin: .6rem 0 1.5rem; font-size: .82rem; }
+/* A port pill says where it goes. Muted, because it is the edge of the drawing
+   rather than part of the circuit, and it must not read as a signal you can
+   walk to -- clicking one does nothing here on purpose. */
+.sch-node.port .sch-pill { stroke-dasharray: 4 2; opacity: .85; }
+.sch-node.port { cursor: default; }
+/* An attributed static gate is part of the circuit and can be walked, but it is
+   a weaker claim than membership -- it is here because of what it drives, not
+   because blocks.rs placed it here. Hollow rather than dashed, so it reads as
+   "part of this drawing" where a port reads as "the edge of it". */
+.sch-node.logic .sch-pill { fill: #0a1120; stroke-dasharray: 2 2; }
+.sch-port-label { fill: #7e8db0; font: 500 7.5px var(--font-mono); text-anchor: middle; }
+
+/* The reading, and the labs ---------------------------------------------- */
+
+.bk-notes { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); }
+.bk-note {
+  padding: .9rem 1rem; background: var(--surface);
+  border: 2px solid var(--line); border-radius: .5rem;
+}
+.bk-note h3 { margin: 0 0 .4rem; font-size: .98rem; color: var(--accent); }
+.bk-note p { margin: 0; font-size: .88rem; line-height: 1.55; color: var(--muted); }
+.bk-note code, .bk-lab-blurb code, .bk-lab-note code {
+  font: 500 .92em var(--font-mono); color: #dce9ff;
+}
+
+.bk-labs { display: grid; gap: 1.25rem; }
+.bk-lab {
+  padding: 1rem 1.1rem 1.1rem; background: var(--surface);
+  border: 2px solid var(--line); border-radius: .5rem; box-shadow: var(--hard-card);
+}
+.bk-lab h3 { margin: 0 0 .35rem; font-size: 1.02rem; }
+.bk-lab-blurb { margin: 0 0 .8rem; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+.bk-lab-src {
+  margin: 0 0 1rem; padding: .7rem .8rem; overflow-x: auto;
+  background: #080c15; border: 1px solid var(--line); border-radius: .35rem;
+  font-size: .76rem; line-height: 1.5; color: #9fb4d8;
+}
+.bk-lab-failed { margin: 0; color: var(--warn); font-size: .85rem; }
+.bk-lab-rows { display: grid; gap: .55rem; }
+.bk-lab-row {
+  display: grid; gap: .3rem .9rem; padding: .6rem .7rem;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  background: #0d1524; border: 1px solid var(--line); border-radius: .35rem;
+}
+.bk-lab-when { grid-row: span 2; font-size: .74rem; color: var(--muted); line-height: 1.5; }
+.bk-lab-when b { display: block; font-size: 1.05rem; color: var(--accent); }
+.bk-lab-note { margin: 0; font-size: .85rem; line-height: 1.5; color: var(--foreground); }
+.bk-lab-buses { display: flex; flex-wrap: wrap; gap: .3rem; }
+.bk-bus {
+  display: inline-flex; align-items: baseline; gap: .35rem;
+  padding: .15rem .4rem; font-size: .72rem;
+  background: #101829; border: 1px solid var(--line); border-radius: .25rem;
+}
+.bk-bus i { font-style: normal; color: var(--muted); }
+.bk-bus b { color: #dce9ff; }
+.bk-bus-reg b { color: var(--gold); }
+.bk-check { grid-column: 2; margin: 0; display: flex; gap: .45rem; font-size: .8rem; }
+.bk-check-mark { font-weight: 700; }
+.bk-check.held .bk-check-mark { color: var(--mint); }
+.bk-check.broke { color: var(--hot); }
+.bk-check.broke .bk-check-mark { color: var(--hot); }
+
+/* Where to go next ------------------------------------------------------- */
+
+.bk-seealso { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1.25rem; }
+.bk-seealso-link {
+  display: grid; gap: .1rem; padding: .55rem .8rem; text-decoration: none;
+  background: var(--surface); border: 2px solid var(--line); border-radius: .4rem;
+  transition: .15s;
+}
+.bk-seealso-link:hover { border-color: var(--accent); }
+.bk-seealso-link b { font-size: .9rem; color: var(--foreground); }
+.bk-seealso-link span { font-size: .76rem; color: var(--muted); }
+
+.bk-blocknav { display: flex; flex-wrap: wrap; gap: .6rem; align-items: stretch; }
+.bk-step {
+  display: grid; gap: .1rem; padding: .55rem .8rem; text-decoration: none;
+  background: var(--surface); border: 2px solid var(--line); border-radius: .4rem;
+  transition: .15s; align-content: center;
+}
+.bk-step:hover { border-color: var(--accent); }
+.bk-step-dir { font: 700 .62rem var(--font-mono); letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted); }
+.bk-step b { font-size: .9rem; color: var(--foreground); }
+.bk-step-all { margin-left: auto; }
+
+.bk-error { color: var(--warn); }
+
+/* A phone has no room for a fixed label column beside every lab row, and the
+   port grid wants to be one column rather than three squeezed ones. */
+@media (max-width: 40rem) {
+  .bk-lab-row { grid-template-columns: minmax(0, 1fr); }
+  .bk-lab-when { grid-row: auto; }
+  .bk-check { grid-column: 1; }
+  .bk-step-all { margin-left: 0; }
+}

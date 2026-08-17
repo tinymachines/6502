@@ -60,6 +60,7 @@ for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/blueprint.html web/blueprint.js web/blueprint.json \
          web/exploded.html web/exploded.js web/exploded-gl.js web/blocks.json \
          web/schematic.html web/schematic.js web/schematic.json \
+         web/sch-draw.js web/block.html web/block.js web/block-notes.js \
          web/trace.html web/trace.js web/primer.html web/primer.js web/demos.js \
          web/decode.html web/decode.js web/decode.json \
          web/timing.html web/timing.js web/timing.json \
@@ -109,7 +110,7 @@ head -c 8 web/layout.bin | grep -q '^V6502LAY' || {
 # The blueprint is derived, so an empty derivation is a silent failure: the page
 # would load and draw nothing at all. Insist it actually found the datapath.
 python3 - <<'PY' || exit 1
-import json, sys
+import json, re, sys
 bp = json.load(open("web/blueprint.json"))
 if len(bp["units"]) < 12 or len(bp["links"]) < 16:
     sys.exit(f"deploy: blueprint derived only {len(bp['units'])} units / "
@@ -136,6 +137,22 @@ functional = cov["transistorsPlaced"] - logic["transistors"]
 if functional < 2000:
     sys.exit(f"deploy: only {functional} transistors reach a functional block -- "
              "the name rules have drifted")
+# Every functional block needs a page, and the slug table in block-notes.js is
+# the one authored thing standing between blocks.rs and a 404. A block added or
+# renamed there produces a well-formed blocks.json and a menu entry pointing at
+# nothing, which is exactly the failure the archive exists to be embarrassed
+# about. Read the slugs out of the JS rather than duplicating them here.
+notes = open("web/block-notes.js").read()
+slugs = set(re.findall(r"^  '?([A-Za-z][A-Za-z &/]*)'?:\s*'([a-z-]+)',", notes, re.M))
+have = {name for name, _ in slugs}
+for b in blk["blocks"]:
+    if b["half"] in ("unknown", "logic"):
+        continue
+    if b["name"] not in have:
+        sys.exit(f"deploy: block-notes.js has no slug for {b['name']!r}, so it has no page")
+if len({s for _, s in slugs}) != len(slugs):
+    sys.exit("deploy: two functional blocks share a slug, so one of their pages is unreachable")
+
 # The static logic is identified by an electrical signature, not by name, so it
 # must never be seeded. If it ever is, a name rule has started matching gates.
 if logic["seeded"] != 0:

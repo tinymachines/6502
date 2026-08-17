@@ -38,7 +38,7 @@ const load = (src) => new Promise((r) => {
 });
 
 const PAGES = ['index.html', 'programs', 'primer', 'trace', 'exploded',
-               'schematic', 'blueprint', 'decode', 'timing'];
+               'block', 'schematic', 'blueprint', 'decode', 'timing'];
 
 /** Read the rendered menu out of the iframe. */
 function readMenu(d) {
@@ -90,14 +90,15 @@ const shape = (groups) =>
        reference.slice(0, 90) + '…');
 
     ok('every entry says what it is', noHint.length === 0,
-       noHint.join(', ') || 'all 14 carry a hint');
+       noHint.join(', ') || 'every entry carries a hint');
 
     // Exactly one entry marks the current page, and it is the right one. Five
     // of the entries are sections of the index; marking all five would tell the
     // reader they are in five places at once.
     const wrongCurrent = [];
     const expect = { 'index.html': 'Explorer', programs: 'Programs', primer: 'Primer',
-                     trace: 'Trace', exploded: 'Exploded', schematic: 'Schematic',
+                     trace: 'Trace', exploded: 'Exploded', block: 'Blocks',
+                     schematic: 'Schematic',
                      blueprint: 'Blueprint', decode: 'Decode', timing: 'Timing' };
     for (const [page, cur] of Object.entries(currents)) {
       if (cur.length !== 1 || cur[0] !== expect[page]) {

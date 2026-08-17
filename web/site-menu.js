@@ -43,6 +43,8 @@ export const MENU = [
     items: [
       { label: 'Exploded', page: 'exploded',
         hint: 'three mask layers and twelve blocks, pulled apart' },
+      { label: 'Blocks', page: 'block',
+        hint: 'one functional block at a time, and what crosses its edge' },
       { label: 'Schematic', page: 'schematic',
         hint: '1160 gates recognised from the switch network' },
       { label: 'Blueprint', page: 'blueprint',

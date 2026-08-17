@@ -187,6 +187,7 @@ def main() -> None:
     b.copy_hashed("site-nav.js")
     b.copy_hashed("fullscreen.js")
     b.copy_hashed("block-palette.js")
+    b.copy_hashed("block-notes.js")
     b.copy_hashed("chip-controls.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
@@ -245,6 +246,15 @@ def main() -> None:
     cnav = replace_once(cnav, "'./chip-controls.js'", f"'./{b.ref('chip-controls.js')}'",
                         where="chip-nav.js")
     b.emit("chip-nav.js", cnav.encode())
+
+    # 2c-bis. sch-draw.js: the layered layout and the gate and switch symbols,
+    #     shared by schematic.js and block.js. It exists as its own file for
+    #     exactly the reason block-palette.js does -- two pages drawing an NMOS
+    #     gate from two copies would eventually draw it two different ways.
+    schd = b.read("sch-draw.js").decode()
+    schd = replace_once(schd, "'./block-palette.js'", f"'./{b.ref('block-palette.js')}'",
+                        where="sch-draw.js")
+    b.emit("sch-draw.js", schd.encode())
 
     # 2d. site-menu.js: the nav itself, grouped, rendered into every header.
     #     It imports site-nav.js (the disclosure wiring), which the archive also
@@ -335,6 +345,7 @@ def main() -> None:
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./block-palette.js", "./" + b.ref("block-palette.js")),
+        ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
     ]:
@@ -402,6 +413,25 @@ def main() -> None:
                       f"fetch('{b.ref('timing.json')}')", where="programs-page.js")
     b.emit("programs-page.js", pg.encode())
 
+    # 3j. block.js: one document serving all twelve functional blocks. It reads
+    #     both published node-indexed files -- schematic.json for the circuit and
+    #     blocks.json for `nodeDrives` -- and checks them against each other at
+    #     boot rather than trusting that they agree.
+    bk = b.read("block.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./asm.js", "./" + b.ref("asm.js")),
+        ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+        ("./block-palette.js", "./" + b.ref("block-palette.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./block-notes.js", "./" + b.ref("block-notes.js")),
+    ]:
+        bk = replace_once(bk, f"'{original}'", f"'{resolved}'", where="block.js")
+    for original in ["schematic.json", "blocks.json"]:
+        bk = replace_once(bk, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
+                          where="block.js")
+    b.emit("block.js", bk.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -468,6 +498,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         pgh = replace_once(pgh, f'"{original}"', f'"{b.ref(original)}"', where="programs.html")
     b.emit("programs.html", pgh.encode(), hashed=False)
+
+    bkh = b.read("block.html").decode()
+    for original in ["style.css", "block.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        bkh = replace_once(bkh, f'"{original}"', f'"{b.ref(original)}"', where="block.html")
+    b.emit("block.html", bkh.encode(), hashed=False)
 
     timh = b.read("timing.html").decode()
     for original in ["style.css", "timing.js", "version-footer.js", "site-menu.js",

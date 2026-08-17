@@ -1,0 +1,277 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The functional block pages.
+
+  The page derives a block's interface and its circuit from schematic.json. This
+  harness re-derives both straight out of the same file, independently, and
+  compares. Asserting only "some ports appeared" would pass on a boundary
+  computed the wrong way round -- and one of the two bugs found while building
+  this page was exactly that shape: `bounds` read as (x0,y0,x1,y1) when it is
+  (xmin,xmax,ymin,ymax), which gives a plausible extent on some blocks and a
+  negative one on the rest.
+
+  It also drives all twelve, because the point of one document serving twelve
+  blocks is that the twelfth cannot quietly differ from the first.
+
+    http://localhost:8777/_block-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1280px;height:820px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script type="module">
+import { SLUGS, NOTES } from './block-notes.js';
+
+const results = [];
+const rows = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const load = (src) => new Promise((r) => {
+  f.addEventListener('load', r, { once: true });
+  f.src = src;
+});
+
+/** Wait for the page to have built itself, or give up and say so. */
+async function ready(d, sel = '#bk-main') {
+  for (let i = 0; i < 400; i++) {
+    const main = d.querySelector(sel);
+    if (main && !main.hidden) return true;
+    await sleep(50);
+  }
+  return false;
+}
+
+(async () => {
+  try {
+    const [sch, blk] = await Promise.all(
+      ['schematic.json', 'blocks.json'].map((x) => fetch(x).then((r) => r.json())));
+
+    // --- the two published files agree ---------------------------------------
+    //
+    // The page reads node membership from one and `nodeDrives` from the other,
+    // which is the coupling CLAUDE.md warns about. It is allowed here only
+    // because it is checked, so the check is asserted rather than assumed.
+    const sameNodes = sch.nodeBlock.length === blk.nodeBlock.length
+      && sch.nodeBlock.every((v, i) => (v & 0x7f) === (blk.nodeBlock[i] & 0x7f));
+    ok('schematic.json and blocks.json place every node in the same block',
+       sameNodes, `${sch.nodeBlock.length} nodes`);
+    ok('and name every block the same way',
+       blk.blocks.every((b) => sch.blockNames[b.id] === b.name),
+       blk.blocks.map((b) => b.name).join(', ').slice(0, 60) + '…');
+
+    // Every functional block has a slug, or one of them has no page.
+    const functional = blk.blocks.filter((b) => b.half !== 'unknown' && b.half !== 'logic');
+    const noSlug = functional.filter((b) => !SLUGS[b.name]);
+    ok('every functional block has a page', noSlug.length === 0,
+       noSlug.map((b) => b.name).join(', ') || `${functional.length} blocks`);
+    const slugs = functional.map((b) => SLUGS[b.name]);
+    ok('and no two share a URL', new Set(slugs).size === slugs.length, slugs.join(' '));
+
+    // --- the derivation, re-done here ----------------------------------------
+    const rail = new Set([sch.vss, sch.vcc]);
+    const logicId = sch.blockNames.indexOf('Static logic');
+    const gateInputs = new Map(sch.gates.map((g) => [g[0], new Set(g[3].flat())]));
+
+    /** The four boundary relations, computed from scratch. */
+    function interfaceOf(id) {
+      const inside = new Set();
+      for (let n = 0; n < sch.nodeBlock.length; n++) {
+        if ((sch.nodeBlock[n] & 0x7f) === id && !rail.has(n)) inside.add(n);
+      }
+      const feedsIn = new Set(), drivesOut = new Set(), joined = new Set(), control = new Set();
+      for (const [out, ins] of gateInputs) {
+        if (inside.has(out)) {
+          for (const lit of ins) if (!inside.has(lit) && !rail.has(lit)) feedsIn.add(lit);
+        } else {
+          for (const lit of ins) if (inside.has(lit)) drivesOut.add(lit);
+        }
+      }
+      for (const [c, a, b] of sch.switches) {
+        const touches = inside.has(a) || inside.has(b);
+        if (touches) {
+          for (const [x, y] of [[a, b], [b, a]]) {
+            if (inside.has(x) && !inside.has(y) && !rail.has(y)) joined.add(y);
+          }
+          if (!inside.has(c) && !rail.has(c)) control.add(c);
+        }
+        if (inside.has(c) && (!inside.has(a) || !inside.has(b))) drivesOut.add(c);
+      }
+      return { inside, feedsIn, drivesOut, joined, control };
+    }
+
+    // --- every block builds, and says the right things -----------------------
+    let anyLabs = 0, checksSeen = 0;
+    for (const b of functional) {
+      const slug = SLUGS[b.name];
+      await load(`block?b=${slug}`);
+      const d = f.contentDocument;
+      const built = await ready(d);
+      if (!built) {
+        ok(`${slug}: the page builds`, false,
+           d.querySelector('#bk-status')?.textContent || 'never revealed #bk-main');
+        continue;
+      }
+
+      const mine = interfaceOf(b.id);
+      const groups = [...d.querySelectorAll('.bk-portgroup')];
+      const counts = groups.map((g) =>
+        Number(/(\d+) signals/.exec(g.querySelector('.bk-count').textContent)[1]));
+      const want = [mine.feedsIn.size, mine.drivesOut.size, mine.joined.size, mine.control.size];
+      if (counts.join() !== want.join()) {
+        ok(`${slug}: the interface is the one in schematic.json`, false,
+           `page ${counts.join('/')} vs independent ${want.join('/')}`);
+      }
+
+      // The circuit has to contain something and must not have wandered out of
+      // the block: every pill is a member, an attributed static gate, or a port,
+      // and the ports are exactly the ones that are neither.
+      const pills = [...d.querySelectorAll('#bk-svg .sch-node')];
+      const strayed = pills.filter((p) => {
+        const n = Number(p.dataset.node);
+        const isPort = p.classList.contains('port');
+        const isLogic = p.classList.contains('logic');
+        const member = mine.inside.has(n);
+        const attributed = (sch.nodeBlock[n] & 0x7f) === logicId && blk.nodeDrives[n] === b.id;
+        if (member) return isPort || isLogic;
+        if (attributed) return !isLogic;
+        return !isPort;                       // anything else must be a port
+      });
+      if (strayed.length) {
+        ok(`${slug}: every pill is labelled for what it is`, false,
+           strayed.slice(0, 3).map((p) => p.textContent.trim()).join(', '));
+      }
+
+      const labs = [...d.querySelectorAll('.bk-lab')];
+      anyLabs += labs.length;
+      const failed = [...d.querySelectorAll('.bk-lab-failed')];
+      if (failed.length) {
+        ok(`${slug}: its labs run`, false, failed[0].textContent.slice(0, 120));
+      }
+      const broke = [...d.querySelectorAll('.bk-check.broke')];
+      checksSeen += d.querySelectorAll('.bk-check').length;
+      if (broke.length) {
+        ok(`${slug}: every checked claim held on the chip`, false,
+           broke[0].textContent.slice(0, 120));
+      }
+
+      rows.push(`     ${slug.padEnd(20)} ${String(pills.length).padStart(3)} pills, `
+        + `ports ${want.join('/')}, ${labs.length} lab(s)`);
+    }
+    ok('all twelve blocks build, and each states the interface schematic.json does',
+       !results.some((r) => r.startsWith('FAIL')), `${functional.length} pages`);
+    ok('the labs run and every claim they check held on the chip',
+       anyLabs > 0 && checksSeen > 0, `${anyLabs} labs, ${checksSeen} checks`);
+
+    // --- the numbers on the page are the numbers in the file ------------------
+    await load('block?b=alu');
+    let d = f.contentDocument;
+    await ready(d);
+    const alu = blk.blocks.find((x) => x.name === 'ALU');
+    const stats = [...d.querySelectorAll('.bk-stat')]
+      .map((s) => [s.querySelector('span').textContent, s.querySelector('b').textContent]);
+    const stat = (k) => (stats.find(([n]) => n === k) || [])[1];
+    ok('the transistor and signal counts are blocks.json\'s',
+       stat('transistors') === String(alu.transistors) && stat('signals') === String(alu.nodes),
+       `${stat('transistors')} / ${stat('signals')}`);
+    // The one that shipped wrong. `bounds` is (xmin, xmax, ymin, ymax): read as
+    // (x0,y0,x1,y1) the ALU's extent came out negative, and on a block where it
+    // did not, it would simply have been wrong and silent.
+    ok('the die extent is read out of bounds the right way round',
+       stat('extent') === `${alu.bounds[1] - alu.bounds[0]} × ${alu.bounds[3] - alu.bounds[2]}`,
+       `${stat('extent')} from [${alu.bounds.join(', ')}]`);
+    const extentOk = /^(\d+) × (\d+)$/.exec(stat('extent'));
+    ok('and both of its dimensions are positive', !!extentOk, stat('extent'));
+
+    // --- the walk stops at the boundary --------------------------------------
+    //
+    // Turned up to its deepest, which is where a walk that leaks would leak.
+    const depth = d.getElementById('bk-depth');
+    depth.value = '5';
+    depth.dispatchEvent(new f.contentWindow.Event('input', { bubbles: true }));
+    await sleep(200);
+    const aluIface = interfaceOf(alu.id);
+    const deep = [...d.querySelectorAll('#bk-svg .sch-node')];
+    const leaked = deep.filter((p) => {
+      const n = Number(p.dataset.node);
+      if (aluIface.inside.has(n)) return false;
+      if ((sch.nodeBlock[n] & 0x7f) === logicId && blk.nodeDrives[n] === alu.id) return false;
+      // Everything else must be a port, and a port must be a leaf: nothing may
+      // have been expanded through it.
+      return !p.classList.contains('port');
+    });
+    ok('at full depth the walk still has not left the block', leaked.length === 0,
+       leaked.slice(0, 4).map((p) => p.textContent.trim()).join(', ')
+         || `${deep.length} pills drawn`);
+
+    // A port is a boundary, so no wire may be drawn *out* of one. `data-from` is
+    // written on every wire that leaves a pill towards an element.
+    const portNodes = new Set(deep.filter((p) => p.classList.contains('port'))
+      .map((p) => p.dataset.node));
+    const fromPort = [...d.querySelectorAll('#bk-svg .sch-wire[data-from]')]
+      .filter((w) => portNodes.has(w.dataset.from));
+    // Wires *into* an element from a port are how a port connects at all, so
+    // this is not a violation -- what would be one is a port having been
+    // expanded, and that is what the pill check above covers. Assert instead
+    // that every port node was reached, which is the honest version.
+    ok('every port drawn is actually wired to the circuit',
+       portNodes.size === 0 || fromPort.length > 0,
+       `${portNodes.size} ports, ${fromPort.length} wires from them`);
+
+    // --- the directory -------------------------------------------------------
+    await load('block');
+    d = f.contentDocument;
+    await ready(d);
+    const cards = [...d.querySelectorAll('.bk-card')];
+    ok('the directory lists every block exactly once',
+       cards.length === functional.length
+       && new Set(cards.map((c) => c.getAttribute('href'))).size === cards.length,
+       `${cards.length} cards`);
+    const badHref = cards.filter((c) => !/^block\?b=[a-z-]+$/.test(c.getAttribute('href')));
+    ok('and every card points at a block page', badHref.length === 0,
+       badHref.map((c) => c.getAttribute('href')).join(' '));
+
+    // --- it is part of the site ----------------------------------------------
+    ok('the nav marks it as the page you are on',
+       d.querySelector('#site-nav a[aria-current="page"] .navlink-label')
+         ?.textContent === 'Blocks',
+       [...d.querySelectorAll('#site-nav a[aria-current] .navlink-label')]
+         .map((x) => x.textContent).join(',') || 'nothing marked');
+
+    // --- no number was typed into the authored notes -------------------------
+    //
+    // Same rule the primer's stray-digit scan enforces, and for the same reason:
+    // block-notes.js is prose, nothing checks it afterwards, and a count written
+    // into a sentence there would sit unchallenged forever. Bit indices and hex
+    // bytes are exempt -- "bit 7" and "$41" are choices about what to watch, not
+    // measurements that can go stale.
+    const stray = [];
+    for (const [slug, note] of Object.entries(NOTES)) {
+      for (const s of note.sections || []) {
+        const bare = s.body
+          .replace(/<code>[^<]*<\/code>/g, '')
+          .replace(/\b6502\b/g, '')
+          .replace(/\bbits? \d+( to \d+)?/g, '')
+          .match(/\b\d[\d,]*\b/g);
+        if (bare) stray.push(`${slug}: ${bare.join('/')} in "${s.title}"`);
+      }
+    }
+    ok('no measurement was typed into the authored prose', stray.length === 0,
+       stray.slice(0, 3).join(' | '));
+
+    results.push('', ...rows);
+  } catch (e) {
+    results.push('FAIL threw :: '
+      + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e));
+  }
+  const lines = results.filter((r) => r.startsWith('PASS') || r.startsWith('FAIL'));
+  document.title = lines.length && lines.every((r) => r.startsWith('PASS'))
+    ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>

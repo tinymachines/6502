@@ -30,6 +30,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
+| Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
@@ -67,6 +68,12 @@ Known gaps, all deliberate:
   single bit because the eight are different circuits; a reader who wants the
   whole byte has to move the slider eight times. Showing all eight at once
   would need a different presentation, not a bigger list.
+- **Eleven of the twelve block pages have no written half yet.** Only the ALU
+  carries a reading and labs; the rest render their derived half, which is
+  complete and stands on its own. That is deliberate rather than unfinished --
+  the prose has to be written from `_block-probe.html` per block, and a
+  placeholder paragraph on eleven pages would be worse than eleven pages that
+  are honestly all measurement.
 - **The trace's preamble is fixed.** `LDA #$41 / LDX #$02 / LDY #$03 / CLC`,
   printed on the page. Tracing an instruction against a *chosen* starting state
   would need an editor and is not built.
@@ -128,6 +135,8 @@ cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
 # (primer.html and programs.html need no export of their own: the primer reads
 #  schematic/decode/timing.json, and the programs are assembled in the page)
 python3 tools/serve.py web 8777                    # http://localhost:8777/
+# (block.html needs no export of its own: it reads schematic.json and
+#  blocks.json, the two files the exploded view and the workbench already use)
 
 # The programs, checked without a browser: they assemble, they round-trip
 # through the disassembler's table, and the three that predate the rewrite are
@@ -199,6 +208,24 @@ $CHROME --window-size=390,844 --force-device-scale-factor=3 \
 ```
 
 Expect ~2–5 fps: that is software rasterisation, not the renderer.
+
+**`google-chrome` headless hangs on this box; use snap `chromium`.** As of
+Chrome 149 here, *any* headless page load with `--dump-dom` or `--screenshot`
+never returns, including on a trivial static page, and `timeout` kills it with
+no output. That reads exactly like a page that failed to boot, and it was
+mistaken for one: the control that settled it was running the same invocation
+against `/timing`, a page that had not been touched, and then against a
+three-line static file. `--version` still works, which makes it look installed
+and healthy. `/snap/bin/chromium` returns normally with the same flags and is
+what every invocation below should use. Its one limit is the confinement note
+further down: it cannot write a screenshot outside `$HOME`.
+
+**`pkill -f <pattern>` will kill this shell.** `pkill -f 'chrome.*headless'`
+matches the *full command line* of the bash process running it, which contains
+that text, so the shell dies before the pattern reaches anything else. It
+surfaces as an inexplicable exit code 144 and no output. The bracket trick does
+not help either, because the literal `--headless=new` elsewhere in the same
+command line still matches. List with `ps -eo pid,comm` and kill by pid.
 
 **Three checks that catch what screenshots alone do not:**
 
@@ -286,7 +313,10 @@ of the project, because a nav missing one link still looks exactly like a nav.
 Same reasoning as `version-footer.js` and `block-palette.js`.
 
 - **The order is a reading order, not a sitemap.** Start here → the chip drawn
-  four ways → one instruction at a time → the measured tables → about. A reader
+  four ways → one instruction at a time → the measured tables → about. `Blocks`
+  sits between Exploded and Schematic, which is where it belongs: the exploded
+  view is where a reader first meets the twelve, and the workbench is where they
+  end up once one block is not enough. A reader
   arriving does not know what a decode PLA is, so the tables come after the
   pages that explain them.
 - **Every entry carries one line of what it is**, and that line is the part a
@@ -335,7 +365,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Twenty-one harnesses plus two probes, all prefixed `_` and **never shipped** —
+Twenty-three harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -368,6 +398,8 @@ _exploded-test.html    # the exploded view: do the sliders actually move geometr
 _blueprint-test.html   # the block diagram: drawn, bound, and no label collisions
 _decode-test.html      # the decode table, re-checked against the documented ISA
 _timing-test.html      # cycle counts, re-checked against the published ones
+_block-test.html       # the block pages: the interface and the circuit, re-derived
+_block-probe.html      # what one block's signals do, per half-cycle, for its prose
 ```
 
 **A harness that samples state still in flight tests nothing.** `_handler-test`
@@ -1269,6 +1301,103 @@ generators on two bits only; the carry chain links each bit to its neighbour.
 measures the geometric regularity (bit index runs down the die); this measures
 the electrical irregularity. Drawing one slice and writing "×8" would have
 hidden precisely the parts that make the chip work.
+
+### The functional block pages (`block.html`, `block.js`, `block-notes.js`)
+
+One page per functional block: what crosses its boundary, the circuit inside it,
+and what it does when the chip runs. The exploded view says how big each block
+is; this is what happens when you climb inside one.
+
+**One document serves all twelve**, chosen by `?b=<slug>`, and with no `b` it is
+the directory of them. Twelve near-identical files would be twelve chances for
+one of them to drift, which is the failure this project keeps finding.
+
+- **The drawing engine is shared with the workbench** (`sch-draw.js`), extracted
+  from `schematic.js` the moment a second page wanted to draw the same circuit.
+  Same reasoning as `block-palette.js`, and the stake is higher: two pages
+  drawing an NMOS gate from two copies would eventually draw it two different
+  ways, and a reader comparing them would have no way to tell which was lying.
+  It takes a *cone* -- `{root, levels, elements, dir}` -- and knows nothing about
+  how those levels were arrived at, which is exactly why two pages that walk
+  differently can share it.
+- **The boundary is four relations, not one.** A gate input arriving from
+  outside is the block being told something; an inside signal read outside is the
+  block telling somebody else; a pass transistor joins two wires without either
+  causing the other; and a control line reaching in is the decoder operating
+  machinery it does not own. Collapsing those into "connections" would throw away
+  the only thing the panel is for. The four counts deliberately do not sum to a
+  total, because a signal can cross more than one way, and the page says so.
+- **Ports collapse by stem, and that is what makes the interface readable.**
+  `ab0..ab15` is one port sixteen wide, not sixteen ports. Measured: 196 ports
+  become 95 on the data bus, 149 become 71 on the address latches.
+  - **Unnamed nodes are not a bus.** Splitting trailing digits off `#1446` gives
+    a stem of `#`, so fifteen unrelated anonymous gate outputs collapsed into one
+    port labelled `# x15` -- a bus that does not exist. They group by the block
+    they come from instead, which is the only thing about them worth knowing.
+- **A functional block is not a closed circuit, and the first version of this
+  page proved it.** Stopping the walk at `inside` alone, almost every block came
+  out two or three signals deep. That is not a bug in the walk: a block's gates
+  are built out of the static logic the blocks are embedded in, which no block
+  claimed because growth refuses to cross a rail. Twenty of those gates make the
+  ALU's; 191 make the control pipeline's. The walk follows `blocks.rs`'s existing
+  attribution of each static gate to the block it drives.
+  - **It is a second category, not folded into membership**, because it is a
+    weaker claim. Affiliation is not location: a quarter of the attributions sit
+    more than 3000 die units from what they drive. There is no floorplan to get
+    wrong in a schematic, but the pills still say which they are -- member,
+    attributed gate, or port -- and the caption counts the three separately.
+- **Both node-indexed files are read, and checked rather than trusted.** The
+  circuit needs `schematic.json` and the attribution needs `blocks.json`'s
+  `nodeDrives`, which is the coupling this file warns about elsewhere. So the
+  page compares all 1725 entries at boot, masked, because `blocks.json` carries
+  `was_seeded` in bit 7 and `schematic.json` does not. A verified coupling is a
+  stronger position than avoiding the second file would have been.
+- **The default signal is measured, and global fan-out is the wrong measure.**
+  It picked signals whose connections nearly all leave, so a page opened one step
+  deep against a wall of ports and the timing chain arrived showing a single
+  signal. What makes a good place to stand is how much of the block you can see
+  from there, which is a count of the elements *filed here* that touch it.
+- **`bounds` is `(xmin, xmax, ymin, ymax)`, not `(x0, y0, x1, y1)`.** Read the
+  wrong way round the ALU's extent came out as `-1402 x 759`, and only the minus
+  sign said so -- on a block where both differences happened to be positive it
+  would have been wrong and silent. Pinned in `_block-test.html` against
+  `blocks.json`, and the sign is asserted separately.
+- **The authored half is `block-notes.js` and is labelled as authored.** Slugs,
+  a reading of what the block does, and the labs. Kept small and separate for the
+  same reason `STEMS` is, and deliberately not given the `measured` tag: mixing a
+  person's reading in with the measurements launders one into the other. The
+  stray-digit scan from the primer applies to it, so a count cannot be typed into
+  a sentence there and sit unchallenged.
+- **A block with no notes still has a page.** The derived half stands on its own
+  and the authored sections are simply not rendered -- a heading over an apology
+  is worse than no heading. So adding a block to `blocks.rs` cannot break this
+  file, and this file being incomplete cannot break a page.
+- **A lab is offsets from an instruction's own opcode fetch**, found by running
+  until `sync && lastFetchAddr == at`, never a remembered half-cycle number:
+  reset timing moving would shift every step by the same amount and the page
+  would go on looking exactly as convincing. The prose is written from
+  `_block-probe.html`, and `_block-test.html` re-checks it against the engine.
+- **A lab's checks are functions, not expression strings.** The CSP is
+  `script-src 'self'` with no `'unsafe-eval'`, so a string would need a parser
+  written in the page, and a parser there is a second thing that can be wrong
+  about arithmetic.
+- **`_block-test.html` re-derives the interface from `schematic.json` itself**
+  and compares, rather than asserting that some ports appeared -- which would
+  pass on a boundary computed the wrong way round. It drives all twelve, because
+  the point of one document serving twelve is that the twelfth cannot quietly
+  differ from the first. All three implementations of the port counts (the
+  throwaway measurement script, the harness, and the page) agree.
+- `deploy.sh` refuses to publish if a functional block has no slug or two share
+  one. Renaming a block in `blocks.rs` otherwise yields a well-formed
+  `blocks.json` and a menu entry pointing at nothing.
+
+**What the ALU page found, and it is the argument for the whole section.** The
+control lines gating switches into that block come out as five ways in
+(`SBADD`, `DBADD`, `nDBADD`, `ADLADD`, `0ADD`), five functions (`ANDS`, `EORS`,
+`ORS`, `SUMS`, `SRS`) and three ways out (`ADDSB06`, `ADDSB7`, `ADDADL`), each
+gating exactly eight switches, one per bit -- except the output pair, which
+splits 7 and 1, and that split is the shifter. None of that was authored: it is
+what `schematic.json` says when you ask which controls reach into block 8.
 
 ### The Blueprint (`blueprint.html`, `blueprint.js`, `blueprint.rs`)
 
