@@ -38,7 +38,10 @@ const state = {
   switchesBy: new Map(),  // node -> [switch] it opens
   dir: 'back',            // 'back' = what makes it, 'fwd' = what it drives
   root: null,
-  depth: 3,
+  // One level. The walk merges as you follow signals, so arriving deep means
+  // arriving at a wall of gates nobody asked for; starting at one level and
+  // clicking outward is how the bench is actually used.
+  depth: 1,
   // Lock the chip's own I/O to the far end of the drawing and show the chain
   // between. Off by default: it adds eight or so elements, which is a lot to
   // arrive to uninvited.
@@ -1324,19 +1327,32 @@ const PANELS = {
     }
     const NAMES = { feedsIn: 'Told', drivesOut: 'Tells', joined: 'Joined',
                     control: 'Operated by' };
-    const parts = [`<p class="sp-sub">${b.name}: the whole block is drawn.
+    // Pinned to the top of the drawer rather than scrolling away with the
+    // pills, because a block like the data bus has 174 of them and a filter you
+    // have to scroll back up to reach is a filter nobody uses.
+    const parts = [`<div class="sp-portfilter">
+        <input type="search" id="sp-port-filter" placeholder="filter ports"
+               aria-label="Filter ports">
+        <span class="mono" id="sp-port-count"></span>
+      </div>
+      <p class="sp-sub">${b.name}: the whole block is drawn.
       Switch a port on to bring that wire in.</p>`];
     for (const { key, stems } of b.listed) {
       if (!stems.length) continue;
-      parts.push(`<h4 class="sp-porth">${NAMES[key]}
-        <span class="mono">${stems.length}</span></h4><div class="sp-ports">`
+      // Grouped in a wrapper so a heading can be hidden with its pills: a
+      // heading left standing over nothing reads as a group that has been
+      // emptied rather than one that was filtered out.
+      parts.push(`<div class="sp-portgroup" data-group="${key}">
+        <h4 class="sp-porth">${NAMES[key]}
+          <span class="mono">${stems.length}</span></h4><div class="sp-ports">`
         + stems.map((s, i) =>
           `<button type="button" class="sp-port" data-port="${key}:${i}"
+             data-find="${(s.stem + ' ' + s.nodes.map(nameOf).join(' ')).toLowerCase()}"
              title="${s.nodes.map(nameOf).sort().join(' ')}"
            ><i style="background:${blockCss(s.block)}"></i>${s.stem}`
           + (s.nodes.length > 1 ? `<span class="mono">×${s.nodes.length}</span>` : '')
           + '</button>').join('')
-        + '</div>');
+        + '</div></div>');
     }
     parts.push(`<p class="sp-note">A signal can cross the boundary more than one
       way, so the same wire has a pill under two headings. Switching one on
@@ -1350,9 +1366,45 @@ const PANELS = {
         if (b.lit.has(pk)) b.lit.delete(pk); else b.lit.add(pk);
         relitBlock();
         render();
+        // Repaint on the action, not on the next frame. This is the fourth
+        // time this exact bug has appeared here: the pill's state is applied by
+        // the frame loop, and animation frames are throttled to nearly zero in
+        // an iframe, so the wire appeared on the bench while the switch that
+        // put it there still looked off. It is a real responsiveness bug
+        // wherever frames are scarce, not only in a harness.
+        if (state.panel) state.panel();
         saveConfig();
       });
     }
+
+    /**
+     * Show only the pills matching the filter, and hide a group left with none.
+     *
+     * Matched against the stem AND every wire name behind it, so typing `pcl`
+     * finds the `pcl` bus and typing `dpc39` finds the pill whose bus contains
+     * it. A pill that is switched ON always stays visible whatever the filter
+     * says: hiding something the reader has turned on would make the drawing
+     * contain a wire with no way to reach the switch that put it there.
+     */
+    const filterInput = host.querySelector('#sp-port-filter');
+    const countEl = host.querySelector('#sp-port-count');
+    const applyFilter = () => {
+      const q = filterInput.value.trim().toLowerCase();
+      let shown = 0, total = 0;
+      for (const g of host.querySelectorAll('.sp-portgroup')) {
+        let any = 0;
+        for (const btn of g.querySelectorAll('.sp-port')) {
+          total += 1;
+          const hit = !q || btn.dataset.find.includes(q) || b.lit.has(btn.dataset.port);
+          btn.hidden = !hit;
+          if (hit) { any += 1; shown += 1; }
+        }
+        g.hidden = any === 0;
+      }
+      countEl.textContent = q ? `${shown} of ${total}` : `${total}`;
+    };
+    filterInput.addEventListener('input', applyFilter);
+    applyFilter();
     // Built once, painted every frame -- and `shown` is a fact about what the
     // drawing placed, so it is read from there rather than from the toggles.
     let last = '';
@@ -1369,6 +1421,9 @@ const PANELS = {
           !on && nodes.length > 0 && nodes.every((n) => b.drawn.has(n)));
         btn.setAttribute('aria-pressed', String(on));
       }
+      // A switched-on pill is exempt from the filter, so the visible set has to
+      // be recomputed when the lit set changes and not only when it is typed in.
+      applyFilter();
     };
   },
 
@@ -1563,12 +1618,28 @@ function setTab(name) {
 }
 
 /** Open or shut the drawer, leaving the strip. */
+/**
+ * Publish the strip's height so the toggles drawer can be capped to it.
+ *
+ * Measured rather than declared, for the same reason `site-nav.js` measures the
+ * header: CSS has no way to say "no taller than my sibling", and the strip is
+ * not a fixed height -- the Ports icon appears only once a block is on the
+ * bench, which makes it taller *after* boot. Observing the box is the only way
+ * to be right whenever that changes.
+ */
+function measureStrip() {
+  const strip = $('sp-strip');
+  const h = strip.getBoundingClientRect().height;
+  if (h > 0) $('solo-palette').style.setProperty('--sp-strip-h', `${Math.round(h)}px`);
+}
+
 function setDrawer(on) {
   state.drawer = !!on;
   $('solo-palette').dataset.drawer = state.drawer ? 'open' : 'shut';
   $('sp-collapse').setAttribute('aria-expanded', state.drawer ? 'true' : 'false');
   setTab(state.tab);
   saveConfig();
+  measureStrip();
   // Opening changes the panel's width and height, so where it is allowed to be
   // changes with it. Without this, opening a drawer near an edge puts half of
   // it outside the stage.
@@ -2125,7 +2196,7 @@ async function boot() {
       + `${c.absorbed} of ${c.transistors} transistors inside a symbol · ${c.unresolved} unresolved`;
 
     const q = new URLSearchParams(location.search);
-    state.depth = Math.max(1, Math.min(6, Number(q.get('depth')) || 3));
+    state.depth = Math.max(1, Math.min(6, Number(q.get('depth')) || 1));
     state.dir = q.get('dir') === 'fwd' ? 'fwd' : 'back';
     $('sch-depth').value = String(state.depth);
     $('sch-depth-val').textContent = String(state.depth);
@@ -2261,6 +2332,14 @@ async function boot() {
     // screen, with everything else out of the way. Clicking a signal re-roots
     // and stays there, which is how a reader walks the islands.
     const console_ = document.querySelector('.console');
+    // The strip grows after boot: the Ports icon is revealed only once a block
+    // has loaded. Measuring on open alone would cache the height it had before
+    // that, which is the same trap the nav's disclosure panel hit.
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(measureStrip).observe($('sp-strip'));
+    }
+    window.addEventListener('resize', measureStrip);
+
     setupFullscreen(console_, $('sch-fullscreen'), () => {
       const on = console_.classList.contains('immersive');
       // Read the saved configuration *once*, up front, and write nothing until

@@ -375,7 +375,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Twenty-five harnesses plus two probes, all prefixed `_` and **never shipped** —
+Twenty-six harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -415,6 +415,9 @@ _talk-test.html        # the talk page: every claim re-derived from the JSON by 
 _designer-test.html    # the designer page: the clock generator re-walked by the
                        # harness, and the walk re-run WITHOUT its boundary clause
                        # to prove the clause is load-bearing
+_ports-test.html       # the block bench's Ports drawer: the filter filters, a
+                       # switched-on pill survives a filter that excludes it,
+                       # and the drawer is capped to the strip and SCROLLS
 ```
 
 **A harness that samples state still in flight tests nothing.** `_handler-test`
@@ -1586,6 +1589,54 @@ bench opens showing what the block page was showing.
   `block-notes.js` *and* a `blocks.json` fetch. Miss any and the hashed bundle
   404s at runtime while `web/` goes on working perfectly. Boot `dist/` before
   believing a build; this is the second time in one sitting.
+
+#### Every levels slider starts at 1
+
+`sch-depth` and the study view's copy of it defaulted to three, and `state.depth`
+with them. The walk *merges* as you follow signals, so arriving at three levels
+means arriving at a wall of gates nobody asked for; starting at one and clicking
+outward is how the bench is actually used. `bk-depth` was already one.
+
+- **`_schematic-test.html` went red on this, correctly.** Its "a dense cone
+  still draws every element" assertion leaned on the page defaulting to three,
+  and reported two elements for a signal with forty switches on it. It sets the
+  depth itself now: a test about density that depends on somebody else's default
+  is testing the default. Fixed, it reports 56.
+
+#### The Ports drawer: capped, scrolling, and filtered
+
+The data bus has 174 ports collapsing to 40 pills, which grew the drawer past
+the console it belongs to. It is now capped to the height of the strip beside
+it, scrolls inside that, and carries a filter pinned to its top.
+
+- **`--sp-strip-h` is measured, because CSS cannot say "no taller than my
+  sibling".** Same reasoning as `site-nav.js` measuring the header, and it needs
+  a `ResizeObserver` for the same reason too: the Ports icon is revealed only
+  once a block has loaded, so the strip gets taller *after* boot and measuring
+  on open alone caches the wrong height.
+- **`max-height: min(100%, var(--sp-strip-h))` clamps nothing, and it is not
+  obvious.** The percentage resolves against the palette, whose height is `auto`
+  and therefore set *by this very drawer* -- a circular reference that leaves
+  the percentage indefinite. It applied cleanly in the computed style and the
+  drawer stayed 629px against a 479px strip. Dropping the `100%` term fixes it;
+  the palette already caps itself against the stage.
+- **The filter matches the stem AND every wire name behind it**, so `pcl` finds
+  the bus and `dpc39` finds the pill whose bus contains it. A group with no
+  survivors is hidden with its heading: a heading over nothing reads as a group
+  that was emptied rather than one that was filtered out.
+- **A switched-on pill is exempt from the filter.** Hiding one would leave a
+  wire on the bench with no way to reach the switch that put it there.
+- **The repaint-on-action bug, for the fourth time.** The pill's `on` class was
+  applied by the frame loop, and animation frames are throttled to nearly zero
+  in an iframe, so the wire appeared on the bench while its switch still looked
+  off. `state.panel()` is called from the click handler now. It is a real
+  responsiveness bug wherever frames are scarce, not only in a harness.
+- **Two of `_ports-test.html`'s assertions were worthless as first written.**
+  They measured the drawer *after* the filter had cut the list to one pill, so
+  it was 282px against a 479px strip with nothing to scroll, and both passed
+  without exercising the cap they exist for. Restoring the full list first is
+  what found the `min(100%, …)` problem above. **Measure the thing under the
+  condition it is supposed to hold under.**
 
 #### `web/block.js` contained a raw NUL byte, and grep silently skipped it
 

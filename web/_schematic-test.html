@@ -151,7 +151,18 @@ try {
   ok('no two parts overlap', hits.length === 0, `${hits.length}: ${hits.slice(0, 3).join(' | ')}`);
 
   // A dense signal is the case that used to pile a dozen switches on one spot.
+  //
+  // The depth is set here rather than inherited from the page. This assertion
+  // is about the LAYOUT under density, so it has to make the cone dense itself:
+  // it used to lean on the page defaulting to three levels, and went red the
+  // day that default became one, reporting two elements for a signal with
+  // forty switches on it. A test about density that depends on somebody else's
+  // default is testing the default.
   const busy = new URL(location.href);
+  const depthSlider = document.getElementById('sch-depth');
+  depthSlider.value = '4';
+  depthSlider.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(200);
   document.getElementById('sch-signal').value =
     String([...new Map(data.names.map((n, i) => [n, i])).entries()].find(([n]) => n === 'a0')[1]);
   document.getElementById('sch-signal').dispatchEvent(new Event('change'));

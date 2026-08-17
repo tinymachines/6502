@@ -1,0 +1,111 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The block bench's Ports drawer: does the filter actually filter, does a pill
+  the reader switched ON survive a filter that excludes it, and is the drawer
+  capped to the strip beside it and scrolling rather than growing.
+
+  The last two assertions are the reason this file is worth keeping. Written the
+  obvious way they measured AFTER the filter had cut the list to one pill, so
+  the drawer was 282px against a 479px strip and the panel had nothing to
+  scroll: both passed without ever exercising the cap they exist for. They now
+  restore the full list first, and asserting the cap that way immediately found
+  that `min(100%, var(--sp-strip-h))` clamps nothing, because the percentage
+  resolves against a parent whose height this drawer sets.
+
+    http://localhost:8777/_ports-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>html,body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1400px;height:900px;border:0;display:block}pre{padding:1rem}</style>
+</head><body>
+<iframe id="f" src="schematic?block=data-bus&solo=1"></iframe>
+<script type="module">
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const out = [];
+const ok = (n, c, d) => out.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const w = f.contentWindow;
+  for (let i = 0; i < 400 && d.getElementById('sch-main').hidden; i++) await sleep(50);
+  await sleep(900);
+
+  const pills = () => [...d.querySelectorAll('.sp-port')];
+  const visible = () => pills().filter((p) => !p.hidden);
+  const input = d.getElementById('sp-port-filter');
+  const count = d.getElementById('sp-port-count');
+  ok('the drawer opened on the ports', !!input, input ? 'yes' : 'no filter box');
+
+  const all = pills().length;
+  ok('every port is listed to begin with', visible().length === all, `${all} pills`);
+
+  input.value = 'idb';
+  input.dispatchEvent(new w.Event('input', { bubbles: true }));
+  await sleep(150);
+  const hits = visible();
+  ok('typing narrows the list', hits.length > 0 && hits.length < all,
+     `${hits.length} of ${all}, count reads "${count.textContent}"`);
+  ok('and every survivor matches what was typed',
+     hits.every((p) => p.dataset.find.includes('idb')),
+     hits.slice(0, 4).map((p) => p.textContent.trim()).join(' | '));
+  const emptyGroups = [...d.querySelectorAll('.sp-portgroup')].filter((g) =>
+    !g.hidden && g.querySelectorAll('.sp-port:not([hidden])').length === 0);
+  ok('no heading is left standing over nothing', emptyGroups.length === 0,
+     emptyGroups.map((g) => g.dataset.group).join(','));
+
+  // A switched-on pill must survive a filter that excludes it, or the drawing
+  // would hold a wire with no way to reach the switch that put it there.
+  input.value = '';
+  input.dispatchEvent(new w.Event('input', { bubbles: true }));
+  await sleep(120);
+  const target = pills().find((p) => !p.dataset.find.includes('zzz')
+    && !p.classList.contains('shown'));
+  target.click();
+  await sleep(250);
+  input.value = 'zzzznope';
+  input.dispatchEvent(new w.Event('input', { bubbles: true }));
+  await sleep(150);
+  ok('a switched-on port survives a filter that excludes it',
+     !target.hidden && target.classList.contains('on'),
+     `visible=${!target.hidden} on=${target.classList.contains('on')}`);
+  ok('and nothing else does', visible().length === 1, `${visible().length} visible`);
+
+  // Capped to the strip beside it, and scrolling rather than growing.
+  //
+  // Measured with the FULL list showing. The first version of this ran while
+  // the filter still had one pill left, so the drawer was 282px against a 479px
+  // strip and the panel had nothing to scroll: both assertions passed without
+  // ever exercising the cap they exist for.
+  target.click();                       // switch it back off
+  input.value = '';
+  input.dispatchEvent(new w.Event('input', { bubbles: true }));
+  await sleep(250);
+  ok('the full list is back for the measurement', visible().length === all,
+     `${visible().length} of ${all}`);
+
+  const strip = d.getElementById('sp-strip');
+  const drawer = d.querySelector('.sp-drawer');
+  const sh = strip.getBoundingClientRect().height;
+  const dh = drawer.getBoundingClientRect().height;
+  ok('the drawer is no taller than the strip', dh <= sh + 1,
+     `drawer ${Math.round(dh)}px, strip ${Math.round(sh)}px`);
+  const panel = d.getElementById('sp-panel');
+  ok('and its contents scroll inside it rather than growing it',
+     panel.scrollHeight > panel.clientHeight + 1,
+     `scrollHeight ${panel.scrollHeight}, clientHeight ${panel.clientHeight}`);
+  const filt = d.querySelector('.sp-portfilter');
+  ok('and the filter stays pinned while they scroll',
+     w.getComputedStyle(filt).position === 'sticky',
+     w.getComputedStyle(filt).position);
+
+  const bad = out.filter((r) => r.startsWith('FAIL'));
+  document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = out.join('\n');
+  document.body.appendChild(pre);
+});
+</script>
+</body></html>
