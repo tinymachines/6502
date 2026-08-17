@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>What the designer remembers</title>
+<meta name="description" content="Bill Mensch co-designed the 6502 and described what went into it forty years later. His account of the on-chip clock generator, the decimal correction and the unused opcodes, with each claim re-asked of the silicon.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">What the designer remembers</p>
+    <h1>One of the people who drew this chip, checked against it.</h1>
+    <p class="lede">
+      Every other page here reads the die. This one reads a person. Bill Mensch
+      co-designed the 6502 and described, four decades later, what went into it
+      and why. Some of what he says can be asked of the silicon directly, so it
+      is, one claim at a time. The most interesting answer is not agreement.
+    </p>
+    <div class="statbar" id="dz-stats"></div>
+  </section>
+
+  <div id="dz-boot" class="bp-boot wrap"><p id="dz-status">Loading the chip…</p></div>
+
+  <div id="dz-main" hidden>
+
+    <section class="wrap sec bp-prose" id="interview" data-history>
+      <div class="sec-head">
+        <p class="eyebrow">Written, not measured</p>
+        <h2>The interview</h2>
+      </div>
+      <p>
+        In August 2015, Kevin Savetz recorded an interview with Bill Mensch for
+        ANTIC, a podcast about the Atari 8-bit computers. Mensch is one of the
+        four people named as inventors of the 6502, alongside Chuck Peddle, Rod
+        Orgill and Wil Mathys. He had come from Motorola, where he had worked on
+        the 6800 and its peripheral chips, as part of the group that left to
+        build a cheaper processor at MOS Technology. He has spent the years since
+        running the company that still sells the design.
+      </p>
+      <p>
+        This is a different kind of source from the talk on the other page, and
+        the difference matters for how it is read. A reverse engineer describes
+        an artefact, and if the description is wrong the artefact will say so. A
+        designer describes intent, from memory, about decisions taken forty years
+        earlier. Intent cannot be checked at all. What can be checked is the
+        handful of places where he attaches a number or a structure to it.
+      </p>
+      <p>
+        So this page does not attempt to grade him. It asks the small number of
+        his statements that are answerable, and the answers turn out to divide
+        cleanly: the structural claims are right, and the one quantity is not.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="clock" data-history>
+      <div class="sec-head">
+        <p class="eyebrow">Written, not measured</p>
+        <h2>The clock that made it a 6502</h2>
+      </div>
+      <p>
+        The story he tells is about the difference between two part numbers. The
+        6501 was built to drop into a 6800 socket. The 6800 took its two clock
+        phases from a separate generator chip, which Motorola sold alongside it,
+        and Mensch's argument was that this was a liability rather than a
+        feature: the generator was manufactured on a different process from the
+        processor it drove, so a slow generator could be paired with a fast part
+        and the two phases could overlap. Overlapping phases in a chip that
+        stores its state on the wires between them is not a performance problem,
+        it is a wrong answer.
+      </p>
+      <p>
+        His proposal was to build the generator into the processor. He recalls
+        arguing that it would cost nothing worth counting: it would not make the
+        die bigger, because the transistors could be hidden under the metal that
+        was already routed over that area, and it would not change the price. The
+        part with the generator on it was the 6502. Motorola then sued over the
+        socket-compatible 6501 and it stopped being sold, which settled a bet he
+        had made with Rod Orgill about which of the two would sell more.
+      </p>
+      <p>
+        Two things in that are answerable. He says the change was worth about a
+        dozen transistors, and he says the point of it was to guarantee the
+        phases never overlap. The second is a claim about the shape of a circuit,
+        and this die has that circuit on it.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="checked">
+      <div class="sec-head">
+        <p class="eyebrow">Measured, not written</p>
+        <h2>The claims, re-asked of the chip</h2>
+      </div>
+      <p class="lede">
+        Each row pairs what he said with what this simulation answers when the
+        same question is put to it. Nothing below is written down as a verdict:
+        every row carries a function that re-derives the answer from the
+        published measurements, and the verdict is the comparison. If the chip
+        stops agreeing, the page changes on its own.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">verdicts · computed</span>
+          <span class="bar-note" id="dz-tally"></span>
+        </div>
+        <div class="claim-list" id="dz-checks"></div>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="circuit">
+      <div class="sec-head">
+        <p class="eyebrow">Derived from the switch network</p>
+        <h2>What the clock generator actually is</h2>
+      </div>
+      <p>
+        Nothing on this site had drawn this circuit before, so it is worth
+        setting out what the walk finds. Starting at the <b class="mono">clk0</b>
+        pad and following the wiring forward, the generator is
+        <b class="mono" data-fact="clockNodes">…</b> nodes carrying
+        <b class="mono" data-fact="clockTransistors">…</b> transistors, which is
+        <b class="mono" data-fact="clockShare">…</b>% of the chip.
+      </p>
+      <p>
+        It is two symmetric halves. The input pad drives a pair of inverters, and
+        each of those feeds a chain that ends in one of the four clocks: two used
+        inside the chip, and two driven back out of the package on pins so the
+        rest of the system can be built around them. Most of the transistor count
+        is not logic at all. Only
+        <b class="mono" data-fact="clockLogic">…</b> of them decide anything; the
+        remaining <b class="mono" data-fact="clockDrivers">…</b> are the four
+        output stages, wide banks of transistors in parallel that exist to shift
+        the load. Driving a clock is mostly a question of strength: the internal
+        one alone opens <b class="mono" data-fact="cclkSwitches">…</b> switches
+        across the chip.
+      </p>
+      <p>
+        The interlock is the part worth looking at. There are exactly
+        <b class="mono" data-fact="interlock">…</b> transistors that carry a
+        finished clock back into the generator, and each lands in one of the two
+        halves. That feedback is the non-overlap: each phase is held off until
+        the other has gone. The guarantee Mensch describes as the reason for the
+        entire change is those two devices, and it is a guarantee about the chip
+        rather than about the board it is soldered to, which is the whole point
+        of moving it inside.
+      </p>
+      <p>
+        The count is derived by a rule rather than a list, which is what makes it
+        a measurement: walk forward from the pad, and include the four clocks
+        without expanding them. Expanding them is not an option, incidentally,
+        which is why the rule has to say so. The chip's own boundary is the
+        answer to where the generator stops.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="memory">
+      <div class="sec-head">
+        <p class="eyebrow">What the difference is worth</p>
+        <h2>Being wrong about the number and right about the argument</h2>
+      </div>
+      <p>
+        The one row that differs is worth more than the four that agree, and it
+        is not a gotcha. A designer recalling a change from four decades earlier
+        is off by roughly a factor of two on the transistor count, and is exactly
+        right about everything the count was being used to support.
+      </p>
+      <p>
+        His argument was never really that the number was twelve. It was that the
+        cost was negligible, that it would not grow the die, and that it bought a
+        guarantee no external part could offer. All three survive the
+        measurement: the circuit is
+        <b class="mono" data-fact="clockShare">…</b>% of the chip, and the
+        guarantee is there in the silicon as the feedback that makes the phases
+        exclusive. What is off is the figure attached to the argument, which is
+        the part a person is least likely to carry accurately and the only part
+        anybody could check.
+      </p>
+      <p>
+        There is also a limit on this page that no amount of care removes. There
+        is no 6501 on this die. Nothing here can measure a difference between two
+        chips, only the size of the circuit on the one that survives, so the row
+        is worded as that and its verdict means only that the circuit is larger
+        than the recollection. If the two parts differed in some other way as
+        well, this page would have no way of knowing.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="credit-here">
+      <div class="sec-head">
+        <p class="eyebrow">Credit</p>
+        <h2>Sources</h2>
+      </div>
+      <p>
+        The interview is Kevin Savetz's, recorded for ANTIC, and the recollections
+        are Bill Mensch's. This page is our own reading of it and our own
+        measurements against it. Where the two disagree the disagreement is on
+        the page rather than smoothed away, and where his account cannot be
+        checked at all we have said so rather than implying otherwise.
+      </p>
+      <p>
+        The die trace is by Greg James, Brian Silverman, Barry Silverman and Ed
+        Spittles, and is licensed CC BY-NC-SA 3.0. Those terms carry to
+        everything on this site.
+      </p>
+      <p class="tk-links">
+        <a class="btn" href="talk">The other account</a>
+        <a class="btn btn-ghost" href="archive/">The visual6502 archive</a>
+        <a class="btn btn-ghost" href="./#credit">Credit and licence</a>
+      </p>
+    </section>
+
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="designer.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

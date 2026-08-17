@@ -112,11 +112,11 @@ f.addEventListener('load', async () => {
     // card. Requiring every one of them to appear is what makes this stronger
     // than checking a count: a card that rendered the right total from the wrong
     // opcodes would pass a count and fail this.
-    const card = (re) => [...d.querySelectorAll('.tk-check')].find((c) => re.test(c.textContent));
+    const card = (re) => [...d.querySelectorAll('.claim')].find((c) => re.test(c.textContent));
     const laxCard = card(/LAX/);
     ok('the page names every opcode in the overlap',
        !!laxCard && both.every((o) => laxCard.textContent.includes(hex(o.op))),
-       laxCard ? laxCard.querySelector('.tk-got').textContent.trim() : 'no card');
+       laxCard ? laxCard.querySelector('.claim-got').textContent.trim() : 'no card');
 
     // The mechanism, not just the count: the overlap must be the opcodes whose
     // low two bits are both set, and each row must require one of those bits.
@@ -136,7 +136,7 @@ f.addEventListener('load', async () => {
     ok('and the page states those same two bits',
        !!laxCard && new RegExp(`bit ${lowReq(iLda)}\\b`).test(laxCard.textContent)
        && new RegExp(`bit ${lowReq(iLdx)}\\b`).test(laxCard.textContent),
-       laxCard ? laxCard.querySelector('.tk-note').textContent.trim().slice(0, 70) : 'no card');
+       laxCard ? laxCard.querySelector('.claim-note').textContent.trim().slice(0, 70) : 'no card');
 
     // --- the other derived claims -------------------------------------------
     const jams = tim.opcodes.filter((o) => o.jam);
@@ -146,7 +146,7 @@ f.addEventListener('load', async () => {
        jams.map((o) => hex(o.op)).join(' '));
     ok('and the page names every one of them',
        !!jamCard && jams.every((o) => jamCard.textContent.includes(hex(o.op))),
-       jamCard ? jamCard.querySelector('.tk-got').textContent.trim().slice(0, 70) : 'no card');
+       jamCard ? jamCard.querySelector('.claim-got').textContent.trim().slice(0, 70) : 'no card');
 
     const buses = bp.units.filter((u) => u.kind === 'bus').map((u) => u.name);
     ok('the two internal data buses are both derived',
@@ -164,15 +164,15 @@ f.addEventListener('load', async () => {
        `${lowRows} of ${dec.rows.length} rows`);
 
     // --- the verdicts are computed, and one of them differs -------------------
-    const cards = [...d.querySelectorAll('.tk-check')];
+    const cards = [...d.querySelectorAll('.claim')];
     ok('every claim rendered a card', cards.length >= 6, `${cards.length} cards`);
 
-    const differs = cards.filter((c) => c.classList.contains('tk-check-differs'));
+    const differs = cards.filter((c) => c.classList.contains('claim-differs'));
     ok('exactly one claim differs', differs.length === 1,
-       differs.map((c) => c.querySelector('.tk-says').textContent.trim().slice(0, 40)).join(' | '));
+       differs.map((c) => c.querySelector('.claim-says').textContent.trim().slice(0, 40)).join(' | '));
     ok('and it is the one about the PLA ignoring the low opcode bits',
        differs.length === 1 && /lowest two/.test(differs[0].textContent),
-       differs[0] ? differs[0].querySelector('.tk-says').textContent.trim().slice(0, 60) : 'none');
+       differs[0] ? differs[0].querySelector('.claim-says').textContent.trim().slice(0, 60) : 'none');
 
     // A verdict that is written rather than computed would still say "agrees"
     // if the comparison threw. Check the tally against the cards themselves.

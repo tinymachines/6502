@@ -78,6 +78,8 @@ export const MENU = [
         hint: 'two oracles, either alone insufficient' },
       { label: 'The talk', page: 'talk',
         hint: 'how the die was opened and traced, re-checked here' },
+      { label: 'The designer', page: 'designer',
+        hint: 'what one of its authors recalls, asked of the silicon' },
       { label: 'Credit', page: '', hash: 'credit', marks: false,
         hint: 'who traced the die, and the licence' },
       { label: 'Archive', href: 'archive/',

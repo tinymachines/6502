@@ -187,6 +187,9 @@ def main() -> None:
     b.copy_hashed("site-nav.js")
     b.copy_hashed("fullscreen.js")
     b.copy_hashed("block-palette.js")
+    # The claim card, shared by talk.html and designer.html. A leaf: it imports
+    # nothing, so it only has to be emitted before the two pages that take it.
+    b.copy_hashed("claim-table.js")
     b.copy_hashed("block-notes.js")
     b.copy_hashed("chip-controls.js")
     b.copy_hashed("blocks.json")
@@ -434,13 +437,28 @@ def main() -> None:
 
     # 3k. talk.js: the page about where the die data came from. It reads every
     #     published file the other pages read, because its job is to re-ask the
-    #     talk's claims of the same measurements rather than of a copy. It
-    #     imports nothing: there is no shared module it needs, only the JSON.
+    #     talk's claims of the same measurements rather than of a copy, and it
+    #     takes the claim card from claim-table.js so that the two pages using
+    #     that component cannot render a verdict two different ways.
     tk = b.read("talk.js").decode()
     for original in ["schematic.json", "decode.json", "timing.json",
                      "blocks.json", "blueprint.json"]:
         tk = replace_once(tk, f"'{original}'", f"'{b.ref(original)}'", where="talk.js")
+    tk = replace_once(tk, "'./claim-table.js'", f"'./{b.ref('claim-table.js')}'",
+                      where="talk.js")
     b.emit("talk.js", tk.encode())
+
+    # 3l. designer.js: the same arrangement, checking one of the chip's authors
+    #     rather than one of its readers. It does not read blueprint.json, so the
+    #     list here is its own rather than a copy of the one above: a file it
+    #     does not fetch would fail replace_once, which is the point of that
+    #     helper.
+    dz = b.read("designer.js").decode()
+    for original in ["schematic.json", "decode.json", "timing.json", "blocks.json"]:
+        dz = replace_once(dz, f"'{original}'", f"'{b.ref(original)}'", where="designer.js")
+    dz = replace_once(dz, "'./claim-table.js'", f"'./{b.ref('claim-table.js')}'",
+                      where="designer.js")
+    b.emit("designer.js", dz.encode())
 
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
@@ -522,6 +540,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         tkh = replace_once(tkh, f'"{original}"', f'"{b.ref(original)}"', where="talk.html")
     b.emit("talk.html", tkh.encode(), hashed=False)
+
+    dzh = b.read("designer.html").decode()
+    for original in ["style.css", "designer.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        dzh = replace_once(dzh, f'"{original}"', f'"{b.ref(original)}"', where="designer.html")
+    b.emit("designer.html", dzh.encode(), hashed=False)
 
     timh = b.read("timing.html").decode()
     for original in ["style.css", "timing.js", "version-footer.js", "site-menu.js",

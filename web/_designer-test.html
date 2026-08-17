@@ -1,0 +1,244 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  Same two-register shape as _talk-test.html, and the same division of labour.
+  The history sections cannot be derived and cannot go stale, so what they get
+  is the stray-digit scan with `[data-history]` exempt. The verification table
+  is re-derived here STRAIGHT OUT OF THE JSON, with this file's own code, rather
+  than by importing designer.js: a harness that called the page's own functions
+  would be asking the page whether the page is right.
+
+  The clock generator is the reason this file exists. It is a new derived figure
+  that no other page publishes, and it rests on a walk with a boundary clause --
+  include the four clocks, never expand them. So this file re-runs the walk
+  itself, and then, because an invariant nothing can violate is not an
+  invariant, it re-runs it WITHOUT the boundary clause and asserts the result
+  blows up. That is what makes the clause load-bearing rather than decorative.
+
+    http://localhost:8777/_designer-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1100px;height:700px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="designer.html"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, dd) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${dd ? ' :: ' + dd : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const hex = (n) => '$' + n.toString(16).toUpperCase().padStart(2, '0');
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 200 && $('dz-main').hidden; i++) await sleep(50);
+    ok('the page booted', !$('dz-main').hidden, $('dz-status').textContent);
+
+    const [sch, dec, tim] = await Promise.all(
+      ['schematic.json', 'decode.json', 'timing.json'].map((x) => fetch(x).then((r) => r.json())));
+
+    const idx = new Map();
+    sch.names.forEach((n, i) => { if (n) idx.set(n, i); });
+    const gates = new Map(sch.gates.map((g) => [g[0], g]));
+    const nm = (i) => sch.names[i] || `#${i}`;
+
+    // --- every slot filled ---------------------------------------------------
+    const slots = [...d.querySelectorAll('[data-fact]')];
+    ok('the page has facts to fill', slots.length >= 6, `${slots.length} slots`);
+    const empty = slots.filter((s) => !s.textContent.trim() || s.textContent.trim() === '…');
+    ok('and every one of them was filled', empty.length === 0,
+       empty.map((s) => s.dataset.fact).join(', '));
+
+    // --- no number typed into the prose --------------------------------------
+    // `[data-history]` is exempt because dates and headcounts belong there and
+    // nothing can make them drift; `#dz-checks` because every word in it is
+    // generated from the JSON at render time. That second exemption is only
+    // honest while the assertions below re-derive those numbers rather than
+    // trusting the text, which is what they do.
+    const stray = [];
+    for (const p of $('dz-main').querySelectorAll('p')) {
+      if (p.closest('[data-history]') || p.closest('#dz-checks')) continue;
+      const clone = p.cloneNode(true);
+      for (const kill of clone.querySelectorAll('[data-fact], .mono, code, a')) kill.remove();
+      // Part numbers and a licence version are proper nouns, not figures.
+      const m = clone.textContent
+        .replace(/\b65C?[0-9]{2,3}\b/gi, '')
+        .replace(/\b6800\b|\bZ80\b/gi, '')
+        .replace(/CC BY-NC-SA 3\.0/g, '')
+        .match(/\b\d[\d,]*\b/g);
+      if (m) stray.push(`${m.join('/')} in "${clone.textContent.trim().slice(0, 40)}…"`);
+    }
+    ok('and no number about this chip was typed into the prose', stray.length === 0,
+       stray.slice(0, 3).join(' | '));
+
+    const fact = (n) => d.querySelector(`[data-fact="${n}"]`).textContent.trim();
+    const num = (n) => Number(fact(n));
+
+    // --- re-derive the clock generator ---------------------------------------
+    // This harness's own walk, its own inversion of the gate lists, its own
+    // transistor arithmetic. Nothing below reads designer.js.
+    const feeds = new Map();
+    const add = (k, v) => { if (!feeds.has(k)) feeds.set(k, new Set()); feeds.get(k).add(v); };
+    for (const [node, , pre, legs] of sch.gates) {
+      for (const leg of legs) for (const i of leg) add(i, node);
+      if (pre >= 0) add(pre, node);
+    }
+    const CLOCKS = ['cclk', 'cp1', 'clk1out', 'clk2out'];
+    const outs = new Set(CLOCKS.map((n) => idx.get(n)));
+
+    const walk = (bounded) => {
+      const pad = idx.get('clk0');
+      const seen = new Set([pad]);
+      const q = [pad];
+      while (q.length) {
+        const n = q.shift();
+        if (bounded && outs.has(n)) continue;
+        for (const t of feeds.get(n) || []) {
+          if (seen.has(t) || t === sch.vss || t === sch.vcc) continue;
+          seen.add(t); q.push(t);
+        }
+      }
+      seen.delete(pad);
+      return seen;
+    };
+    const cost = (n) => {
+      const g = gates.get(n);
+      if (!g) return 0;
+      return g[3].reduce((a, l) => a + l.length, 0) + (g[2] >= 0 ? 1 : 0);
+    };
+    const gen = walk(true);
+    const transistors = [...gen].reduce((a, n) => a + cost(n), 0);
+    const drivers = [...outs].reduce((a, n) => a + cost(n), 0);
+
+    ok('the generator is the circuit this harness walks to',
+       num('clockNodes') === gen.size && num('clockTransistors') === transistors,
+       `page ${fact('clockNodes')}/${fact('clockTransistors')}, harness ${gen.size}/${transistors}`);
+    ok('and it splits into logic and output drivers the same way',
+       num('clockDrivers') === drivers && num('clockLogic') === transistors - drivers,
+       `${fact('clockLogic')} logic + ${fact('clockDrivers')} drivers = ${fact('clockTransistors')}`);
+    ok('the four clocks are all reached',
+       CLOCKS.every((c) => gen.has(idx.get(c))), CLOCKS.join(' '));
+
+    // The boundary clause is load-bearing, and this is the proof. Without it the
+    // walk crosses cclk and escapes into the control pipeline, which is a
+    // different circuit entirely. Asserted as "it reaches the pipeline" rather
+    // than as a node-count multiple: the multiple is an arbitrary threshold that
+    // says nothing about whether the boundary is in the right place, and the
+    // first version of this assertion picked one the real blowup just missed.
+    const unbounded = walk(false);
+    const dpc = (s) => [...s].filter((n) => /^dpc/.test(sch.names[n] || '')).length;
+    ok('and without the boundary clause the walk escapes into the pipeline',
+       dpc(gen) === 0 && dpc(unbounded) > 0,
+       `bounded ${gen.size} nodes / ${dpc(gen)} control lines, `
+       + `unbounded ${unbounded.size} / ${dpc(unbounded)}`);
+
+    // --- the interlock -------------------------------------------------------
+    const feedback = [];
+    for (const [node, , pre, legs] of sch.gates) {
+      if (!gen.has(node)) continue;
+      for (const leg of legs) for (const i of leg) if (outs.has(i)) feedback.push([i, node]);
+      if (pre >= 0 && outs.has(pre)) feedback.push([pre, node]);
+    }
+    ok('exactly two transistors carry a clock back into the generator',
+       feedback.length === 2 && num('interlock') === 2,
+       feedback.map(([c, n]) => `${nm(c)}->${nm(n)}`).join(', '));
+    ok('and they share one control and land on two different nodes',
+       new Set(feedback.map(([c]) => c)).size === 1
+       && new Set(feedback.map(([, n]) => n)).size === 2,
+       feedback.map(([c, n]) => `${nm(c)}->${nm(n)}`).join(', '));
+
+    // --- the share of the die ------------------------------------------------
+    ok('the share of the die is that count over the netlist',
+       fact('clockShare') === (transistors / sch.counts.transistors * 100).toFixed(1),
+       `${fact('clockShare')}%`);
+
+    // --- the decoder knows nothing about validity ----------------------------
+    const fired = new Map(dec.opcodes.map((o) => [o.op, new Set(o.hc.flatMap((h) => h.r))]));
+    ok('every one of the 256 opcodes fires a product term',
+       fired.size === 256 && [...fired.values()].every((s) => s.size > 0),
+       `${fired.size} opcodes`);
+    const re = /illeg|invalid|undef|unused|trap/i;
+    const named = [...dec.rows.map((r) => r.name), ...dec.outputs.map((o) => o.name)]
+      .filter((n) => n && re.test(n));
+    ok('and nothing on the die names an opcode invalid', named.length === 0, named.join(', '));
+
+    // --- implied addressing --------------------------------------------------
+    const card = (rx) => [...d.querySelectorAll('.claim')].find((c) => rx.test(c.textContent));
+    const implIdx = dec.rows.findIndex((r) => r.name === 'op-implied');
+    const impl = [...fired.entries()].filter(([, s]) => s.has(implIdx)).map(([o]) => o);
+    const implCard = card(/op-implied/);
+    ok('the implied opcodes are the term\'s own opcode set',
+       !!implCard && implCard.textContent.includes(`${impl.length} opcodes fire op-implied`),
+       implCard ? implCard.querySelector('.claim-got').textContent.trim().slice(0, 70) : 'no card');
+    ok('and they are the instructions that need no operand',
+       [0xE8, 0xC8, 0xCA, 0x88].every((o) => impl.includes(o)) && !impl.includes(0xA9),
+       `INX/INY/DEX/DEY in, LDA# ${hex(0xA9)} out`);
+
+    // --- the decimal correction ----------------------------------------------
+    // Counted through the gate structure, which is what catches the series legs
+    // in the two AOI carries. Counting only transistors with a terminal on the
+    // output node misses the middle of every series pair and undercounts.
+    const DEC = ['dpc18_#DAA', 'dpc22_#DSA', 'DC34', 'DC78', 'DC78.phi2'];
+    ok('every node of the decimal correction is named on the die',
+       DEC.every((n) => idx.has(n)), DEC.filter((n) => !idx.has(n)).join(', ') || 'all present');
+    const decT = DEC.map((n) => cost(idx.get(n))).reduce((a, b) => a + b, 0);
+    const decCard = card(/decimal/i);
+    ok('and the page reports that circuit\'s own transistor count',
+       !!decCard && decCard.textContent.includes(`${decT} transistors`),
+       decCard ? decCard.querySelector('.claim-got').textContent.trim().slice(0, 90) : 'no card');
+
+    // --- the verdicts --------------------------------------------------------
+    const cards = [...d.querySelectorAll('.claim')];
+    ok('every claim rendered a card', cards.length >= 5, `${cards.length} cards`);
+
+    // The load-bearing assertion. All-green is exactly what a comparison that
+    // silently throws would produce, so the row that does NOT agree is pinned,
+    // and so is which one it is.
+    const differs = cards.filter((c) => c.classList.contains('claim-differs'));
+    ok('exactly one claim differs', differs.length === 1,
+       differs.map((c) => c.querySelector('.claim-says').textContent.trim().slice(0, 40)).join(' | '));
+    ok('and it is the transistor count, not one of the structural claims',
+       differs.length === 1 && /dozen/i.test(differs[0].textContent),
+       differs[0] ? differs[0].querySelector('.claim-says').textContent.trim().slice(0, 70) : 'none');
+    ok('the differing row still reports the measured count',
+       differs.length === 1 && differs[0].textContent.includes(`${transistors} transistors`),
+       differs[0] ? differs[0].querySelector('.claim-got').textContent.trim().slice(0, 80) : 'none');
+
+    const agreed = cards.length - differs.length;
+    ok('the tally matches the cards', $('dz-tally').textContent === `${agreed} of ${cards.length} agree`,
+       $('dz-tally').textContent);
+
+    // --- the page shell ------------------------------------------------------
+    for (let i = 0; i < 100 && !d.querySelector('#site-nav a'); i++) await sleep(50);
+    const current = [...d.querySelectorAll('#site-nav a')]
+      .filter((a) => a.getAttribute('aria-current') === 'page');
+    ok('the menu marks this page as the current one', current.length === 1,
+       current.map((a) => a.textContent.trim().slice(0, 30)).join(', '));
+    ok('the footer is the site footer, all four elements',
+       !!d.querySelector('footer.site-foot .wrap .mark')
+       && !!d.querySelector('footer.site-foot .wrap .foot-meta')
+       && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'),
+       '');
+    const bare = [...$('dz-main').querySelectorAll('section.wrap')]
+      .filter((s) => !s.classList.contains('sec') || !s.classList.contains('bp-prose'));
+    ok('every prose section carries the shell classes', bare.length === 0,
+       bare.map((s) => s.id).join(', '));
+    ok('no em dash in the rendered page', !$('dz-main').textContent.includes('—'), '');
+    ok('the other account is linked', [...d.querySelectorAll('a')]
+       .some((a) => /talk/.test(a.getAttribute('href') || '')), '');
+  } catch (e) {
+    ok('the harness ran to the end', false, e && e.message ? e.message : String(e));
+  }
+
+  const bad = results.filter((r) => r.startsWith('FAIL'));
+  document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  document.body.appendChild(pre);
+});
+</script>
+</body></html>

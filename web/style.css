@@ -2254,36 +2254,41 @@ body.no-scroll #view { z-index: 70; }
 
 .tk-links { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.4rem; }
 
-.tk-checks { display: grid; gap: .9rem; padding: 1rem 1.1rem; }
+/* The claim card, shared by talk.html and designer.html and rendered by
+   claim-table.js. Named for what it is rather than for either page: it was
+   `.tk-*` while the talk was the only caller, and a second page inheriting a
+   first page's prefix is how a component stops being recognisable as one. */
 
-.tk-check {
+.claim-list { display: grid; gap: .9rem; padding: 1rem 1.1rem; }
+
+.claim {
   display: grid; gap: .45rem; padding: .85rem .9rem; min-width: 0;
   background: #101829; border: 1.4px solid var(--line);
   border-left: 3px solid var(--mint); border-radius: .35rem;
 }
-.tk-check-differs { border-left-color: var(--gold); }
+.claim-differs { border-left-color: var(--gold); }
 
-.tk-says { font-size: .92rem; line-height: 1.5; color: var(--foreground); }
+.claim-says { font-size: .92rem; line-height: 1.5; color: var(--foreground); }
 
 /* The verdict reads as a label on the claim, not as a separate column, so it
    stays on the same line and wraps with it. */
-.tk-verdict {
+.claim-verdict {
   display: inline-block; margin-right: .5rem; padding: .1rem .4rem;
   font: 700 .6rem var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
   color: var(--space); background: var(--mint); border-radius: .2rem;
   vertical-align: .1em;
 }
-.tk-check-differs .tk-verdict { background: var(--gold); }
+.claim-differs .claim-verdict { background: var(--gold); }
 
-.tk-got {
+.claim-got {
   font: 500 .8rem var(--font-mono); line-height: 1.55; color: #dce9ff;
   overflow-wrap: anywhere;
 }
-.tk-got .tag { margin-right: .45rem; }
+.claim-got .tag { margin-right: .45rem; }
 
-.tk-note { margin: 0; font-size: .78rem; line-height: 1.5; max-width: 68ch; }
-.tk-where { margin: 0; font-size: .78rem; }
-.tk-where a { color: var(--accent); }
+.claim-note { margin: 0; font-size: .78rem; line-height: 1.5; max-width: 68ch; }
+.claim-where { margin: 0; font-size: .78rem; }
+.claim-where a { color: var(--accent); }
 
 /* What the talk asked for ------------------------------------------------- */
 

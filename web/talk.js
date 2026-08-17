@@ -19,6 +19,8 @@
 // this site most likely to go quietly wrong, because nothing checks it
 // afterwards.
 
+import { renderClaims } from './claim-table.js';
+
 const $ = (id) => document.getElementById(id);
 
 /** Files this page reads. All are published, and all are read by other pages. */
@@ -169,34 +171,6 @@ const CHECKS = [
   },
 ];
 
-function renderChecks(d) {
-  const host = $('tk-checks');
-  host.innerHTML = '';
-  let agreed = 0;
-  for (const c of CHECKS) {
-    let holds;
-    try {
-      holds = c.holds(d);
-    } catch {
-      holds = null;
-    }
-    if (holds) agreed += 1;
-    const row = document.createElement('div');
-    row.className = 'tk-check' + (holds ? '' : ' tk-check-differs');
-    const verdict = holds ? 'agrees' : 'differs';
-    row.innerHTML = `
-      <div class="tk-says"><span class="tk-verdict">${verdict}</span>${esc(c.says)}</div>
-      <div class="tk-got"><span class="tag live">measured here</span> ${esc(c.got(d))}</div>
-      ${c.note ? `<p class="tk-note muted">${esc(c.note(d))}</p>` : ''}
-      <p class="tk-where"><a href="${c.where.href}">Shown on ${esc(c.where.label)}</a></p>`;
-    host.appendChild(row);
-  }
-  $('tk-tally').textContent = `${agreed} of ${CHECKS.length} agree`;
-}
-
-const esc = (s) => String(s).replace(/[&<>"]/g, (ch) =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-
 /**
  * The hero's stat line, in the same shape every other page uses: one run of
  * text with middot separators, not a grid of cards. A second arrangement of the
@@ -233,7 +207,7 @@ async function boot() {
     }
 
     stats(d);
-    renderChecks(d);
+    renderClaims($('tk-checks'), $('tk-tally'), CHECKS, d);
 
     if (missing.length) throw new Error('facts not derived: ' + missing.join(', '));
     $('tk-boot').hidden = true;
