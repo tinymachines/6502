@@ -14,10 +14,10 @@ use std::collections::HashSet;
 
 use v6502_netlist::blocks::{classify_name, Block, Blocks, Half, UNCLASSIFIED};
 use v6502_netlist::blueprint::{centroid, Blueprint};
-use v6502_netlist::{NodeId, Netlist};
+use v6502_netlist::{mos6502, NodeId, Netlist};
 
 fn setup() -> (Netlist, Blocks) {
-    let nl = Netlist::mos6502();
+    let nl = mos6502();
     let b = Blocks::derive(&nl);
     (nl, b)
 }

@@ -24,7 +24,7 @@
 //! mem.load(0x0000, &[0xa9, 0x42]); // LDA #$42
 //! mem.set_reset_vector(0x0000);
 //!
-//! let mut cpu = Cpu::new(Arc::new(Netlist::mos6502()), mem)?;
+//! let mut cpu = Cpu::new(Arc::new(mos6502()), mem)?;
 //! cpu.reset();
 //! for _ in 0..20 {
 //!     cpu.step_cycle();
@@ -37,15 +37,16 @@
 
 pub mod bus;
 pub mod cpu;
-pub mod engine;
 pub mod history;
 pub mod timing;
 
-pub use v6502_netlist::{Netlist, NodeId, TransId};
+pub use v6502_netlist::{mos6502, Netlist, NodeId, TransId};
 
 pub use bus::{Bus, FlatMemory};
 pub use cpu::{BusState, Cpu, CycleState, ReadWrite, Registers, Signals};
-pub use engine::{ChipState, Drive, Engine, Stats};
+// The solver lives in `halfphi`; re-exported so this crate's callers are
+// unaffected by where it moved to.
+pub use halfphi::engine::{ChipState, Drive, Engine, Stats};
 pub use history::{History, RewindError};
 pub use timing::{Hidden, Phase, StoreData, TimingState};
 
@@ -58,7 +59,7 @@ pub fn boot(load_addr: u16, program: &[u8]) -> Cpu<FlatMemory> {
     let mut mem = FlatMemory::new();
     mem.load(load_addr, program);
     mem.set_reset_vector(load_addr);
-    let mut cpu = Cpu::new(Arc::new(Netlist::mos6502()), mem)
+    let mut cpu = Cpu::new(Arc::new(mos6502()), mem)
         .expect("the embedded 6502 netlist has every required signal");
     cpu.reset();
     cpu

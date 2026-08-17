@@ -9,7 +9,7 @@ use std::sync::Arc;
 use v6502_netlist::{Netlist, NodeId};
 
 use crate::bus::Bus;
-use crate::engine::Engine;
+use halfphi::engine::Engine;
 use crate::timing::{Phase, TimingNodes, TimingState};
 
 /// A signal the 6502 layer requires was absent from the netlist.

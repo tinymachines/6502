@@ -7,7 +7,6 @@
 //!
 //! See NOTICE.md: the die data is CC BY-NC-SA 3.0, unlike this code.
 
-use std::collections::HashMap;
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
@@ -19,189 +18,11 @@ use std::path::{Path, PathBuf};
 // strings, integers (including negatives), comments and trailing commas.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
-enum Val {
-    Num(i64),
-    Str(String),
-    Arr(Vec<Val>),
-    Obj(Vec<(String, Val)>),
-}
-
-impl Val {
-    fn as_num(&self) -> Option<i64> {
-        match self {
-            Val::Num(n) => Some(*n),
-            _ => None,
-        }
-    }
-    fn as_str(&self) -> Option<&str> {
-        match self {
-            Val::Str(s) => Some(s),
-            _ => None,
-        }
-    }
-    fn as_arr(&self) -> Option<&[Val]> {
-        match self {
-            Val::Arr(a) => Some(a),
-            _ => None,
-        }
-    }
-}
-
-struct Parser<'a> {
-    s: &'a [u8],
-    i: usize,
-}
-
-impl<'a> Parser<'a> {
-    fn new(s: &'a str) -> Self {
-        Parser { s: s.as_bytes(), i: 0 }
-    }
-
-    fn skip_trivia(&mut self) {
-        loop {
-            while self.i < self.s.len() && (self.s[self.i] as char).is_ascii_whitespace() {
-                self.i += 1;
-            }
-            if self.s[self.i..].starts_with(b"//") {
-                while self.i < self.s.len() && self.s[self.i] != b'\n' {
-                    self.i += 1;
-                }
-            } else if self.s[self.i..].starts_with(b"/*") {
-                self.i += 2;
-                while self.i < self.s.len() && !self.s[self.i..].starts_with(b"*/") {
-                    self.i += 1;
-                }
-                self.i = (self.i + 2).min(self.s.len());
-            } else {
-                return;
-            }
-        }
-    }
-
-    fn peek(&mut self) -> u8 {
-        self.skip_trivia();
-        if self.i < self.s.len() {
-            self.s[self.i]
-        } else {
-            0
-        }
-    }
-
-    fn parse_value(&mut self) -> Result<Val, String> {
-        match self.peek() {
-            b'[' => self.parse_array(),
-            b'{' => self.parse_object(),
-            b'\'' | b'"' => Ok(Val::Str(self.parse_string()?)),
-            c if c == b'-' || c == b'+' || c.is_ascii_digit() => self.parse_number(),
-            c => Err(format!("unexpected byte {:?} at offset {}", c as char, self.i)),
-        }
-    }
-
-    fn parse_array(&mut self) -> Result<Val, String> {
-        self.i += 1; // '['
-        let mut out = Vec::new();
-        loop {
-            if self.peek() == b']' {
-                self.i += 1;
-                return Ok(Val::Arr(out));
-            }
-            out.push(self.parse_value()?);
-            match self.peek() {
-                b',' => self.i += 1,
-                b']' => {}
-                c => return Err(format!("expected , or ] got {:?} at {}", c as char, self.i)),
-            }
-        }
-    }
-
-    fn parse_object(&mut self) -> Result<Val, String> {
-        self.i += 1; // '{'
-        let mut out = Vec::new();
-        loop {
-            if self.peek() == b'}' {
-                self.i += 1;
-                return Ok(Val::Obj(out));
-            }
-            let key = match self.peek() {
-                b'\'' | b'"' => self.parse_string()?,
-                _ => {
-                    let start = self.i;
-                    while self.i < self.s.len()
-                        && (self.s[self.i].is_ascii_alphanumeric()
-                            || self.s[self.i] == b'_'
-                            || self.s[self.i] == b'$')
-                    {
-                        self.i += 1;
-                    }
-                    if start == self.i {
-                        return Err(format!("empty object key at {}", self.i));
-                    }
-                    String::from_utf8_lossy(&self.s[start..self.i]).into_owned()
-                }
-            };
-            if self.peek() != b':' {
-                return Err(format!("expected : after key {key:?} at {}", self.i));
-            }
-            self.i += 1;
-            let value = self.parse_value()?;
-            out.push((key, value));
-            match self.peek() {
-                b',' => self.i += 1,
-                b'}' => {}
-                c => return Err(format!("expected , or }} got {:?} at {}", c as char, self.i)),
-            }
-        }
-    }
-
-    fn parse_string(&mut self) -> Result<String, String> {
-        let quote = self.s[self.i];
-        self.i += 1;
-        let start = self.i;
-        while self.i < self.s.len() && self.s[self.i] != quote {
-            self.i += 1;
-        }
-        let out = String::from_utf8_lossy(&self.s[start..self.i]).into_owned();
-        self.i += 1; // closing quote
-        Ok(out)
-    }
-
-    fn parse_number(&mut self) -> Result<Val, String> {
-        let start = self.i;
-        if self.s[self.i] == b'-' || self.s[self.i] == b'+' {
-            self.i += 1;
-        }
-        while self.i < self.s.len() && (self.s[self.i].is_ascii_digit() || self.s[self.i] == b'.') {
-            self.i += 1;
-        }
-        let text = String::from_utf8_lossy(&self.s[start..self.i]);
-        // The data files are all-integer; tolerate a trailing ".0" defensively.
-        let text = text.split('.').next().unwrap_or("");
-        text.parse::<i64>()
-            .map(Val::Num)
-            .map_err(|e| format!("bad number {text:?} at {start}: {e}"))
-    }
-}
-
-/// Find `var <name> = <value>` (or `<name> = <value>`) and parse the literal.
-fn parse_decl(src: &str, name: &str) -> Result<Val, String> {
-    let pat = format!("{name} =");
-    let alt = format!("{name}=");
-    let at = src
-        .find(&pat)
-        .map(|p| p + pat.len())
-        .or_else(|| src.find(&alt).map(|p| p + alt.len()))
-        .ok_or_else(|| format!("declaration of `{name}` not found"))?;
-    let mut p = Parser::new(&src[at..]);
-    p.parse_value()
-}
-
-// ---------------------------------------------------------------------------
-// Binary encoding
-// ---------------------------------------------------------------------------
-
-const MAGIC: &[u8; 8] = b"V6502NL1";
-
+/// A little-endian byte sink for this crate's own blobs.
+///
+/// The netlist blob is `halfphi`'s format and is written there. These two are
+/// ours: `layout.bin` is geometry for the renderer and `centroids.bin` is where
+/// each node sits on the die, and neither is anything a simulator needs.
 struct Blob(Vec<u8>);
 
 impl Blob {
@@ -211,23 +32,8 @@ impl Blob {
     fn u32(&mut self, v: u32) {
         self.0.extend_from_slice(&v.to_le_bytes());
     }
-    fn i32(&mut self, v: i32) {
-        self.0.extend_from_slice(&v.to_le_bytes());
-    }
-    fn bits(&mut self, flags: &[bool]) {
-        for chunk in flags.chunks(8) {
-            let mut byte = 0u8;
-            for (i, &b) in chunk.iter().enumerate() {
-                if b {
-                    byte |= 1 << i;
-                }
-            }
-            self.0.push(byte);
-        }
-    }
 }
 
-/// One filled shape on one mask layer, belonging to one node.
 struct Polygon {
     layer: u8,
     node: u16,
@@ -362,150 +168,30 @@ fn main() {
 }
 
 fn build(refdir: &Path, out: &Path) -> Result<String, String> {
+    // The die data, parsed by the library rather than by this script. Rails are
+    // named rather than assumed: the 6502 and the Z80 call ground `vss` and the
+    // 6800 calls it `gnd`, and a parser that hardcodes one spelling is how a
+    // library ends up quietly about one chip.
     let read = |f: &str| -> Result<String, String> {
         fs::read_to_string(refdir.join(f)).map_err(|e| format!("{f}: {e}"))
     };
-
-    // --- nodenames: name -> node number (values may be -1 for "no such bit") ---
-    let nodenames = parse_decl(&read("nodenames.js")?, "nodenames")?;
-    let Val::Obj(entries) = &nodenames else {
-        return Err("nodenames is not an object".into());
-    };
-    let mut names: Vec<(String, i32)> = Vec::with_capacity(entries.len());
-    let mut name_to_node: HashMap<&str, i64> = HashMap::new();
-    for (k, v) in entries {
-        let n = v.as_num().ok_or_else(|| format!("nodename {k} is not a number"))?;
-        names.push((k.clone(), n as i32));
-        name_to_node.insert(k.as_str(), n);
-    }
-    let vss = *name_to_node.get("vss").ok_or("no vss in nodenames")? as u32;
-    let vcc = *name_to_node.get("vcc").ok_or("no vcc in nodenames")? as u32;
-
-    // --- segdefs: [node, '+'|'-' pullup, layer, x0,y0, x1,y1, ...] ---
-    // One polygon per entry; a node owns many. Only the node number and the
-    // pullup flag matter to the simulation.
-    //
-    // Faithful detail: the reference sets pullup when it FIRST sees a node and
-    // never revisits it, so a later polygon for the same node cannot change it.
-    // Replicated here -- OR-ing the flags instead would alter the netlist.
-    let segdefs = parse_decl(&read("segdefs.js")?, "segdefs")?;
-    let segs = segdefs.as_arr().ok_or("segdefs is not an array")?;
-    let mut node_count = 0usize;
-    for s in segs {
-        let a = s.as_arr().ok_or("segdef entry is not an array")?;
-        let n = a
-            .first()
-            .and_then(Val::as_num)
-            .ok_or("segdef entry has no node number")? as usize;
-        node_count = node_count.max(n + 1);
-    }
-    let mut exists = vec![false; node_count];
-    let mut pullup = vec![false; node_count];
-    let mut polygons: Vec<Polygon> = Vec::with_capacity(segs.len());
-    for s in segs {
-        let a = s.as_arr().unwrap();
-        let n = a[0].as_num().unwrap() as usize;
-        if !exists[n] {
-            // First sighting wins for the pullup flag -- see above.
-            exists[n] = true;
-            pullup[n] = a.get(1).and_then(Val::as_str) == Some("+");
-        }
-        // Geometry, in contrast, accumulates: a node owns every polygon that
-        // names it.
-        let layer = a.get(2).and_then(Val::as_num).ok_or("segdef entry has no layer")? as u8;
-        let coords = &a[3..];
-        if coords.len() < 6 || coords.len() % 2 != 0 {
-            continue; // fewer than 3 points cannot be filled
-        }
-        let mut pts = Vec::with_capacity(coords.len() / 2);
-        for xy in coords.chunks_exact(2) {
-            let x = xy[0].as_num().ok_or("non-numeric polygon x")?;
-            let y = xy[1].as_num().ok_or("non-numeric polygon y")?;
-            pts.push((x as u16, y as u16));
-        }
-        polygons.push(Polygon { layer, node: n as u16, pts });
-    }
-
-    // --- transdefs: ['name', gate, c1, c2, [bb], [geometry]] ---
-    let transdefs = parse_decl(&read("transdefs.js")?, "transdefs")?;
-    let trans = transdefs.as_arr().ok_or("transdefs is not an array")?;
-    let mut tg = Vec::with_capacity(trans.len());
-    let mut bboxes: Vec<[u16; 4]> = Vec::with_capacity(trans.len());
-    let mut gated_by_rail = 0usize;
-    for t in trans {
-        let a = t.as_arr().ok_or("transdef entry is not an array")?;
-        if a.len() < 4 {
-            return Err(format!("short transdef entry: {a:?}"));
-        }
-        // Gate bounding box [xmin, xmax, ymin, ymax], used for hit-testing and
-        // for outlining a transistor in the renderer.
-        let bb = a.get(4).and_then(Val::as_arr).unwrap_or(&[]);
-        bboxes.push(if bb.len() >= 4 {
-            [
-                bb[0].as_num().unwrap_or(0) as u16,
-                bb[1].as_num().unwrap_or(0) as u16,
-                bb[2].as_num().unwrap_or(0) as u16,
-                bb[3].as_num().unwrap_or(0) as u16,
-            ]
-        } else {
-            [0; 4]
-        });
-        let gate = a[1].as_num().ok_or("transdef gate")? as u32;
-        let mut c1 = a[2].as_num().ok_or("transdef c1")? as u32;
-        let mut c2 = a[3].as_num().ok_or("transdef c2")? as u32;
-
-        // Terminal normalisation, ported exactly from wires.js:setupTransistors().
-        // The two ifs are sequential, not exclusive -- the second sees the result
-        // of the first. Preserved so the netlist matches the reference bit for bit.
-        if c1 == vss {
-            c1 = c2;
-            c2 = vss;
-        }
-        if c1 == vcc {
-            c1 = c2;
-            c2 = vcc;
-        }
-
-        // A transistor gated by vss is permanently off, which is both what the
-        // model does and what the silicon does -- 17 of these exist and are fine.
-        // A transistor gated by vcc would be permanently *on* in silicon but
-        // permanently off here, because group evaluation never crosses a rail.
-        // None exist in the 6502 data; warn loudly if that ever changes.
-        if gate == vcc {
-            gated_by_rail += 1;
-        }
-        for n in [gate, c1, c2] {
-            if (n as usize) >= node_count || !exists[n as usize] {
-                return Err(format!("transistor references unknown node {n}"));
-            }
-        }
-        tg.push((gate as u16, c1 as u16, c2 as u16));
-    }
-
-    // --- encode ---
-    let mut b = Blob(Vec::with_capacity(1 << 16));
-    b.0.extend_from_slice(MAGIC);
-    b.u32(node_count as u32);
-    b.u32(tg.len() as u32);
-    b.u32(names.len() as u32);
-    b.u32(vss);
-    b.u32(vcc);
-    b.bits(&exists);
-    b.bits(&pullup);
-    for (g, c1, c2) in &tg {
-        b.u16(*g);
-        b.u16(*c1);
-        b.u16(*c2);
-    }
-    for (name, node) in &names {
-        let bytes = name.as_bytes();
-        b.u16(bytes.len() as u16);
-        b.0.extend_from_slice(bytes);
-        b.i32(*node);
-    }
+    let parsed = halfphi::source::parse(&halfphi::ChipSource {
+        segdefs: &read("segdefs.js")?,
+        transdefs: &read("transdefs.js")?,
+        nodenames: &read("nodenames.js")?,
+        rails: halfphi::Rails { ground: "vss", supply: "vcc" },
+    })?;
+    let node_count = parsed.node_count;
+    let polygons: Vec<Polygon> = parsed
+        .polygons
+        .iter()
+        .map(|p| Polygon { layer: p.layer, node: p.node, pts: p.pts.clone() })
+        .collect();
+    let bboxes = parsed.gate_boxes.clone();
+    let gated_by_rail = parsed.gated_by_supply;
 
     let path = out.join("netlist.bin");
-    fs::write(&path, &b.0).map_err(|e| format!("writing {}: {e}", path.display()))?;
+    fs::write(&path, &parsed.blob).map_err(|e| format!("writing {}: {e}", path.display()))?;
 
     // --- layout: geometry for the renderer, kept in a separate blob ---
     //
@@ -560,9 +246,9 @@ fn build(refdir: &Path, out: &Path) -> Result<String, String> {
         summary,
         "{} nodes, {} transistors, {} names, {} KiB; layout: {}",
         node_count,
-        tg.len(),
-        names.len(),
-        b.0.len() / 1024,
+        parsed.transistor_count,
+        parsed.name_count,
+        parsed.blob.len() / 1024,
         layout_summary
     );
     if gated_by_rail > 0 {

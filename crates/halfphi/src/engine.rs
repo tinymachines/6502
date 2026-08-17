@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use v6502_netlist::{BitSet, Netlist, NodeId, TransId};
+use crate::netlist::{BitSet, Netlist, NodeId, TransId};
 
 /// Matches the reference implementation's loop limiter. A settle that needs
 /// more rounds than this is oscillating; the reference silently gave up, we

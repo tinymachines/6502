@@ -6,11 +6,11 @@
 //! carries and grown along the wiring; see `blocks.rs` for why that works and
 //! for what it deliberately leaves unclassified.
 
-use v6502_netlist::{blocks::Blocks, Netlist};
+use v6502_netlist::{mos6502, blocks::Blocks};
 
 fn main() -> std::io::Result<()> {
     let path = std::env::args().nth(1).unwrap_or_else(|| "web/blocks.json".into());
-    let nl = Netlist::mos6502();
+    let nl = mos6502();
     let b = Blocks::derive(&nl);
     let json = b.to_json(&nl);
 

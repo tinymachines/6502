@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use v6502_netlist::Netlist;
+use v6502_netlist::mos6502;
 use v6502_sim::{bus::FlatMemory, cpu::Cpu, history::History, RewindError};
 
 /// LDA #$00 ; loop { INC $20 ; JMP loop } -- memory changes continuously, so a
@@ -21,7 +21,7 @@ fn boot() -> Cpu<FlatMemory> {
     let mut mem = FlatMemory::new();
     mem.load(0x0200, PROGRAM);
     mem.set_reset_vector(0x0200);
-    let mut cpu = Cpu::new(Arc::new(Netlist::mos6502()), mem).unwrap();
+    let mut cpu = Cpu::new(Arc::new(mos6502()), mem).unwrap();
     cpu.reset();
     // Reset itself performs bus cycles; start history from a clean journal so
     // checkpoints refer only to post-reset writes.

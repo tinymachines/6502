@@ -10,11 +10,11 @@ use v6502_netlist::blocks::Blocks;
 use v6502_netlist::blueprint::Blueprint;
 use v6502_netlist::pla::Pla;
 use v6502_netlist::schematic::{Kind, Schematic};
-use v6502_netlist::{Netlist, NodeId};
+use v6502_netlist::{mos6502, NodeId};
 
 fn main() -> std::io::Result<()> {
     let path = std::env::args().nth(1).unwrap_or_else(|| "web/schematic.json".into());
-    let nl = Netlist::mos6502();
+    let nl = mos6502();
     let sc = Schematic::derive(&nl);
 
     let kind_index = |k: Kind| match k {

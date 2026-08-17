@@ -4,10 +4,10 @@
 //! question for the engine, and is asserted in `v6502-sim/tests/decode.rs`.
 
 use v6502_netlist::pla::{Pla, MIN_IR_INPUTS};
-use v6502_netlist::Netlist;
+use v6502_netlist::mos6502;
 
 fn pla() -> Pla {
-    Pla::derive(&Netlist::mos6502())
+    Pla::derive(&mos6502())
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn control_lines_sort_the_way_they_read() {
 /// independently obvious.
 #[test]
 fn the_trace_reaches_the_terms_that_make_sense() {
-    let nl = Netlist::mos6502();
+    let nl = mos6502();
     let p = pla();
     let bp = v6502_netlist::blueprint::Blueprint::derive(&nl);
     let blocked: Vec<u16> =

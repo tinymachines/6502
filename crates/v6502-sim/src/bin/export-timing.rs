@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use v6502_netlist::blueprint::Blueprint;
+use v6502_netlist::{mos6502, blueprint::Blueprint};
 use v6502_netlist::pla::Pla;
 use v6502_netlist::Netlist;
 use v6502_sim::{bus::FlatMemory, cpu::Cpu};
@@ -29,7 +29,7 @@ const LIMIT: u64 = 40;
 
 fn main() -> std::io::Result<()> {
     let path = std::env::args().nth(1).unwrap_or_else(|| "web/timing.json".into());
-    let nl = Arc::new(Netlist::mos6502());
+    let nl = Arc::new(mos6502());
     let pla = Pla::derive(&nl);
 
     // The chain itself, and what can reach it. Same trace as the control lines:

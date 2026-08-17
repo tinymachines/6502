@@ -7,9 +7,11 @@ license.workspace = true
 description = "Immutable transistor netlist for the MOS 6502, extracted from the visual6502 die trace"
 
 [dependencies]
+halfphi = { path = "../halfphi" }
 
 [features]
 default = []
 
 [build-dependencies]
+halfphi = { path = "../halfphi" }
 earcutr = "0.5.0"

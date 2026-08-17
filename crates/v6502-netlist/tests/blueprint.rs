@@ -12,10 +12,10 @@
 
 use std::collections::{HashMap, HashSet};
 use v6502_netlist::blueprint::{Blueprint, Kind};
-use v6502_netlist::Netlist;
+use v6502_netlist::{mos6502, Netlist};
 
 fn bp() -> (Netlist, Blueprint) {
-    let nl = Netlist::mos6502();
+    let nl = mos6502();
     let bp = Blueprint::derive(&nl);
     (nl, bp)
 }

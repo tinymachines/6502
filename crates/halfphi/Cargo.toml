@@ -1,0 +1,10 @@
+[package]
+name = "halfphi"
+version = "0.1.0"
+edition = "2021"
+description = "Switch-level simulation and analysis of transistor-level chip netlists"
+license = "MIT"
+repository = "https://github.com/tinymachines/6502"
+
+# No dependencies, and no die data. Both are deliberate: see src/lib.rs.
+[dependencies]

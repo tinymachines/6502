@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use v6502_sim::{bus::FlatMemory, cpu::Cpu, history::History, Netlist, ReadWrite};
+use v6502_sim::{bus::FlatMemory, cpu::Cpu, history::History, mos6502, ReadWrite};
 use wasm_bindgen::prelude::*;
 
 /// A 6502 with 64 KiB of RAM and a rewind buffer.
@@ -30,7 +30,7 @@ impl Machine {
     /// program and set the reset vector first.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Machine {
-        let netlist = Arc::new(Netlist::mos6502());
+        let netlist = Arc::new(mos6502());
         let node_count = netlist.node_count();
         let cpu = Cpu::new(netlist, FlatMemory::new())
             .expect("embedded netlist has every required signal");
@@ -350,6 +350,6 @@ impl Default for Machine {
 /// Netlist facts, available without constructing a machine.
 #[wasm_bindgen(js_name = netlistInfo)]
 pub fn netlist_info() -> String {
-    let nl = Netlist::mos6502();
+    let nl = mos6502();
     format!("{} nodes, {} transistors", nl.node_count(), nl.transistor_count())
 }

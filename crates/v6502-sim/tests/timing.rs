@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use v6502_netlist::Netlist;
+use v6502_netlist::{mos6502, Netlist};
 use v6502_sim::{bus::FlatMemory, cpu::Cpu};
 
 const BASE: u16 = 0x0200;
@@ -45,7 +45,7 @@ fn cycles(nl: &Arc<Netlist>, opcode: u8) -> Option<u64> {
 /// page and the base count applies.
 #[test]
 fn measured_lengths_match_the_published_ones() {
-    let nl = Arc::new(Netlist::mos6502());
+    let nl = Arc::new(mos6502());
     let expected: &[(u8, u64)] = &[
         (0xa9, 2), (0xa5, 3), (0xb5, 4), (0xad, 4), (0xbd, 4), (0xb9, 4),
         (0xa1, 6), (0xb1, 5), (0x20, 6), (0x60, 6), (0x40, 6), (0x00, 7),
@@ -65,7 +65,7 @@ fn measured_lengths_match_the_published_ones() {
 /// gap.
 #[test]
 fn exactly_twelve_opcodes_never_finish() {
-    let nl = Arc::new(Netlist::mos6502());
+    let nl = Arc::new(mos6502());
     let jams: Vec<u8> = (0..=255u8).filter(|op| cycles(&nl, *op).is_none()).collect();
     assert_eq!(
         jams,
@@ -79,7 +79,7 @@ fn exactly_twelve_opcodes_never_finish() {
 /// reach a term that stops it.
 #[test]
 fn twelve_undocumented_opcodes_run_longer_than_any_documented_one() {
-    let nl = Arc::new(Netlist::mos6502());
+    let nl = Arc::new(mos6502());
     let eight: Vec<u8> =
         (0..=255u8).filter(|op| cycles(&nl, *op) == Some(8)).collect();
     assert_eq!(
@@ -106,7 +106,7 @@ fn twelve_undocumented_opcodes_run_longer_than_any_documented_one() {
 /// across two thirds of the instruction set is worth not losing quietly.
 #[test]
 fn instructions_end_on_the_term_named_for_them() {
-    let nl = Arc::new(Netlist::mos6502());
+    let nl = Arc::new(mos6502());
     let pla = v6502_netlist::pla::Pla::derive(&nl);
     for (opcode, want) in [
         (0x20u8, "op-T0-jsr"),

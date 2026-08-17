@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use v6502_netlist::pla::Pla;
+use v6502_netlist::{mos6502, pla::Pla};
 use v6502_netlist::Netlist;
 use v6502_sim::{bus::FlatMemory, cpu::Cpu};
 
@@ -67,7 +67,7 @@ fn fires(nl: &Arc<Netlist>, node: u16, opcode: u8, preamble: &[u8]) -> bool {
 }
 
 fn setup() -> (Arc<Netlist>, Pla) {
-    let nl = Arc::new(Netlist::mos6502());
+    let nl = Arc::new(mos6502());
     let pla = Pla::derive(&nl);
     (nl, pla)
 }

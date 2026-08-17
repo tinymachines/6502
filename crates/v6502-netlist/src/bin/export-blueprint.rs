@@ -5,11 +5,11 @@
 //! Nothing here is authored: the units, the edges and their control lines all
 //! fall out of switch topology. See `blueprint.rs` for why that is possible.
 
-use v6502_netlist::{blueprint::Blueprint, Netlist};
+use v6502_netlist::{mos6502, blueprint::Blueprint};
 
 fn main() -> std::io::Result<()> {
     let path = std::env::args().nth(1).unwrap_or_else(|| "web/blueprint.json".into());
-    let nl = Netlist::mos6502();
+    let nl = mos6502();
     let bp = Blueprint::derive(&nl);
     let json = bp.to_json();
 

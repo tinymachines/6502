@@ -5,4 +5,5 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+halfphi = { path = "../halfphi" }
 v6502-netlist = { path = "../v6502-netlist" }

@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use v6502_netlist::Netlist;
+use v6502_netlist::mos6502;
 use v6502_sim::{bus::Bus, bus::FlatMemory, cpu::Cpu};
 
 const C: u8 = 0x01;
@@ -67,7 +67,7 @@ fn boot(program: &[u8]) -> Cpu<Recording> {
     let mut mem = FlatMemory::new();
     mem.load(0x0200, program);
     mem.set_reset_vector(0x0200);
-    let mut cpu = Cpu::new(Arc::new(Netlist::mos6502()), Recording::new(mem)).unwrap();
+    let mut cpu = Cpu::new(Arc::new(mos6502()), Recording::new(mem)).unwrap();
     cpu.reset();
     cpu
 }
@@ -171,7 +171,7 @@ fn taken_branch_across_a_page_costs_an_extra_cycle() {
     let mut mem = FlatMemory::new();
     mem.load(0x02f8, &[0xa9, 0x00, 0xf0, 0x0a, 0xea]); // LDA #$00 ; BEQ +10
     mem.set_reset_vector(0x02f8);
-    let mut cpu = Cpu::new(Arc::new(Netlist::mos6502()), Recording::new(mem)).unwrap();
+    let mut cpu = Cpu::new(Arc::new(mos6502()), Recording::new(mem)).unwrap();
     cpu.reset();
     let cycles = run(&mut cpu, 2);
     assert_eq!(cycles[1], 4, "taken branch crossing a page boundary");

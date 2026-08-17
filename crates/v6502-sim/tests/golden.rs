@@ -12,7 +12,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use v6502_netlist::Netlist;
+use v6502_netlist::mos6502;
 use v6502_sim::{bus::FlatMemory, cpu::Cpu, ReadWrite};
 
 struct Golden {
@@ -111,7 +111,7 @@ fn matches_reference_node_for_node() {
     mem.load(golden.program_addr, &golden.program);
     mem.set_reset_vector(golden.reset_vector);
 
-    let mut cpu = Cpu::new(Arc::new(Netlist::mos6502()), mem).unwrap();
+    let mut cpu = Cpu::new(Arc::new(mos6502()), mem).unwrap();
     cpu.reset();
 
     for row in &golden.rows {
@@ -129,7 +129,7 @@ fn matches_reference_node_for_node() {
                 .filter(|(_, (a, b))| a != b)
                 .map(|(i, _)| i)
                 .collect();
-            let nl = Netlist::mos6502();
+            let nl = mos6502();
             let named: Vec<String> = diverged
                 .iter()
                 .take(12)

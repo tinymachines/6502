@@ -37,6 +37,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e5e8f6c15a24b9a3ee5efec809ccd006d3b30e8b3bb63c39af737c7f87daa1d"
 
 [[package]]
+name = "halfphi"
+version = "0.1.0"
+
+[[package]]
 name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -106,12 +110,14 @@ name = "v6502-netlist"
 version = "0.1.0"
 dependencies = [
  "earcutr",
+ "halfphi",
 ]
 
 [[package]]
 name = "v6502-sim"
 version = "0.1.0"
 dependencies = [
+ "halfphi",
  "v6502-netlist",
 ]
 

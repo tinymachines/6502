@@ -14,7 +14,7 @@ use std::collections::VecDeque;
 
 use crate::bus::Bus;
 use crate::cpu::Cpu;
-use crate::engine::ChipState;
+use halfphi::engine::ChipState;
 
 /// A restorable point in time.
 #[derive(Clone, Debug)]

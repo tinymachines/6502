@@ -5,10 +5,10 @@
 //! that should never happen quietly.
 
 use v6502_netlist::schematic::{Diff, Kind, Schematic, Via};
-use v6502_netlist::Netlist;
+use v6502_netlist::{mos6502, Netlist};
 
 fn setup() -> (Netlist, Schematic) {
-    let nl = Netlist::mos6502();
+    let nl = mos6502();
     let sc = Schematic::derive(&nl);
     (nl, sc)
 }
