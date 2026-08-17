@@ -1437,6 +1437,33 @@ one of them to drift, which is the failure this project keeps finding.
   - **It is exported separately rather than folded into `NOTES`.** Eleven blocks
     would otherwise need a near-empty `NOTES` entry each, and `block.js` already
     guards every optional field on that object.
+  - **It is drawn as a quote block, and the tint is an argument.** The paragraph
+    is authored and the console beneath it is derived, so giving the two
+    different surfaces says so at a glance rather than leaving it to a caption.
+    `.bk-does` is the rule.
+  - **Its spacing had to be fixed, and it was 72 against 0.** The paragraph
+    inherited the box of the heading and lede it replaced: `.sec` supplies a
+    generous pad above and *exactly none* below, and `p` carries `margin: 0`, so
+    the text sat flush on the console. Measured before touching it, rather than
+    guessed at from the rules, because the gap above comes from one element and
+    the gap below from another.
+
+#### `--sec-gap`, and why the fix is a token
+
+The bottom margin has to equal `.sec`'s top padding, which is
+`clamp(2.5rem, 7vw, 4.5rem)`. **A copy of that expression would only be equal at
+the width it was eyeballed at**, so the value moved to `--sec-gap` on `:root`
+and both rules now name it. One definition, and the two buffers cannot drift
+apart at some width nobody photographed.
+
+- **No overflow or fit harness can catch this class of mistake, and it is worth
+  knowing why.** A `var()` naming a token that does not exist drops the whole
+  declaration silently, so a mistyped `--sec-gap` would leave every `.sec` on
+  every page with *no* padding. That page is cramped, not wider, so
+  `_overflow-test.html` still reports PAGE OK and `_navfit-test.html` still
+  fits. The check that answers it is computed `padding-top` per page, which is
+  the `:root`-vs-`var()` diff this file already recommends, run as a throwaway
+  probe rather than kept.
   - **`_block-test.html` had to be extended for it, and this is the trap.** The
     stray-digit scan walked `NOTES[*].sections[].body` only, so a new prose
     field would have been the only prose on the page that nothing checked.

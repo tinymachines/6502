@@ -23,6 +23,12 @@
   --hard: 5px 5px 0 rgba(2, 6, 16, .5);
   --hard-card: 8px 8px 0 rgba(2, 6, 16, .48);
 
+  /* The vertical rhythm between sections. A token rather than a literal because
+     anything that wants to sit an equal distance below something has to use the
+     SAME expression, not a copy of it: this is responsive, so a matching literal
+     is only equal at the width it was eyeballed at. */
+  --sec-gap: clamp(2.5rem, 7vw, 4.5rem);
+
   --panel-w: 20rem;
   /* Safe-area insets so the transport bar clears a phone's home indicator. */
   --sa-b: env(safe-area-inset-bottom, 0px);
@@ -827,7 +833,7 @@ body.no-scroll #explorer { z-index: 70; }
 
 /* ---------- content sections ---------- */
 
-.sec { padding: clamp(2.5rem, 7vw, 4.5rem) 1.25rem 0; }
+.sec { padding: var(--sec-gap) 1.25rem 0; }
 .sec-head { margin-bottom: 1.5rem; }
 .sec-head .eyebrow { margin-bottom: .8rem; }
 
@@ -2075,6 +2081,32 @@ body.no-scroll #view { z-index: 70; }
 /* `.statbar` is a flex row with a .5rem gap, written for plain strings
    separated by dots. These are label-and-value pairs stacked in columns, so at
    that gap the columns touch and read as one run of digits. */
+/* The one authored paragraph on a block page, set as a quote block.
+ *
+ * It is a reading rather than a measurement, and giving it its own surface says
+ * so at a glance, before the `interface · derived` tag on the console below it
+ * has to. That is the same separation block-notes.js exists to keep, expressed
+ * in the layout instead of only in a caption.
+ *
+ * The spacing is the point as much as the tint. This paragraph replaced a
+ * heading and a lede, and inherited their box: `.sec` supplies a generous pad
+ * above and exactly none below, and `p` has no margin, so the text sat flush on
+ * top of the console with 72px of air above it and zero beneath. `--sec-gap` is
+ * the section's own rhythm, so using it here makes the two buffers equal at
+ * every width rather than at the one they were measured at.
+ */
+.bk-does {
+  max-width: 68ch;
+  margin: 0 0 var(--sec-gap);
+  /* Equal top and bottom, so the tint reads as a band around the text rather
+     than as a box the text is sitting at the top of. */
+  padding: 1.15rem 1.35rem;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  border: 1.4px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  border-radius: .4rem;
+}
+
 .bk-statbar { gap: .55rem 1.9rem; align-items: baseline; }
 .bk-stat { display: flex; flex-direction: column; gap: .1rem; }
 .bk-stat b { font-size: .92rem; color: var(--foreground); }
