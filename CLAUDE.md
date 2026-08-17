@@ -2088,8 +2088,8 @@ The header has its own four, and they are independent of the explorer's:
 
 | Width | Header |
 |---|---|
-| ≤ 34rem | picker and clock narrowed, "Menu" label dropped for the hamburger alone |
-| ≤ 52rem | the control group takes a row of its own, below the wordmark |
+| ≤ 34rem | picker and clock narrowed, menu button tightened. The "Menu" label stays |
+| ≤ 52rem | the control group takes a row of its own; the source link and menu button reorder together |
 | < 80rem | nav links behind the disclosure menu |
 | ≥ 80rem | links inline beside the controls; ≥ 96rem gives both more room |
 
@@ -2108,6 +2108,33 @@ screen to show three things.
 - `_navfit-test.html` measures the transport and the clock the same way it
   measures the picker, and for the same reason: a tap target squeezed to nothing
   still renders and still looks like a control.
+
+**The source link is injected by `site-nav.js`, and is the one header element
+that is not hand-copied.** Everything else in the header -- wordmark, control
+slots, menu button -- exists in eleven documents plus `archive/tools/shell.py`,
+which is the arrangement that had already let ten copies of the nav list drift
+three ways before `site-menu.js` existed. A twelfth hand-copied element would be
+repeating that knowingly, so `addSourceLink()` inserts one before `.menu-btn` on
+every header it wires. The archive gets it without any markup of its own,
+because `build-archive.py` copies that file verbatim.
+
+- **Its style has to be restated in `shell.py`.** The archive carries its own
+  stylesheet rather than the simulator's, emitted per builder as
+  `own CSS + shell.CSS` into `archive.css`, `wiki.css` and `gallery.css`. The
+  three tokens the rule needs (`--line`, `--muted`, `--gold`) happen to exist
+  under the same names on both sides; `--font-mono` does not, and is `--mono`
+  there. **Check the `.css` files, not the HTML**: the header markup is in the
+  pages and the header CSS is not, so grepping a generated page for a new rule
+  reports it missing when it is present.
+- **The pair reorders together below 52rem.** A default `order: 0` strands the
+  link beside the wordmark while the button moves right, and the auto margin has
+  to sit on whichever of the two comes first or a gap opens between them.
+- **The "Menu" label is shown at every width.** It was hidden below 34rem when
+  the controls still shared row one with the wordmark and a 90px call to action.
+  Since the group took a row of its own at 52rem, row one holds the brand and
+  those two buttons and nothing else, so the word fits at 320px. Measured in a
+  real iframe: a `--window-size` under ~500px crops the photograph without
+  narrowing the layout, so a screenshot cannot answer this.
 
 Touch-specific behaviour that is easy to break:
 
