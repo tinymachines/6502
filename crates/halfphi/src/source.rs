@@ -243,8 +243,6 @@ impl Blob {
     }
 }
 
-/// One filled shape on one mask layer, belonging to one node.
-
 // ---------------------------------------------------------------------------
 // The chip source: three files in, one netlist blob out
 // ---------------------------------------------------------------------------

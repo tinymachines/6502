@@ -16,9 +16,19 @@ use std::path::{Path, PathBuf};
 
 use halfphi::{parse, ChipSource, Engine, Netlist, Rails};
 
+/// Where the die traces are, if they are anywhere.
+///
+/// Two candidates, because this file is shared verbatim between the standalone
+/// `halfphi` repository (where the submodule sits beside the crate) and the
+/// `tinymachines/6502` monorepo (where the crate is two levels down). Searching
+/// rather than hardcoding is what lets the two copies stay byte-identical, which
+/// is the only thing stopping them drifting apart.
 fn refdir() -> Option<PathBuf> {
-    let d = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extern/visual6502");
-    d.join("segdefs.js").exists().then_some(d)
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    ["extern/visual6502", "../../extern/visual6502"]
+        .iter()
+        .map(|p| root.join(p))
+        .find(|d| d.join("segdefs.js").exists())
 }
 
 fn require() -> bool {
