@@ -20,7 +20,8 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 80 tests, bit-exact against the original. |
+| Simulation | Complete. 83 tests, bit-exact against the original. |
+| Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Controls | Program, transport and clock live in the header and drive every page. The rate is the simulated clock in Hz. |
@@ -108,9 +109,13 @@ running under systemd's environment, not yours** — check the version, do not
 assume the binary.
 
 ```bash
-cargo test --workspace              # 80 tests: netlist, functional, golden,
+cargo test --workspace              # 83 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode, blocks
 cargo test -p v6502-sim --test golden      # differential vs the reference
+cargo test -p halfphi --test chips         # the 6502, the 6800 and the Z80,
+                                           # through identical calls. SKIPS without
+                                           # extern/; HALFPHI_REQUIRE_CHIPS=1 to
+                                           # make its absence a failure.
 cargo test -p v6502-sim --test functional  # vs the documented ISA
 cargo clippy --workspace --all-targets
 cargo run --release -p v6502-sim --example bench   # throughput
@@ -443,9 +448,43 @@ per-instance and mutable.
 
 | Crate | Role |
 |---|---|
-| `v6502-netlist` | Immutable topology: nodes, transistors, names. No state. |
-| `v6502-sim` | The solver, the 6502 clock/bus layer, rewind. |
+| `halfphi` | Chip-agnostic: the die-data parser, the netlist, the solver. Names no chip. |
+| `v6502-netlist` | The 6502's die data, and the analyses seeded from its names. |
+| `v6502-sim` | The 6502 clock/bus layer, timing chain, rewind. |
 | `v6502-wasm` | `wasm-bindgen` surface consumed by `web/`. |
+
+### `halfphi`, and why it is separate
+
+Also published on its own at <https://github.com/tinymachines/halfphi>. It is the
+part of this project that is about switch networks rather than about a 6502:
+`source.rs` (the JS-literal parser for visual6502-format die data), `netlist.rs`
+(CSR topology) and `engine.rs` (the solver).
+
+- **The split is a licence boundary as much as a design one.** `halfphi` embeds
+  **no die data** and is MIT. `v6502-netlist` embeds `netlist.bin` and therefore
+  carries the CC BY-NC-SA obligations. Adding die data to `halfphi` would undo
+  the only reason it can be depended on freely.
+- **Nothing in `halfphi/src` may name a chip.** Rails are a parameter because
+  the 6800 calls ground `gnd`; layers are data because the 6800 and Z80 have no
+  layer 2. Measured before the split: the solver contained zero literals naming
+  a signal on this die, and ~72% of the workspace was already the library.
+- **The parser moved out of `build.rs`, and that is the change that mattered.**
+  It could always read any of these dies; nothing could call it.
+- **`Netlist::mos6502()` is now the free function `v6502_netlist::mos6502()`.**
+  A type that knows how to construct itself as one particular chip is the exact
+  coupling the split removes.
+- **`rustfmt.toml` exists to stop whitespace drift**, not as a style opinion. The
+  standalone repo runs `cargo fmt --check` in CI and this one has never been
+  fmt'd, so default rustfmt reflowed the one-line struct literals used
+  throughout. Do not run `cargo fmt --all` here expecting a no-op on the rest of
+  the workspace.
+
+**The source exists in two repositories and nothing keeps them in sync.** The
+five shared files are byte-identical today and drifted on whitespace within
+minutes of the split. `tests/chips.rs` searches two candidate paths for the die
+submodule precisely so one file can be correct in both layouts. The real fix is
+a git or crates.io dependency; until then, changing one copy means changing the
+other and re-checking with `diff`.
 
 ### `v6502-netlist`
 
