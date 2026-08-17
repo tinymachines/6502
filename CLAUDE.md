@@ -1933,6 +1933,35 @@ instead sweeps in the terms describing the instruction's class (`op-implied`,
   read relative to PC belong to the *next* instruction. The simulator latches each
   fetch at `sync` so batched stepping cannot miss one.
 
+### The page shell is a convention, and it is not written in the CSS
+
+Every page carries the same head, header, footer and section classes, and none
+of that is enforced by anything. Two of them went wrong on the block pages in
+one sitting, and both looked like a stylesheet that had failed to load:
+
+- **Prose sections are `class="wrap sec bp-prose"`, with the eyebrow and the
+  heading inside a `<div class="sec-head">`.** `.wrap` carries *no vertical
+  padding at all* -- it is max-width and side gutters only -- and `p` has
+  `margin: 0`, so a section that is `wrap` alone has every heading butted
+  straight against the content above it.
+- **The footer is four elements, not one.** `<footer class="site-foot">` is the
+  fixed bar; inside it a `.wrap` holds the wordmark, the `.foot-meta` line, and
+  a `<span class="version-foot" data-version-footer>`. Putting
+  `data-version-footer` on the `<footer>` itself renders the version in the
+  page's body font at 16px instead of mono at 11.2px, and silently drops the
+  wordmark and the project line.
+
+**Diff the shell against a known-good page rather than reading it.** Blanking
+out `<main>`, the title and the description leaves boilerplate that should be
+byte-identical to `timing.html`; anything left in that diff is a divergence.
+That found the remaining one (script order) in a single pass, after two rounds
+of finding them one at a time by eye.
+
+`.bp-prose` also puts a gap between adjacent paragraphs, which is right for a
+column of prose and wrong inside a card or a table row, where two paragraphs in
+a row are a value and its caption. Turn it off on the component, not on the
+section: the section's own ledes still want it.
+
 ### Page shell, responsive layout and PWA
 
 The app is a page, not a bare tool: sticky header, hero, the explorer in a
