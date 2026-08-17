@@ -73,6 +73,17 @@ border-radius:.375rem;background:transparent;color:var(--muted);cursor:pointer;
 font-family:var(--mono);font-size:.7rem;font-weight:700;letter-spacing:.12em;
 text-transform:uppercase;transition:.15s}
 .menu-btn:hover{border-color:var(--gold);color:var(--gold)}
+/* The source link is inserted by web/site-nav.js, which this site shares
+   verbatim, so it appears here without any markup of ours. The style has to be
+   restated because this page carries its own stylesheet rather than the
+   simulator's; the three tokens it needs happen to exist under the same names
+   on both sides. */
+.gh-link{display:inline-flex;align-items:center;justify-content:center;
+width:2.75rem;height:2.75rem;flex:none;
+border:2px solid color-mix(in srgb,var(--line) 80%,transparent);
+border-radius:.375rem;background:transparent;color:var(--muted);transition:.15s}
+.gh-link:hover{border-color:var(--gold);color:var(--gold)}
+.gh-link svg{width:1.15rem;height:1.15rem;display:block}
 .menu-btn .mi{display:grid;gap:3px;width:.95rem}
 .menu-btn .mi i{display:block;height:2px;background:currentColor;border-radius:2px;
 transition:.15s}

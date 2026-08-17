@@ -311,6 +311,19 @@ code {
   letter-spacing: .12em; text-transform: uppercase; transition: .15s;
 }
 .menu-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+/* The source link sits immediately left of the menu button and is built to the
+   same measurements, so the two read as one pair of affordances rather than a
+   button and a stray icon. Square, because it has no label to make it wider. */
+.gh-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.75rem; height: 2.75rem; flex: none;
+  border: 2px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: .375rem; background: transparent; color: var(--muted);
+  transition: .15s;
+}
+.gh-link:hover { border-color: var(--gold); color: var(--gold); }
+.gh-link svg { width: 1.15rem; height: 1.15rem; display: block; }
 .menu-btn .mi { display: grid; gap: 3px; width: .95rem; }
 .menu-btn .mi i { display: block; height: 2px; background: currentColor; border-radius: 2px; transition: .15s; }
 .menu-btn[aria-expanded="true"] {
@@ -937,7 +950,12 @@ body.no-scroll .site-foot { display: none; }
      so without reordering it wraps to a row of its own and the header eats
      144px of a phone screen to show three things. `order` costs nothing and
      leaves the tab sequence alone. */
-  .menu-btn { order: 1; margin-left: auto; }
+  /* The source link is reordered WITH the menu button, not left behind on the
+     wordmark's side: they are one pair, and a default `order: 0` would strand
+     it beside the brand while the button moved right. The auto margin moves to
+     whichever of the two comes first, or a gap opens between them. */
+  .gh-link { order: 1; margin-left: auto; }
+  .menu-btn { order: 1; margin-left: 0; }
   .nav-ctl { order: 2; flex: 1 0 100%; margin-left: 0; gap: .4rem; }
   .nav-prog { flex: 1 1 auto; min-width: 0; }
   /* Filling the row is not the same as being usable. Given the whole width the
@@ -951,7 +969,12 @@ body.no-scroll .site-foot { display: none; }
   .nav-prog-select { min-width: 6rem; height: 2rem; font-size: .72rem; padding: .25rem .35rem; }
   .nav-tbtn { width: 2rem; height: 2rem; font-size: .66rem; }
   .nav-clock-select { width: 4.2rem; height: 2rem; font-size: .66rem; }
-  .menu-btn .mtxt { display: none; }
+  /* The label stays. It was dropped here when the controls still shared this
+     row with the wordmark and a 90px call to action; since the control group
+     took a row of its own at 52rem, row one holds the brand and these two
+     buttons and nothing else, so there is room for the word at 320px. A
+     hamburger with no label is the weakest affordance in the header, and it was
+     only ever hidden to buy space that is no longer needed. */
   .menu-btn { padding: .4rem .55rem; }
   .site-head nav { column-gap: .5rem; }
 }
