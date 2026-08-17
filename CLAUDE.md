@@ -1626,6 +1626,15 @@ it, scrolls inside that, and carries a filter pinned to its top.
   that was emptied rather than one that was filtered out.
 - **A switched-on pill is exempt from the filter.** Hiding one would leave a
   wire on the bench with no way to reach the switch that put it there.
+- **"all nodes" lights every port at once, and it acts on what is on screen.**
+  With a filter running it says `all shown` and switches on only the visible
+  set: lighting wires the reader cannot see would be a control doing more than
+  it appears to. It is **one** button rather than an all/none pair, because with
+  the label reading the current state there is only ever one useful thing to
+  press, and a pair would put a dead control beside a live one at both ends.
+  Measured on the four heaviest blocks: address latches 108 signals to 192,
+  control pipeline 335 to 386, decode PLA 159 to 181, ALU 188 to 216, all
+  drawing and clearing cleanly.
 - **The repaint-on-action bug, for the fourth time.** The pill's `on` class was
   applied by the frame loop, and animation frames are throttled to nearly zero
   in an iframe, so the wire appeared on the bench while its switch still looked

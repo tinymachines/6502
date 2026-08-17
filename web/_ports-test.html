@@ -101,6 +101,52 @@ f.addEventListener('load', async () => {
      w.getComputedStyle(filt).position === 'sticky',
      w.getComputedStyle(filt).position);
 
+  // --- everything at once -------------------------------------------------
+  const allBtn = d.getElementById('sp-port-all');
+  const captionPorts = () => {
+    const m = /(\d+) signals/.exec(d.getElementById('sch-caption').textContent);
+    return m ? Number(m[1]) : -1;
+  };
+  ok('there is a control for lighting everything', !!allBtn,
+     allBtn ? allBtn.textContent.trim() : 'missing');
+
+  const before = captionPorts();
+  allBtn.click();
+  await sleep(600);
+  ok('it switches every port on',
+     pills().every((p) => p.classList.contains('on')),
+     `${pills().filter((p) => p.classList.contains('on')).length} of ${all} on`);
+  ok('and the drawing grows to take them', captionPorts() > before,
+     `${before} signals -> ${captionPorts()}`);
+  ok('and it now offers to clear instead', allBtn.textContent.trim() === 'none',
+     allBtn.textContent.trim());
+
+  allBtn.click();
+  await sleep(600);
+  ok('pressing it again clears them', pills().every((p) => !p.classList.contains('on')),
+     `${pills().filter((p) => p.classList.contains('on')).length} still on`);
+  ok('and the drawing returns to what it was', captionPorts() === before,
+     `${captionPorts()} vs ${before}`);
+
+  // Filtered, it must act on what is on screen and say so, or it would be a
+  // control doing more than it appears to.
+  input.value = 'idb';
+  input.dispatchEvent(new w.Event('input', { bubbles: true }));
+  await sleep(200);
+  const vis = visible().length;
+  ok('with a filter running it offers only what is shown',
+     allBtn.textContent.trim() === 'all shown', allBtn.textContent.trim());
+  allBtn.click();
+  await sleep(600);
+  const litNow = pills().filter((p) => p.classList.contains('on')).length;
+  ok('and it lights only those', litNow === vis && vis < all,
+     `${litNow} lit, ${vis} were visible, ${all} exist`);
+  allBtn.click();
+  await sleep(400);
+  input.value = '';
+  input.dispatchEvent(new w.Event('input', { bubbles: true }));
+  await sleep(200);
+
   const bad = out.filter((r) => r.startsWith('FAIL'));
   document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
   const pre = document.createElement('pre');

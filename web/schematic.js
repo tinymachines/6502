@@ -1333,6 +1333,7 @@ const PANELS = {
     const parts = [`<div class="sp-portfilter">
         <input type="search" id="sp-port-filter" placeholder="filter ports"
                aria-label="Filter ports">
+        <button type="button" class="sp-allbtn" id="sp-port-all">all nodes</button>
         <span class="mono" id="sp-port-count"></span>
       </div>
       <p class="sp-sub">${b.name}: the whole block is drawn.
@@ -1388,6 +1389,10 @@ const PANELS = {
      */
     const filterInput = host.querySelector('#sp-port-filter');
     const countEl = host.querySelector('#sp-port-count');
+    const allBtn = host.querySelector('#sp-port-all');
+    const visiblePills = () =>
+      [...host.querySelectorAll('.sp-port')].filter((p) => !p.hidden);
+
     const applyFilter = () => {
       const q = filterInput.value.trim().toLowerCase();
       let shown = 0, total = 0;
@@ -1402,7 +1407,40 @@ const PANELS = {
         g.hidden = any === 0;
       }
       countEl.textContent = q ? `${shown} of ${total}` : `${total}`;
+      // The button acts on what is ON SCREEN, so it says which that is. With a
+      // filter running, lighting everything the reader cannot see would be a
+      // control doing more than it appears to.
+      const vis = visiblePills();
+      const allOn = vis.length > 0 && vis.every((p) => b.lit.has(p.dataset.port));
+      allBtn.textContent = allOn ? 'none' : (q ? 'all shown' : 'all nodes');
+      allBtn.title = allOn
+        ? 'Switch these ports back off'
+        : `Switch on ${vis.length} port${vis.length === 1 ? '' : 's'} and draw every wire`;
+      allBtn.classList.toggle('on', allOn);
     };
+
+    /**
+     * Everything at once, and back again.
+     *
+     * One button rather than an all/none pair: with the label reading the
+     * current state there is only ever one useful thing to press, and a pair
+     * would put a dead control next to a live one at both ends of the range.
+     */
+    allBtn.addEventListener('click', () => {
+      const vis = visiblePills();
+      const allOn = vis.length > 0 && vis.every((p) => b.lit.has(p.dataset.port));
+      for (const p of vis) {
+        if (allOn) b.lit.delete(p.dataset.port); else b.lit.add(p.dataset.port);
+      }
+      relitBlock();
+      render();
+      // On the action rather than on the next frame, for the same reason a
+      // single pill repaints there: frames are scarce in an iframe and this
+      // changes dozens of controls at once.
+      if (state.panel) state.panel();
+      saveConfig();
+    });
+
     filterInput.addEventListener('input', applyFilter);
     applyFilter();
     // Built once, painted every frame -- and `shown` is a fact about what the
