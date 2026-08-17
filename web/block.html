@@ -38,7 +38,7 @@
     <p class="eyebrow" id="bk-eyebrow">Derived · not drawn</p>
     <h1><i class="bk-hero-dot" id="bk-hero-dot" aria-hidden="true"></i><span id="bk-title">Functional blocks</span></h1>
     <p class="lede" id="bk-lede">…</p>
-    <div class="statbar" id="bk-stats"></div>
+    <div class="statbar bk-statbar" id="bk-stats"></div>
   </section>
 
   <div id="bk-boot" class="bp-boot wrap"><p id="bk-status">Loading the chip…</p></div>
@@ -46,13 +46,15 @@
   <div id="bk-main" hidden>
 
     <!-- The directory: shown when no block is named. -->
-    <section class="wrap" id="bk-directory" hidden></section>
+    <section class="wrap sec" id="bk-directory" hidden></section>
 
     <div id="bk-block" hidden>
 
-      <section class="wrap" id="interface">
-        <p class="eyebrow">Measured</p>
-        <h2>What crosses the boundary</h2>
+      <section class="wrap sec bp-prose" id="interface">
+        <div class="sec-head">
+          <p class="eyebrow">Measured</p>
+          <h2>What crosses the boundary</h2>
+        </div>
         <p class="lede">
           A block is only a claim about where one part of the chip stops. These
           are the places it does not: every signal that a gate in here reads
@@ -70,9 +72,11 @@
         </div>
       </section>
 
-      <section class="wrap" id="circuit">
-        <p class="eyebrow">Measured</p>
-        <h2>The circuit, without leaving the block</h2>
+      <section class="wrap sec bp-prose" id="circuit">
+        <div class="sec-head">
+          <p class="eyebrow">Measured</p>
+          <h2>The circuit, without leaving the block</h2>
+        </div>
         <p class="lede">
           The same walk the workbench does, stopped at the edge. Pick any signal
           in the block and follow what makes it or what it changes; a wire that
@@ -115,15 +119,19 @@
         </p>
       </section>
 
-      <section class="wrap" id="bk-prose-section" hidden>
-        <p class="eyebrow">Written, not measured</p>
-        <h2>What it does</h2>
+      <section class="wrap sec bp-prose" id="bk-prose-section" hidden>
+        <div class="sec-head">
+          <p class="eyebrow">Written, not measured</p>
+          <h2>What it does</h2>
+        </div>
         <div class="bk-notes" id="bk-prose"></div>
       </section>
 
-      <section class="wrap" id="bk-labs-section" hidden>
-        <p class="eyebrow">Run on the chip</p>
-        <h2>Labs</h2>
+      <section class="wrap sec bp-prose" id="bk-labs-section" hidden>
+        <div class="sec-head">
+          <p class="eyebrow">Run on the chip</p>
+          <h2>Labs</h2>
+        </div>
         <p class="lede">
           Each of these assembles a short program, runs it on the same
           simulation the die view draws, and reads the block's own signals back
@@ -134,8 +142,10 @@
         <div class="bk-labs" id="bk-labs"></div>
       </section>
 
-      <section class="wrap" id="elsewhere">
-        <h2>The same silicon, drawn other ways</h2>
+      <section class="wrap sec" id="elsewhere">
+        <div class="sec-head">
+          <h2>The same silicon, drawn other ways</h2>
+        </div>
         <div class="bk-seealso" id="bk-seealso"></div>
         <nav class="bk-blocknav" id="bk-blocknav" aria-label="Blocks"></nav>
       </section>
