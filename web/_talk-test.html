@@ -1,0 +1,219 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  This page is unusual for this site in that half of it is history, which cannot
+  be derived from anything and cannot go stale, and half of it is a table of
+  claims whose verdicts are computed. The two halves need different checks, and
+  conflating them would weaken both.
+
+  For the history: the stray-digit scan, exactly as the primer has it, but
+  exempting `[data-history]`. Years and headcounts belong there and no
+  measurement can contradict them. What the scan is for is a number about *this
+  chip* being typed into a sentence where nothing would ever check it again.
+
+  For the verification table: this harness re-derives every claim STRAIGHT OUT OF
+  THE JSON with its own code, rather than importing talk.js. That is the whole
+  point. A harness that called the page's own functions would be asking the page
+  whether the page is right, and would agree with it however wrong it was.
+
+  It also pins that exactly one row differs, and which one. An "all green" table
+  is the outcome a bug would most likely produce -- a comparison that silently
+  throws and is caught as agreement -- so the row that does NOT agree is the
+  load-bearing assertion here.
+
+    http://localhost:8777/_talk-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1100px;height:700px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="talk.html"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const hex = (n) => '$' + n.toString(16).toUpperCase().padStart(2, '0');
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 200 && $('tk-main').hidden; i++) await sleep(50);
+    ok('the page booted', !$('tk-main').hidden, $('tk-status').textContent);
+
+    const [sch, dec, tim, blk, bp] = await Promise.all(
+      ['schematic.json', 'decode.json', 'timing.json', 'blocks.json', 'blueprint.json']
+        .map((x) => fetch(x).then((r) => r.json())));
+
+    // --- every slot filled ---------------------------------------------------
+    const slots = [...d.querySelectorAll('[data-fact]')];
+    ok('the page has facts to fill', slots.length >= 6, `${slots.length} slots`);
+    const empty = slots.filter((s) => !s.textContent.trim() || s.textContent.trim() === '…');
+    ok('and every one of them was filled', empty.length === 0,
+       empty.map((s) => s.dataset.fact).join(', '));
+
+    // --- no number typed into the prose --------------------------------------
+    // `[data-history]` is exempt and the exemption is the rule stated precisely:
+    // 1974 and 1975 are dates, not measurements, and nothing here could ever
+    // make them drift. What this polices is a count of transistors or terms
+    // being written into a sentence, where it would sit unchallenged forever.
+    // `#tk-checks` is exempt for the same reason the primer exempts its demos:
+    // every word in there is generated from the JSON at render time, so a number
+    // appearing in it is by construction a measurement. The exemption is only
+    // honest as long as that stays true, which is why the assertions further
+    // down re-derive those numbers instead of trusting the text.
+    const stray = [];
+    for (const p of $('tk-main').querySelectorAll('p')) {
+      if (p.closest('[data-history]') || p.closest('#tk-checks')) continue;
+      const clone = p.cloneNode(true);
+      for (const kill of clone.querySelectorAll('[data-fact], .mono, code, a')) kill.remove();
+      // Chip names and a licence version are proper nouns, not figures: nothing
+      // measures them and no change here can make them drift. Same exemption the
+      // primer makes for "6502", extended to the two other dies halfphi loads
+      // and to the licence this data is under.
+      const m = clone.textContent
+        .replace(/\b6502\b|\b6800\b|\bZ80\b/gi, '')
+        .replace(/CC BY-NC-SA 3\.0/g, '')
+        .match(/\b\d[\d,]*\b/g);
+      if (m) stray.push(`${m.join('/')} in "${clone.textContent.trim().slice(0, 40)}…"`);
+    }
+    ok('and no number about this chip was typed into the prose', stray.length === 0,
+       stray.slice(0, 3).join(' | '));
+
+    // --- the filled values are the measurements ------------------------------
+    const fact = (n) => d.querySelector(`[data-fact="${n}"]`).textContent.trim();
+    const num = (n) => Number(fact(n));
+
+    ok('the transistor count is the netlist, and is the talk\'s own subtitle',
+       num('transistors') === sch.counts.transistors && num('transistors') === 3510,
+       `${fact('transistors')}`);
+    ok('the gate count is the schematic',
+       num('gates') === sch.counts.gates && num('unresolvedGates') === sch.counts.unresolved,
+       `${fact('gates')} gates, ${fact('unresolvedGates')} unresolved`);
+
+    // --- re-derive the LAX claim independently -------------------------------
+    // Not by asking talk.js. Straight out of decode.json, with this file's own
+    // code, which is what makes agreement evidence rather than a tautology.
+    const rowIdx = (pred) => dec.rows.findIndex(pred);
+    const iLda = rowIdx((r) => r.name === 'op-T0-lda');
+    const iLdx = rowIdx((r) => r.name && r.name.startsWith('op-T0-ldx'));
+    ok('both load rows exist in the PLA', iLda >= 0 && iLdx >= 0, `${iLda}, ${iLdx}`);
+
+    const firesRow = (o, i) => o.hc.some((h) => h.r.includes(i));
+    const both = dec.opcodes.filter((o) => firesRow(o, iLda) && firesRow(o, iLdx));
+    const onlyA = dec.opcodes.filter((o) => firesRow(o, iLda) && !firesRow(o, iLdx));
+    const onlyX = dec.opcodes.filter((o) => !firesRow(o, iLda) && firesRow(o, iLdx));
+    ok('the overlap of the two load rows is eight opcodes', both.length === 8,
+       both.map((o) => hex(o.op)).join(' '));
+    // The opcode list lives in a generated card rather than a slot, so read the
+    // card. Requiring every one of them to appear is what makes this stronger
+    // than checking a count: a card that rendered the right total from the wrong
+    // opcodes would pass a count and fail this.
+    const card = (re) => [...d.querySelectorAll('.tk-check')].find((c) => re.test(c.textContent));
+    const laxCard = card(/LAX/);
+    ok('the page names every opcode in the overlap',
+       !!laxCard && both.every((o) => laxCard.textContent.includes(hex(o.op))),
+       laxCard ? laxCard.querySelector('.tk-got').textContent.trim() : 'no card');
+
+    // The mechanism, not just the count: the overlap must be the opcodes whose
+    // low two bits are both set, and each row must require one of those bits.
+    ok('the overlap is exactly the opcodes with low bits 11',
+       both.every((o) => (o.op & 3) === 3)
+       && onlyA.every((o) => (o.op & 3) === 1)
+       && onlyX.every((o) => (o.op & 3) === 2),
+       `${onlyA.length} at 01, ${onlyX.length} at 10, ${both.length} at 11`);
+
+    const lowReq = (i) => {
+      const low = dec.rows[i].ir.filter(([b]) => b <= 1);
+      return low.length === 1 && low[0][1] ? low[0][0] : null;
+    };
+    ok('the load-A row requires IR bit 0 and the load-X row IR bit 1',
+       lowReq(iLda) === 0 && lowReq(iLdx) === 1,
+       `A wants bit ${lowReq(iLda)}, X wants bit ${lowReq(iLdx)}`);
+    ok('and the page states those same two bits',
+       !!laxCard && new RegExp(`bit ${lowReq(iLda)}\\b`).test(laxCard.textContent)
+       && new RegExp(`bit ${lowReq(iLdx)}\\b`).test(laxCard.textContent),
+       laxCard ? laxCard.querySelector('.tk-note').textContent.trim().slice(0, 70) : 'no card');
+
+    // --- the other derived claims -------------------------------------------
+    const jams = tim.opcodes.filter((o) => o.jam);
+    const jamCard = card(/halt the machine/);
+    ok('the jams are twelve and all end in 2',
+       jams.length === 12 && jams.every((o) => (o.op & 0x0f) === 2),
+       jams.map((o) => hex(o.op)).join(' '));
+    ok('and the page names every one of them',
+       !!jamCard && jams.every((o) => jamCard.textContent.includes(hex(o.op))),
+       jamCard ? jamCard.querySelector('.tk-got').textContent.trim().slice(0, 70) : 'no card');
+
+    const buses = bp.units.filter((u) => u.kind === 'bus').map((u) => u.name);
+    ok('the two internal data buses are both derived',
+       buses.includes('sb') && buses.includes('idb'), buses.join(' '));
+
+    const functional = blk.blocks.filter((b) => b.name !== 'Unaccounted' && b.name !== 'Static logic');
+    const highest = functional.slice().sort((a, b) => b.die[1] - a.die[1])[0];
+    ok('the decode PLA is the topmost functional block on the die',
+       highest.name === 'Decode PLA', `${highest.name} at y=${Math.round(highest.die[1])}`);
+
+    const lowRows = dec.rows.filter((r) => r.ir.some(([b]) => b <= 1)).length;
+    const lowCard = card(/lowest two/);
+    ok('and the low opcode bits do reach the PLA directly',
+       lowRows > 0 && !!lowCard && lowCard.textContent.includes(String(lowRows)),
+       `${lowRows} of ${dec.rows.length} rows`);
+
+    // --- the verdicts are computed, and one of them differs -------------------
+    const cards = [...d.querySelectorAll('.tk-check')];
+    ok('every claim rendered a card', cards.length >= 6, `${cards.length} cards`);
+
+    const differs = cards.filter((c) => c.classList.contains('tk-check-differs'));
+    ok('exactly one claim differs', differs.length === 1,
+       differs.map((c) => c.querySelector('.tk-says').textContent.trim().slice(0, 40)).join(' | '));
+    ok('and it is the one about the PLA ignoring the low opcode bits',
+       differs.length === 1 && /lowest two/.test(differs[0].textContent),
+       differs[0] ? differs[0].querySelector('.tk-says').textContent.trim().slice(0, 60) : 'none');
+
+    // A verdict that is written rather than computed would still say "agrees"
+    // if the comparison threw. Check the tally against the cards themselves.
+    const agreed = cards.length - differs.length;
+    ok('the tally matches the cards', $('tk-tally').textContent === `${agreed} of ${cards.length} agree`,
+       $('tk-tally').textContent);
+
+    // --- the shell ------------------------------------------------------------
+    for (let i = 0; i < 100 && !d.querySelector('#site-nav a'); i++) await sleep(50);
+    const current = [...d.querySelectorAll('#site-nav a')]
+      .filter((a) => a.getAttribute('aria-current') === 'page');
+    ok('the menu marks this page as current', current.length === 1,
+       current.map((a) => a.textContent.trim()).join(', '));
+
+    ok('the footer is the four-element form',
+       !!d.querySelector('footer.site-foot .wrap .mark')
+       && !!d.querySelector('footer.site-foot .wrap .foot-meta')
+       && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'),
+       'wordmark + meta + version span');
+
+    ok('the recording is linked', [...d.querySelectorAll('a')]
+       .some((a) => /media\.ccc\.de/.test(a.href)), '');
+
+    // Prose sections carry the section classes, or every heading butts against
+    // the content above it and the page looks like a stylesheet failed to load.
+    const bare = [...$('tk-main').querySelectorAll('section.wrap')]
+      .filter((s) => !s.classList.contains('sec'));
+    ok('every section carries the shell classes', bare.length === 0,
+       bare.map((s) => s.id).join(', '));
+
+    // House style: no em dashes in anything shipped.
+    ok('no em dash in the rendered page', !$('tk-main').textContent.includes('—'), '');
+  } catch (e) {
+    ok('harness threw', false, e && e.stack ? e.stack.split('\n')[0] : String(e));
+  }
+
+  const fails = results.filter((r) => r.startsWith('FAIL')).length;
+  document.title = fails ? `${fails} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  document.body.appendChild(pre);
+});
+</script>
+</body></html>

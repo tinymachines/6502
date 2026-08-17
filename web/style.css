@@ -386,7 +386,14 @@ code {
 
 .hero { padding: clamp(2rem, 6vw, 4rem) 1.25rem clamp(1.5rem, 4vw, 2.5rem); }
 .hero .eyebrow { margin-bottom: 1.1rem; }
-.hero h1 { margin-bottom: 1.25rem; }
+/* A hero heading is set in Inter 900 at clamp() sizes, so at 320px a word of
+   about eleven characters is already wider than the column. Every h1 on the
+   site happened to be built from short words, which is not a property anyone
+   was maintaining on purpose: the first heading written with "photographed" in
+   it pushed the whole page sideways by 4px, and a header that overflows scrolls
+   the document rather than clipping. `break-word` only acts when a word cannot
+   fit on a line of its own, so it changes nothing anywhere else. */
+.hero h1 { margin-bottom: 1.25rem; overflow-wrap: break-word; }
 .hero h1 .hl { color: var(--accent); }
 .cta-row { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.75rem; }
 .statbar {
@@ -2210,3 +2217,80 @@ body.no-scroll #view { z-index: 70; }
   .bk-check { grid-column: 1; }
   .bk-step-all { margin-left: 0; }
 }
+
+/* ---------------------------------------------------------------------------
+   The talk (talk.html): where the die data came from, and its claims re-checked
+
+   Two visual registers on one page, because the page has two kinds of content
+   and conflating them is exactly what it is arguing against. The history
+   sections are plain prose. The verification rows are cards with a computed
+   verdict, and the verdict colours the card rather than sitting beside it as an
+   icon: a reader scanning the section should be able to see the one that
+   differs without reading a word.
+   --------------------------------------------------------------------------- */
+
+.tk-links { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.4rem; }
+
+.tk-checks { display: grid; gap: .9rem; padding: 1rem 1.1rem; }
+
+.tk-check {
+  display: grid; gap: .45rem; padding: .85rem .9rem; min-width: 0;
+  background: #101829; border: 1.4px solid var(--line);
+  border-left: 3px solid var(--mint); border-radius: .35rem;
+}
+.tk-check-differs { border-left-color: var(--gold); }
+
+.tk-says { font-size: .92rem; line-height: 1.5; color: var(--foreground); }
+
+/* The verdict reads as a label on the claim, not as a separate column, so it
+   stays on the same line and wraps with it. */
+.tk-verdict {
+  display: inline-block; margin-right: .5rem; padding: .1rem .4rem;
+  font: 700 .6rem var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--space); background: var(--mint); border-radius: .2rem;
+  vertical-align: .1em;
+}
+.tk-check-differs .tk-verdict { background: var(--gold); }
+
+.tk-got {
+  font: 500 .8rem var(--font-mono); line-height: 1.55; color: #dce9ff;
+  overflow-wrap: anywhere;
+}
+.tk-got .tag { margin-right: .45rem; }
+
+.tk-note { margin: 0; font-size: .78rem; line-height: 1.5; max-width: 68ch; }
+.tk-where { margin: 0; font-size: .78rem; }
+.tk-where a { color: var(--accent); }
+
+/* What the talk asked for ------------------------------------------------- */
+
+.tk-since {
+  display: grid; gap: 1rem; margin-top: 1.4rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+}
+.tk-item {
+  min-width: 0; padding: 1rem 1.1rem;
+  background: var(--surface); border: 2px solid var(--line); border-radius: .45rem;
+}
+.tk-item h3 { margin: 0 0 .5rem; font-size: .98rem; color: var(--foreground); }
+.tk-item p { margin: 0 0 .6rem; font-size: .84rem; line-height: 1.55; }
+.tk-item p:last-child { margin-bottom: 0; }
+
+/* The pushed-value table --------------------------------------------------- */
+
+/* Wide content scrolls inside its own box rather than widening the page: the
+   console clips its overflow, so without this the last column is simply gone. */
+.tk-table-wrap { overflow-x: auto; padding: 0 1.1rem 1rem; min-width: 0; }
+.tk-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.tk-table th, .tk-table td {
+  padding: .45rem .6rem; text-align: left; border-bottom: 1.4px solid var(--line);
+  vertical-align: top;
+}
+.tk-table th {
+  font: 700 .62rem var(--font-mono); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); white-space: nowrap;
+}
+.tk-table tbody tr:last-child td { border-bottom: 0; }
+.tk-table .mono { color: #dce9ff; }
+.tk-hit td { background: #16203a; }
+.tk-hit td:first-child { box-shadow: inset 3px 0 0 var(--accent); }

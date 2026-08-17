@@ -36,6 +36,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
+| Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. Full Wayback sweep complete: 24,429 URLs, 3.01 GB. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
@@ -109,8 +110,9 @@ running under systemd's environment, not yours** — check the version, do not
 assume the binary.
 
 ```bash
-cargo test --workspace              # 83 tests: netlist, functional, golden,
-                                    # rewind, blueprint, pla, decode, blocks
+cargo test --workspace              # 86 tests: netlist, functional, golden,
+                                    # rewind, blueprint, pla, decode, blocks,
+                                    # interrupts
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p halfphi --test chips         # the 6502, the 6800 and the Z80,
                                            # through identical calls. SKIPS without
@@ -370,7 +372,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Twenty-three harnesses plus two probes, all prefixed `_` and **never shipped** —
+Twenty-four harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -405,6 +407,8 @@ _decode-test.html      # the decode table, re-checked against the documented ISA
 _timing-test.html      # cycle counts, re-checked against the published ones
 _block-test.html       # the block pages: the interface and the circuit, re-derived
 _block-probe.html      # what one block's signals do, per half-cycle, for its prose
+_talk-test.html        # the talk page: every claim re-derived from the JSON by the
+                       # harness itself, and the one row that DIFFERS is pinned
 ```
 
 **A harness that samples state still in flight tests nothing.** `_handler-test`
@@ -1825,6 +1829,69 @@ It is meant to grow. The thing to preserve as it does:
     the next paragraph, so `/\b\d+ cycles?\b/` never matches "took2
     cyclesNothing" at either end.
 
+### The talk (`talk.html`, `talk.js`), and the claims it is checked against
+
+Where the die data came from: the chip decapped in acid, photographed through a
+microscope, the layers chemically stripped and re-shot, and the whole thing
+vectorised by hand into the polygons every other page draws. The source is
+Michael Steil's 27C3 talk, *Reverse Engineering the MOS 6502 CPU*, whose
+subtitle is the number this simulation switches.
+
+- **The page is deliberately two registers, and they are labelled.** The account
+  of the process is history: it cannot be derived, it is written from the talk,
+  and it carries the `Written, not measured` eyebrow. The verification table is
+  the other half and none of it is authored. Mixing them would launder one into
+  the other, which is the failure `block-notes.js` and `STEMS` are also kept
+  apart to avoid.
+- **The verdicts are computed, not written.** Each row pairs an authored `says`
+  with a `holds(d)` that asks the same question of the published JSON, and the
+  verdict comes from comparing them. A table where somebody typed "agrees" beside
+  each row would be a claim about a claim. If the chip stops agreeing the page
+  says so on its own.
+- **One row differs, and that is the load-bearing assertion.** All-green is
+  exactly what a broken comparison would produce, so `_talk-test.html` pins that
+  exactly one row differs *and which one*. The talk says the decode ROM ignores
+  the opcode's low two bits; on this die 48 of 122 product terms are gated by
+  `ir0`/`ir1` directly. That is a simplification rather than an error, and the
+  page says so: the mechanism he gives for `LAX` depends on those bits arriving.
+- **`LAX` is the strongest agreement on the site.** `op-T0-lda` requires IR bit
+  0, `op-T0-ldx/tax/tsx` requires bit 1, and neither constrains the other, so the
+  eight opcodes with low bits `11` fire both rows and the chip loads A and X at
+  once. That was derived here from the switch network and independently explained
+  in the talk sixteen years earlier.
+- **The harness re-derives everything itself** rather than importing `talk.js`.
+  A harness that called the page's own functions would be asking the page whether
+  the page is right.
+- **The stray-digit scan applies, with two exemptions stated precisely.**
+  `[data-history]` is exempt because years and headcounts cannot go stale, and
+  `#tk-checks` because every word in it is generated from the JSON. The scan
+  earned its place immediately: it caught "Twelve of the sixteen" typed into a
+  note in `talk.js`, which is exactly the class of number that would sit
+  unchallenged forever. That note derives both figures now.
+- The page needs **no export of its own**: it reads the five files the other
+  pages already publish, which is also what stops it disagreeing with them.
+
+#### `tests/interrupts.rs`: the BRK that gets lost
+
+The one claim that could not be checked from a published file, because it is
+about two things happening in the same moment. The 6502 has no interrupt
+sequencer: predecode forces the instruction register to `$00`, which is `BRK`,
+so IRQ, NMI and reset all run the BRK sequence and only the vector and the B flag
+differ.
+
+- **Measured, not asserted from the explanation.** Asserting IRQ at each
+  half-cycle offset around a BRK's own opcode fetch and reading the stack gives a
+  window: 3 to 6 half-cycles early, the chip pushes the address of the BRK itself
+  with B clear, so the handler cannot tell a BRK happened. Earlier is an ordinary
+  interrupt; 1 to 2 is too late to be sampled and the BRK survives.
+- **Every offset is an offset from the fetch**, found by running until `sync`
+  with the right address on the bus. A remembered half-cycle number would shift
+  silently the first time reset timing moved.
+- **Reset really does run the same sequence with the writes suppressed**: nothing
+  reaches the stack page and S still moves by three. That is why this chip comes
+  out of reset with whatever S it had minus three, and why the study view's stack
+  panel refuses to report a depth.
+
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 
 Every instruction's length, measured from one `sync` to the next. **Nothing in
@@ -2072,6 +2139,25 @@ Touch-specific behaviour that is easy to break:
 
 Layout gotchas already paid for, in narrowing order of subtlety:
 
+- **A long word in a hero `h1` overflows the page, and every existing heading
+  avoided it by luck.** `.hero h1` is Inter 900 at `clamp()` sizes, so at 320px a
+  word of about eleven characters is already wider than the column; the first
+  heading written with "photographed" in it pushed the whole document sideways by
+  4px. `.hero h1` now carries `overflow-wrap: break-word`, which acts only when a
+  word cannot fit on a line of its own and therefore changes nothing elsewhere.
+  **The bisect is the lesson, not the fix**: hiding any single section still
+  overflowed, hiding *all* of them did not, and that looked like "every section
+  is guilty". It was not. A shorter page loses its vertical scrollbar, which
+  hands back exactly the 4px the iframe scrollbar was taking, so the only
+  section-level result that meant anything was the all-hidden one. Two CSS
+  changes were made on wrong theories before that was noticed. **When hiding
+  things changes the scrollbar, it changes the width you are measuring.**
+- **`_overflow-test.html`'s "elements past the viewport edge" list is
+  informational, not causal.** A passing page prints a long list of them:
+  `timing` at 320px reports its opcode grid at 544px wide and still says PAGE OK,
+  because that grid is inside something that clips. Read `scrollWidth` against
+  `viewport` for the verdict and treat the list as a starting point only. An
+  earlier round here "fixed" a table that was never the problem.
 - **A flex item defaults to `min-width: auto`,** so it refuses to shrink below
   its content — and `min-width: 0` on a *child* cannot rescue it. The program
   `<select>` overflowed the console at 320px until `min-width: 0` was set on the

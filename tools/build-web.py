@@ -432,6 +432,16 @@ def main() -> None:
                           where="block.js")
     b.emit("block.js", bk.encode())
 
+    # 3k. talk.js: the page about where the die data came from. It reads every
+    #     published file the other pages read, because its job is to re-ask the
+    #     talk's claims of the same measurements rather than of a copy. It
+    #     imports nothing: there is no shared module it needs, only the JSON.
+    tk = b.read("talk.js").decode()
+    for original in ["schematic.json", "decode.json", "timing.json",
+                     "blocks.json", "blueprint.json"]:
+        tk = replace_once(tk, f"'{original}'", f"'{b.ref(original)}'", where="talk.js")
+    b.emit("talk.js", tk.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -505,6 +515,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         bkh = replace_once(bkh, f'"{original}"', f'"{b.ref(original)}"', where="block.html")
     b.emit("block.html", bkh.encode(), hashed=False)
+
+    tkh = b.read("talk.html").decode()
+    for original in ["style.css", "talk.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        tkh = replace_once(tkh, f'"{original}"', f'"{b.ref(original)}"', where="talk.html")
+    b.emit("talk.html", tkh.encode(), hashed=False)
 
     timh = b.read("timing.html").decode()
     for original in ["style.css", "timing.js", "version-footer.js", "site-menu.js",

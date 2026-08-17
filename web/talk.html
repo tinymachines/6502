@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Where the die data came from</title>
+<meta name="description" content="The 6502 was decapped in acid, photographed through a microscope and redrawn polygon by polygon. That trace is what this site simulates. The talk that described the process, with its claims re-checked against the silicon.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Where the data came from</p>
+    <h1>A chip dissolved in acid, photographed, and redrawn by hand.</h1>
+    <p class="lede">
+      Nothing on this site would exist without a physical 6502 being destroyed.
+      The polygons every page draws, the transistors the solver switches and the
+      names the analyses are seeded from are one team's trace of one decapped
+      die. This page is what that took, and what happens when the account of it
+      is checked against the chip it produced.
+    </p>
+    <div class="statbar" id="tk-stats"></div>
+  </section>
+
+  <div id="tk-boot" class="bp-boot wrap"><p id="tk-status">Loading the chip…</p></div>
+
+  <div id="tk-main" hidden>
+
+    <section class="wrap sec bp-prose" id="talk" data-history>
+      <div class="sec-head">
+        <p class="eyebrow">Written, not measured</p>
+        <h2>The talk</h2>
+      </div>
+      <p>
+        In December 2010, at the 27th Chaos Communication Congress, Michael
+        Steil gave a talk called <i>Reverse Engineering the MOS 6502 CPU</i>,
+        subtitled <i>3510 transistors in 60 minutes</i>. It covers the chip from
+        three directions: the programming model, the physical die, and what the
+        first two look like once you can see the second one working.
+      </p>
+      <p>
+        The number in that subtitle is the number this simulation switches. It is
+        not a coincidence or a round figure: it is the count that fell out of the
+        trace being finished, and it is the same count the engine reports today.
+      </p>
+      <p>
+        Ed Spittles was originally to have presented the die half and did not,
+        so the account of the process below is second hand even in the talk. The
+        team is Greg James, Brian Silverman, Barry Silverman and Ed Spittles.
+      </p>
+      <p class="tk-links">
+        <a class="btn" href="https://media.ccc.de/v/27c3-4159-en-reverse_engineering_mos_6502">The recording</a>
+        <a class="btn btn-ghost" href="archive/">The visual6502 archive</a>
+        <a class="btn btn-ghost" href="./#credit">Credit and licence</a>
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="why" data-history>
+      <div class="sec-head">
+        <p class="eyebrow">Written, not measured</p>
+        <h2>There was nobody left to ask</h2>
+      </div>
+      <p>
+        The obvious way to learn how a processor works is to ask whoever made it.
+        For this one that route is closed twice over.
+      </p>
+      <p>
+        MOS Technology was founded in 1974 by people who had left Motorola, and
+        shipped the 6502 in 1975. Commodore bought the company in 1976 and went
+        bankrupt in 1994, after which its assets were split between several
+        buyers. There is no company to write to.
+      </p>
+      <p>
+        The deeper problem is that even an intact company would have had little
+        to send. The 6502 was laid out entirely by hand: the masks were cut in
+        plastic film by layout engineers working at wall scale, then reduced
+        photographically. There was no design file, because there were no
+        computers in the loop to hold one. A few schematic sheets have surfaced
+        over the years, in varying states, and one hand reconstruction was made
+        in Hungary by Beregnyei Balázs, who derived a complete schematic from his
+        own photographs of an R6502 and wrote it up. But there is no authoritative
+        machine-readable description of this chip anywhere, and there never was.
+      </p>
+      <p>
+        Which leaves the chip itself as the only primary source.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="process" data-history>
+      <div class="sec-head">
+        <p class="eyebrow">Written, not measured</p>
+        <h2>Opening the package and photographing what is inside</h2>
+      </div>
+      <p>
+        The plastic package is removed with hot sulfuric acid, applied directly to
+        the part. Done carefully the die survives intact and the chip still works
+        afterwards, which matters more than it sounds: a decapped part that still
+        runs can be probed electrically and compared against the picture.
+      </p>
+      <p>
+        The surface is then photographed through a microscope in many small,
+        overlapping frames and stitched into one image, which for this die came
+        to roughly two hundred megapixels. The talk notes that this was more than
+        the job needed, and that about six thousand pixels square would have been
+        enough to recover everything.
+      </p>
+      <p>
+        One photograph is not sufficient, because the structures are stacked. The
+        metal wiring hides the polysilicon, which hides the diffusion, and from
+        directly above it is not always possible to say which layer a feature
+        belongs to. So the layers are chemically stripped and the die is
+        photographed again underneath. That step is irreversible: it consumes the
+        chip. This is why the trace is a one-way process and why a single team
+        doing it carefully is worth more than many doing it casually.
+      </p>
+      <p>
+        The images are then vectorised by hand. Someone draws the outline of every
+        conducting region on top of the photographs, with a purpose-built tool,
+        producing polygons rather than pixels. This is the slow part and it is
+        pure labour. What comes out the far end is a geometric description of the
+        chip: a set of shapes, each on a known layer.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="netlist" data-history>
+      <div class="sec-head">
+        <p class="eyebrow">Written, not measured</p>
+        <h2>Geometry becomes a netlist, and a netlist is the whole chip</h2>
+      </div>
+      <p>
+        A transistor in this process is not a component that was placed. It is a
+        place where polysilicon crosses diffusion. So once the polygons exist and
+        their layers are known, the transistors can be found by intersection, and
+        the wires by which polygons touch. That yields a netlist: every switch,
+        the node that gates it, and the two nodes it can join.
+      </p>
+      <p>
+        The claim the talk makes at this point is the one worth pausing on. The
+        netlist alone specifies the complete working of the processor. Not a
+        summary of it, not a model of it that has to be corrected against a
+        datasheet afterwards. Everything the chip does, including the parts nobody
+        documented, is a consequence of that switch network.
+      </p>
+      <p>
+        This site is a test of that claim. It contains
+        <b class="mono" data-fact="transistors">…</b> transistors across
+        <b class="mono" data-fact="nodes">…</b> nodes and no model of a 6502 at
+        all. There is no instruction table in the simulation path, no cycle
+        counter, and no register that is stored anywhere but in the nodes that
+        physically hold it. Every number on every other page of this site is read
+        back out of that network after settling it. The instruction decoder alone,
+        the block the talk singles out as where the chip's personality lives, is
+        <b class="mono" data-fact="decodeTransistors">…</b> of those transistors.
+      </p>
+      <p>
+        The two files it is built from are the polygons and the transistors of
+        that trace. They are CC BY-NC-SA and they are not this project's work:
+        see <a href="./#credit">Credit</a>.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="checked">
+      <div class="sec-head">
+        <p class="eyebrow">Measured</p>
+        <h2>The claims, asked of the chip</h2>
+      </div>
+      <p class="lede">
+        A talk is prose, and prose about silicon is exactly the thing this site
+        exists to stop taking on trust. So each claim below is paired with a
+        function that asks the same question of the published measurements, of
+        the <b class="mono" data-fact="terms">…</b> decode product terms and
+        everything else derived from the switch network, and
+        the verdict is computed by comparing the two rather than written down. If
+        this chip stops agreeing, this page changes on its own.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">verdicts · computed</span>
+          <span class="bar-note" id="tk-tally"></span>
+        </div>
+        <div class="tk-checks" id="tk-checks"></div>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="brk">
+      <div class="sec-head">
+        <p class="eyebrow">Run on the chip</p>
+        <h2>The BRK that gets lost</h2>
+      </div>
+      <p class="lede">
+        One claim could not be checked from a published file, because it is about
+        two things happening at the same moment. It is also the best story in the
+        talk, so it was worth running.
+      </p>
+      <p>
+        The 6502 has no separate interrupt sequencer. Its predecode logic forces
+        the instruction register to <b class="mono">$00</b> when an interrupt is
+        pending, and <b class="mono">$00</b> is <b class="mono">BRK</b>. So the
+        hardware runs the BRK sequence for IRQ, NMI and reset alike: push the
+        program counter, push the status register, fetch a vector. Only the vector
+        and the B flag differ. It is a real saving, and it is the kind of thing
+        that is invisible from outside until it costs you something.
+      </p>
+      <p>
+        What it costs is this. A genuine BRK being fetched at the instant an
+        interrupt arrives has nothing left to distinguish it, and is serviced as
+        the interrupt instead. The BRK is lost.
+      </p>
+      <p>
+        We reproduced that on this simulation by asserting IRQ at every half-cycle
+        offset around a BRK's own opcode fetch, and reading back what reached the
+        stack. The offsets are offsets from the fetch, found by running until
+        <b class="mono">sync</b>, so nothing here depends on a remembered
+        half-cycle number.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">tests/interrupts.rs</span>
+          <span class="bar-note">what the chip pushed</span>
+        </div>
+        <div class="tk-table-wrap">
+          <table class="tk-table">
+            <thead>
+              <tr><th>IRQ asserted</th><th>Pushed address</th><th>B flag</th><th>Serviced as</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>never</td><td class="mono">BRK + 2</td><td class="mono">set</td><td>BRK</td></tr>
+              <tr><td>1 to 2 half-cycles early</td><td class="mono">BRK + 2</td><td class="mono">set</td><td>BRK, the interrupt missed its sampling point</td></tr>
+              <tr class="tk-hit"><td>3 to 6 half-cycles early</td><td class="mono">BRK</td><td class="mono">clear</td><td>IRQ. The BRK is lost</td></tr>
+              <tr><td>7 or more half-cycles early</td><td class="mono">BRK - 1</td><td class="mono">clear</td><td>an ordinary IRQ, before the BRK was fetched</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="bk-foot muted">
+          In the middle band the handler is given the address of the BRK itself
+          with B clear, so it cannot tell a BRK happened, and the skip past the
+          byte after BRK never occurs.
+        </p>
+      </div>
+      <p>
+        The same experiment settles the other half of the claim. Reset is said to
+        run the identical sequence with the writes suppressed, and it does:
+        nothing lands in the stack page, and the stack pointer still moves by
+        three, one for each push that was not performed. That is why a 6502 comes
+        out of reset with whatever stack pointer it happened to have, minus three,
+        and why this site's stack readout refuses to report a depth.
+      </p>
+      <p class="tk-where"><a href="trace">Follow any opcode half-cycle by half-cycle on Trace</a></p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="since">
+      <div class="sec-head">
+        <p class="eyebrow">Measured</p>
+        <h2>What the talk asked for, and where it stands</h2>
+      </div>
+      <p class="lede">
+        The last part of the talk is a list of things that ought to be done next.
+        It is a useful list to be measured against, because some of it is now
+        done and some of it is still open, and the difference is not the part
+        anyone would have guessed.
+      </p>
+      <div class="tk-since">
+        <div class="tk-item">
+          <h3>Understand the random control logic</h3>
+          <p>
+            The talk is candid that nobody had found a way to make this part of
+            the chip legible. NMOS builds logic exactly one way, which turns out
+            to be enough: a pullup holds a node high and a pulldown network to
+            ground beats it, so every static gate is an inverted sum of products.
+            Reading that rule off the switch network recognises
+            <b class="mono" data-fact="gates">…</b> gates, with
+            <b class="mono" data-fact="unresolvedGates">…</b> node left over.
+          </p>
+          <p class="tk-where"><a href="schematic">Schematic</a></p>
+        </div>
+        <div class="tk-item">
+          <h3>Test other emulators against a perfect one</h3>
+          <p>
+            Done here in the opposite direction: the original JavaScript engine
+            is the oracle, and this implementation is the thing under test. Every
+            node is compared at every half-cycle rather than just the registers,
+            because matching registers would only show agreement about the 6502
+            while matching nodes shows agreement about the silicon.
+          </p>
+          <p class="tk-where"><a href="./#verification">Verification</a></p>
+        </div>
+        <div class="tk-item">
+          <h3>Simulate any chip made the same way</h3>
+          <p>
+            The talk's strongest structural claim is that this style of emulator
+            never grows: you add polygons, not code, and the same engine runs any
+            chip from the same process, or something that is not a processor at
+            all. That is now a library rather than an argument. The engine names
+            no chip, and the 6502, the 6800 and the Z80 load and settle through
+            identical calls.
+          </p>
+          <p class="tk-where"><a href="https://github.com/tinymachines/halfphi">halfphi</a></p>
+        </div>
+        <div class="tk-item">
+          <h3>Break transistors and see what still works</h3>
+          <p>
+            Not built. The talk describes disabling transistors and finding that
+            a test program still passes, which measures the coverage of the
+            program rather than the health of the chip. It is the one idea on the
+            list that nothing here does, and it needs no new die data: it is a
+            property of the solver.
+          </p>
+          <p class="tk-where muted">Open</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap sec" id="credit-here">
+      <div class="sec-head">
+        <h2>Whose work this is</h2>
+      </div>
+      <p class="bp-prose">
+        The die trace is by Greg James, Brian Silverman, Barry Silverman and Ed
+        Spittles, and is licensed CC BY-NC-SA 3.0. Those terms carry to
+        everything on this site. The talk is Michael Steil's. This page is our
+        account of it and our own measurements against it, and where the two
+        disagree the disagreement is on the page rather than smoothed away.
+      </p>
+      <p class="tk-links">
+        <a class="btn" href="https://media.ccc.de/v/27c3-4159-en-reverse_engineering_mos_6502">The recording</a>
+        <a class="btn btn-ghost" href="archive/">The visual6502 archive</a>
+        <a class="btn btn-ghost" href="./#credit">Credit and licence</a>
+      </p>
+    </section>
+
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="talk.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

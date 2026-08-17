@@ -76,6 +76,8 @@ export const MENU = [
         hint: 'what the die view is actually showing' },
       { label: 'Verification', page: '', hash: 'verification', marks: false,
         hint: 'two oracles, either alone insufficient' },
+      { label: 'The talk', page: 'talk',
+        hint: 'how the die was opened and traced, re-checked here' },
       { label: 'Credit', page: '', hash: 'credit', marks: false,
         hint: 'who traced the die, and the licence' },
       { label: 'Archive', href: 'archive/',
