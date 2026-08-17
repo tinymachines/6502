@@ -108,11 +108,15 @@ fn main() -> std::io::Result<()> {
         s.push_str(&nl.gates_of(n as NodeId).len().to_string());
     }
     s.push_str("],\n  \"nodeRole\": [");
-    for n in 0..nl.node_count() {
-        if n > 0 {
+    // Iterated rather than indexed: `role` is built as `vec![0u8; node_count()]`
+    // so the two are exactly equivalent, and the index was only ever used to
+    // reach back into it. The loops above genuinely need `n` -- they pass it as
+    // a NodeId -- which is why only this one was flagged.
+    for (i, r) in role.iter().enumerate() {
+        if i > 0 {
             s.push(',');
         }
-        s.push_str(&role[n].to_string());
+        s.push_str(&r.to_string());
     }
     s.push_str("],\n  \"controlPaths\": [\n");
     for (i, (node, a, b, bits)) in paths.iter().enumerate() {
