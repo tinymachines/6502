@@ -222,6 +222,114 @@ async function ready(d, sel = '#bk-main') {
        portNodes.size === 0 || fromPort.length > 0,
        `${portNodes.size} ports, ${fromPort.length} wires from them`);
 
+    // --- the port toggles ----------------------------------------------------
+    //
+    // The pills switch wires into the drawing. Three things have to hold, and
+    // the third is the one that is easy to get wrong: a signal can cross the
+    // boundary more than one way, so the same wire has a pill under two
+    // headings, and clicking one must not silently flip the other.
+    await load('block?b=program-counter');
+    d = f.contentDocument;
+    await ready(d);
+
+    // How many ports the drawing says it ended at. Read from the page's own
+    // note because that is computed from what was actually placed, not from
+    // what the walk intended to place.
+    const portsDrawn = () => {
+      const m = /(\d+) ports where it ends/.exec(d.getElementById('bk-circuit-note').textContent);
+      return m ? Number(m[1]) : -1;
+    };
+    const pills = () => [...d.querySelectorAll('.bk-port')];
+
+    ok('on arrival every port is switched off',
+       pills().length > 0 && pills().every((p) => !p.classList.contains('on')),
+       `${pills().filter((p) => p.classList.contains('on')).length} of ${pills().length} on`);
+    ok('and the block is drawn with no ports at all', portsDrawn() === 0,
+       `${portsDrawn()} ports drawn`);
+
+    // Every member is drawn: "the block is lit" has to mean all of it. The
+    // backward walk from what the block produces does NOT reach every member on
+    // its own, so this fails without the pass that seeds the remainder.
+    const drawnSignals = () => {
+      const m = /(\d+) signals in the block/.exec(d.getElementById('bk-circuit-note').textContent);
+      return m ? Number(m[1]) : -1;
+    };
+    const pcBlock = functional.find((b) => b.name === 'Program counter');
+    ok('and every signal in the block is drawn, not just the reachable ones',
+       drawnSignals() === pcBlock.nodes, `${drawnSignals()} of ${pcBlock.nodes}`);
+
+    // A pill already marked `shown` is one whose wires are on screen anyway --
+    // a static-logic gate this block is credited with driving, which `ports()`
+    // lists on the boundary but the drawing has always included. Switching one
+    // of those on correctly changes nothing, so testing with it would assert
+    // the opposite of the feature.
+    const first = pills().find((p) => !p.classList.contains('shown'));
+    const firstKey = first.dataset.port;
+    first.click();
+    await sleep(120);
+    ok('switching a port on lights its pill',
+       d.querySelector(`[data-port="${CSS.escape(firstKey)}"]`).classList.contains('on'),
+       firstKey);
+    ok('and brings its wires into the drawing', portsDrawn() > 0,
+       `${portsDrawn()} ports drawn after one toggle`);
+
+    first.click();
+    await sleep(120);
+    ok('switching it off again removes them',
+       !d.querySelector(`[data-port="${CSS.escape(firstKey)}"]`).classList.contains('on')
+       && portsDrawn() === 0,
+       `${portsDrawn()} ports drawn`);
+
+    // The overlap. Find one stem carrying a pill under two different headings,
+    // which is the case the whole per-pill design exists for.
+    // Not every block has a stem under two headings, so the harness looks for
+    // one instead of assuming. Asserting the rule on a block that cannot
+    // exercise it would be a test that passes by not running.
+    const overlapping = () => {
+      const m = new Map();
+      for (const p of pills()) {
+        if (p.classList.contains('shown')) continue;
+        // Matched on the WIRES, not on the stem. Two pills can share a stem and
+        // stand for different signals: stems have their digits stripped, and
+        // `Joined` lists the far side of a switch where `Operated by` lists the
+        // gate. `shown` means every wire of this pill is on screen, so the only
+        // pair that can exercise it is one covering the same wires. The pill's
+        // title is exactly that list, which is what makes this checkable from
+        // outside the page.
+        const g = p.dataset.port.split(':')[0];
+        const k = p.title;
+        if (!m.has(k)) m.set(k, new Map());
+        m.get(k).set(g, p.dataset.port);
+      }
+      const hit = [...m.values()].find((byGroup) => byGroup.size > 1);
+      return hit ? [...hit.values()] : undefined;
+    };
+    let shared = overlapping();
+    for (const cand of ['data-bus', 'address-latches', 'alu', 'registers']) {
+      if (shared) break;
+      await load(`block?b=${cand}`);
+      d = f.contentDocument;
+      await ready(d);
+      shared = overlapping();
+    }
+    if (!shared) {
+      ok('a stem appears under more than one heading somewhere', false,
+         'none found on this block, so the overlap rule went untested');
+    } else {
+      const [a, b] = shared;
+      d.querySelector(`[data-port="${CSS.escape(a)}"]`).click();
+      await sleep(120);
+      const other = d.querySelector(`[data-port="${CSS.escape(b)}"]`);
+      ok('switching one heading on does NOT switch the other on',
+         !other.classList.contains('on'), `${a} clicked, ${b} reads on`);
+      ok('and the other is marked as already shown instead',
+         other.classList.contains('shown'), `${b} classes: ${other.className}`);
+      d.querySelector(`[data-port="${CSS.escape(a)}"]`).click();
+      await sleep(120);
+      ok('and the marking clears when it is switched off',
+         !other.classList.contains('shown') && portsDrawn() === 0, other.className);
+    }
+
     // --- the directory -------------------------------------------------------
     await load('block');
     d = f.contentDocument;

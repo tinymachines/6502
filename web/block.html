@@ -58,7 +58,7 @@
         <div class="console">
           <div class="console-bar">
             <span class="tag live">interface · derived</span>
-            <span class="bar-note">click a bus to put the circuit view on it</span>
+            <span class="bar-note">switch a port on to draw it with the block</span>
           </div>
           <div class="bk-ports" id="bk-ports"></div>
           <p class="bk-foot muted" id="bk-ports-note"></p>
@@ -89,10 +89,14 @@
               <span>Signal</span>
               <select id="bk-signal" aria-label="Signal in this block"></select>
             </label>
+            <!-- The block is always drawn whole, so there is no depth over it.
+                 What is left to choose is how far a port the reader switched ON
+                 is followed outward, and 1 means it is drawn as the boundary
+                 pill it has always been. -->
             <label class="field">
-              <span>Depth <b class="mono" id="bk-depth-val">3</b></span>
-              <input id="bk-depth" type="range" min="1" max="5" value="3"
-                     aria-label="How many steps to walk">
+              <span>Port reach <b class="mono" id="bk-depth-val">1</b></span>
+              <input id="bk-depth" type="range" min="1" max="3" value="1"
+                     aria-label="How far to follow a port that is switched on">
             </label>
             <div class="field">
               <span>Direction</span>

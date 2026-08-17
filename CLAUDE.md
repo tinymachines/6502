@@ -1472,6 +1472,64 @@ apart at some width nobody photographed.
     therefore always present, so "there is prose above the interface" stopped
     being free the moment it became per-block.
 
+#### The ports are switches, and the block is always drawn whole
+
+The circuit view used to be a cone from one chosen signal, so a reader had to
+pick somewhere to stand before they could see anything and what they got
+depended on where they picked. It now draws **the whole block** and nothing
+else, and each port pill is a switch that brings that wire in.
+
+- **The block is a better bound than a radius.** It is what the page is about,
+  `blocks.rs` already measured where it stops, and the picture no longer changes
+  shape depending on where you clicked. There is no depth over it: `blockCone`
+  walks until the block is exhausted, and `MAX_LEVELS` is a runaway guard rather
+  than a design choice.
+- **Seeds are measured, not chosen.** Backward reads "what makes each value", so
+  it starts from what the block hands out (`drivesOut`) and works inward.
+  Forward starts from what the block is handed.
+- **Walking back from the outputs does not reach the whole block**, and "the
+  block is lit" has to mean all of it. On the program counter that left **8 of
+  64** signals undrawn: a member can drive nothing that leaves, or sit behind
+  feedback the backward walk never enters. Whatever is unreached is seeded as a
+  fresh column and the walk continues. Pinned per block against `blocks.json`.
+- **The depth slider became "port reach"**, because the only distance left to
+  choose is how far a port the reader *switched on* is followed outward. One is
+  the default and means the boundary pill it has always been. Following a lit
+  port further is not the page annexing a neighbour: it is a wire somebody
+  explicitly asked for.
+
+**The bookkeeping is per pill, and the drawing takes the union.** A signal can
+cross the boundary more than one way, so the same wire has a pill under two
+headings. Clicking `Told` must never silently flip a pill under `Joined` that
+nobody touched, so toggle state belongs to the pill; `state.litNodes` is the
+union, and that is what the walk reads.
+
+- **`shown` is a fact about the drawing, not about the toggles**, which is why
+  `paintPorts()` runs at the *end* of `drawCircuit()` and reads `state.drawn`
+  out of the layout's own placement. Two kinds of pill get marked: one whose
+  wires another heading already asked for, and one whose wires were always on
+  screen anyway. The second was a surprise and is the more useful: `ports()`
+  lists **attributed static-logic gates** on the boundary, but the drawing has
+  always treated them as part of the block. Pressing one correctly did nothing,
+  and a switch that visibly does nothing reads as broken.
+- **A partial overlap is not `shown`.** Every wire the pill stands for has to be
+  on screen, or the marking would be a lie about the half that is missing.
+- **Pill keys are positional (`${group}:${index}`), not `${group}:${stem}`.**
+  Unnamed nodes are deliberately grouped by originating block rather than by
+  stem, because `#1446` and `#1451` are not a bus, so one heading legitimately
+  holds several pills all labelled `unnamed`. A stem key collided between them
+  and one click lit two. **The harness caught it**, which is the whole argument
+  for having written the overlap assertion before believing the feature worked.
+- **The harness matches pills by their WIRES, not by their stem.** Two pills can
+  share a stem and stand for different signals: stems have their digits
+  stripped, and `Joined` lists the far side of a switch where `Operated by`
+  lists the gate. Grouping by stem found a "pair" that was two unrelated wires,
+  and the `shown` assertion failed against correct behaviour. The pill's
+  `title` is the list of wire names, which is what makes it checkable from
+  outside the page. It also **searches for a block that has an overlap** rather
+  than assuming one: the program counter has none, and a rule asserted where it
+  cannot fire is a test that passes by not running.
+
 #### `web/block.js` contained a raw NUL byte, and grep silently skipped it
 
 `const key = \`${stem}\0${block}\`` was written with a **literal** NUL rather

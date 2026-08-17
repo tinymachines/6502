@@ -2157,6 +2157,33 @@ body.no-scroll #view { z-index: 70; }
   border: 1.4px solid var(--line); border-radius: .25rem; transition: .12s;
 }
 .bk-port:hover { border-color: var(--accent); color: var(--accent); }
+
+/* A pill is a switch, so it needs a resting state that reads as OFF and an on
+   state that reads as on without being mistaken for hover. The variant restates
+   its colour: `.bk-port:hover` declares one at (0,2,0) and would otherwise
+   outrank a variant's resting (0,2,0)... it ties, and source order decides, so
+   the on rules come after the hover rule on purpose. Same trap the primary
+   button hit, where hover put cyan text on a gold background at 1.08:1. */
+.bk-port.on,
+.bk-port.on:hover {
+  background: color-mix(in srgb, var(--accent) 22%, #101829);
+  border-color: var(--accent);
+  color: var(--foreground);
+}
+
+/* Already on screen through a different heading. Dashed rather than filled:
+   this pill is not switched on, and drawing it as though it were would be the
+   page claiming the reader did something they did not. */
+.bk-port.shown {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--muted);
+}
+.bk-port.shown::after {
+  content: 'shown';
+  font-size: .62rem; letter-spacing: .06em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 75%, var(--muted));
+}
 .bk-port-w { color: var(--muted); }
 .bk-dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; flex: none; }
 .bk-chip { display: inline-flex; align-items: center; gap: .35rem; }

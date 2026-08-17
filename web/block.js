@@ -27,8 +27,23 @@ const state = {
   data: null,       // schematic.json -- the only file indexed by node number
   meta: null,       // blocks.json's per-block metadata, indexed by block id
   id: null,         // which block, or null for the directory
-  root: null,       // the signal the circuit view is walking from
-  depth: 3,
+  root: null,       // the signal the workbench link and picker point at
+  // Which port pills the reader has switched on, keyed `${group}:${stem}`.
+  // Per pill rather than per wire, deliberately: a signal can cross the
+  // boundary more than one way and therefore appears under more than one
+  // heading, and clicking `Told` must never silently flip a pill under
+  // `Joined` that nobody touched. The DRAWING takes the union of them, and a
+  // pill whose wires are already on screen through another heading is marked
+  // as such rather than left looking inert. That way the overlap is surfaced
+  // instead of being either hidden or spooky.
+  lit: new Set(),
+  litNodes: new Set(),   // the union, rebuilt whenever `lit` changes
+  drawn: new Set(),      // what the last drawing actually placed
+  portOf: new Map(),     // pill key -> the outside nodes it stands for
+  // How far a LIT port is followed outward. The block itself is always drawn
+  // whole, so this is the only distance left for a reader to choose. One means
+  // the port is drawn as the boundary pill it has always been.
+  depth: 1,
   dir: 'back',
   machine: null,
   inside: null,     // Set of node ids blocks.rs places in this block
@@ -191,20 +206,55 @@ function byStem(map) {
  * to start in one. Walk far enough here and you have seen the block; walk far
  * enough there and you have seen the chip.
  */
-function blockCone(root, depth, dir) {
-  const levels = [[root]];
-  const seen = new Set([root]);
+/**
+ * The whole block, laid out from what it produces, plus whatever ports are lit.
+ *
+ * This used to be a cone from one chosen signal, which meant a reader had to
+ * pick somewhere to stand before they could see anything, and what they got
+ * depended entirely on where they picked. The block is a better bound than an
+ * arbitrary radius: it is the thing the page is about, `blocks.rs` already
+ * measured where it stops, and drawing all of it means the picture no longer
+ * changes shape depending on where you happened to click.
+ *
+ * Seeds are the signals something OUTSIDE reads -- what the block produces.
+ * Walking backward from those, each successive column is one step further from
+ * the outside world, which is the reading order the page already claims for its
+ * backward walk. A block that produces nothing readable falls back to all of its
+ * members, so the drawing can never come out empty.
+ *
+ * There is no depth over the block: it is walked until exhausted, because the
+ * boundary is the bound. `MAX_LEVELS` is a runaway guard, not a design choice.
+ */
+const MAX_LEVELS = 24;
+
+function blockCone(seeds, dir) {
+  const levels = [[...seeds]];
+  const seen = new Set(seeds);
   const elements = [];
   let truncated = 0;
+  // How far outside the block each drawn node sits. Members are 0; a lit port
+  // is 1. Only used to decide whether a lit port may itself be expanded.
+  const outDist = new Map(seeds.map((n) => [n, 0]));
 
-  for (let level = 0; level < depth; level++) {
+  for (let level = 0; level < MAX_LEVELS; level++) {
     const next = [];
     for (const node of levels[level]) {
-      // A port is a boundary, not a frontier.
-      if (!expandable(node)) continue;
+      // A port is a boundary, not a frontier -- unless the reader switched it
+      // on and asked for more than the pill. Toggling one is an explicit
+      // request for that wire, so following it is not the page annexing a
+      // neighbour it was never asked about.
+      const out = outDist.get(node) ?? 0;
+      if (!expandable(node) && out >= state.depth) continue;
 
       const push = (n) => {
-        if (!isRail(n) && !seen.has(n)) { seen.add(n); next.push(n); }
+        if (isRail(n) || seen.has(n)) return;
+        // The gate on the whole feature: a port enters the drawing only if its
+        // pill is lit. Everything inside the block is always drawn.
+        const isPort = !expandable(n);
+        if (isPort && !state.litNodes.has(n)) return;
+        seen.add(n);
+        outDist.set(n, isPort ? out + 1 : out);
+        next.push(n);
       };
       const cap = (list) => {
         if (list.length <= MAX_FAN) return list;
@@ -249,10 +299,23 @@ function blockCone(root, depth, dir) {
         push(far);
       }
     }
-    if (!next.length) break;
+    if (!next.length) {
+      // Walking back from what the block produces does not necessarily reach
+      // all of it: a member can drive nothing that leaves, or sit behind
+      // feedback the backward walk never enters. Measured on the program
+      // counter, that left 8 of its 64 signals undrawn, and "the block is lit"
+      // has to mean the whole block or it means nothing. Whatever is left is
+      // seeded as a fresh column and the walk continues into it.
+      const left = [...state.inside].filter((n) => !seen.has(n));
+      if (!left.length) break;
+      for (const n of left) { seen.add(n); outDist.set(n, 0); next.push(n); }
+    }
     levels.push(next);
   }
-  return { root, levels, elements, dir, truncated };
+  // `root` is the signal the picker and the workbench link point at, carried
+  // through so the drawing can still mark one pill as the subject. It is no
+  // longer what the walk is built from: the block is.
+  return { root: state.root, levels, elements, dir, truncated };
 }
 
 // ---------------------------------------------------------------------------
@@ -292,7 +355,10 @@ function blockChip(id, parent, { link = false } = {}) {
 function renderPorts() {
   const host = $('bk-ports');
   host.replaceChildren();
-  const p = ports();
+  state.portOf.clear();
+  // Cached: the drawing needs the same measurement to pick its seeds, and
+  // computing the boundary twice is two chances to disagree about it.
+  const p = state.ports = ports();
 
   const groups = [
     ['Told', 'feedsIn', p.feedsIn,
@@ -316,32 +382,126 @@ function renderPorts() {
       text('p', 'muted', 'Nothing crosses the boundary this way.', list);
       continue;
     }
-    for (const s of stems) {
+    for (const [i, s] of stems.entries()) {
+      // One pill, one key. A stem stands for every bit of a bus, so switching
+      // `ab` on brings all sixteen wires in at once, which is the only reading
+      // that matches what the pill says.
+      //
+      // Keyed by POSITION, not by stem, and that is not fussiness: unnamed
+      // nodes are deliberately grouped by the block they come from rather than
+      // by stem, because `#1446` and `#1451` are not a bus. So one heading can
+      // hold several pills all labelled `unnamed`, and a `${group}:${stem}` key
+      // collides between them -- clicking one lit two. The harness caught it.
+      const pk = `${key}:${i}`;
+      state.portOf.set(pk, s.nodes);
       const b = text('button', 'bk-port', null, list);
       b.type = 'button';
+      b.dataset.port = pk;
+      // The stem separately, because the key is positional now and anything
+      // asking "is this the same wire under another heading" needs the name.
+      b.dataset.stem = s.stem;
       b.dataset.node = String(s.inner);
       b.title = s.nodes.map(nameOf).sort().join(' ');
       const dot = text('i', 'bk-dot', '', b);
       dot.style.background = blockCss(s.block);
       text('span', 'bk-port-name mono', s.stem, b);
       if (s.nodes.length > 1) text('span', 'bk-port-w mono', `×${s.nodes.length}`, b);
-      b.addEventListener('click', () => setRoot(s.inner));
+      b.addEventListener('click', () => togglePort(pk));
     }
   }
   // The four counts are of *signals*, and a signal can cross more than one way:
-  // a wire can be both joined by a switch and read by a gate outside. Saying so
-  // is cheaper than a footnote explaining why the totals do not add up.
-  $('bk-ports-note').textContent =
-    'A signal can appear under more than one heading: being joined to a wire and '
-    + 'being read by a gate are different relations, and a wire can be both.';
+  // a wire can be both joined by a switch and read by a gate outside. The note
+  // under them says so, and paintPorts owns it because what needs saying
+  // changes once pills start overlapping. It is not called here: it reads what
+  // the drawing placed, so it runs at the end of drawCircuit instead.
+}
+
+/**
+ * Where the walk starts, which is a property of the block rather than a choice.
+ *
+ * Backward reads "what makes each value", so it starts at what the block hands
+ * to the rest of the chip and works inward. Forward reads "what each value
+ * changes", so it starts at what the block is handed. Either way the seeds are
+ * measured, not picked, and a block that has neither falls back to all of its
+ * members so the drawing cannot come out empty.
+ */
+function seeds() {
+  const p = state.ports;
+  const chosen = state.dir === 'back'
+    ? [...p.drivesOut.keys()]
+    : [...new Set([...p.feedsIn.values(), ...p.joined.values(), ...p.control.values()])];
+  return chosen.length ? chosen : [...state.inside];
+}
+
+/**
+ * Switch one port pill on or off, and reconcile the overlap.
+ *
+ * `state.lit` is per pill; `state.litNodes` is the union of the wires those
+ * pills stand for, and the union is what the drawing reads. Those are two
+ * different things whenever one wire crosses the boundary more than one way,
+ * which is common: a bus can be joined by a pass transistor *and* read by a
+ * gate outside, so it has a pill under two headings.
+ *
+ * Keeping them separate is what lets the page be honest about that. Nothing
+ * flips a pill the reader did not click, and a pill whose wires are already on
+ * screen because of a different heading is marked `shown` rather than left
+ * looking as though it did nothing. Switching that pill off then does not
+ * remove the wires either, because the other pill is still asking for them --
+ * which is exactly what `shown` is warning about.
+ */
+function togglePort(pk) {
+  if (state.lit.has(pk)) state.lit.delete(pk); else state.lit.add(pk);
+  state.litNodes = new Set();
+  for (const k of state.lit) {
+    for (const n of state.portOf.get(k) || []) state.litNodes.add(n);
+  }
+  drawCircuit();
+}
+
+/**
+ * Repaint the pills. The markup is built once; only the state moves.
+ *
+ * Called from `drawCircuit`, and it has to be, because `shown` is a fact about
+ * what ended up on screen rather than about what was asked for. It is read from
+ * the drawing's own placement.
+ */
+function paintPorts() {
+  let on = 0;
+  for (const b of document.querySelectorAll('.bk-port')) {
+    const pk = b.dataset.port;
+    const lit = state.lit.has(pk);
+    // Already on screen, for ANY reason. Two get here: another heading's pill
+    // asked for the same wire, and a static-logic gate this block is credited
+    // with driving, which `ports()` lists on the boundary but the drawing has
+    // always treated as part of the block and drawn. Both cases are a switch
+    // that would visibly do nothing, and marking them is better than letting a
+    // reader press one and watch the picture sit still.
+    //
+    // Only meaningful for a pill that is itself off, and only when EVERY wire
+    // it stands for is on screen: a partly drawn bus is not "already shown",
+    // and saying so would be a lie about the half that is missing.
+    const nodes = state.portOf.get(pk) || [];
+    const covered = !lit && nodes.length > 0 && nodes.every((n) => state.drawn.has(n));
+    b.classList.toggle('on', lit);
+    b.classList.toggle('shown', covered);
+    b.setAttribute('aria-pressed', String(lit));
+    if (lit) on += 1;
+  }
+  $('bk-ports-note').textContent = on
+    ? `${on} port${on === 1 ? '' : 's'} switched on and drawn with the block. `
+      + 'A signal can appear under more than one heading, so a pill marked '
+      + '"shown" is already on screen through another one.'
+    : 'The block is drawn on its own. Switch a port on to bring that wire into '
+      + 'the circuit below. A signal can appear under more than one heading: '
+      + 'being joined to a wire and being read by a gate are different relations.';
 }
 
 function drawCircuit() {
   const svg = $('bk-svg');
   svg.replaceChildren();
-  if (state.root == null) return;
+  if (!state.ports) return;
 
-  const c = blockCone(state.root, state.depth, state.dir);
+  const c = blockCone(seeds(), state.dir);
   const L = draw.layout(c);
   svg.setAttribute('viewBox', `0 0 ${L.width} ${L.height}`);
   svg.setAttribute('width', L.width);
@@ -363,6 +523,8 @@ function drawCircuit() {
   });
 
   const drawn = [...L.place.keys()];
+  // What actually got placed, which is what `shown` on a pill is a claim about.
+  state.drawn = new Set(drawn);
   const members = drawn.filter(inside).length;
   const logic = drawn.filter(affiliated).length;
   const outside = drawn.length - members - logic;
@@ -372,6 +534,9 @@ function drawCircuit() {
     + (c.truncated ? ` · ${c.truncated} further connections not drawn` : '')
     + `. Walking ${state.dir === 'back' ? 'backward: what makes each value'
                                         : 'forward: what each value changes'}.`;
+
+  // Last, because a pill's `shown` marking is read off the placement above.
+  paintPorts();
 }
 
 function setRoot(node) {
@@ -636,6 +801,12 @@ function renderBlock() {
       (reach.get(n) > reach.get(best) ? n : best), namedInside[0]);
   }
   sel.value = String(state.root);
+
+  // Ports are switched off on arrival, and the set is cleared per block: a pill
+  // key is only meaningful against the block that built it, so carrying one
+  // across would light a wire on a page that has never heard of it.
+  state.lit.clear();
+  state.litNodes = new Set();
 
   renderPorts();
   paintRoot();
