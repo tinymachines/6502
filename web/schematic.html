@@ -127,6 +127,11 @@
                       aria-label="Signal" title="Signal: what this wire is">◈</button>
               <button class="sp-icon" type="button" data-tab="walk"
                       aria-label="Walk" title="Walk: where you have been">⇢</button>
+              <!-- Only useful when a block is on the bench, which happens on
+                   arrival from a block page. It is hidden otherwise rather than
+                   left as an icon that opens an apology. -->
+              <button class="sp-icon" type="button" data-tab="ports" id="sp-ports-icon" hidden
+                      aria-label="Ports" title="Ports: what crosses this block's boundary">⊞</button>
               <button class="sp-icon" type="button" data-tab="io"
                       aria-label="I/O" title="I/O: the pads and the input pins">⇄</button>
               <button class="sp-icon" type="button" data-tab="mem"

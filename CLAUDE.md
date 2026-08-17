@@ -1530,6 +1530,63 @@ union, and that is what the walk reads.
   than assuming one: the program counter has none, and a rule asserted where it
   cannot fire is a test that passes by not running.
 
+#### `block-cone.js`: where a block stops, computed once
+
+The boundary and the block's own drawing moved out of `block.js` when the
+workbench wanted the same block on its bench. Same reasoning as `sch-draw.js`
+and `block-palette.js`, and a higher stake than either: this is the code that
+decides which wires are **ports**, and two pages answering that from two copies
+would eventually disagree, with no way for a reader comparing them to tell which
+was lying.
+
+It owns no state and touches no DOM. Each page passes its own already-built
+indexes in through a context, and gets back `ports`, `byStem`, `seeds` and
+`cone`. `block.js` keeps thin delegations (`const inside = (n) =>
+state.view.inside(n)`) so the rest of that file reads as it did.
+
+**The extraction was verified by `_block-test.html` passing unchanged**, which
+is the only thing that makes a refactor of a live page defensible.
+
+#### "Open in the workbench" opens the workbench
+
+The button had always just landed on the schematic page, and the reason is worth
+recording: it built `?find=`, and `schematic.js` has only ever read `?signal=`.
+It looked like it did nothing because it very nearly did.
+
+It now carries the **signal, the block, and which ports are switched on**
+(`schematic?signal=…&block=<slug>&solo=1&ports=feedsIn:1,joined:3`), and the
+bench opens showing what the block page was showing.
+
+- **The block goes down first in `merge()`**, so it holds the base columns and
+  anything the reader then walks to is layered on top. First appearance still
+  wins, so a signal already in the block joins where it is rather than moving --
+  the same rule the walk already followed, which is what keeps the drawing
+  stable as it grows.
+- **`?solo=1` clicks the button rather than calling the API.** A page load
+  carries no user activation, so a real `requestFullscreen` would be refused --
+  and `setupFullscreen` already verifies the request took and covers the
+  viewport itself when it did not. Going through the button gets the fallback
+  for free instead of reimplementing it.
+- **`blocks.json` is fetched only when `?block=` is present.** The schematic
+  page proper is a walk rather than a block and has never needed that file, so
+  charging every visit for it would be a cost with no reader behind it. The two
+  node-indexed files are compared at load rather than trusted, exactly as
+  `block.html` does it.
+- **A block that fails to load must not take the page down.** It is an extra the
+  URL asked for, not the page itself, so it boots after `#sch-main` is shown and
+  reports into the caption.
+- **The Ports icon is hidden when no block is on the bench.** An icon that opens
+  "nothing is loaded" is an apology rather than a control -- same reasoning as
+  `.nav-chip:empty` on the measurement pages. `_solo-test.html` asserts *exactly
+  the ports one* is hidden rather than counting visible icons, so the count
+  cannot drift for some other reason.
+- **`shown` is read from the bench, not from the toggles**: `render()` records
+  what `merge()` actually placed, and the pill marking is computed from that.
+- **Three import rewrites, not one.** `schematic.js` gained `block-cone.js`,
+  `block-notes.js` *and* a `blocks.json` fetch. Miss any and the hashed bundle
+  404s at runtime while `web/` goes on working perfectly. Boot `dist/` before
+  believing a build; this is the second time in one sitting.
+
 #### `web/block.js` contained a raw NUL byte, and grep silently skipped it
 
 `const key = \`${stem}\0${block}\`` was written with a **literal** NUL rather

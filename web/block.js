@@ -20,6 +20,7 @@ import { createDraw, el } from './sch-draw.js';
 import { blockCss } from './block-palette.js';
 import { setupProgramNav } from './program-nav.js';
 import { SLUGS, NOTES, DOES } from './block-notes.js';
+import { createBlockView } from './block-cone.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -51,6 +52,7 @@ const state = {
   // A weaker claim than membership and kept separate for that reason -- see
   // `affiliated` below.
   affiliated: null,
+  view: null,       // block-cone.js, closed over this block's membership
   gateOf: new Map(),
   gatesUsing: new Map(),
   switchesOn: new Map(),
@@ -66,10 +68,15 @@ const nameOf = (n) => draw.nameOf(n);
 // page, so the number dropped is reported.
 const MAX_FAN = 16;
 
-const isRail = (n) => n === state.data.vss || n === state.data.vcc;
+// The block's boundary and the drawing of its inside both live in
+// block-cone.js, because the workbench puts the same block on its bench and two
+// pages answering "where does this block stop" from two copies would eventually
+// disagree about which wires are ports. These are thin delegations so the rest
+// of this file reads as it did.
+const isRail = (n) => state.view.isRail(n);
 
 /** In the block, as `blocks.rs` measured it. */
-const inside = (n) => state.inside.has(n);
+const inside = (n) => state.view.inside(n);
 
 /**
  * A static gate this block's own signals are made of.
@@ -92,231 +99,40 @@ const inside = (n) => state.inside.has(n);
  * floorplan to get wrong -- a schematic has no die coordinates -- but the pills
  * still say which they are.
  */
-const affiliated = (n) => state.affiliated.has(n);
+const affiliated = (n) => state.view.affiliated(n);
 
 /** Somewhere the walk may keep going, as opposed to somewhere it must stop. */
-const expandable = (n) => inside(n) || affiliated(n);
+const expandable = (n) => state.view.expandable(n);
 
 // ---------------------------------------------------------------------------
-// The block's interface: what crosses its boundary
+// The block's interface and circuit
 // ---------------------------------------------------------------------------
 //
-// Four relations, and they are not the same relation. A gate input arriving
-// from outside is the block being told something; an inside signal used outside
-// is the block telling somebody else; a pass transistor joins two wires without
-// either being the cause of the other; and a control line reaching in is the
-// decoder operating machinery it does not own. Collapsing those four into
-// "connections" would throw away the only thing the picture is for.
+// Both live in block-cone.js. They moved there when the workbench wanted to put
+// the same block on its bench: this is the code that decides where a block
+// stops, and two pages answering that from two copies would eventually disagree
+// about which wires are ports, with no way for a reader comparing them to tell
+// which was lying. Same reasoning as sch-draw.js and block-palette.js.
 
-function ports() {
-  const gs = [], sw = [];
-  const feedsIn = new Map(), drivesOut = new Map(), joined = new Map(), control = new Map();
-  // Each port remembers one signal inside the block that it touches, so that
-  // clicking it can put the circuit view somewhere that reaches it.
-  const note = (map, outer, innerNode) => {
-    if (isRail(outer) || inside(outer)) return;
-    if (!map.has(outer)) map.set(outer, innerNode);
-  };
+/** What crosses the boundary, as four relations. */
+const ports = () => state.view.ports();
 
-  for (const g of state.gateOf.values()) {
-    if (!inside(g.out)) continue;
-    gs.push(g);
-    for (const lit of new Set(g.terms.flat())) note(feedsIn, lit, g.out);
-  }
-  // A switch is filed by its channel, not its gate -- the gate is the control
-  // line reaching in from the decoder, and filing by it would put every
-  // datapath pass transistor under `Control pipeline`. Same rule as blocks.rs.
-  for (const [ctrlNode, list] of state.switchesBy) {
-    for (const w of list) {
-      if (!inside(w.a) && !inside(w.b)) continue;
-      sw.push(w);
-      const innerSide = inside(w.a) ? w.a : w.b;
-      note(joined, inside(w.a) ? w.b : w.a, innerSide);
-      note(control, ctrlNode, innerSide);
-    }
-  }
-  // The other direction: an inside signal that something outside reads. A gate
-  // outside using it, or a switch outside that it opens -- a control line this
-  // block generates is still this block driving the rest of the chip.
-  for (const g of state.gateOf.values()) {
-    if (inside(g.out)) continue;
-    for (const lit of new Set(g.terms.flat())) {
-      if (inside(lit) && !drivesOut.has(lit)) drivesOut.set(lit, lit);
-    }
-  }
-  for (const [ctrlNode, list] of state.switchesBy) {
-    if (!inside(ctrlNode)) continue;
-    if (list.some((w) => !inside(w.a) || !inside(w.b))) drivesOut.set(ctrlNode, ctrlNode);
-  }
-
-  return { gates: gs, switches: sw, feedsIn, drivesOut, joined, control };
-}
+/** Collapse `ab0..ab15` into one port sixteen wide. */
+const byStem = (map) => state.view.byStem(map);
 
 /**
- * Collapse `ab0..ab15` into one port sixteen wide.
+ * The whole block, plus whatever ports the reader switched on.
  *
- * The eight bits of a bus are eight separate wires and the schematic draws them
- * that way, but a *boundary* listing them eight times says nothing the width
- * does not say better -- and it is the difference between an interface a reader
- * can take in and 153 chips in a grid. Measured: 196 ports collapse to 95 on the
- * data bus, 149 to 71 on the address latches.
+ * `state.litNodes` is the union of the wires the lit pills stand for, and
+ * `state.depth` is how far a lit port is followed outward. `root` is carried
+ * through so the drawing can still mark one pill as the subject; it is no
+ * longer what the walk is built from, because the block is.
  */
-function byStem(map) {
-  const out = new Map();
-  for (const [node, innerNode] of map) {
-    const nm = nameOf(node);
-    const block = state.data.nodeBlock[node] & 0x7f;
-    // An unnamed node is `#1446`, and splitting trailing digits off that gives
-    // a stem of `#` -- so fifteen unrelated anonymous gate outputs collapsed
-    // into one port labelled `# x15`, which claims a bus that does not exist.
-    //
-    // They are not a bus, but they are not fifteen separate facts either: most
-    // of them are gate outputs in the static logic, and listing them
-    // individually fills the panel with numbers a reader can do nothing with.
-    // So they group by where they come from, which is the only thing about them
-    // that is worth knowing, and the full list stays on the tooltip.
-    const named = state.data.names[node] != null;
-    const m = named ? /^(.*?)(\d+)$/.exec(nm) : null;
-    const stem = named ? (m && m[1] ? m[1] : nm) : 'unnamed';
-    // Keyed by block as well as stem: two blocks can each have unnamed gates,
-    // and merging them would put one dot on a group that has two homes.
-    const key = `${stem}\u0000${block}`;
-    if (!out.has(key)) {
-      out.set(key, { stem, bits: [], nodes: [], inner: innerNode, block });
-    }
-    const e = out.get(key);
-    e.nodes.push(node);
-    if (m && m[1]) e.bits.push(Number(m[2]));
-  }
-  return [...out.values()].sort((a, b) =>
-    b.nodes.length - a.nodes.length || a.stem.localeCompare(b.stem));
-}
-
-// ---------------------------------------------------------------------------
-// The circuit, scoped to the block
-// ---------------------------------------------------------------------------
-
-/**
- * The same walk the workbench does, stopped at the block's edge.
- *
- * A node outside the block is added to its level and then never expanded: it is
- * drawn as a port pill carrying the name of the block it belongs to. That is
- * the whole difference between this and `schematic.js`'s cone, and it is what
- * makes the drawing a picture *of a block* rather than a picture that happens
- * to start in one. Walk far enough here and you have seen the block; walk far
- * enough there and you have seen the chip.
- */
-/**
- * The whole block, laid out from what it produces, plus whatever ports are lit.
- *
- * This used to be a cone from one chosen signal, which meant a reader had to
- * pick somewhere to stand before they could see anything, and what they got
- * depended entirely on where they picked. The block is a better bound than an
- * arbitrary radius: it is the thing the page is about, `blocks.rs` already
- * measured where it stops, and drawing all of it means the picture no longer
- * changes shape depending on where you happened to click.
- *
- * Seeds are the signals something OUTSIDE reads -- what the block produces.
- * Walking backward from those, each successive column is one step further from
- * the outside world, which is the reading order the page already claims for its
- * backward walk. A block that produces nothing readable falls back to all of its
- * members, so the drawing can never come out empty.
- *
- * There is no depth over the block: it is walked until exhausted, because the
- * boundary is the bound. `MAX_LEVELS` is a runaway guard, not a design choice.
- */
-const MAX_LEVELS = 24;
-
-function blockCone(seeds, dir) {
-  const levels = [[...seeds]];
-  const seen = new Set(seeds);
-  const elements = [];
-  let truncated = 0;
-  // How far outside the block each drawn node sits. Members are 0; a lit port
-  // is 1. Only used to decide whether a lit port may itself be expanded.
-  const outDist = new Map(seeds.map((n) => [n, 0]));
-
-  for (let level = 0; level < MAX_LEVELS; level++) {
-    const next = [];
-    for (const node of levels[level]) {
-      // A port is a boundary, not a frontier -- unless the reader switched it
-      // on and asked for more than the pill. Toggling one is an explicit
-      // request for that wire, so following it is not the page annexing a
-      // neighbour it was never asked about.
-      const out = outDist.get(node) ?? 0;
-      if (!expandable(node) && out >= state.depth) continue;
-
-      const push = (n) => {
-        if (isRail(n) || seen.has(n)) return;
-        // The gate on the whole feature: a port enters the drawing only if its
-        // pill is lit. Everything inside the block is always drawn.
-        const isPort = !expandable(n);
-        if (isPort && !state.litNodes.has(n)) return;
-        seen.add(n);
-        outDist.set(n, isPort ? out + 1 : out);
-        next.push(n);
-      };
-      const cap = (list) => {
-        if (list.length <= MAX_FAN) return list;
-        truncated += list.length - MAX_FAN;
-        return list.slice(0, MAX_FAN);
-      };
-
-      if (dir === 'back') {
-        const g = state.gateOf.get(node);
-        if (g) {
-          const inputs = [...new Set(g.terms.flat())];
-          elements.push({ kind: g.kind, out: node, inputs, terms: g.terms, level,
-                          precharge: g.precharge });
-          inputs.forEach(push);
-        }
-      } else {
-        // Forward stops at the edge too: a gate whose output is outside is
-        // another block's circuit, and drawing it here would be this page
-        // quietly annexing its neighbour. That the signal leaves at all is what
-        // the interface panel above is for.
-        for (const g of cap((state.gatesUsing.get(node) || []).filter((x) => expandable(x.out)))) {
-          elements.push({ kind: g.kind, out: g.out, inputs: [node], terms: g.terms,
-                          level, precharge: g.precharge, forward: true });
-          push(g.out);
-        }
-        for (const w of cap(state.switchesBy.get(node) || [])) {
-          for (const side of [w.a, w.b]) {
-            if (isRail(side)) continue;
-            elements.push({ kind: 'switch', out: side, inputs: [node],
-                            control: node, level, forward: true, opens: true });
-            push(side);
-          }
-        }
-      }
-
-      // A pass transistor conducts both ways, so its far side belongs to either
-      // reading. If that far side is outside the block it becomes a port, which
-      // is exactly right: this is where the block ends.
-      for (const w of cap(state.switchesOn.get(node) || [])) {
-        const far = w.a === node ? w.b : w.a;
-        elements.push({ kind: 'switch', out: node, inputs: [far], control: w.control, level });
-        push(far);
-      }
-    }
-    if (!next.length) {
-      // Walking back from what the block produces does not necessarily reach
-      // all of it: a member can drive nothing that leaves, or sit behind
-      // feedback the backward walk never enters. Measured on the program
-      // counter, that left 8 of its 64 signals undrawn, and "the block is lit"
-      // has to mean the whole block or it means nothing. Whatever is left is
-      // seeded as a fresh column and the walk continues into it.
-      const left = [...state.inside].filter((n) => !seen.has(n));
-      if (!left.length) break;
-      for (const n of left) { seen.add(n); outDist.set(n, 0); next.push(n); }
-    }
-    levels.push(next);
-  }
-  // `root` is the signal the picker and the workbench link point at, carried
-  // through so the drawing can still mark one pill as the subject. It is no
-  // longer what the walk is built from: the block is.
-  return { root: state.root, levels, elements, dir, truncated };
-}
+const blockCone = (seedNodes, dir) => ({
+  root: state.root,
+  dir,
+  ...state.view.cone(seedNodes, dir, state.litNodes, state.depth),
+});
 
 // ---------------------------------------------------------------------------
 // Rendering
@@ -425,13 +241,7 @@ function renderPorts() {
  * measured, not picked, and a block that has neither falls back to all of its
  * members so the drawing cannot come out empty.
  */
-function seeds() {
-  const p = state.ports;
-  const chosen = state.dir === 'back'
-    ? [...p.drivesOut.keys()]
-    : [...new Set([...p.feedsIn.values(), ...p.joined.values(), ...p.control.values()])];
-  return chosen.length ? chosen : [...state.inside];
-}
+const seeds = () => state.view.seeds(state.ports, state.dir);
 
 /**
  * Switch one port pill on or off, and reconcile the overlap.
@@ -537,6 +347,9 @@ function drawCircuit() {
 
   // Last, because a pill's `shown` marking is read off the placement above.
   paintPorts();
+  // The workbench link carries the switched-on ports, so it has to be rebuilt
+  // whenever they change rather than only when the block does.
+  paintRoot();
 }
 
 function setRoot(node) {
@@ -548,10 +361,27 @@ function setRoot(node) {
   drawCircuit();
 }
 
+/**
+ * The subject, and the link that takes the whole block to the workbench.
+ *
+ * The link used to say `?find=`, which `schematic.js` has never read -- it
+ * takes `?signal=`. So the button had always landed on the schematic page
+ * without selecting anything, and looked like it did nothing because it very
+ * nearly did. It now carries three things: the signal, the block, and which
+ * ports are switched on, so the bench opens showing exactly what was on screen
+ * here.
+ */
 function paintRoot() {
   $('bk-root-name').textContent = nameOf(state.root);
-  const link = $('bk-root-link');
-  link.href = `schematic?find=${encodeURIComponent(nameOf(state.root))}`;
+  const q = new URLSearchParams({
+    signal: nameOf(state.root),
+    block: SLUGS[state.meta.blocks[state.id].name],
+    solo: '1',
+  });
+  // Only when there are some: an empty `ports=` is noise in a URL somebody may
+  // well paste somewhere.
+  if (state.lit.size) q.set('ports', [...state.lit].join(','));
+  $('bk-root-link').href = `schematic?${q}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -972,6 +802,18 @@ async function boot() {
         if (b === found.id) state.inside.add(n);
         else if (b === logicId && meta.nodeDrives[n] === found.id) state.affiliated.add(n);
       }
+      // The boundary and the circuit, from the module the workbench shares. It
+      // is built once per block because membership is what it closes over.
+      state.view = createBlockView({
+        data,
+        inside: state.inside,
+        affiliated: state.affiliated,
+        gateOf: state.gateOf,
+        gatesUsing: state.gatesUsing,
+        switchesOn: state.switchesOn,
+        switchesBy: state.switchesBy,
+        nameOf,
+      });
     }
 
     setupControls();

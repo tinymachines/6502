@@ -191,6 +191,10 @@ def main() -> None:
     # nothing, so it only has to be emitted before the two pages that take it.
     b.copy_hashed("claim-table.js")
     b.copy_hashed("block-notes.js")
+    # Where a functional block stops, shared by block.js and schematic.js so the
+    # two cannot disagree about which wires are ports. A leaf: imports nothing,
+    # so it only has to be emitted before its two importers.
+    b.copy_hashed("block-cone.js")
     b.copy_hashed("chip-controls.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
@@ -351,12 +355,19 @@ def main() -> None:
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        # Both arrived with the block bench: the boundary is computed by
+        # block-cone.js, and the slug a `?block=` link names is resolved through
+        # block-notes.js. Miss either and the hashed bundle 404s at runtime
+        # while web/ goes on working perfectly.
+        ("./block-cone.js", "./" + b.ref("block-cone.js")),
+        ("./block-notes.js", "./" + b.ref("block-notes.js")),
     ]:
         sch = replace_once(sch, f"'{original}'", f"'{resolved}'", where="schematic.js")
     sch = replace_once(sch, "'./fullscreen.js'", f"'./{b.ref('fullscreen.js')}'",
                        where="schematic.js")
-    sch = replace_once(sch, "fetch('schematic.json')",
-                       f"fetch('{b.ref('schematic.json')}')", where="schematic.js")
+    for original in ["schematic.json", "blocks.json"]:
+        sch = replace_once(sch, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
+                           where="schematic.js")
     b.emit("schematic.js", sch.encode())
 
     # 3f. trace.js: wasm for the chip, disasm for the opcode names, and the same
@@ -428,6 +439,7 @@ def main() -> None:
         ("./block-palette.js", "./" + b.ref("block-palette.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./block-notes.js", "./" + b.ref("block-notes.js")),
+        ("./block-cone.js", "./" + b.ref("block-cone.js")),
     ]:
         bk = replace_once(bk, f"'{original}'", f"'{resolved}'", where="block.js")
     for original in ["schematic.json", "blocks.json"]:

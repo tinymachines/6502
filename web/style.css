@@ -1622,6 +1622,40 @@ body.no-scroll #view { z-index: 70; }
   color: var(--accent-foreground); background: var(--hot); border-color: var(--hot);
 }
 
+/* The block's boundary as switches, when a block is on the bench.
+   Same three states the block page's pills have, and deliberately the same
+   reading: off, on, and already-on-screen-through-something-else. */
+.sp-porth {
+  margin: .7rem 0 .35rem; font: 700 .58rem/1 var(--font-mono);
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  display: flex; gap: .4rem; align-items: baseline;
+}
+.sp-porth .mono { color: #6f819f; }
+.sp-ports { display: flex; flex-wrap: wrap; gap: .25rem; }
+.sp-port {
+  display: inline-flex; align-items: center; gap: .25rem; cursor: pointer;
+  padding: .2rem .35rem; font: 500 .62rem var(--font-mono);
+  color: #dce9ff; background: var(--subtle);
+  border: 1.4px solid var(--line); border-radius: .2rem; transition: .12s;
+}
+.sp-port i { width: .4rem; height: .4rem; border-radius: 50%; flex: none; }
+.sp-port .mono { color: var(--muted); }
+.sp-port:hover { border-color: var(--accent); }
+/* After the hover rule on purpose: the two tie on specificity and source order
+   decides, so an `on` pill must not be repainted by hovering it. */
+.sp-port.on, .sp-port.on:hover {
+  background: color-mix(in srgb, var(--accent) 26%, var(--subtle));
+  border-color: var(--accent); color: var(--foreground);
+}
+.sp-port.shown {
+  border-style: dashed; color: var(--muted);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.sp-port.shown::after {
+  content: 'shown'; font-size: .5rem; letter-spacing: .06em;
+  text-transform: uppercase; color: color-mix(in srgb, var(--accent) 75%, var(--muted));
+}
+
 /* Memory, as a hex dump of the bus the chip is talking to. */
 .sp-fields { display: flex; gap: .4rem; align-items: flex-end; flex-wrap: wrap; }
 .sp-field { display: grid; gap: .15rem; flex: 1 1 8rem; min-width: 0; }

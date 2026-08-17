@@ -448,8 +448,18 @@ f.addEventListener('load', async () => {
     // A vertical strip of icons, each opening the drawer onto one thing. The
     // strip is what stays when the drawer is shut, so the transport and the way
     // out live on it rather than behind it.
-    ok('the strip carries an icon per drawer',
-       $('sp-strip').querySelectorAll('.sp-icon[data-tab]').length === 5);
+    // Six drawers now: Ports arrived with the block bench. Its icon is present
+    // but hidden here, because this page has no block on it and an icon that
+    // opens "nothing is loaded" is an apology rather than a control. Asserted
+    // as "exactly the ports one is hidden" rather than by counting what is
+    // visible, so the count cannot quietly drift for some other reason.
+    const icons = [...$('sp-strip').querySelectorAll('.sp-icon[data-tab]')];
+    ok('the strip carries an icon per drawer', icons.length === 6,
+       icons.map((b) => b.dataset.tab).join(','));
+    const hiddenIcons = icons.filter((b) => b.hidden);
+    ok('and only the block drawer is hidden without a block on the bench',
+       hiddenIcons.length === 1 && hiddenIcons[0].dataset.tab === 'ports',
+       hiddenIcons.map((b) => b.dataset.tab).join(',') || 'none hidden');
     ok('and the transport and the exit stay on the strip, not in a drawer',
        $('sp-strip').contains($('solo-run')) && $('sp-strip').contains($('sch-solo-exit')));
 

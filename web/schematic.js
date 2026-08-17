@@ -14,6 +14,8 @@ import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './prog
 import { setupProgramNav } from './program-nav.js';
 import { blockCss } from './block-palette.js';
 import { createDraw, el, SVGNS, NODE_H } from './sch-draw.js';
+import { createBlockView } from './block-cone.js';
+import { SLUGS } from './block-notes.js';
 import { setupFullscreen } from './fullscreen.js';
 import { setupChipNav } from './chip-nav.js';
 import {
@@ -44,6 +46,11 @@ const state = {
   compare: null,          // [nodeA, nodeB] when comparing two signals
   diffControls: null,     // control names that differ, ringed in the drawing
   solo: false,            // fullscreen: one level, centred, nothing else
+  // A functional block put on the bench, arrived at from its own page via
+  // `?block=<slug>`. Null on the schematic page proper, which is a walk rather
+  // than a block. When set, the block's whole circuit is drawn underneath
+  // whatever the reader then walks to, and its ports are switches in a drawer.
+  block: null,
   // Whether it is running and how fast are in chip-controls.js, set from the
   // header and from the study view's own drawer.
   lastFrame: 0,
@@ -596,12 +603,105 @@ function pinChain(root, dir) {
   return null;
 }
 
+/**
+ * Load a functional block onto the bench, arrived at from its own page.
+ *
+ * `blocks.json` is fetched only when `?block=` is present. The schematic page
+ * proper is a walk rather than a block and has never needed that file, so
+ * making every visit pay for it would be a cost with no reader behind it.
+ *
+ * This is the second file on this page indexed by node number, which is the
+ * coupling CLAUDE.md warns about -- so the two are compared rather than
+ * trusted, exactly as block.html does it, masked because `blocks.json` carries
+ * `was_seeded` in bit 7 and `schematic.json` does not.
+ */
+async function loadBlock(slug, data) {
+  const meta = await fetch('blocks.json').then((r) => {
+    if (!r.ok) throw new Error(`blocks.json: HTTP ${r.status}`);
+    return r.json();
+  });
+  for (let n = 0; n < data.nodeBlock.length; n++) {
+    if ((meta.nodeBlock[n] & 0x7f) !== (data.nodeBlock[n] & 0x7f)) {
+      throw new Error('blocks.json and schematic.json disagree about node ' + n);
+    }
+  }
+  const found = meta.blocks.find((b) => SLUGS[b.name] === slug);
+  if (!found) throw new Error(`no functional block called "${slug}"`);
+
+  const inside = new Set();
+  const affiliated = new Set();
+  // Asked by name rather than assumed to be 13: an id hardcoded here would
+  // silently point at whatever ends up in that slot the day a block is added.
+  const logicId = data.blockNames.indexOf('Static logic');
+  for (let n = 0; n < data.nodeBlock.length; n++) {
+    if (n === data.vss || n === data.vcc) continue;
+    const b = data.nodeBlock[n] & 0x7f;
+    if (b === found.id) inside.add(n);
+    else if (b === logicId && meta.nodeDrives[n] === found.id) affiliated.add(n);
+  }
+
+  const view = createBlockView({
+    data, inside, affiliated,
+    gateOf: state.gateOf,
+    gatesUsing: state.gatesUsing,
+    switchesOn: state.switchesOn,
+    switchesBy: state.switchesBy,
+    nameOf,
+  });
+  const p = view.ports();
+  // The pill keys the block page uses, rebuilt here so a link can carry which
+  // ports were switched on. Positional within a group, and the groups are in
+  // the same order on both pages -- that ordering IS the wire format, and
+  // `_solo-test.html` pins that a link round-trips.
+  const portOf = new Map();
+  const groups = [['feedsIn', p.feedsIn], ['drivesOut', p.drivesOut],
+                  ['joined', p.joined], ['control', p.control]];
+  const listed = groups.map(([key, map]) => {
+    const stems = view.byStem(map);
+    stems.forEach((s, i) => portOf.set(`${key}:${i}`, s.nodes));
+    return { key, stems };
+  });
+  return { slug, id: found.id, name: found.name, view, ports: p, listed, portOf,
+           lit: new Set(), litNodes: new Set(), drawn: new Set(), reach: 1 };
+}
+
+/** Recompute the union of wires the lit pills stand for. */
+function relitBlock() {
+  const b = state.block;
+  b.litNodes = new Set();
+  for (const k of b.lit) for (const n of b.portOf.get(k) || []) b.litNodes.add(n);
+}
+
 function merge() {
   const col = new Map();          // node -> column
   const seen = [];                // insertion order, for a stable tie-break
   const elements = new Map();     // key -> element, first sighting wins
   let truncated = 0;
   let last = null;
+
+  // The block goes down first, when there is one, so it holds the base columns
+  // and everything the reader then walks to is layered on top of it. First
+  // appearance still wins, so a signal already in the block joins where it is
+  // rather than moving -- which is what keeps the drawing stable as it grows,
+  // and is the same rule the walk already follows.
+  if (state.block) {
+    const b = state.block;
+    const bc = b.view.cone(b.view.seeds(b.ports, state.dir), state.dir, b.litNodes, b.reach);
+    truncated += bc.truncated;
+    bc.levels.forEach((nodes, k) => {
+      for (const n of nodes) {
+        if (col.has(n)) continue;
+        col.set(n, k);
+        seen.push(n);
+      }
+    });
+    for (const e of bc.elements) {
+      const key = e.kind === 'switch'
+        ? `s:${e.control}:${Math.min(e.out, e.inputs[0])}:${Math.max(e.out, e.inputs[0])}`
+        : `g:${e.out}`;
+      if (!elements.has(key)) elements.set(key, e);
+    }
+  }
 
   state.trail.forEach((t, i) => {
     if (!col.has(t.node)) {
@@ -1205,6 +1305,73 @@ const PANELS = {
   },
 
   /** The chip's edge: what is on the pads, and the five pins that drive it. */
+  /**
+   * The block's boundary, as switches, on the bench.
+   *
+   * The same four relations and the same per-pill bookkeeping the block page
+   * has, because it is the same measurement: `block-cone.js` computes the
+   * boundary for both, so the two cannot disagree about which wires are ports.
+   * What is different here is only that the drawing they switch into is the
+   * bench, which can be panned, zoomed and walked from.
+   */
+  ports(host) {
+    const b = state.block;
+    if (!b) {
+      host.innerHTML = `<p class="sp-note">No block is on the bench. This drawer
+        appears when you arrive from a block page, where the four relations that
+        cross a block's boundary are measured.</p>`;
+      return () => {};
+    }
+    const NAMES = { feedsIn: 'Told', drivesOut: 'Tells', joined: 'Joined',
+                    control: 'Operated by' };
+    const parts = [`<p class="sp-sub">${b.name}: the whole block is drawn.
+      Switch a port on to bring that wire in.</p>`];
+    for (const { key, stems } of b.listed) {
+      if (!stems.length) continue;
+      parts.push(`<h4 class="sp-porth">${NAMES[key]}
+        <span class="mono">${stems.length}</span></h4><div class="sp-ports">`
+        + stems.map((s, i) =>
+          `<button type="button" class="sp-port" data-port="${key}:${i}"
+             title="${s.nodes.map(nameOf).sort().join(' ')}"
+           ><i style="background:${blockCss(s.block)}"></i>${s.stem}`
+          + (s.nodes.length > 1 ? `<span class="mono">×${s.nodes.length}</span>` : '')
+          + '</button>').join('')
+        + '</div>');
+    }
+    parts.push(`<p class="sp-note">A signal can cross the boundary more than one
+      way, so the same wire has a pill under two headings. Switching one on
+      never flips another: a pill whose wires are already on screen is marked
+      <b>shown</b> instead.</p>`);
+    host.innerHTML = parts.join('');
+
+    for (const btn of host.querySelectorAll('.sp-port')) {
+      btn.addEventListener('click', () => {
+        const pk = btn.dataset.port;
+        if (b.lit.has(pk)) b.lit.delete(pk); else b.lit.add(pk);
+        relitBlock();
+        render();
+        saveConfig();
+      });
+    }
+    // Built once, painted every frame -- and `shown` is a fact about what the
+    // drawing placed, so it is read from there rather than from the toggles.
+    let last = '';
+    return () => {
+      const sig = [...b.lit].sort().join(',') + '|' + b.drawn.size;
+      if (sig === last) return;
+      last = sig;
+      for (const btn of host.querySelectorAll('.sp-port')) {
+        const pk = btn.dataset.port;
+        const on = b.lit.has(pk);
+        const nodes = b.portOf.get(pk) || [];
+        btn.classList.toggle('on', on);
+        btn.classList.toggle('shown',
+          !on && nodes.length > 0 && nodes.every((n) => b.drawn.has(n)));
+        btn.setAttribute('aria-pressed', String(on));
+      }
+    };
+  },
+
   io(host) {
     host.innerHTML = `<dl class="sp-kv" id="sp-io"></dl>
       <p class="sp-sub">Input pins: the level on each. Click to flip it.</p>
@@ -1367,7 +1534,8 @@ const PANELS = {
 };
 
 const TAB_NAMES = {
-  signal: 'Signal', walk: 'Walk', io: 'I/O', mem: 'Memory', stack: 'Stack',
+  signal: 'Signal', walk: 'Walk', ports: 'Ports', io: 'I/O', mem: 'Memory',
+  stack: 'Stack',
 };
 
 /**
@@ -1781,6 +1949,9 @@ function render() {
   if (!state.solo || !state.trail.length) resetTrail();
   const c = merge();
   drawWalk(c);
+  // What ended up on the bench. A port pill is marked `shown` from this rather
+  // than from the toggles, because the claim it makes is about the drawing.
+  if (state.block) state.block.drawn = new Set(c.levels.flat());
   const gates = c.elements.filter((e) => e.kind !== 'switch').length;
   const sw = c.elements.length - gates;
   const way = c.dir === 'fwd' ? 'levels forward' : 'levels back';
@@ -2148,6 +2319,44 @@ async function boot() {
     setDir(state.dir);
     $('sch-boot').hidden = true;
     $('sch-main').hidden = false;
+
+    // Arriving from a block page: put the block on the bench, carry across the
+    // ports that were already switched on, and open the study view showing it.
+    //
+    // A block failing to load must not take the schematic page down with it --
+    // it is an extra the URL asked for, not the page itself -- so it boots
+    // after `#sch-main` is shown and reports into the caption if it fails.
+    const slug = q.get('block');
+    if (slug) {
+      try {
+        state.block = await loadBlock(slug, data);
+        for (const k of (q.get('ports') || '').split(',').filter(Boolean)) {
+          if (state.block.portOf.has(k)) state.block.lit.add(k);
+        }
+        relitBlock();
+        $('sp-ports-icon').hidden = false;
+        // The block IS the subject now, so the walk starts from one of its own
+        // signals rather than from whatever `?signal=` defaulted to. Without
+        // this the trail anchors outside the block and the bench opens with a
+        // stranger in the middle of it.
+        const startAt = byName.get(q.get('signal'));
+        if (startAt == null || !state.block.view.inside(startAt)) {
+          const named = [...state.block.ports.drivesOut.keys()];
+          if (named.length) setRoot(named[0]);
+        }
+        render();
+        if (q.get('solo') === '1') {
+          // The button, not the API: `setupFullscreen` verifies the real
+          // request took and covers the viewport itself when it did not, which
+          // is what happens here because a page load carries no user gesture.
+          $('sch-fullscreen').click();
+          setTab('ports');
+          setDrawer(true);
+        }
+      } catch (e) {
+        $('sch-caption').textContent = `Could not put that block on the bench: ${e.message}`;
+      }
+    }
     tick();
   } catch (e) {
     status.textContent = 'Could not load: ' + (e && e.message ? e.message : e);
