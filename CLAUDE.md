@@ -37,6 +37,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
+| Designer | The other account: one of the chip's authors, recalling it forty years on. 4 of 5 agree, and the clock generator is derived here for the first time. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. Full Wayback sweep complete: 24,429 URLs, 3.01 GB. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
@@ -70,12 +71,14 @@ Known gaps, all deliberate:
   single bit because the eight are different circuits; a reader who wants the
   whole byte has to move the slider eight times. Showing all eight at once
   would need a different presentation, not a bigger list.
-- **Eleven of the twelve block pages have no written half yet.** Only the ALU
-  carries a reading and labs; the rest render their derived half, which is
-  complete and stands on its own. That is deliberate rather than unfinished --
-  the prose has to be written from `_block-probe.html` per block, and a
-  placeholder paragraph on eleven pages would be worse than eleven pages that
-  are honestly all measurement.
+- **Eleven of the twelve block pages still have no *labs*.** All twelve now say
+  what they do, in one authored paragraph each (`DOES` in `block-notes.js`), but
+  only the ALU carries the deeper reading and the per-half-cycle labs. The rest
+  render their derived half, which is complete and stands on its own. The
+  remaining gap is deliberate: a lab has to be written from `_block-probe.html`
+  against a dump of what the chip actually did, and a plausible-sounding
+  walkthrough on eleven pages would be worse than eleven pages that are honestly
+  all measurement.
 - **The trace's preamble is fixed.** `LDA #$41 / LDX #$02 / LDY #$03 / CLC`,
   printed on the page. Tracing an instruction against a *chosen* starting state
   would need an editor and is not built.
@@ -372,7 +375,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Twenty-four harnesses plus two probes, all prefixed `_` and **never shipped** —
+Twenty-five harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -409,6 +412,9 @@ _block-test.html       # the block pages: the interface and the circuit, re-deri
 _block-probe.html      # what one block's signals do, per half-cycle, for its prose
 _talk-test.html        # the talk page: every claim re-derived from the JSON by the
                        # harness itself, and the one row that DIFFERS is pinned
+_designer-test.html    # the designer page: the clock generator re-walked by the
+                       # harness, and the walk re-run WITHOUT its boundary clause
+                       # to prove the clause is load-bearing
 ```
 
 **A harness that samples state still in flight tests nothing.** `_handler-test`
@@ -638,7 +644,8 @@ Plain ES modules, no build step, no framework: `renderer.js` (WebGL2),
 (the header picker), `chip-controls.js` (run state and clock rate) and
 `chip-nav.js` (the header transport), `blueprint.js`, `decode.js`, `timing.js`,
 `programs-page.js` and `trace.js` (five further pages, see
-below), `index.html`,
+below), `claim-table.js` (the verdict card, shared by `talk.js` and
+`designer.js`), `index.html`,
 `style.css`, plus
 `site-nav.js` and `version-footer.js` which are **shared verbatim with the
 archive** (`build-archive.py` copies them). A second copy of either would drift.
@@ -1415,6 +1422,47 @@ one of them to drift, which is the failure this project keeps finding.
   and the authored sections are simply not rendered -- a heading over an apology
   is worse than no heading. So adding a block to `blocks.rs` cannot break this
   file, and this file being incomplete cannot break a page.
+- **`DOES` is one paragraph per block, above its interface, and it replaced a
+  generic one.** The interface section used to open with a `Measured` eyebrow, a
+  heading, and a paragraph explaining what a block boundary is. All three were
+  identical on twelve pages, and a reader who has navigated to the program
+  counter wants the program counter. The four boundary relations are named and
+  described on the panel itself, which is where they belong, so nothing was
+  lost by deleting the explanation of them.
+  - **The section-level `Measured` eyebrow had to go with it**, and that is
+    correctness rather than tidying: the paragraph is authored and the console
+    under it is derived, so a heading claiming the whole section is measured
+    would be the exact laundering this file is kept separate to prevent. The
+    console keeps its own `interface · derived` tag, which is the real claim.
+  - **It is exported separately rather than folded into `NOTES`.** Eleven blocks
+    would otherwise need a near-empty `NOTES` entry each, and `block.js` already
+    guards every optional field on that object.
+  - **`_block-test.html` had to be extended for it, and this is the trap.** The
+    stray-digit scan walked `NOTES[*].sections[].body` only, so a new prose
+    field would have been the only prose on the page that nothing checked.
+    Adding a field to `block-notes.js` means adding it to that scan. The harness
+    also now asserts all twelve have one: the old paragraph was generic and
+    therefore always present, so "there is prose above the interface" stopped
+    being free the moment it became per-block.
+
+#### `web/block.js` contained a raw NUL byte, and grep silently skipped it
+
+`const key = \`${stem}\0${block}\`` was written with a **literal** NUL rather
+than an escape. The composite key is a sound idiom -- a NUL cannot occur in a
+stem or a block name, so it is a safe separator -- but as a raw byte it made
+`file` report the source as `data`, and any grep with a binary-file guard
+returned **no matches at all** for a symbol plainly present. That reads exactly
+like "the code is not there", and it cost a detour before it was noticed by
+`head` and `grep` disagreeing about the same file.
+
+It is `\u0000` now, which is byte-identical at runtime and leaves the file as
+text. Two lessons worth keeping:
+
+- **`head` showing a line that `grep` cannot find is an instrument failure, not
+  a fact about the code.** Control for it with `command grep`, which bypasses
+  the shell wrapper, or with python.
+- Prefer an escape to a raw control character in source, even where the raw one
+  is legal. The cost is invisible until tooling quietly disagrees with itself.
 - **A lab is offsets from an instruction's own opcode fetch**, found by running
   until `sync && lastFetchAddr == at`, never a remembered half-cycle number:
   reset timing moving would shift every step by the same amount and the page
@@ -1870,6 +1918,9 @@ subtitle is the number this simulation switches.
   unchallenged forever. That note derives both figures now.
 - The page needs **no export of its own**: it reads the five files the other
   pages already publish, which is also what stops it disagreeing with them.
+- **The verdict card is no longer in this file.** It moved to `claim-table.js`
+  when `designer.js` wanted the same component; edit it there, and the CSS is
+  `.claim-*` rather than `.tk-*`. See the designer section for why.
 
 #### `tests/interrupts.rs`: the BRK that gets lost
 
@@ -1891,6 +1942,100 @@ differ.
   reaches the stack page and S still moves by three. That is why this chip comes
   out of reset with whatever S it had minus three, and why the study view's stack
   panel refuses to report a depth.
+
+### The designer (`designer.html`, `designer.js`)
+
+The other account of this chip: one of the people who drew it in 1975, recalling
+it in a 2015 interview, with the answerable parts re-asked of the silicon. Same
+two labelled registers as the talk page and the same computed verdicts, and it
+needs **no export of its own** for the same reason: it reads four of the files
+the other pages already publish.
+
+**The register is different, and that is the page rather than a caveat on it.**
+A reverse engineer describes an artefact and the artefact can contradict him. A
+designer describes *intent*, from memory, decades later. Intent cannot be
+checked at all, so the page asks only the handful of statements with a number or
+a structure attached, and says in the prose that it is not grading anybody.
+**4 of 5 agree, and the one that differs is the only quantity in the set** — the
+structural claims are all right and the transistor count is out by roughly a
+factor of two. That asymmetry is the finding.
+
+- **There is no 6501 on this die, so the headline claim cannot be measured as
+  stated**, and every wording on the page respects that. The recollection is that
+  the on-chip clock generator is the whole 6501/6502 difference and cost "about a
+  dozen transistors". What is measurable is the generator on the chip we have.
+  Saying otherwise would be claiming a comparison between two parts from one.
+- **The verdict is a comparison, not a decision.** `holds` tests the measured
+  count against `A_DOZEN = 15` -- twelve read as generously as that phrase can
+  carry -- rather than returning a hardcoded false. If this chip ever measured
+  that small the row flips on its own. The talk page's differing row does use a
+  bare `false`, and this is the better pattern.
+
+#### The clock generator, derived for the first time
+
+**44 transistors across 16 nodes, 1.3% of the die**, of which only **21** decide
+anything: the other 23 are the four output stages, parallel banks that exist to
+shift load. Nothing on this site had drawn this circuit before.
+
+- **It is found by a rule, never by a list of node numbers.** Walk forward from
+  the `clk0` pad through gate inputs; include the four clocks it ends at
+  (`cclk`, `cp1`, `clk1out`, `clk2out`) but never expand them. A list would be
+  authored, and would go stale silently.
+- **The boundary clause is the whole rule, and the harness proves it by removing
+  it.** `cclk` alone opens 243 switches, so an unbounded walk crosses into the
+  control pipeline: bounded reaches 16 nodes and *zero* `dpc*` control lines,
+  unbounded reaches 158 and 18. An invariant nothing can violate is not an
+  invariant.
+  - **That assertion was first written as a node-count multiple and it failed on
+    correct behaviour.** The real blowup is 16 to 158, and the threshold picked
+    was `> 10x`. A multiple is an arbitrary number that says nothing about
+    whether the boundary is in the *right place*; "it reaches the pipeline and
+    the bounded walk does not" is the claim actually being made.
+- **Two transistors are the non-overlap.** Both gated by `cp1`, each pulling down
+  one node in one of the two symmetric halves. That feedback is what holds each
+  phase off until the other has gone, and it is the guarantee the whole change
+  was made for. Asserted as a *shape* -- exactly two, one shared control, two
+  distinct targets -- because "there is some feedback" would pass on noise.
+- **Counting transistors from `schematic.json` needs the legs, not the
+  terminals.** A gate's transistor count is `sum(len(leg)) + 1 if precharged`. A
+  depletion pullup is a segdef flag on this die and not an entry in the
+  transistor table, so it must *not* be added. Verified against real transistor
+  IDs parsed from `transdefs.js`: both give 44 exactly.
+  - **Counting "transistors with a terminal on the output node" undercounts, and
+    it is silent.** It misses the middle of every series leg. It agreed for the
+    clock generator, which has no series legs, and was wrong by a third for the
+    decimal correction, whose two carry gates are AOI with four series legs each
+    (15 against the true 21). A measurement that happens to agree on the first
+    circuit you try is not validated.
+- **`clk0`'s own two transistors are excluded**: they are gated by vss, can never
+  switch, and belong to the pad rather than to the generator. This is the
+  difference between the 46 the die reports on the chain and the 44 the circuit
+  actually is.
+- **`cclk` "gates 273 transistors" is NOT derivable from `schematic.json`**, and
+  a `data-fact` slot claiming it shipped briefly saying 41. The published file
+  gives gate legs and switches as two lists that overlap, and 41 + 243 is 284,
+  not 273. The page reports **the 243 switches it opens**, which is exact from
+  that file and makes the same point about load.
+
+#### `claim-table.js`, extracted
+
+The verdict card was `renderChecks` inside `talk.js` until this page wanted the
+same component, which is the moment `sch-draw.js` came out of `schematic.js` and
+the reasoning is identical: two pages rendering a verdict from two copies would
+eventually render it two different ways, and a reader comparing them would have
+no way to tell which was lying. The CSS moved with it, `.tk-*` to `.claim-*` --
+a second page inheriting the first page's prefix is how a component stops being
+recognisable as one.
+
+- **The refactor was safe to make because `_talk-test.html` asserts the rendered
+  output**, including that exactly one row differs and which one. Run it before
+  and after; that is what licenses touching a deployed page for a structural
+  reason.
+- **It also broke the production build in a way the dev server cannot show.**
+  `talk.js` now has an import, and step 3k's comment said in as many words that
+  it imported nothing. `build-web.py` has to emit `claim-table.js` and rewrite
+  `'./claim-table.js'` in **both** pages, or the hashed bundle 404s at runtime
+  while `web/` keeps working perfectly. Boot `dist/` before believing a build.
 
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 

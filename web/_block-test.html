@@ -24,7 +24,7 @@ iframe{width:1280px;height:820px;border:0}pre{padding:1rem;white-space:pre-wrap}
 </head><body>
 <iframe id="f"></iframe>
 <script type="module">
-import { SLUGS, NOTES } from './block-notes.js';
+import { SLUGS, NOTES, DOES } from './block-notes.js';
 
 const results = [];
 const rows = [];
@@ -250,18 +250,30 @@ async function ready(d, sel = '#bk-main') {
     // bytes are exempt -- "bit 7" and "$41" are choices about what to watch, not
     // measurements that can go stale.
     const stray = [];
+    const scan = (where, body) => {
+      const bare = body
+        .replace(/<code>[^<]*<\/code>/g, '')
+        .replace(/\b6502\b/g, '')
+        .replace(/\bbits? \d+( to \d+)?/g, '')
+        .match(/\b\d[\d,]*\b/g);
+      if (bare) stray.push(`${where}: ${bare.join('/')}`);
+    };
     for (const [slug, note] of Object.entries(NOTES)) {
-      for (const s of note.sections || []) {
-        const bare = s.body
-          .replace(/<code>[^<]*<\/code>/g, '')
-          .replace(/\b6502\b/g, '')
-          .replace(/\bbits? \d+( to \d+)?/g, '')
-          .match(/\b\d[\d,]*\b/g);
-        if (bare) stray.push(`${slug}: ${bare.join('/')} in "${s.title}"`);
-      }
+      for (const s of note.sections || []) scan(`${slug} "${s.title}"`, s.body);
     }
+    // The per-block paragraph is prose on the same terms as the sections, so it
+    // is scanned on the same terms. Adding a field to block-notes.js without
+    // adding it here would leave the newest prose the only prose nothing checks.
+    for (const [slug, body] of Object.entries(DOES)) scan(`${slug} (does)`, body);
     ok('no measurement was typed into the authored prose', stray.length === 0,
        stray.slice(0, 3).join(' | '));
+
+    // Every functional block says what it does. The paragraph replaced one that
+    // was generic and therefore always present, so "the page still has prose
+    // above its interface" stopped being free the moment it became per-block.
+    const noDoes = Object.values(SLUGS).filter((s) => !DOES[s]);
+    ok('every block has a paragraph saying what it does', noDoes.length === 0,
+       noDoes.join(', ') || `${Object.keys(DOES).length} blocks`);
 
     results.push('', ...rows);
   } catch (e) {
