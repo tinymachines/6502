@@ -17,7 +17,7 @@
 //!
 //! ```no_run
 //! use std::sync::Arc;
-//! use v6502_netlist::Netlist;
+//! use v6502_netlist::mos6502;
 //! use v6502_sim::{bus::FlatMemory, cpu::Cpu};
 //!
 //! let mut mem = FlatMemory::new();
