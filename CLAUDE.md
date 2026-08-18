@@ -158,7 +158,7 @@ python3 tools/serve.py web 8777                    # http://localhost:8777/
 # that is web/_asm-test.html.)
 node tools/check-programs.mjs
 
-# Every measured cycle count against the published instruction table: 118 of
+# Every measured cycle count against the published instruction table: 138 of
 # its 151 rows, against the 33 the hand-typed checks cover. SKIPS without the
 # manual in reference/ (which is gitignored and not redistributed);
 # REQUIRE_MANUAL=1 makes its absence a failure. deploy.sh runs it.
@@ -2445,7 +2445,7 @@ recognisable as one.
 
 `tests/timing.rs` and `_timing-test.html` cross-check **33** documented opcodes
 against figures typed in by hand. `tools/check-timing-vs-manual.py` checks
-**118** against Appendix B of the MCS6500 family programming manual, which is a
+**138** against Appendix B of the MCS6500 family programming manual, which is a
 much stronger form of the same statement: the measurement path consults no
 instruction table at all, so agreeing with a published one is evidence rather
 than tautology.
@@ -2513,10 +2513,32 @@ distance from an opcode's own fetch to the next one, both found by watching
   the parser does read, it fails correctly and the tool exits 1. **A negative
   test has to be aimed at something the check actually covers, or it proves the
   opposite of what it looks like it proves.**
-- **So the coverage is 118 of 151 rows, and roughly a third of the immediate
-  and accumulator forms are not verified by this route at all.** They are
-  covered by `tests/timing.rs` and `_timing-test.html`, which is why that
-  hand-typed set is still worth having rather than superseded.
+- **Coverage is 138 of 151 rows.** Getting from 118 to 138 was two structural
+  fixes to the scan reader, neither of which looks at any data:
+  - **A mnemonic is not always its own token.** The scan writes the accumulator
+    forms as `ASL A` and the immediates as `LDA # Oper`, so an exact match
+    dropped those rows wholesale -- which is why LDA immediate, one of the most
+    used instructions on the chip, was in the blind spot. Matching a token that
+    *begins* with a mnemonic recovers them.
+  - **A lone `A` is also a valid hex digit**, so the numeric scan ate the
+    accumulator operand and shifted every column by one. Stepping over it where
+    the mode is `Accumulator` is positional, not data-dependent.
+- **A handful of characters are repaired, and the rule is that the repair may
+  never consult our own data.** A lowercase L and a capital I both read as a 1,
+  so `Cl` is `C1`. Repairing an opcode by looking up what we know the chip to be
+  would make the comparison circular: a manual corrected against ourselves would
+  agree with us for free. The repairs are **reported**, because a repair that
+  goes wrong makes a plausible row rather than an obviously broken one.
+  - **One repair was removed for exactly that reason.** `IE` -> `1E` fixes the
+    opcode correctly and then attaches the wrong figures to it, because the scan
+    has run two rows' number columns together there. It was caught by the guard
+    failing loudly rather than absorbing it, and each surviving repair was then
+    audited on its own rather than trusted because the total was green.
+- **The remaining 13 rows are genuinely unreadable** -- a footnote interrupting
+  a row, figures missing from the scan entirely -- and are reported as skipped
+  rather than guessed at. `tests/timing.rs` and `_timing-test.html` still cover
+  their own hand-typed set, which is why that set is worth keeping rather than
+  superseded.
 
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 

@@ -33,6 +33,26 @@ MNEMONICS = set("""ADC AND ASL BCC BCS BEQ BIT BMI BNE BPL BRK BVC BVS CLC CLD C
 CPX CPY DEC DEX DEY EOR INC INX INY JMP JSR LDA LDX LDY LSR NOP ORA PHA PHP PLA PLP ROL
 ROR RTI RTS SBC SEC SED SEI STA STX STY TAX TAY TSX TXA TXS TYA""".split())
 
+# Characters the scan confuses, and only the ones actually observed in this
+# document: a lowercase L and a capital I both read as a 1. The mapping is from
+# the SHAPE OF THE SCAN and never from what we know the chip to be -- repairing
+# an opcode by consulting our own tables would make the comparison circular, and
+# a manual we corrected against ourselves would agree with us for free.
+#
+# The trailing comma is the same class: "4," is a cycle count with punctuation.
+# `IE` -> `1E` is deliberately NOT here. The opcode repairs correctly and the
+# figures beside it do not: the scan has run two rows' number columns together
+# there, so the repair turns an unreadable row into a WRONG one, which is worse.
+# It was caught because the guard failed loudly rather than absorbing it.
+SCAN_FIXES = {
+    "Cl": "C1", "El": "E1", "FI": "F1", "ID": "1D",
+    "4,": "4", "3,": "3", "2,": "2", "5,": "5", "6,": "6",
+}
+
+# A token is this row's instruction if it IS a mnemonic or merely begins with
+# one: the scan writes "ASL A" and "LDA # Oper" as single tokens.
+MNEMONIC_AT_START = re.compile(r"^(" + "|".join(sorted(MNEMONICS)) + r")(?:$|\s)")
+
 # Longest first: "Zero Page, X" must win over "Zero Page".
 MODES = ["Zero Page, X", "Zero Page,X", "Zero Page, Y", "Zero Page,Y",
          "Absolute, X", "Absolute,X", "Absolute, Y", "Absolute,Y",
@@ -55,6 +75,7 @@ def appendix_b(text):
     toks = [t.strip() for t in text[start:].splitlines() if t.strip()]
 
     out, i, seen = {}, 0, 0
+    repaired = set()
     dropped = {"no mnemonic in the row": 0, "numbers unreadable": 0,
                "opcode read twice": 0}
     while i < len(toks):
@@ -65,10 +86,16 @@ def appendix_b(text):
         seen += 1
         mne, j = None, i + 1
         while j < len(toks):
-            if toks[j] in MNEMONICS:
-                mne = toks[j]
+            # The scan does not always split the mnemonic from the assembly
+            # form it is written with, so a row can arrive as one token: "ASL A"
+            # for the accumulator forms, "LDA # Oper" for the immediates. An
+            # exact match drops every one of those, which is why the immediate
+            # and accumulator rows were missing wholesale.
+            m = MNEMONIC_AT_START.match(toks[j])
+            if m:
+                mne = m.group(1)
                 break
-            if any(toks[j] == m for m in MODES):
+            if any(toks[j] == m2 for m2 in MODES):
                 break          # the next row started; this one has no mnemonic
             j += 1
         if mne is None:
@@ -76,9 +103,18 @@ def appendix_b(text):
             i += 1
             continue
 
+        # The accumulator forms are written "ASL A", and a lone "A" is also a
+        # valid hex digit -- so the numeric scan below eats the operand and
+        # every column shifts by one. Stepping over it is structural: it does
+        # not look at any data, only at where the operand sits.
         nums, k = [], j + 1
+        if mode == "Accumulator" and k < len(toks) and toks[k] == "A":
+            k += 1
         while k < len(toks) and len(nums) < 6:
             t = toks[k]
+            if t in SCAN_FIXES:
+                repaired.add(t)
+                t = SCAN_FIXES[t]
             if re.fullmatch(r"[0-9A-F]{1,2}\*?", t):
                 nums.append(t)
             elif t in MODES or t in MNEMONICS:
@@ -103,7 +139,7 @@ def appendix_b(text):
         else:
             dropped["numbers unreadable"] += 1
         i = k if k > i else i + 1
-    return out, dropped, seen
+    return out, dropped, seen, repaired
 
 
 def main():
@@ -124,7 +160,7 @@ def main():
         print("check-timing: pdftotext not installed, SKIPPING")
         return 0
 
-    table, dropped, seen = appendix_b(text)
+    table, dropped, seen, repaired = appendix_b(text)
     measured = {o["op"]: o for o in json.loads(TIMING.read_text())["opcodes"]}
 
     agree, explained, disagree = 0, [], []
@@ -162,6 +198,12 @@ def main():
     for why, n in dropped.items():
         if n:
             print(f"  {n} skipped: {why}")
+    if repaired:
+        # Never silent. A figure resting on a character repair should be
+        # visible, because a repair that goes wrong makes a plausible row
+        # rather than an obviously broken one.
+        print(f"  {len(repaired)} tokens repaired from scan damage: "
+              f"{', '.join(sorted(repaired))}")
     total = len(table) + sum(dropped.values())
     if total != seen:
         raise SystemExit(f"check-timing: {seen} rows seen but {total} accounted for")
