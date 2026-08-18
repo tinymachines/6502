@@ -376,6 +376,22 @@ code {
 .navlinks a:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .navlinks a:hover .navlink-label { color: var(--gold); }
 .navlink-label { display: block; font-weight: 700; font-size: .95rem; }
+
+/* A recently changed page. The date is measured (the last commit touching that
+   page's own files, stamped at deploy), so the dot is derived rather than kept
+   by hand and cannot go stale. Inline after the label so it rides with the
+   text at every width, and a fixed colour rather than the label's, so hover
+   and current-page recolouring do not swallow it. */
+.navlink-dot {
+  display: inline-block; width: .42rem; height: .42rem; margin-left: .4rem;
+  border-radius: 50%; background: var(--mint); vertical-align: .18em;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mint) 25%, transparent);
+}
+/* Text for a screen reader that the dot carries visually. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 /* The line that a list of nouns cannot carry: what this one is, and therefore
    which of the four drawings of the same chip you actually want. */
 .navlink-hint {

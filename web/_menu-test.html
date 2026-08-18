@@ -119,6 +119,34 @@ const shape = (groups) =>
     ok('the entry for the page you are on does not send you to the index',
        primerSelf.href === '#top', `Primer -> ${primerSelf.href}`);
 
+    // --- the "changed since the last deploy" dot ----------------------------
+    //
+    // The dots are read from build-info.json's `changed` list, which
+    // tools/build-info.py measures from git against the previously deployed
+    // commit. So the assertion is that the DOM agrees with the file: every
+    // page named in `changed` carries a dot and no page outside it does. A
+    // stamp that silently produced an empty list would leave the menu bare and
+    // pass a weaker check, so the file's own `previousDeploy` is inspected
+    // too: when there IS a previous deploy, an empty list is only acceptable if
+    // git agrees nothing changed -- which this harness cannot ask, so it at
+    // least insists the field is present and well-formed.
+    const info = await fetch('build-info.json').then((r) => r.json());
+    ok('build-info carries a changed-pages list', Array.isArray(info.changed),
+       `changed=${JSON.stringify(info.changed)} previousDeploy=${info.previousDeploy}`);
+    const dotted = [...d.querySelectorAll('.navlinks a[data-page].recent')]
+      .map((a) => a.dataset.page);
+    const undotted = [...d.querySelectorAll('.navlinks a[data-page]:not(.recent)')]
+      .map((a) => a.dataset.page);
+    const changed = new Set(info.changed || []);
+    ok('every page in the changed list carries a dot, and only those',
+       dotted.every((p) => changed.has(p)) && undotted.every((p) => !changed.has(p)),
+       `dotted=${JSON.stringify(dotted)}`);
+    ok('a dotted entry says so for a screen reader and a pointer',
+       dotted.length === 0 || [...d.querySelectorAll('.navlinks a.recent')].every((a) =>
+         a.title.includes('changed') && a.querySelector('.navlink-dot')
+         && a.querySelector('.sr-only')),
+       `${dotted.length} dotted`);
+
     // --- every href reaches something --------------------------------------
     //
     // A typo'd page name is a 404 that looks exactly like a working link.

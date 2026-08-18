@@ -358,6 +358,30 @@ Same reasoning as `version-footer.js` and `block-palette.js`.
   last group 38px below the fold with no way to reach it. It also needs a
   `ResizeObserver`: the header grows *after* boot when the picker and transport
   are filled in, and measuring only on open cached a 70px header.
+- **A dot marks the pages that changed since the previous deploy, and it is
+  measured.** `tools/build-info.py` asks git which pages' own files changed
+  between the commit that was live and the one being deployed, and stamps the
+  list into `build-info.json` as `changed`; `site-menu.js` reads it and dots
+  those entries. `deploy.sh` reads the live commit off the current release's own
+  stamp, which is the one fact about the previous deploy that cannot drift.
+  Nothing decides which pages are new by hand, so the dots cannot go stale the
+  way a kept list would, and a new page cannot be forgotten.
+  - **Not a fixed number of days, and this was measured rather than assumed.**
+    A 14-day window was built first and dotted every entry on the menu, because
+    the whole site is two weeks old. Every window either dots nothing useful or
+    dots everything, and a constant tuned against today's history is wrong
+    again a month later. "Changed since you could last have seen it" is what a
+    returning reader means, and it adjusts itself as the site ages.
+  - **The page-to-files map is a page's own document and script**, not
+    `style.css`, the shared modules or the JSON it reads: those touch every page
+    at once and would light every dot at once, which says nothing.
+  - **The archive shares `site-menu.js` and stays undotted on purpose**: its
+    `build-info.json` is `kind: archive` and carries no `changed` list, and
+    `markRecent()` does nothing without one. Failure to load leaves the menu
+    exactly as it was; the dots are a courtesy, not navigation.
+  - **`_menu-test.html` asserts the DOM agrees with the file**: every page in
+    `changed` carries a dot and no page outside it does, with a title and
+    screen-reader text on each.
 - **The archive's menu is grouped the same way but is not the same list.**
   `shell.py` owns it, split into "The archive" and "The simulator", which is
   the fact a reader most needs: half of those links leave the archive. The

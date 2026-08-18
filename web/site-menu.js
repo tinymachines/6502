@@ -155,6 +155,10 @@ export function renderMenu(root = document) {
         const label = document.createElement('span');
         label.className = 'navlink-label';
         label.textContent = item.label;
+        // Marked once the dates are known: see markRecent(). The page name is
+        // carried on the link so the dot can find its entry without a second
+        // copy of the list.
+        if (item.page !== undefined && !item.href) a.dataset.page = item.page;
         const hint = document.createElement('span');
         hint.className = 'navlink-hint';
         hint.textContent = item.hint;
@@ -169,4 +173,55 @@ export function renderMenu(root = document) {
   setupNavMenu(root);
 }
 
+/**
+ * A dot on the entries whose page changed since the previous deploy.
+ *
+ * "Recently updated" is measured, and measured RELATIVE to what a returning
+ * reader could last have seen: tools/build-info.py asks git which pages' own
+ * files changed between the commit that was live and the one being deployed,
+ * and stamps the list into build-info.json. Nothing here decides which pages
+ * are new, so the dots cannot go stale the way a hand-kept list would, and a
+ * new page cannot be forgotten.
+ *
+ * Not a fixed number of days, deliberately. That was tried and measured: on a
+ * site two weeks old, every window either dots nothing useful or dots every
+ * entry at once, and a constant chosen against today's history is wrong again
+ * a month later. "Since the last deploy" adjusts itself as the site ages.
+ *
+ * Fetched the way the footer fetches it, relative to this module rather than to
+ * the page, because the archive carries this file too and nests its pages two
+ * deep. Failure to load leaves the menu exactly as it was: the dots are a
+ * courtesy, not a load-bearing part of navigation.
+ */
+async function markRecent(root = document) {
+  let info;
+  try {
+    const r = await fetch(new URL('build-info.json', import.meta.url), { cache: 'no-cache' });
+    if (!r.ok) return;
+    info = await r.json();
+  } catch {
+    return;
+  }
+  const changed = new Set(info && Array.isArray(info.changed) ? info.changed : []);
+  if (!changed.size) return;
+  for (const a of root.querySelectorAll('.navlinks a[data-page]')) {
+    if (!changed.has(a.dataset.page)) continue;
+    a.classList.add('recent');
+    // The dot is the mark; this is what it means, for a pointer and a reader.
+    a.title = 'changed since the last deploy';
+    const label = a.querySelector('.navlink-label');
+    if (label && !label.querySelector('.navlink-dot')) {
+      const dot = document.createElement('i');
+      dot.className = 'navlink-dot';
+      dot.setAttribute('aria-hidden', 'true');
+      label.append(dot);
+      const sr = document.createElement('span');
+      sr.className = 'sr-only';
+      sr.textContent = ' (changed since the last deploy)';
+      label.append(sr);
+    }
+  }
+}
+
 renderMenu();
+markRecent();

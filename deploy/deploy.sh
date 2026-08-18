@@ -272,7 +272,15 @@ PY
 # copies build-info.json into dist/ -- and it reads the working tree, so it also
 # records whether this deploy came from uncommitted changes.
 log "stamping build info"
-python3 tools/build-info.py web --kind simulator
+# What is live at this moment, so the menu can mark what changed SINCE it. Read
+# off the current release's own stamp rather than remembered anywhere: the
+# symlink is the one fact about the previous deploy that cannot drift.
+PREV_COMMIT=""
+if [ -f "$SITE/current/build-info.json" ]; then
+  PREV_COMMIT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commitFull",""))' \
+    "$SITE/current/build-info.json" 2>/dev/null || true)
+fi
+PREVIOUS_DEPLOY="$PREV_COMMIT" python3 tools/build-info.py web --kind simulator
 
 log "hashing assets"
 python3 tools/build-web.py web dist
