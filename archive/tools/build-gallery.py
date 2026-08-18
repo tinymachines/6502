@@ -183,9 +183,23 @@ padding:.1rem .4rem;letter-spacing:.04em}
 """
 
 
-def shell(title: str, body: str, *, depth: int) -> str:
+def shell(title: str, body: str, *, depth: int, changed_since: bool = False) -> str:
+    """One page in the gallery's chrome.
+
+    `changed_since` places the "changed since the previous deploy" slot, on the
+    index ONLY. A per-chip page is a set of somebody else's photographs; a note
+    on it saying it "changed" would be about our chrome while reading as if it
+    were about the images. The hrefs are computed from `depth` rather than
+    written, so the slot would still be right on a deeper page if it were ever
+    wanted there.
+    """
     root = "../" * depth              # back to gallery/
     archive = "../" * (depth + 1)     # back to the archive root
+    slot = ('<section class="changed-since" data-changed-since=\'{'
+            f'"index":{{"label":"The archive overview","href":"{archive}index.html"}},'
+            f'"wiki":{{"label":"The wiki","href":"{archive}wiki/index.html"}},'
+            f'"gallery":{{"label":"This collection","href":"{root}index.html"}}'
+            '}\' hidden></section>') if changed_since else ""
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -195,6 +209,7 @@ def shell(title: str, body: str, *, depth: int) -> str:
 </head><body>
 {site_header(archive, SITE_GROUPS, active="Die photos")}
 <div class="wrap">
+{slot}
 {body}
 <footer>Images &copy; the {ATTRIB}, licensed
 <a href="{LICENCE}" rel="noopener">CC BY-NC-SA 3.0</a>. Mirrored from
@@ -324,7 +339,7 @@ def main() -> None:
             f'many of them the only public images of the part.</p>{BANNER}'
             f'<ul class="chips">{lis}</ul>')
     (OUT / "index.html").write_text(
-        shell("Die photography", body, depth=0))
+        shell("Die photography", body, depth=0, changed_since=True))
 
     (OUT / "gallery-manifest.json").write_text(json.dumps(
         {"chips": [{"chip": c, "images": n, "bytes": t} for t, c, n, _ in cards],

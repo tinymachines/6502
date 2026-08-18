@@ -39,6 +39,12 @@ const root = new URL('./', location.href).href;
 const f = document.getElementById('f');
 f.src = root + 'index.html';
 
+// `once`, and it is load-bearing. The sub-index checks below navigate this
+// same iframe, and each navigation fires `load` again -- which without `once`
+// re-enters this whole handler from the top, which navigates again, which
+// fires load again. The harness re-ran itself forever, produced no title and
+// no output, and looked exactly like a headless hang. Two wrong hypotheses
+// were tested and disproved before the recursion was seen.
 f.addEventListener('load', async () => {
   const d = f.contentDocument;
   try {
@@ -51,8 +57,29 @@ f.addEventListener('load', async () => {
     if (!info) throw new Error('no stamp');
     ok('the stamp is the archive\'s own', info.kind === 'archive', `kind=${info.kind}`);
 
+    // The three indexes each carry the slot; every other page must NOT. A
+    // wiki article and a gallery chip page are somebody else's content in our
+    // chrome, and a note saying they "changed" would read as being about the
+    // content. So this checks a sample of each is slot-free before checking
+    // the indexes.
+    const wikiPages = await fetch(root + 'wiki/index.html').then((r) => r.text());
+    const firstArticle = (wikiPages.match(/href="([A-Za-z0-9_%.-]+\.html)"/g) || [])
+      .map((m) => m.slice(6, -1)).find((h) => h !== 'index.html' && h !== 'images.html');
+    if (firstArticle) {
+      const art = await fetch(root + 'wiki/' + firstArticle).then((r) => r.text());
+      ok('a wiki article does NOT carry the slot', !art.includes('data-changed-since'),
+         firstArticle);
+    }
+    const chipList = await fetch(root + 'gallery/index.html').then((r) => r.text());
+    const firstChip = (chipList.match(/href="chip\/[^"]+\.html"/) || [null])[0];
+    if (firstChip) {
+      const chip = await fetch(root + 'gallery/' + firstChip.slice(6, -1)).then((r) => r.text());
+      ok('a gallery chip page does NOT carry the slot', !chip.includes('data-changed-since'),
+         firstChip.slice(6, -1));
+    }
+
     const sec = d.querySelector('section.changed-since');
-    ok('the index carries the slot', !!sec, sec ? 'present' : 'missing');
+    ok('the overview index carries the slot', !!sec, sec ? 'present' : 'missing');
     // Wait for the module to have filled (or hidden) it.
     for (let i = 0; i < 100 && sec && sec.hidden && !sec.textContent.trim()
          && info.previousDeploy; i++) await sleep(50);
@@ -90,6 +117,57 @@ f.addEventListener('load', async () => {
          footNote ? footNote.textContent : 'no note');
     }
     ok('no em dash in the section', !sec || !sec.textContent.includes('—'), '');
+
+    // --- the wiki and gallery indexes, at their own depth --------------------
+    //
+    // A relative href is where depth goes wrong, so each is loaded for real and
+    // its self-link is checked to point at itself.
+    for (const [rel, selfKey, selfHref] of [['wiki/index.html', 'wiki', 'index.html'],
+                                            ['gallery/index.html', 'gallery', 'index.html']]) {
+      // Attach before navigating, and never wait forever: an iframe already on
+      // this URL, or one whose load fires before the listener is on, would
+      // otherwise park the whole harness with no title and no output -- which
+      // is exactly what the first version did, for ten minutes.
+      // The timer is declared BEFORE the callback that clears it. The first
+      // version had them the other way round, and when `load` fired
+      // synchronously the callback reached `t` in its temporal dead zone,
+      // threw inside the executor, and the promise neither resolved nor
+      // surfaced the error -- the await parked forever, with no output.
+      await new Promise((r) => {
+        let t = null;
+        const done = () => { if (t) clearTimeout(t); r(); };
+        t = setTimeout(done, 8000);
+        f.addEventListener('load', done, { once: true });
+        f.src = root + rel + '?t=' + Date.now();
+      });
+      const dd = f.contentDocument;
+      for (let i = 0; i < 100 && !dd.querySelector('section.changed-since'); i++) await sleep(50);
+      const s2 = dd.querySelector('section.changed-since');
+      for (let i = 0; i < 100 && s2 && !s2.textContent.trim()
+           && !(s2.hidden && !info.previousDeploy); i++) await sleep(50);
+      ok(`${rel} carries the slot`, !!s2, s2 ? 'present' : 'missing');
+      if (!s2) continue;
+      if (!info.previousDeploy) {
+        ok(`${rel}: hidden with no previous deploy`, s2.hidden, `hidden=${s2.hidden}`);
+      } else if (!info.changed.length) {
+        ok(`${rel}: says nothing changed`, /Nothing a reader would see/.test(s2.textContent),
+           s2.textContent.trim().slice(0, 40));
+      } else {
+        const links = [...s2.querySelectorAll('.changed-list a')]
+          .map((a) => [a.textContent.trim(), a.getAttribute('href')]);
+        ok(`${rel}: lists ${info.changed.length} entr${info.changed.length === 1 ? 'y' : 'ies'}`,
+           s2.querySelectorAll('.changed-list li').length === info.changed.length,
+           JSON.stringify(links));
+        if (info.changed.includes(selfKey)) {
+          ok(`${rel}: links to itself, from its own depth`,
+             links.some(([, h]) => h === selfHref), JSON.stringify(links));
+        }
+        if (info.changed.includes('index')) {
+          ok(`${rel}: links up to the overview correctly`,
+             links.some(([, h]) => h === '../index.html'), JSON.stringify(links));
+        }
+      }
+    }
   } catch (e) {
     ok('the harness ran to the end', false, e && e.message ? e.message : String(e));
   }
@@ -98,6 +176,6 @@ f.addEventListener('load', async () => {
   const pre = document.createElement('pre');
   pre.textContent = results.join('\n');
   document.body.appendChild(pre);
-});
+}, { once: true });
 </script>
 </body></html>

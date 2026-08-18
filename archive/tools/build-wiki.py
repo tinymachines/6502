@@ -517,7 +517,16 @@ def build_image_index(out: Path, images: dict, pages: set, known: dict) -> int:
     return total
 
 
-def shell(title: str, body: str, *, banner: str, desc: str = "") -> str:
+def shell(title: str, body: str, *, banner: str, desc: str = "",
+          changed_since: bool = False) -> str:
+    """One page in the wiki's chrome.
+
+    `changed_since` places the "changed since the previous deploy" slot, and it
+    is set for the index ONLY. Every other page here is a rebuilt third-party
+    article, and a note on it saying it "changed" would be about our shell while
+    reading as if it were about the article. The index is ours; the articles
+    are not.
+    """
     if "Archived copy" not in banner:
         # The banner carries the CC BY-NC-SA attribution. A page without it is a
         # licence violation, so this fails the build rather than shipping.
@@ -533,6 +542,7 @@ def shell(title: str, body: str, *, banner: str, desc: str = "") -> str:
 {site_header("../", WIKI_GROUPS, active="Wiki")}
 <div class="wrap"><article>
 {banner}
+{CHANGED_SLOT if changed_since else ""}
 {body}
 <footer>
   Content &copy; the {ATTRIB}, licensed
@@ -545,6 +555,16 @@ def shell(title: str, body: str, *, banner: str, desc: str = "") -> str:
 <script type="module" src="../version-footer.js"></script>
 </body></html>
 """
+
+
+# The slot version-footer.js fills. Hrefs are relative to wiki/, where this
+# page lives; the module resolves the stamp relative to itself, so depth is
+# not its problem, but these links are ours to get right.
+CHANGED_SLOT = ('<section class="changed-since" data-changed-since=\'{'
+                '"index":{"label":"The archive overview","href":"../index.html"},'
+                '"wiki":{"label":"This wiki","href":"index.html"},'
+                '"gallery":{"label":"The die photography","href":"../gallery/index.html"}'
+                '}\' hidden></section>')
 
 
 def banner_for(title: str, entry: dict | None, kind: str) -> str:
@@ -665,7 +685,8 @@ which therefore appear on no rebuilt page.</p>"""
     (OUT / "index.html").write_text(shell(
         "Index", intro + "".join(sections),
         banner=banner_for("Main_Page", known.get("Main_Page"), "archived pages"),
-        desc="Static reconstruction of the visual6502.org wiki."),
+        desc="Static reconstruction of the visual6502.org wiki.",
+        changed_since=True),
         encoding="utf-8")
     (OUT / "wiki.css").write_text(CSS + HEADER_CSS, encoding="utf-8")
 

@@ -3138,6 +3138,25 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
       `web/` on another port the stamp fetch is cross-origin and blocked, which
       the first version found by failing on every state at once. It is copied
       into `archive/public/` to run and removed afterwards.
+    - **The wiki and gallery indexes carry the section too, and their articles
+      and chip pages do not, on purpose.** Every wiki page and every per-chip
+      page is somebody else's content in our chrome; a note saying it
+      "changed" would be about the shell while reading as if it were about the
+      article. So `changed_since` is a parameter on each builder's `shell()`
+      that only the index sets, and the harness asserts a sampled article and a
+      sampled chip page are slot-free. The gallery computes its hrefs from
+      `depth` rather than writing them, so they would still be right on a
+      deeper page if one ever wanted the section.
+    - **The harness re-ran itself forever, and it looked exactly like a
+      headless hang.** The whole test lives inside `f.addEventListener('load',
+      …)`. Checking the sub-indexes means navigating that same iframe, and
+      each navigation fires `load` again -- which re-entered the entire handler
+      from the top, which navigated again. No title, no output, `--dump-dom`
+      never returning: indistinguishable from the Chrome hang this file already
+      documents. **Two hypotheses were tested in isolation and "disproved"
+      precisely because isolation removed the persistent handler.** The fix is
+      `{ once: true }`, and the lesson generalises: a harness that navigates
+      its own iframe must not be *triggered* by that iframe's load.
     - **`archive-deploy.sh` now excludes `_*`.** `rsync -a --delete
       archive/public/` copies *everything*, so a harness left in that directory
       would have shipped -- and the first draft of the harness's own comment
