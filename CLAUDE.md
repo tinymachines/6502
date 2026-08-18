@@ -158,6 +158,12 @@ python3 tools/serve.py web 8777                    # http://localhost:8777/
 # that is web/_asm-test.html.)
 node tools/check-programs.mjs
 
+# Every measured cycle count against the published instruction table: 117
+# opcodes, against the 33 the hand-typed checks cover. SKIPS without the
+# manual in reference/ (which is gitignored and not redistributed);
+# REQUIRE_MANUAL=1 makes its absence a failure. deploy.sh runs it.
+python3 tools/check-timing-vs-manual.py
+
 # Web app, production shape: content-hashed bundle + service worker into dist/
 python3 tools/build-web.py web dist
 
@@ -2434,6 +2440,33 @@ recognisable as one.
   it imported nothing. `build-web.py` has to emit `claim-table.js` and rewrite
   `'./claim-table.js'` in **both** pages, or the hashed bundle 404s at runtime
   while `web/` keeps working perfectly. Boot `dist/` before believing a build.
+
+#### Checked against the published table, all 117 of it
+
+`tests/timing.rs` and `_timing-test.html` cross-check **33** documented opcodes
+against figures typed in by hand. `tools/check-timing-vs-manual.py` checks
+**117** against Appendix B of the MCS6500 family programming manual, which is a
+much stronger form of the same statement: the measurement path consults no
+instruction table at all, so agreeing with a published one is evidence rather
+than tautology.
+
+- **The manual is not in this repository and is not redistributed by it.** The
+  check reads whatever is in the gitignored `reference/`, exactly as the golden
+  test reads a trace generated on demand, and **SKIPS when it is absent**.
+  `REQUIRE_MANUAL=1` makes that a failure. Only facts come out of it -- opcode,
+  bytes, cycles -- and only to verify our own numbers.
+- **113 agree exactly and 4 are branches**, and the four are the whole reason
+  this is worth having rather than a worry. A published branch figure is the
+  NOT-TAKEN case; a taken branch costs one more. Our run measured BCC, BEQ, BPL
+  and BVC one higher, and those are exactly the four satisfied by a single
+  consistent flag state (**N=0, V=0, C=0, Z=1**). The other four fell through.
+  No exceptions, so the difference is about what was measured rather than about
+  the chip, and the checker allows *only* that shape of difference: a branch,
+  exactly one cycle high.
+- **The scan splits some opcodes across two lines** -- `6D` arrives as `6` then
+  `D` -- so the parser rejoins a pair of single hex characters when a plausible
+  byte count follows. It reports how many rows it could not read (11) rather
+  than quietly parsing fewer opcodes and claiming they all agreed.
 
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 

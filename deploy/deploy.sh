@@ -102,6 +102,12 @@ NODE_BIN=$(pick_node) || {
 }
 "$NODE_BIN" tools/check-programs.mjs || exit 1
 
+# Every measured cycle count against the published instruction table. It
+# SKIPS where the manual is not present, which is everywhere but this box,
+# so it can never block a deploy for being unavailable -- only for a real
+# disagreement about the chip.
+python3 tools/check-timing-vs-manual.py || exit 1
+
 # The layout blob is the one artefact whose corruption would not be obvious --
 # a truncated file still "loads" and then renders nothing.
 head -c 8 web/layout.bin | grep -q '^V6502LAY' || {
