@@ -102,10 +102,14 @@ NODE_BIN=$(pick_node) || {
 }
 "$NODE_BIN" tools/check-programs.mjs || exit 1
 
-# Every measured cycle count against the published instruction table. It
-# SKIPS where the manual is not present, which is everywhere but this box,
-# so it can never block a deploy for being unavailable -- only for a real
+# Every measured cycle count and byte length against the published instruction
+# table. It SKIPS where the manual is not present, which is everywhere but this
+# box, so it can never block a deploy for being unavailable -- only for a real
 # disagreement about the chip.
+#
+# The fast path: this reads 138 of the table's rows in about four seconds.
+# RESCAN=1 re-reads the pages the first pass could not resolve and gets to 144,
+# but takes twenty, which is not worth paying on every publish.
 python3 tools/check-timing-vs-manual.py || exit 1
 
 # The layout blob is the one artefact whose corruption would not be obvious --

@@ -13,6 +13,7 @@ on demand, and SKIPS when it is absent. `REQUIRE_MANUAL=1` makes its absence a
 failure instead.
 
     python3 tools/check-timing-vs-manual.py
+    RESCAN=1 python3 tools/check-timing-vs-manual.py   # slower, reads more rows
 
 Only facts are taken out of it -- opcode, byte count, cycle count -- and only to
 verify our own numbers. Nothing from the manual is published by this project.
@@ -243,8 +244,13 @@ def main():
     # agree on it before the figures are accepted: two engines wrong in
     # different places agreeing on a value is worth something, and neither of
     # them has consulted our measurements.
+    # The second pass renders pages and runs an OCR engine over them, which is
+    # most of this check's runtime. It recovers six rows out of a hundred and
+    # fifty, so it is worth having deliberately and not worth paying for on
+    # every publish. Off unless asked.
+    rescan = os.environ.get("RESCAN") == "1"
     recovered = 0
-    if unread:
+    if unread and rescan:
         want = {m for m, _, _ in unread}
         # Which page each row is on, taken from the text already extracted:
         # pdftotext separates pages with a form feed, so the page number is just
@@ -320,6 +326,9 @@ def main():
     if recovered:
         print(f"  {recovered} rows recovered by re-reading their page at higher "
               f"resolution, with both passes agreeing on the opcode")
+    elif unread and not rescan:
+        print(f"  {len(unread)} unread rows not re-read: set RESCAN=1 to render "
+              f"their pages and read them again (slower, recovers most of them)")
     if repaired:
         # Never silent. A figure resting on a character repair should be
         # visible, because a repair that goes wrong makes a plausible row

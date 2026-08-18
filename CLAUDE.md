@@ -2513,7 +2513,7 @@ distance from an opcode's own fetch to the next one, both found by watching
   the parser does read, it fails correctly and the tool exits 1. **A negative
   test has to be aimed at something the check actually covers, or it proves the
   opposite of what it looks like it proves.**
-- **Coverage is 144 of the 150 real rows.** Getting from 118 to 138 was two structural
+- **Coverage is 138 of the 150 real rows by default, 144 with `RESCAN=1`.** Getting from 118 to 138 was two structural
   fixes to the scan reader, neither of which looks at any data:
   - **A mnemonic is not always its own token.** The scan writes the accumulator
     forms as `ASL A` and the immediates as `LDA # Oper`, so an exact match
@@ -2534,6 +2534,12 @@ distance from an opcode's own fetch to the next one, both found by watching
     has run two rows' number columns together there. It was caught by the guard
     failing loudly rather than absorbing it, and each surviving repair was then
     audited on its own rather than trusted because the total was green.
+- **The second pass is opt-in, and the default is the fast one.** Plain
+  `check-timing-vs-manual.py` reads **138** rows in about four seconds and is
+  what `deploy.sh` runs. `RESCAN=1` reads the pages the first pass could not
+  resolve and gets to **144**, taking twenty seconds. Six rows out of a hundred
+  and fifty is worth having deliberately and not worth paying for on every
+  publish. Both modes report what they did not read.
 - **A second, higher-resolution read recovers what the first one lost.** Where
   the primary extraction keeps an opcode but loses its figures, the page is
   rendered at 400 DPI and read again with a real OCR engine. The two passes are
