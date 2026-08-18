@@ -49,6 +49,30 @@ const BUSES = [
   { id: 'idb', label: 'internal data bus', stem: 'idb', side: 'right' },
 ];
 
+/**
+ * The control side of the figure, and why it resolves differently.
+ *
+ * A datapath box is a claim about a *bus*: so many wires, carrying a value, and
+ * it is answered by resolving a stem and counting bits. A decode or timing box
+ * is not that. It is a claim about a *region* of the chip -- a place where work
+ * happens -- and the only honest answer is how much silicon is filed there.
+ *
+ * So these carry `region` instead of `stem` and are measured against
+ * `blocks.rs`. Forcing them through the bit-width path would have meant
+ * inventing a width for something that does not have one, which is exactly the
+ * sort of tidy-looking wrong answer this site exists to avoid.
+ */
+const CONTROL = [
+  { id: 'decode', label: 'Instruction decode', region: 'Decode PLA',
+    says: 'turns the opcode and the cycle into the terms everything else obeys' },
+  { id: 'pipeline', label: 'Control pipeline', region: 'Control pipeline',
+    says: 'latches those terms on the clock and drives the control lines' },
+  { id: 'timing', label: 'Timing control', region: 'Timing chain',
+    says: 'counts how far through the instruction the chip has got' },
+  { id: 'interrupt', label: 'Interrupt logic', region: 'Interrupts & vectors',
+    says: 'samples the interrupt pins and supplies the vectors' },
+];
+
 const BLOCKS = [
   { id: 'abh', label: 'Address bus buffer, high', stem: 'abh', rail: 'adh',
     says: 'drives the top half of the address pins' },
@@ -92,13 +116,29 @@ function ownerOf(d, stem) {
 /** Every claim in the dataset, answered by the chip. */
 function resolve(d) {
   const out = [];
-  for (const b of [...BLOCKS]) {
+  for (const b of BLOCKS) {
     const ids = d.bits.get(b.stem) || [];
     const unit = d.bp.units.find((u) => u.name === b.stem) || null;
-    out.push({ ...b, ids, width: ids.length, owner: ownerOf(d, b.stem), unit });
+    out.push({ ...b, kind: 'bits', section: 'datapath',
+               ids, width: ids.length, owner: ownerOf(d, b.stem), unit });
+  }
+  for (const b of CONTROL) {
+    // Measured as a region: how much of the chip is filed here. `blocks.rs`
+    // grew these out of the die's own names, so a box the figure draws either
+    // corresponds to one of them or it does not, and the page says which.
+    const meta = d.blk.blocks.find((x) => x.name === b.region) || null;
+    out.push({ ...b, kind: 'region', section: 'control', meta,
+               owner: meta ? { id: meta.id, name: meta.name, share: 1 } : null,
+               unit: null });
   }
   return out;
 }
+
+/** What was measured about one block, as the short string beside its box. */
+const measured = (r) => {
+  if (r.kind === 'bits') return r.width ? `${r.stem} ×${r.width}` : 'no such signal';
+  return r.meta ? `${r.meta.transistors} transistors` : 'no such region';
+};
 
 /* -- the drawing -----------------------------------------------------------
  *
@@ -108,54 +148,101 @@ function resolve(d) {
  * computed from the order and the rail assignment above, which is why adding a
  * block to the dataset just works.
  */
-const GEO = { w: 980, top: 70, rowH: 58, boxW: 300, boxH: 40, railW: 22, gap: 26 };
+const GEO = {
+  w: 1160, top: 78, rowH: 58, boxW: 300, boxH: 40, railW: 22, gap: 26,
+  ctrlX: 800, ctrlW: 330,
+};
 
-function draw(rows, d) {
+/**
+ * Two sections, laid out by rule.
+ *
+ * The datapath is a column of boxes between its bus rails, because that is what
+ * a datapath is: things hung off wires. The control side is a separate column
+ * with no rails at all, because nothing there is a bus -- decode does not carry
+ * a value to the registers, it tells them what to do. Drawing a rail through it
+ * to make the picture symmetrical would be inventing a bus.
+ *
+ * No coordinate here came from the original plate. The arrangement falls out of
+ * the order and the `rail` / `section` fields, which is why adding a block to
+ * the dataset just works.
+ */
+function draw(rows) {
   const svg = $('bd-svg');
   svg.replaceChildren();
-  const h = GEO.top + rows.length * GEO.rowH + 60;
+  const path = rows.filter((r) => r.section === 'datapath');
+  const ctrl = rows.filter((r) => r.section === 'control');
+  const h = GEO.top + Math.max(path.length, ctrl.length + 1) * GEO.rowH + 60;
   svg.setAttribute('viewBox', `0 0 ${GEO.w} ${h}`);
 
-  const boxX = (GEO.w - GEO.boxW) / 2;
+  const boxX = 300;
   const leftX = boxX - GEO.gap - GEO.railW;
   const rightX = boxX + GEO.boxW + GEO.gap;
   const railX = { adh: leftX - 34, adl: leftX, sb: rightX, idb: rightX + 34 };
+
+  const heading = (x, wArg, text) => {
+    const t = el('text', { x: x + wArg / 2, y: GEO.top - 40, class: 'bd-section' }, svg);
+    t.setAttribute('text-anchor', 'middle');
+    t.textContent = text;
+  };
+  heading(boxX, GEO.boxW, 'datapath');
+  heading(GEO.ctrlX, GEO.ctrlW, 'control');
 
   // Rails first, so the boxes sit over them.
   for (const bus of BUSES) {
     const x = railX[bus.id];
     const g = el('g', { class: 'bd-rail' + (bus.figure === false ? ' bd-rail-extra' : '') }, svg);
-    el('rect', { x, y: GEO.top - 30, width: GEO.railW, height: h - GEO.top - 10, rx: 3 }, g);
-    const t = el('text', { x: x + GEO.railW / 2, y: GEO.top - 38,
-                           class: 'bd-raillabel' }, g);
-    t.textContent = bus.stem;
+    el('rect', { x, y: GEO.top - 24, width: GEO.railW,
+                 height: GEO.top + path.length * GEO.rowH - GEO.top + 14, rx: 3 }, g);
+    const t = el('text', { x: x + GEO.railW / 2, y: GEO.top - 30, class: 'bd-raillabel' }, g);
     t.setAttribute('text-anchor', 'middle');
+    t.textContent = bus.stem;
   }
 
-  rows.forEach((r, i) => {
+  const box = (r, x, wArg, y, cls) => {
+    const g = el('g', { class: `bd-block ${cls}`, 'data-id': r.id }, svg);
+    const rect = el('rect', { x, y, width: wArg, height: GEO.boxH, rx: 4, class: 'bd-box' }, g);
+    if (r.owner) rect.style.setProperty('--bd-hue', blockCss(r.owner.id));
+    const label = el('text', { x: x + 12, y: y + GEO.boxH / 2 + 4, class: 'bd-label' }, g);
+    label.textContent = r.label;
+    // The measurement beside the claim rather than under it: the comparison is
+    // the whole page and burying it in a caption would undo that.
+    const meas = el('text', { x: x + wArg - 12, y: y + GEO.boxH / 2 + 4, class: 'bd-meas' }, g);
+    meas.setAttribute('text-anchor', 'end');
+    meas.textContent = measured(r);
+    return g;
+  };
+
+  path.forEach((r, i) => {
     const y = GEO.top + i * GEO.rowH;
-    const g = el('g', { class: 'bd-block' + (r.width ? '' : ' bd-missing'),
-                        'data-id': r.id }, svg);
+    const g = box(r, boxX, GEO.boxW, y, r.width ? '' : 'bd-missing');
     // The connector to the rail the figure hangs this block off.
     const rx = railX[r.rail];
-    const from = rx > boxX ? boxX + GEO.boxW : rx + GEO.railW;
-    const to = rx > boxX ? rx : boxX;
-    el('line', { x1: from, y1: y + GEO.boxH / 2, x2: to, y2: y + GEO.boxH / 2,
-                 class: 'bd-wire' }, g);
-
-    const box = el('rect', { x: boxX, y, width: GEO.boxW, height: GEO.boxH, rx: 4,
-                             class: 'bd-box' }, g);
-    if (r.owner) box.style.setProperty('--bd-hue', blockCss(r.owner.id));
-
-    const label = el('text', { x: boxX + 12, y: y + GEO.boxH / 2 + 4, class: 'bd-label' }, g);
-    label.textContent = r.label;
-    // The measurement, beside the claim rather than under it: this is the whole
-    // point of the page and burying it in a caption would undo that.
-    const meas = el('text', { x: boxX + GEO.boxW - 12, y: y + GEO.boxH / 2 + 4,
-                              class: 'bd-meas' }, g);
-    meas.setAttribute('text-anchor', 'end');
-    meas.textContent = r.width ? `${r.stem} ×${r.width}` : 'no such signal';
+    const right = rx > boxX;
+    el('line', { x1: right ? boxX + GEO.boxW : rx + GEO.railW, y1: y + GEO.boxH / 2,
+                 x2: right ? rx : boxX, y2: y + GEO.boxH / 2, class: 'bd-wire' }, g);
   });
+
+  // The control column, and one bracket standing for every control line that
+  // reaches into the datapath. It is deliberately ONE mark rather than a line
+  // per block: 46 control lines fanning across the drawing would be a picture
+  // of a mess, and the count is on the page in words instead.
+  ctrl.forEach((r, i) => {
+    const y = GEO.top + i * GEO.rowH;
+    box(r, GEO.ctrlX, GEO.ctrlW, y, r.meta ? '' : 'bd-missing');
+  });
+  const bx = GEO.ctrlX - 26;
+  const by0 = GEO.top + GEO.boxH / 2;
+  const by1 = GEO.top + (ctrl.length - 1) * GEO.rowH + GEO.boxH / 2;
+  const midY = GEO.top + Math.min(path.length - 1, 4) * GEO.rowH + GEO.boxH / 2;
+  el('path', {
+    d: `M ${GEO.ctrlX} ${by0} H ${bx} V ${by1} H ${GEO.ctrlX}`
+       + ` M ${bx} ${(by0 + by1) / 2} H ${railX.idb + GEO.railW + 12}`
+       + ` M ${railX.idb + GEO.railW + 12} ${(by0 + by1) / 2} V ${midY}`,
+    class: 'bd-control-wire',
+  }, svg);
+  const ct = el('text', { x: bx - 8, y: (by0 + by1) / 2 - 8, class: 'bd-raillabel' }, svg);
+  ct.setAttribute('text-anchor', 'end');
+  ct.textContent = 'control lines';
   return { h };
 }
 
@@ -165,6 +252,9 @@ function table(rows) {
   host.replaceChildren();
   for (const r of rows) {
     const tr = document.createElement('tr');
+    // The harness branches on this: a bus claim and a region claim are checked
+    // against different things, and a row has to say which it is.
+    tr.dataset.kind = r.kind;
     const cell = (s, cls) => {
       const td = document.createElement('td');
       if (cls) td.className = cls;
@@ -172,10 +262,19 @@ function table(rows) {
       tr.append(td);
     };
     cell(r.label);
-    cell(r.width ? r.stem : '(not on this die)', 'mono');
-    cell(r.width ? String(r.width) : '0', 'mono');
+    if (r.kind === 'bits') {
+      cell(r.width ? r.stem : '(not on this die)', 'mono');
+      cell(r.width ? `${r.width} wires` : 'none', 'mono');
+    } else {
+      cell(r.meta ? r.region : '(no such region)', 'mono');
+      cell(r.meta ? `${r.meta.nodes} signals, ${r.meta.transistors} transistors` : 'none',
+           'mono');
+    }
     cell(r.owner ? r.owner.name : 'unclaimed');
-    cell(r.unit ? 'yes' : 'no', 'mono');
+    // Only a datapath claim can have a derived unit: the blueprint derives the
+    // *datapath*, so asking whether it found the decode PLA would be asking a
+    // question with one possible answer.
+    cell(r.kind === 'bits' ? (r.unit ? 'yes' : 'no') : 'not applicable', 'mono');
     host.append(tr);
   }
 }
@@ -185,14 +284,14 @@ const CHECKS = [
     says: 'The figure names a set of registers and an adder as the whole of the '
       + 'datapath, and every one of them is a real, named structure on the die',
     got: (d) => {
-      const rows = resolve(d);
+      const rows = resolve(d).filter((r) => r.kind === 'bits');
       const hit = rows.filter((r) => r.width > 0);
       return `${hit.length} of ${rows.length} resolve to named signals, `
         + `${hit.filter((r) => r.width === 8).length} of them eight bits wide`;
     },
-    holds: (d) => resolve(d).every((r) => r.width > 0),
+    holds: (d) => resolve(d).filter((r) => r.kind === 'bits').every((r) => r.width > 0),
     note: (d) => {
-      const rows = resolve(d);
+      const rows = resolve(d).filter((r) => r.kind === 'bits');
       const odd = rows.filter((r) => r.width !== 8);
       return 'The one that needs a translation is the input data latch: the figure '
         + 'calls it DL and this die calls it '
@@ -219,18 +318,18 @@ const CHECKS = [
     where: { href: 'blueprint', label: 'Blueprint' },
   },
   {
-    says: 'Each block in the figure is one part of the chip, in one place',
+    says: 'Each datapath block in the figure is one part of the chip, in one place',
     got: (d) => {
-      const rows = resolve(d).filter((r) => r.owner);
+      const rows = resolve(d).filter((r) => r.kind === 'bits' && r.owner);
       const clean = rows.filter((r) => r.owner.share === 1);
       return `${clean.length} of ${rows.length} have every bit filed to one functional block`;
     },
     holds: (d) => {
-      const rows = resolve(d).filter((r) => r.owner);
+      const rows = resolve(d).filter((r) => r.kind === 'bits' && r.owner);
       return rows.every((r) => r.owner.share >= 0.75);
     },
     note: (d) => {
-      const rows = resolve(d).filter((r) => r.owner);
+      const rows = resolve(d).filter((r) => r.kind === 'bits' && r.owner);
       const split = rows.filter((r) => r.owner.share < 1);
       return split.length
         ? `Split across blocks: ${split.map((r) => `${r.stem} is `
@@ -241,6 +340,30 @@ const CHECKS = [
           + 'figure claims: it draws boxes, and the wiring turns out to respect them.';
     },
     where: { href: 'exploded', label: 'Exploded' },
+  },
+  {
+    says: 'The control side is a handful of boxes off to one side: decode, the '
+      + 'pipeline that follows it, the timing chain and the interrupt logic',
+    got: (d) => {
+      const rows = resolve(d).filter((r) => r.kind === 'region');
+      const hit = rows.filter((r) => r.meta);
+      const t = hit.reduce((a, r) => a + r.meta.transistors, 0);
+      return `${hit.length} of ${rows.length} are regions blocks.rs grew on its own, `
+        + `${t} transistors between them`;
+    },
+    holds: (d) => resolve(d).filter((r) => r.kind === 'region').every((r) => r.meta),
+    note: (d) => {
+      const rows = resolve(d).filter((r) => r.kind === 'region' && r.meta);
+      const biggest = rows.slice().sort((a, b) => b.meta.transistors - a.meta.transistors)[0];
+      const dp = resolve(d).filter((r) => r.kind === 'bits' && r.owner)
+        .reduce((s, r) => s + (d.blk.blocks.find((x) => x.id === r.owner.id)?.transistors || 0), 0);
+      return 'These were not sought out: `blocks.rs` seeds from the names on the die and '
+        + 'grows along the wiring, and these four fell out of it. The proportions are the '
+        + `part worth noticing: ${biggest.label.toLowerCase()} alone is `
+        + `${biggest.meta.transistors} transistors, and the control side is not the small `
+        + 'annex off to one side that the drawing makes it look like.';
+    },
+    where: { href: 'decode', label: 'Decode' },
   },
 ];
 
@@ -260,7 +383,7 @@ function indexBits(sch) {
 // Only what the page actually has a slot for. An entry here with no `data-fact`
 // to fill is dead weight that reads as a fact the page states and does not.
 const FACTS = {
-  claimed: () => BLOCKS.length,
+  claimed: () => BLOCKS.length + CONTROL.length,
 };
 
 async function boot() {
@@ -283,14 +406,17 @@ async function boot() {
     }
 
     const rows = resolve(d);
-    draw(rows, d);
+    draw(rows);
     table(rows);
     renderClaims($('bd-checks'), $('bd-tally'), CHECKS, d);
 
+    const solved = rows.filter((r) => (r.kind === 'bits' ? r.width > 0 : !!r.meta));
+    const ctrlT = rows.filter((r) => r.kind === 'region' && r.meta)
+      .reduce((a, r) => a + r.meta.transistors, 0);
     $('bd-stats').textContent =
-      `${rows.length} blocks in the figure · ${rows.filter((r) => r.width).length} resolve `
-      + `on this die · ${d.bp.units.filter((u) => u.kind === 'bus').length} buses derived `
-      + `from switch topology`;
+      `${rows.length} blocks in the figure · ${solved.length} resolve on this die · `
+      + `${d.bp.units.filter((u) => u.kind === 'bus').length} buses derived from switch `
+      + `topology · ${ctrlT} transistors on the control side`;
 
     if (missing.length) throw new Error('facts not derived: ' + missing.join(', '));
     $('bd-boot').hidden = true;

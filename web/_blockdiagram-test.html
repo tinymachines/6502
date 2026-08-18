@@ -34,8 +34,9 @@ f.addEventListener('load', async () => {
     for (let i = 0; i < 250 && $('bd-main').hidden; i++) await sleep(50);
     ok('the page booted', !$('bd-main').hidden, $('bd-status').textContent);
 
-    const [sch, bp] = await Promise.all(['schematic.json', 'blueprint.json']
-      .map((x) => fetch(x).then((r) => r.json())));
+    const [sch, blk, bp] = await Promise.all(
+      ['schematic.json', 'blocks.json', 'blueprint.json']
+        .map((x) => fetch(x).then((r) => r.json())));
 
     // This harness's own index of `stem0..stemN`, built from the names table.
     const bits = new Map();
@@ -54,25 +55,55 @@ f.addEventListener('load', async () => {
        `${slots.length} slots, ${empty.length} empty`);
 
     // --- the table is the measurement, row by row ---------------------------
-    const rows = [...d.querySelectorAll('#bd-rows tr')].map((tr) =>
-      [...tr.children].map((td) => td.textContent.trim()));
-    ok('every block in the figure has a row', rows.length >= 12, `${rows.length} rows`);
+    const rows = [...d.querySelectorAll('#bd-rows tr')].map((tr) => ({
+      kind: tr.dataset.kind,
+      cells: [...tr.children].map((td) => td.textContent.trim()),
+    }));
+    ok('every block in the figure has a row', rows.length >= 16, `${rows.length} rows`);
+
+    // A bus claim and a region claim are checked against different things, so
+    // the row says which it is and this branches on that. Running the region
+    // rows through the width check would report them all as broken.
+    const bitRows = rows.filter((r) => r.kind === 'bits');
+    const regionRows = rows.filter((r) => r.kind === 'region');
+    ok('the figure has both a datapath and a control side',
+       bitRows.length >= 12 && regionRows.length >= 4,
+       `${bitRows.length} datapath, ${regionRows.length} control`);
 
     const wrong = [];
-    for (const [label, stem, width] of rows) {
+    for (const { cells: [label, stem, size] } of bitRows) {
       const mine = bits.get(stem);
       if (!mine) { wrong.push(`${label}: ${stem} is not a stem here`); continue; }
-      if (String(mine.length) !== width) {
-        wrong.push(`${label}: page says ${width}, netlist says ${mine.length}`);
+      if (`${mine.length} wires` !== size) {
+        wrong.push(`${label}: page says "${size}", netlist says ${mine.length}`);
       }
     }
-    ok('and every width is the one in the netlist', wrong.length === 0,
-       wrong.slice(0, 3).join(' | ') || `${rows.length} checked`);
+    ok('and every datapath width is the one in the netlist', wrong.length === 0,
+       wrong.slice(0, 3).join(' | ') || `${bitRows.length} checked`);
+
+    // The control rows are measured against blocks.json, which this harness
+    // reads for itself rather than taking the page's word for the sizes.
+    const byName = new Map(blk.blocks.map((b) => [b.name, b]));
+    const badRegion = [];
+    for (const { cells: [label, region, size] } of regionRows) {
+      const meta = byName.get(region);
+      if (!meta) { badRegion.push(`${label}: no region "${region}"`); continue; }
+      const want = `${meta.nodes} signals, ${meta.transistors} transistors`;
+      if (want !== size) badRegion.push(`${label}: page says "${size}", blocks.json says "${want}"`);
+    }
+    ok('and every control region is the size blocks.json measured',
+       badRegion.length === 0,
+       badRegion.slice(0, 3).join(' | ') || `${regionRows.length} checked`);
+    ok('decode and timing are both among them',
+       regionRows.some((r) => /decode/i.test(r.cells[0]))
+       && regionRows.some((r) => /timing/i.test(r.cells[0])),
+       regionRows.map((r) => r.cells[0]).join(', '));
 
     // The translation the page makes a point of: the figure's DL is idl here.
     ok('the input data latch resolved to this die\'s own name for it',
-       rows.some((r) => /input data latch/i.test(r[0]) && r[1] === 'idl'),
-       rows.find((r) => /input data latch/i.test(r[0]))?.join(' / ') || 'no such row');
+       rows.some((r) => /input data latch/i.test(r.cells[0]) && r.cells[1] === 'idl'),
+       rows.find((r) => /input data latch/i.test(r.cells[0]))?.cells.join(' / ')
+         || 'no such row');
 
     // --- the drawing contains what the table claims -------------------------
     const boxes = [...d.querySelectorAll('#bd-svg .bd-box')];

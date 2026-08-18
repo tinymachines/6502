@@ -84,12 +84,20 @@
         <h2>Every block the figure names, resolved</h2>
       </div>
       <p>
-        One row per block. The stem is what this die calls it, the width is how
-        many wires carry it, and the owning block is where
-        <b class="mono">blocks.rs</b> files those wires when it grows the twelve
-        functional regions out of the die's own names. The last column asks a
-        harder question: whether the datapath derivation, which knows nothing
-        about any datasheet, arrived at the same unit independently.
+        One row per block, and the two halves of the figure are answered by
+        different questions. A datapath box is a claim about a <em>bus</em>, so
+        it resolves to a name and a count of wires. A decode or timing box is
+        not: it is a claim about a <em>region</em>, a place where work happens,
+        and the only honest answer is how much silicon is filed there. Forcing
+        the second through the first would mean inventing a width for something
+        that has none.
+      </p>
+      <p>
+        The owning block is where <b class="mono">blocks.rs</b> files those
+        signals when it grows the twelve functional regions out of the die's own
+        names. The last column asks a harder question, and only of the datapath:
+        whether the blueprint derivation, which knows nothing about any
+        datasheet, arrived at the same unit independently.
       </p>
       <div class="console">
         <div class="console-bar">
@@ -100,7 +108,7 @@
           <table class="tk-table">
             <thead>
               <tr>
-                <th>In the figure</th><th>On this die</th><th>Bits</th>
+                <th>In the figure</th><th>On this die</th><th>What was measured</th>
                 <th>Functional block</th><th>A derived unit</th>
               </tr>
             </thead>

@@ -34,7 +34,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
-| Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 2 of 3 agree. |
+| Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 3 of 4 agree. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
@@ -2167,6 +2167,24 @@ in this site's palette rather than the plate's. How a chip is organised is not
 anyone's to own; a particular drawing of it is. The credit section says so, and
 `GEO` is the only geometry in the file.
 
+- **The two halves of the figure resolve differently, and that is the design.**
+  A datapath box is a claim about a *bus*: so many wires carrying a value,
+  answered by resolving a stem and counting bits. A decode or timing box is a
+  claim about a *region* -- a place where work happens -- and the only honest
+  answer is how much silicon is filed there, from `blocks.rs`. Forcing the
+  second through the first would have meant inventing a width for something
+  that does not have one. `kind` on each row says which, the table branches on
+  it, and so does the harness.
+  - **The control column is drawn with no rails**, because nothing there is a
+    bus: decode does not carry a value to the registers, it tells them what to
+    do. Running a rail through it to make the picture symmetrical would be
+    inventing one.
+  - **One bracket stands for every control line into the datapath**, not a line
+    per block: 46 wires fanning across the drawing is a picture of a mess, and
+    the count belongs in words.
+  - The control side is **four regions and 1113 transistors**, which is the
+    quiet finding of adding it: the figure draws it as a small annex off to one
+    side and the decode array alone is 749.
 - **The dataset carries only the claim**: a label, and the stem this die uses
   for the thing being claimed. Width, owning functional block, and whether the
   datapath derivation found the same unit independently are all read out of
