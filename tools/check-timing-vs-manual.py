@@ -34,7 +34,8 @@ CPX CPY DEC DEX DEY EOR INC INX INY JMP JSR LDA LDX LDY LSR NOP ORA PHA PHP PLA 
 ROR RTI RTS SBC SEC SED SEI STA STX STY TAX TAY TSX TXA TXS TYA""".split())
 
 # Longest first: "Zero Page, X" must win over "Zero Page".
-MODES = ["Zero Page, X", "Zero Page, Y", "Absolute, X", "Absolute, Y",
+MODES = ["Zero Page, X", "Zero Page,X", "Zero Page, Y", "Zero Page,Y",
+         "Absolute, X", "Absolute,X", "Absolute, Y", "Absolute,Y",
          "(Indirect, X)", "(Indirect), Y", "Immediate", "Zero Page", "Absolute",
          "Indirect", "Accumulator", "Implied", "Relative"]
 
@@ -53,19 +54,25 @@ def appendix_b(text):
         raise SystemExit("check-timing: no Appendix B in the extracted text")
     toks = [t.strip() for t in text[start:].splitlines() if t.strip()]
 
-    out, i, unparsed = {}, 0, 0
+    out, i, seen = {}, 0, 0
+    dropped = {"no mnemonic in the row": 0, "numbers unreadable": 0,
+               "opcode read twice": 0}
     while i < len(toks):
         mode = next((m for m in MODES if toks[i] == m), None)
         if mode is None:
             i += 1
             continue
+        seen += 1
         mne, j = None, i + 1
-        while j < min(i + 5, len(toks)):
+        while j < len(toks):
             if toks[j] in MNEMONICS:
                 mne = toks[j]
                 break
+            if any(toks[j] == m for m in MODES):
+                break          # the next row started; this one has no mnemonic
             j += 1
         if mne is None:
+            dropped["no mnemonic in the row"] += 1
             i += 1
             continue
 
@@ -89,11 +96,14 @@ def appendix_b(text):
         if len(nums) >= 3 and re.fullmatch(r"[0-9A-F]{2}", nums[0]) \
                 and nums[1].isdigit() and re.fullmatch(r"\d\*?", nums[2]):
             op = int(nums[0], 16)
-            out.setdefault(op, (mne, mode, int(nums[1]), int(nums[2][0])))
+            if op in out:
+                dropped["opcode read twice"] += 1
+            else:
+                out[op] = (mne, mode, int(nums[1]), int(nums[2][0]))
         else:
-            unparsed += 1
+            dropped["numbers unreadable"] += 1
         i = k if k > i else i + 1
-    return out, unparsed
+    return out, dropped, seen
 
 
 def main():
@@ -114,7 +124,7 @@ def main():
         print("check-timing: pdftotext not installed, SKIPPING")
         return 0
 
-    table, unparsed = appendix_b(text)
+    table, dropped, seen = appendix_b(text)
     measured = {o["op"]: o for o in json.loads(TIMING.read_text())["opcodes"]}
 
     agree, explained, disagree = 0, [], []
@@ -131,8 +141,18 @@ def main():
         else:
             disagree.append(f"${op:02X} {mne} {mode}: manual {cycles}, measured {m['cycles']}")
 
-    print(f"  {len(table)} opcodes in the published table "
-          f"({unparsed} rows the scan could not read)")
+    # Every row accounted for. A count that does not add up is how silent
+    # truncation hides: the first version of this reported only the rows it
+    # found AND failed to parse, so 30 rows it never saw at all looked like a
+    # table that did not contain them.
+    print(f"  {seen} rows in the published table")
+    print(f"  {len(table)} read as opcodes")
+    for why, n in dropped.items():
+        if n:
+            print(f"  {n} skipped: {why}")
+    total = len(table) + sum(dropped.values())
+    if total != seen:
+        raise SystemExit(f"check-timing: {seen} rows seen but {total} accounted for")
     print(f"  {agree} agree exactly")
     print(f"  {len(explained)} branches measured one cycle higher, taken in this run: "
           f"{', '.join(sorted(explained))}")

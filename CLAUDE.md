@@ -158,8 +158,8 @@ python3 tools/serve.py web 8777                    # http://localhost:8777/
 # that is web/_asm-test.html.)
 node tools/check-programs.mjs
 
-# Every measured cycle count against the published instruction table: 117
-# opcodes, against the 33 the hand-typed checks cover. SKIPS without the
+# Every measured cycle count against the published instruction table: 118 of
+# its 151 rows, against the 33 the hand-typed checks cover. SKIPS without the
 # manual in reference/ (which is gitignored and not redistributed);
 # REQUIRE_MANUAL=1 makes its absence a failure. deploy.sh runs it.
 python3 tools/check-timing-vs-manual.py
@@ -2445,7 +2445,7 @@ recognisable as one.
 
 `tests/timing.rs` and `_timing-test.html` cross-check **33** documented opcodes
 against figures typed in by hand. `tools/check-timing-vs-manual.py` checks
-**117** against Appendix B of the MCS6500 family programming manual, which is a
+**118** against Appendix B of the MCS6500 family programming manual, which is a
 much stronger form of the same statement: the measurement path consults no
 instruction table at all, so agreeing with a published one is evidence rather
 than tautology.
@@ -2455,7 +2455,16 @@ than tautology.
   test reads a trace generated on demand, and **SKIPS when it is absent**.
   `REQUIRE_MANUAL=1` makes that a failure. Only facts come out of it -- opcode,
   bytes, cycles -- and only to verify our own numbers.
-- **113 agree exactly and 4 are branches**, and the four are the whole reason
+- **The row accounting must add up, and the checker exits non-zero if it does
+  not.** It reports 151 rows in the table, how many were read as opcodes, and
+  every row it skipped with the reason. **The first version reported only the
+  rows it found AND failed to parse**, so 30 rows it never saw at all looked
+  like a table that did not contain them: it announced "117 opcodes in the
+  published table" when the table has 151. The bug was a fixed four-token
+  search window for the mnemonic; the fix is to search up to the next mode
+  label, which is the row's real boundary. **A coverage number that cannot be
+  reconciled against a total is not a coverage number.**
+- **114 agree exactly and 4 are branches**, and the four are the whole reason
   this is worth having rather than a worry. A published branch figure is the
   NOT-TAKEN case; a taken branch costs one more. Our run measured BCC, BEQ, BPL
   and BVC one higher, and those are exactly the four satisfied by a single
@@ -2465,8 +2474,15 @@ than tautology.
   exactly one cycle high.
 - **The scan splits some opcodes across two lines** -- `6D` arrives as `6` then
   `D` -- so the parser rejoins a pair of single hex characters when a plausible
-  byte count follows. It reports how many rows it could not read (11) rather
-  than quietly parsing fewer opcodes and claiming they all agreed.
+  byte count follows.
+- **The addressing-mode column is in the same parse and was checked too**, and
+  every mismatch turned out to be the *mapping* being wrong rather than a
+  finding. Six opcodes the manual calls implied do not fire `op-implied`: PHP,
+  PLP, RTI, PHA, RTS and PLA all fire a stack term instead, so `op-implied`
+  means "implied and not a stack operation". `JSR` is absolute in the manual and
+  has its own path here rather than an ordinary absolute access. The die's sets
+  are otherwise supersets of the manual's, which is the expected direction: a
+  term fires for the undocumented opcodes that share its mode.
 
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 
