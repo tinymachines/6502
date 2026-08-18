@@ -158,11 +158,14 @@ python3 tools/serve.py web 8777                    # http://localhost:8777/
 # that is web/_asm-test.html.)
 node tools/check-programs.mjs
 
-# Every measured cycle count against the published instruction table: 144 of
-# its 150 rows, against the 33 the hand-typed checks cover. SKIPS without the
-# manual in reference/ (which is gitignored and not redistributed);
-# REQUIRE_MANUAL=1 makes its absence a failure. deploy.sh runs it.
+# Every measured cycle count and byte length against the published instruction
+# table: 138 of its 150 rows in about four seconds, against the 33 the
+# hand-typed checks cover. RESCAN=1 re-reads the pages the first pass could not
+# resolve and reaches 144, taking twenty seconds. SKIPS without the manual in
+# reference/ (gitignored, not redistributed); REQUIRE_MANUAL=1 makes its absence
+# a failure. deploy.sh runs the fast path.
 python3 tools/check-timing-vs-manual.py
+RESCAN=1 python3 tools/check-timing-vs-manual.py
 
 # Web app, production shape: content-hashed bundle + service worker into dist/
 python3 tools/build-web.py web dist
@@ -2441,14 +2444,14 @@ recognisable as one.
   `'./claim-table.js'` in **both** pages, or the hashed bundle 404s at runtime
   while `web/` keeps working perfectly. Boot `dist/` before believing a build.
 
-#### Checked against the published table, all 117 of it
+#### Checked against the published table, 138 rows of it, or 144 asked twice
 
 `tests/timing.rs` and `_timing-test.html` cross-check **33** documented opcodes
 against figures typed in by hand. `tools/check-timing-vs-manual.py` checks
-**144** against Appendix B of the MCS6500 family programming manual, which is a
-much stronger form of the same statement: the measurement path consults no
-instruction table at all, so agreeing with a published one is evidence rather
-than tautology.
+**138** against Appendix B of the MCS6500 family programming manual, and **144**
+with `RESCAN=1`. That is a much stronger form of the same statement: the
+measurement path consults no instruction table at all, so agreeing with a
+published one is evidence rather than tautology.
 
 - **The manual is not in this repository and is not redistributed by it.** The
   check reads whatever is in the gitignored `reference/`, exactly as the golden
@@ -2456,15 +2459,18 @@ than tautology.
   `REQUIRE_MANUAL=1` makes that a failure. Only facts come out of it -- opcode,
   bytes, cycles -- and only to verify our own numbers.
 - **The row accounting must add up, and the checker exits non-zero if it does
-  not.** It reports 151 rows in the table, how many were read as opcodes, and
-  every row it skipped with the reason. **The first version reported only the
+  not.** It reports 150 rows in the table plus the 1 mode label that turned out
+  to be a heading, how many were read as opcodes, and every row it skipped with
+  the reason. **The first version reported only the
   rows it found AND failed to parse**, so 30 rows it never saw at all looked
   like a table that did not contain them: it announced "117 opcodes in the
-  published table" when the table has 151. The bug was a fixed four-token
+  published table" when the table has 150. The bug was a fixed four-token
   search window for the mnemonic; the fix is to search up to the next mode
   label, which is the row's real boundary. **A coverage number that cannot be
   reconciled against a total is not a coverage number.**
-- **114 agree exactly and 4 are branches**, and the four are the whole reason
+- **134 cycle counts agree by default and 140 with `RESCAN=1`; the byte lengths
+  are 133 and 139. Nothing disagrees in either mode.** Four are branches, and
+  the four are the whole reason
   this is worth having rather than a worry. A published branch figure is the
   NOT-TAKEN case; a taken branch costs one more. Our run measured BCC, BEQ, BPL
   and BVC one higher, and those are exactly the four satisfied by a single
