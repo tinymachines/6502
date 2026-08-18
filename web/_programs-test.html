@@ -93,6 +93,39 @@ const load = (src) => new Promise((resolve) => {
     ok('every cycle count is the one timing.json measured',
        cycleBad.length === 0, cycleBad.join(' | ') || 'all match');
 
+    // --- the length column agrees with the bytes the assembler emitted --------
+    //
+    // Two independent measurements of one thing on every row: the Bytes column
+    // is what the assembler produced, the Len column is how far the program
+    // counter moved on the chip. Neither knows about the other, so agreement is
+    // evidence and a mismatch is a real bug in one of them.
+    const lenBad = [];
+    let lenShown = 0, lenDeclined = 0;
+    for (const row of $('prog-listing').querySelectorAll('tbody tr.pg-row')) {
+      const cell = row.querySelector('.c-len');
+      const shown = cell.textContent.trim();
+      const hex = row.querySelector('.c-bytes').textContent.trim();
+      if (!hex) continue;
+      const emitted = hex.split(' ').length;
+      const op = parseInt(hex.split(' ')[0], 16);
+      const m = measured.get(op);
+      if (shown === '·') {
+        // Declined: the chip's measurement is null here, and it must be a
+        // control transfer, not an instruction the page just failed to fill.
+        lenDeclined += 1;
+        if (m && m.bytes != null) lenBad.push(`$${hex}: declined but timing.json has ${m.bytes}`);
+        continue;
+      }
+      if (!shown) continue;
+      lenShown += 1;
+      if (String(emitted) !== shown) lenBad.push(`$${hex}: assembler ${emitted}, chip ${shown}`);
+      if (cell.classList.contains('pg-mismatch')) lenBad.push(`$${hex}: flagged as a mismatch`);
+    }
+    ok('every measured length equals what the assembler emitted',
+       lenBad.length === 0, lenBad.join(' | ') || `${lenShown} agree, ${lenDeclined} declined`);
+    ok('and lengths were shown, with the declined ones being real transfers',
+       lenShown >= 5 && lenDeclined >= 1, `${lenShown} shown, ${lenDeclined} declined`);
+
     // ...and it is not empty, which is how a broken fetch would look.
     const withCycles = [...$('prog-listing').querySelectorAll('.c-cyc')]
       .filter((c) => c.textContent.trim()).length;

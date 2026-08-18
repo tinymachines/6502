@@ -26,6 +26,11 @@ const $ = (id) => document.getElementById(id);
 const state = {
   index: 0,
   cycles: null,     // opcode -> measured cycle count, or null if it never ends
+  // opcode -> measured byte length. A SECOND opinion on the Bytes column: that
+  // one is what the assembler emitted, this one is how far the program counter
+  // moved on the chip. They are independent, so a disagreement is a real bug in
+  // one of them and the row says so rather than picking a winner.
+  lens: null,
   jam: new Set(),
   chip: null,
   nav: null,
@@ -74,6 +79,7 @@ function renderListing(program) {
     const bytes = el('td', { class: 'c-bytes mono' }, tr);
     const src = el('td', { class: 'c-src' }, tr);
     const cyc = el('td', { class: 'c-cyc mono' }, tr);
+    const len = el('td', { class: 'c-len mono' }, tr);
 
     // A .org that skips forward leaves real memory the chip will fetch
     // through. Showing the gap is more honest than omitting it.
@@ -89,6 +95,28 @@ function renderListing(program) {
     const code = el('code', { class: 'pg-src' }, src);
     code.textContent = ln.text.replace(/\s+$/, '') || ' ';
     if (ln.mnemonic) code.classList.add('has-op');
+
+    if (ln.mnemonic && state.lens) {
+      const emitted = (ln.bytes && ln.bytes.length) || 0;
+      const measured = state.lens[ln.opcode];
+      if (state.jam.has(ln.opcode)) {
+        len.textContent = '';
+        len.title = 'This opcode never finishes, so it never reaches another fetch.';
+      } else if (measured == null) {
+        len.textContent = '·';
+        len.title = 'Control goes elsewhere, so the distance to the next fetch is '
+          + `not this instruction's length. The assembler emitted ${emitted}.`;
+      } else {
+        len.textContent = String(measured);
+        len.title = `${measured} bytes, measured as how far the program counter moved`;
+        if (emitted && emitted !== measured) {
+          // Two independent measurements of the same thing, disagreeing.
+          len.classList.add('pg-mismatch');
+          len.title = `The assembler emitted ${emitted} bytes and the chip moved `
+            + `${measured}. One of them is wrong.`;
+        }
+      }
+    }
 
     if (ln.mnemonic && state.cycles) {
       const n = state.cycles[ln.opcode];
@@ -106,7 +134,7 @@ function renderListing(program) {
       const nr = el('tr', { class: 'pg-note-row' }, tbody);
       el('td', {}, nr);
       const cell = el('td', { class: 'pg-note' }, nr);
-      cell.colSpan = 3;
+      cell.colSpan = 4;
       el('p', { html: note }, cell);
     }
   }
@@ -296,9 +324,14 @@ async function boot() {
       return r.json();
     });
     state.cycles = {};
+    state.lens = {};
     for (const row of timing.opcodes) {
       if (row.jam) state.jam.add(row.op);
       else state.cycles[row.op] = row.cycles;
+      // Null for an instruction that transfers control: the distance to the
+      // next fetch is not a length. Kept as null rather than dropped so the
+      // column can say so.
+      if (row.bytes != null) state.lens[row.op] = row.bytes;
     }
   } catch (err) {
     console.warn('cycle counts unavailable:', err);

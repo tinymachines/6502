@@ -2068,6 +2068,11 @@ body.no-scroll #view { z-index: 70; }
 .pg-listing .c-addr { width: 4.2rem; color: var(--muted); white-space: nowrap; }
 .pg-listing .c-bytes { width: 6.4rem; color: var(--mint); white-space: nowrap; }
 .pg-listing .c-cyc { width: 2.6rem; text-align: right; color: var(--muted); }
+.pg-listing .c-len { width: 2.6rem; text-align: right; color: var(--muted); }
+/* The assembler and the chip disagreeing about an instruction's length. Two
+   independent measurements of one thing, so this is a bug in one of them and
+   is loud on purpose. It should never appear. */
+.pg-listing .c-len.pg-mismatch { color: var(--warn); font-weight: 700; }
 .pg-listing .c-src { width: auto; }
 .pg-src { display: block; white-space: pre; font-size: .8rem; color: var(--muted); }
 .pg-src.has-op { color: var(--foreground); }

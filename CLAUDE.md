@@ -1920,6 +1920,15 @@ promising to watch for it.
 - **Every program loops rather than ending.** There is no operating system to
   return to and running off the end reaches `$00` — `BRK`, vectoring to `$0000`,
   which is another `BRK`. That exact bug was live on two pages of this site.
+- **The Len column is a second opinion on the Bytes column, and the two never
+  disagree.** Bytes is what the assembler emitted; Len is how far the program
+  counter moved on the chip, from `timing.json`. Neither knows about the other,
+  so agreement is evidence: across all seven programs and 62 instructions they
+  match on every row that has both. A disagreement is drawn loud (`.pg-mismatch`)
+  because it would be a real bug in one of them, and `_programs-test.html`
+  asserts there are none. A `·` is an instruction that transfers control, where
+  the distance to the next fetch is not a length, and the harness checks those
+  are exactly the rows where the chip's measurement is null.
 - **The cycle column is `timing.json`**, measured sync to sync, not a datasheet.
   Where an instruction can take longer — a taken branch, a page crossed — the
   shortest is shown, because the rest depends on values the page cannot know
