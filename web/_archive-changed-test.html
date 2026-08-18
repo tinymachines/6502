@@ -70,12 +70,24 @@ f.addEventListener('load', async () => {
       ok('a wiki article does NOT carry the slot', !art.includes('data-changed-since'),
          firstArticle);
     }
+    // A chip page DOES carry it: the photographs are somebody else's, but the
+    // page is ours, and the section only ever describes our deploys. What has
+    // to hold instead is that the section comes AFTER the page has said what
+    // it is -- the h1 and lede -- and before the attribution banner. The
+    // first version emitted it from shell() above the h1, so a reader met a
+    // deploy notice before the name of the chip.
     const chipList = await fetch(root + 'gallery/index.html').then((r) => r.text());
     const firstChip = (chipList.match(/href="chip\/[^"]+\.html"/) || [null])[0];
+    let chipRel = null;
     if (firstChip) {
-      const chip = await fetch(root + 'gallery/' + firstChip.slice(6, -1)).then((r) => r.text());
-      ok('a gallery chip page does NOT carry the slot', !chip.includes('data-changed-since'),
-         firstChip.slice(6, -1));
+      chipRel = 'gallery/' + firstChip.slice(6, -1);
+      const chip = await fetch(root + chipRel).then((r) => r.text());
+      const at = (needle) => chip.indexOf(needle);
+      ok('a gallery chip page carries the slot', at('data-changed-since') >= 0, chipRel);
+      ok('and it comes after the title and lede, before the attribution banner',
+         at('<h1') < at('class="lede"') && at('class="lede"') < at('data-changed-since')
+         && at('data-changed-since') < at('class="banner"'),
+         `h1@${at('<h1')} lede@${at('class="lede"')} slot@${at('data-changed-since')} banner@${at('class="banner"')}`);
     }
 
     const sec = d.querySelector('section.changed-since');
@@ -124,9 +136,13 @@ f.addEventListener('load', async () => {
     // its self-link is checked to point at itself.
     // images.html is the wiki's contact sheet: ours, at the wiki's depth, so
     // its self-link is the wiki index rather than itself.
-    for (const [rel, selfKey, selfHref] of [['wiki/index.html', 'wiki', 'index.html'],
-                                            ['wiki/images.html', 'wiki', 'index.html'],
-                                            ['gallery/index.html', 'gallery', 'index.html']]) {
+    const depthCases = [['wiki/index.html', 'wiki', 'index.html', '../index.html'],
+                        ['wiki/images.html', 'wiki', 'index.html', '../index.html'],
+                        ['gallery/index.html', 'gallery', 'index.html', '../index.html']];
+    // A chip page is one level deeper still, so its self-link is ../index.html
+    // (the collection) and the overview is two levels up.
+    if (chipRel) depthCases.push([chipRel, 'gallery', '../index.html', '../../index.html']);
+    for (const [rel, selfKey, selfHref, upHref] of depthCases) {
       // Attach before navigating, and never wait forever: an iframe already on
       // this URL, or one whose load fires before the listener is on, would
       // otherwise park the whole harness with no title and no output -- which
@@ -167,7 +183,7 @@ f.addEventListener('load', async () => {
         }
         if (info.changed.includes('index')) {
           ok(`${rel}: links up to the overview correctly`,
-             links.some(([, h]) => h === '../index.html'), JSON.stringify(links));
+             links.some(([, h]) => h === upHref), JSON.stringify(links));
         }
       }
     }

@@ -3142,15 +3142,33 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
       the indexes do: it is a page this archive *built* (the backstop that keeps
       every recovered image reachable), not a rebuilt article. The rule is
       "ours, not theirs", and `images.html` is ours.
-    - **The wiki and gallery indexes carry the section too, and their articles
-      and chip pages do not, on purpose.** Every wiki page and every per-chip
-      page is somebody else's content in our chrome; a note saying it
-      "changed" would be about the shell while reading as if it were about the
-      article. So `changed_since` is a parameter on each builder's `shell()`
-      that only the index sets, and the harness asserts a sampled article and a
-      sampled chip page are slot-free. The gallery computes its hrefs from
-      `depth` rather than writing them, so they would still be right on a
-      deeper page if one ever wanted the section.
+    - **The gallery chip pages carry it; the wiki articles do not.** The line
+      is "is the *page* ours". A chip page is our page around somebody else's
+      photographs, and the section only ever describes our deploys, so it is
+      honest there. A wiki article is a *rebuilt third-party document*, and a
+      note on it saying it "changed" reads as being about the article. The
+      harness asserts a sampled article is slot-free and a sampled chip page is
+      not, and drives the chip page at depth 2, where its hrefs are
+      `../index.html` for the collection and `../../index.html` for the
+      overview -- computed from `depth`, which is why they are right.
+    - **The slot is placed by each page's BODY, after the h1 and lede, never by
+      `shell()` before the body.** The first version had every builder's
+      `shell()` emit it, and it landed above the title everywhere: a reader
+      opening a chip page met a deploy notice before the name of the chip.
+      Measured across the five pages by document order, then fixed in each
+      builder. Asserted on the chip page: `h1 < lede < slot < banner`.
+    - **It is an aside, not a panel, and that took two rounds because it has
+      to work in two surrounds.** On the gallery it sits directly above the
+      attribution banner, which *is* a panel (2px rule, hard shadow, the
+      licence compliance); a second bordered box a hair beneath it read as two
+      peers fighting. So: no box, no shadow, a left rule. But on the overview
+      that same left rule sat directly under a callout ruled in the accent
+      colour, and two left-ruled asides one above the other read as *one
+      quotation* -- the note looked like the callout's last paragraph. The rule
+      is solid gold, its own signal, with a top margin larger than the gap
+      inside any of the archive's own blocks, so it breaks rather than
+      continues. **Look at every surround a shared style lands in; fixing one
+      collision made the other.**
     - **The harness re-ran itself forever, and it looked exactly like a
       headless hang.** The whole test lives inside `f.addEventListener('load',
       …)`. Checking the sub-indexes means navigating that same iframe, and

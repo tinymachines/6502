@@ -506,31 +506,23 @@ def build_image_index(out: Path, images: dict, pages: set, known: dict) -> int:
             f'{len(groups[key])}</span></h2><p>{note}</p>'
             f'<ul class="sheet">{"".join(card(e) for e in groups[key])}</ul>')
 
-    body = (f"<h1>Images</h1><p>Every image recovered from the wiki, "
-            f"{total} in all. Click one for its description page where the wiki "
-            f"had one, or for the image itself where it did not.</p>"
-            + "".join(sections))
     # The contact sheet is OURS -- a backstop this archive built -- not a
     # rebuilt article, so a "changed since the previous deploy" note on it is
     # honest in the way it would not be on a wiki page.
+    body = (f"<h1>Images</h1><p>Every image recovered from the wiki, "
+            f"{total} in all. Click one for its description page where the wiki "
+            f"had one, or for the image itself where it did not.</p>"
+            + CHANGED_SLOT
+            + "".join(sections))
     (out / "images.html").write_text(shell(
         "Images", body,
         banner=banner_for("Main_Page", known.get("Main_Page"), "archived pages"),
-        desc="Every image recovered from the visual6502 wiki.",
-        changed_since=True), encoding="utf-8")
+        desc="Every image recovered from the visual6502 wiki."), encoding="utf-8")
     return total
 
 
-def shell(title: str, body: str, *, banner: str, desc: str = "",
-          changed_since: bool = False) -> str:
-    """One page in the wiki's chrome.
-
-    `changed_since` places the "changed since the previous deploy" slot, and it
-    is set only for the pages that are OURS: the index and the images contact
-    sheet. Every other page here is a rebuilt third-party article, and a note
-    on it saying it "changed" would be about our shell while reading as if it
-    were about the article.
-    """
+def shell(title: str, body: str, *, banner: str, desc: str = "") -> str:
+    """One page in the wiki's chrome."""
     if "Archived copy" not in banner:
         # The banner carries the CC BY-NC-SA attribution. A page without it is a
         # licence violation, so this fails the build rather than shipping.
@@ -546,7 +538,6 @@ def shell(title: str, body: str, *, banner: str, desc: str = "",
 {site_header("../", WIKI_GROUPS, active="Wiki")}
 <div class="wrap"><article>
 {banner}
-{CHANGED_SLOT if changed_since else ""}
 {body}
 <footer>
   Content &copy; the {ATTRIB}, licensed
@@ -561,9 +552,12 @@ def shell(title: str, body: str, *, banner: str, desc: str = "",
 """
 
 
-# The slot version-footer.js fills. Hrefs are relative to wiki/, where this
-# page lives; the module resolves the stamp relative to itself, so depth is
-# not its problem, but these links are ours to get right.
+# The slot version-footer.js fills, for a page's BODY to place after its h1
+# and intro -- never emitted by shell() before the body, which put it above
+# the title. Only on pages that are OURS: the index and the images contact
+# sheet. Every other page here is a rebuilt third-party article, and a note
+# on it saying it "changed" would be about our shell while reading as if it
+# were about the article. Hrefs are relative to wiki/, where these pages live.
 CHANGED_SLOT = ('<section class="changed-since" data-changed-since=\'{'
                 '"index":{"label":"The archive overview","href":"../index.html"},'
                 '"wiki":{"label":"This wiki","href":"index.html"},'
@@ -684,13 +678,12 @@ exists only as a Wayback rendering, <a class="dead" href="#">struck red</a>
 means no copy was archived at all.</p>
 <p><a href="images.html"><strong>Every recovered image</strong></a> is listed on
 one contact sheet, including those whose articles survive only as renderings and
-which therefore appear on no rebuilt page.</p>"""
+which therefore appear on no rebuilt page.</p>""" + CHANGED_SLOT
 
     (OUT / "index.html").write_text(shell(
         "Index", intro + "".join(sections),
         banner=banner_for("Main_Page", known.get("Main_Page"), "archived pages"),
-        desc="Static reconstruction of the visual6502.org wiki.",
-        changed_since=True),
+        desc="Static reconstruction of the visual6502.org wiki."),
         encoding="utf-8")
     (OUT / "wiki.css").write_text(CSS + HEADER_CSS, encoding="utf-8")
 

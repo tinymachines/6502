@@ -85,9 +85,19 @@ text-transform:uppercase;transition:.15s}
 /* The "changed since the previous deploy" section on the overview, filled at
    runtime by version-footer.js from the same stamp the footer reads. Hidden
    until filled, and hidden again when there is nothing to compare against. */
-.changed-since{margin:1.4rem 0 .4rem;padding:1rem 1.1rem;
-border:1px solid color-mix(in srgb,var(--line) 60%,transparent);border-radius:.4rem;
-background:color-mix(in srgb,var(--line) 12%,transparent)}
+/* Not a panel. On the gallery it sits directly above the attribution banner,
+   which IS a panel -- 2px rule, hard shadow, the licence compliance -- and two
+   bordered boxes stacked with a hair between them read as peers fighting for
+   the same job. This is a courtesy and ranks below that banner, so it is a
+   left-ruled aside: no box, no shadow, and enough margin beneath it that the
+   banner starts as its own thing. */
+.changed-since{margin:2.2rem 0 2rem;padding:.6rem 0 .6rem 1rem;
+border-left:3px solid var(--gold)}
+/* Two left-ruled asides one above the other read as one quotation, and on the
+   overview this sits directly under a callout ruled in the accent colour: the
+   note looked like the callout's last paragraph. The rule is solid gold, not a
+   washed accent, and the top margin is deliberately larger than the gap inside
+   any of the archive's own blocks, so it breaks rather than continues. */
 .changed-since[hidden]{display:none}
 .changed-since .eyebrow{margin-top:0}
 .changed-list{margin:.5rem 0 .6rem;padding-left:1.2rem;line-height:1.7}

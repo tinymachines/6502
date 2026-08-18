@@ -183,23 +183,30 @@ padding:.1rem .4rem;letter-spacing:.04em}
 """
 
 
-def shell(title: str, body: str, *, depth: int, changed_since: bool = False) -> str:
-    """One page in the gallery's chrome.
+def changed_slot(depth: int) -> str:
+    """The "changed since the previous deploy" slot, for a page's BODY to place.
 
-    `changed_since` places the "changed since the previous deploy" slot, on the
-    index ONLY. A per-chip page is a set of somebody else's photographs; a note
-    on it saying it "changed" would be about our chrome while reading as if it
-    were about the images. The hrefs are computed from `depth` rather than
-    written, so the slot would still be right on a deeper page if it were ever
-    wanted there.
+    Placed by the caller after the page has said what it is -- after the h1
+    and the lede -- and never by the shell before the body. The first version
+    had shell() emit it, and it landed above the title on every page: a reader
+    opening a chip page met a deploy notice before the name of the chip. The
+    hrefs are computed from `depth`, so a chip page at depth 1 resolves them
+    without a second table. The section only ever describes OUR deploys; the
+    photographs are somebody else's and the wording keeps that unmistakable.
     """
-    root = "../" * depth              # back to gallery/
-    archive = "../" * (depth + 1)     # back to the archive root
-    slot = ('<section class="changed-since" data-changed-since=\'{'
+    root = "../" * depth
+    archive = "../" * (depth + 1)
+    return ('<section class="changed-since" data-changed-since=\'{'
             f'"index":{{"label":"The archive overview","href":"{archive}index.html"}},'
             f'"wiki":{{"label":"The wiki","href":"{archive}wiki/index.html"}},'
             f'"gallery":{{"label":"This collection","href":"{root}index.html"}}'
-            '}\' hidden></section>') if changed_since else ""
+            '}\' hidden></section>')
+
+
+def shell(title: str, body: str, *, depth: int) -> str:
+    """One page in the gallery's chrome."""
+    root = "../" * depth              # back to gallery/
+    archive = "../" * (depth + 1)     # back to the archive root
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -209,7 +216,6 @@ def shell(title: str, body: str, *, depth: int, changed_since: bool = False) -> 
 </head><body>
 {site_header(archive, SITE_GROUPS, active="Die photos")}
 <div class="wrap">
-{slot}
 {body}
 <footer>Images &copy; the {ATTRIB}, licensed
 <a href="{LICENCE}" rel="noopener">CC BY-NC-SA 3.0</a>. Mirrored from
@@ -315,11 +321,11 @@ def main() -> None:
                 f'Click a photograph for a 2000px view; the original full-resolution '
                 f'scan is linked beneath each one.</p>'
                 + (f'<div class="orig-wrap">{extra}</div>' if extra else "")
+                + changed_slot(1)
                 + BANNER
                 + f'<ul class="grid">{"".join(items)}</ul>')
         (OUT / "chip").mkdir(parents=True, exist_ok=True)
-        (OUT / "chip" / f"{chip}.html").write_text(
-            shell(chip, body, depth=1))
+        (OUT / "chip" / f"{chip}.html").write_text(shell(chip, body, depth=1))
 
         cover = files[0].relative_to(SRC)
         cards.append((total, chip, len(files),
@@ -336,10 +342,10 @@ def main() -> None:
     body = (f'<h1>Die photography</h1><p class="lede">'
             f'{len(cards)} chips, {sum(c[2] for c in cards)} photographs, '
             f'{human(grand)}. Twenty-times microscope scans of the silicon, '
-            f'many of them the only public images of the part.</p>{BANNER}'
+            f'many of them the only public images of the part.</p>'
+            f'{changed_slot(0)}{BANNER}'
             f'<ul class="chips">{lis}</ul>')
-    (OUT / "index.html").write_text(
-        shell("Die photography", body, depth=0, changed_since=True))
+    (OUT / "index.html").write_text(shell("Die photography", body, depth=0))
 
     (OUT / "gallery-manifest.json").write_text(json.dumps(
         {"chips": [{"chip": c, "images": n, "bytes": t} for t, c, n, _ in cards],
