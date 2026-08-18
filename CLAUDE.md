@@ -3095,8 +3095,26 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
   but an empty list, because a footer that goes quiet is ambiguous; and nothing
   at all when there was no previous deploy, since an empty list with no anchor
   is not "nothing changed", it is "nothing to compare against". The archive's
-  stamp carries neither field and this file is shared, so their absence is a
-  normal state rather than an error.
+  stamp carries the pair too, measured over ITS pages against ITS previous
+  deploy, so this file being shared costs nothing: the same renderer reads
+  whichever stamp sits beside it.
+  - **The archive's "pages" are its sections, and what changes them is the
+    builder that emits them** plus the shared shell and the recovered content
+    it is built from -- `ARCHIVE_FILES` in `build-info.py`. The 2.3 GB mirror is
+    excluded on purpose: it is somebody else's site, preserved exactly, and
+    "changed" is not something we should ever say about it.
+  - **The archive is stamped at build time and only the deploy knows what is
+    live**, so `archive-deploy.sh` re-stamps just before publishing, reading the
+    anchor off the live copy's own `build-info.json` -- the same arrangement the
+    simulator's deploy uses, for the same reason: it is the one fact about the
+    previous deploy that cannot drift.
+  - **The `.vf-changed` rule lives in `shell.CSS`, once.** The three builders
+    each carry their own copy of the other footer rules already, which is
+    exactly the duplication that let ten nav lists drift; a fourth copy in
+    three places was not the answer. All three emit `own CSS + shell.CSS`, so
+    one rule reaches all three stylesheets, and the tokens it names (`--fg`,
+    `--gold`, `--muted`) were checked to exist in each before relying on them --
+    a `var()` naming a missing token drops the declaration silently.
   - `_menu-test.html` asserts the footer agrees with the dots, that the diff
     link names both commits, and that the separator's computed `::before`
     content is a real `·` -- the check that would have caught the `␀b7` escape

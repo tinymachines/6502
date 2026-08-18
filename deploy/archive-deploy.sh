@@ -54,6 +54,18 @@ log "publishing mirror ($(du -sh archive/mirror | cut -f1))"
 mkdir -p "$SITE/mirror"
 rsync -a --delete archive/mirror/ "$SITE/mirror/"
 
+# Re-stamp with what is live at this moment, so the footer can say what changed
+# since it. build-archive.py stamped at build time and could not know; only the
+# deploy does. The anchor is read off the live copy's own stamp rather than
+# remembered anywhere, the same arrangement the simulator's deploy uses.
+PREV_COMMIT=""
+if [ -f "$SITE/archive/build-info.json" ]; then
+  PREV_COMMIT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("commitFull",""))' \
+    "$SITE/archive/build-info.json" 2>/dev/null || true)
+fi
+log "stamping build info (previous archive deploy: ${PREV_COMMIT:-none})"
+PREVIOUS_DEPLOY="$PREV_COMMIT" python3 tools/build-info.py archive/public --kind archive
+
 log "publishing archive ($(du -shL archive/public 2>/dev/null | cut -f1))"
 mkdir -p "$SITE/archive"
 rsync -a --delete archive/public/ "$SITE/archive/"

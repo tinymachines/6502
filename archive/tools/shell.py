@@ -73,6 +73,15 @@ border-radius:.375rem;background:transparent;color:var(--muted);cursor:pointer;
 font-family:var(--mono);font-size:.7rem;font-weight:700;letter-spacing:.12em;
 text-transform:uppercase;transition:.15s}
 .menu-btn:hover{border-color:var(--gold);color:var(--gold)}
+/* What changed since the previous archive deploy, rendered by the shared
+   version-footer.js. Here rather than in each builder's own CSS because the
+   three of them already carry three copies of the footer rules, and a fourth
+   copy in three places is how those drifted in the first place. A literal
+   middot, not an escape: see the simulator's notes on the ␀b7 bug. */
+.vf-changed{color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vf-changed::before{content:"·";margin-right:.5rem;opacity:.6}
+.vf-changed a{color:var(--gold);text-decoration:none}
+.vf-changed a:hover{color:var(--fg);text-decoration:underline}
 /* The source link is inserted by web/site-nav.js, which this site shares
    verbatim, so it appears here without any markup of ours. The style has to be
    restated because this page carries its own stylesheet rather than the

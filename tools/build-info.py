@@ -57,6 +57,18 @@ PAGE_FILES = {
 }
 
 
+# The archive's sections, keyed by the page names ITS menu uses (shell.py). Its
+# "pages" are built rather than authored, so what changes them is the builder
+# that emits them, the shared shell, and the recovered content it is built from.
+# The mirror is excluded on purpose: it is 2.3 GB of somebody else's site,
+# preserved exactly, and "changed" is not something we should ever say about it.
+ARCHIVE_FILES = {
+    "index": ["archive/tools/build-archive.py", "archive/tools/shell.py", "archive/README.md"],
+    "wiki": ["archive/tools/build-wiki.py", "archive/tools/harvest-wiki.py", "archive/urls"],
+    "gallery": ["archive/tools/build-gallery.py", "archive/urls/site-images.txt"],
+}
+
+
 def page_dates() -> dict:
     """ISO date of the last commit touching each page's own files."""
     out = {}
@@ -67,7 +79,7 @@ def page_dates() -> dict:
     return out
 
 
-def pages_changed_since(commit: str) -> list:
+def pages_changed_since(commit: str, table: dict = None) -> list:
     """The pages whose own files changed after `commit`.
 
     "Recently updated" is measured against the previous deploy rather than a
@@ -80,7 +92,7 @@ def pages_changed_since(commit: str) -> list:
     if not commit:
         return []
     out = []
-    for page, files in PAGE_FILES.items():
+    for page, files in (table or PAGE_FILES).items():
         changed = git("log", "--format=%H", f"{commit}..HEAD", "--", *files)
         if changed:
             out.append(page)
@@ -116,14 +128,17 @@ def main() -> None:
         "kind": kind,
         "repo": "https://github.com/tinymachines/6502",
     }
+    prev = os.environ.get("PREVIOUS_DEPLOY", "")
+    info["previousDeploy"] = prev[:40] if prev else None
+    # An empty list when there was no previous deploy to compare against is not
+    # "nothing changed"; `previousDeploy` being null is how a reader of the file
+    # tells the two apart. Both deployments carry the pair, each measured over
+    # its own pages against its own previous deploy.
     if kind == "simulator":
         info["pages"] = page_dates()
-        prev = os.environ.get("PREVIOUS_DEPLOY", "")
-        info["previousDeploy"] = prev[:40] if prev else None
-        # An empty list when there was no previous deploy to compare against is
-        # not "nothing changed"; `previousDeploy` being null is how a reader of
-        # the file tells the two apart.
         info["changed"] = pages_changed_since(prev)
+    else:
+        info["changed"] = pages_changed_since(prev, ARCHIVE_FILES)
 
     out.mkdir(parents=True, exist_ok=True)
     (out / "build-info.json").write_text(json.dumps(info, indent=2) + "\n")
