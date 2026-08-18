@@ -122,7 +122,10 @@ f.addEventListener('load', async () => {
     //
     // A relative href is where depth goes wrong, so each is loaded for real and
     // its self-link is checked to point at itself.
+    // images.html is the wiki's contact sheet: ours, at the wiki's depth, so
+    // its self-link is the wiki index rather than itself.
     for (const [rel, selfKey, selfHref] of [['wiki/index.html', 'wiki', 'index.html'],
+                                            ['wiki/images.html', 'wiki', 'index.html'],
                                             ['gallery/index.html', 'gallery', 'index.html']]) {
       // Attach before navigating, and never wait forever: an iframe already on
       // this URL, or one whose load fires before the listener is on, would

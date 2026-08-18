@@ -510,10 +510,14 @@ def build_image_index(out: Path, images: dict, pages: set, known: dict) -> int:
             f"{total} in all. Click one for its description page where the wiki "
             f"had one, or for the image itself where it did not.</p>"
             + "".join(sections))
+    # The contact sheet is OURS -- a backstop this archive built -- not a
+    # rebuilt article, so a "changed since the previous deploy" note on it is
+    # honest in the way it would not be on a wiki page.
     (out / "images.html").write_text(shell(
         "Images", body,
         banner=banner_for("Main_Page", known.get("Main_Page"), "archived pages"),
-        desc="Every image recovered from the visual6502 wiki."), encoding="utf-8")
+        desc="Every image recovered from the visual6502 wiki.",
+        changed_since=True), encoding="utf-8")
     return total
 
 
@@ -522,10 +526,10 @@ def shell(title: str, body: str, *, banner: str, desc: str = "",
     """One page in the wiki's chrome.
 
     `changed_since` places the "changed since the previous deploy" slot, and it
-    is set for the index ONLY. Every other page here is a rebuilt third-party
-    article, and a note on it saying it "changed" would be about our shell while
-    reading as if it were about the article. The index is ours; the articles
-    are not.
+    is set only for the pages that are OURS: the index and the images contact
+    sheet. Every other page here is a rebuilt third-party article, and a note
+    on it saying it "changed" would be about our shell while reading as if it
+    were about the article.
     """
     if "Archived copy" not in banner:
         # The banner carries the CC BY-NC-SA attribution. A page without it is a

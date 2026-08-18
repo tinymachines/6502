@@ -3138,6 +3138,10 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
       `web/` on another port the stamp fetch is cross-origin and blocked, which
       the first version found by failing on every state at once. It is copied
       into `archive/public/` to run and removed afterwards.
+    - **The wiki's images contact sheet carries it too**, for the same reason
+      the indexes do: it is a page this archive *built* (the backstop that keeps
+      every recovered image reachable), not a rebuilt article. The rule is
+      "ours, not theirs", and `images.html` is ours.
     - **The wiki and gallery indexes carry the section too, and their articles
       and chip pages do not, on purpose.** Every wiki page and every per-chip
       page is somebody else's content in our chrome; a note saying it
