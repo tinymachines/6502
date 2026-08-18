@@ -266,7 +266,11 @@ f.addEventListener('load', async () => {
     const file = H.encode(frames, {
       program: { id: prog.id }, nodes: sch.names.length, vss: sch.vss, vcc: sch.vcc,
       units: bp.units.map((u) => u.name), controls: bp.links.map((l) => l.control), terms: [],
+      instructions: st.segs.map((s) => ({ start: s.start, end: s.end, label: s.label, at: s.fetch, op: s.op })),
     });
+    ok('the file names the instructions the strip groups by',
+       file.instructions.length === st.segs.length && file.instructions[1].label === st.segs[1].label
+       && file.instructions.every((s, i) => i === 0 || s.start === file.instructions[i - 1].end + 1));
     ok('the file carries one record per frame, the first in full and the rest as deltas',
        file.frames.length === frames.length && typeof file.frames[0].levels === 'string'
        && file.frames.slice(1).every((r) => Array.isArray(r.up) && Array.isArray(r.down) && r.levels === undefined));

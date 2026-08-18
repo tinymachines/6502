@@ -82,6 +82,8 @@ export function encode(frames, meta) {
     units: meta.units,
     controls: meta.controls,
     terms: meta.terms,
+    // Which frames belong to which instruction, as the strip groups them.
+    instructions: meta.instructions || [],
     frames: out,
   };
 }

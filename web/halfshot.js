@@ -567,6 +567,7 @@ function exportRecording() {
     units: state.bp.units.map((u) => u.name),
     controls: state.bp.links.map((l) => l.control),
     terms: state.termNodes.map((n, i) => state.dec.rows[i].name || `#${n}`),
+    instructions: state.segs.map((s) => ({ start: s.start, end: s.end, label: s.label, at: s.fetch, op: s.op })),
   });
   const blob = new Blob([JSON.stringify(file)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
