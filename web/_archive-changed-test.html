@@ -130,6 +130,45 @@ f.addEventListener('load', async () => {
     }
     ok('no em dash in the section', !sec || !sec.textContent.includes('—'), '');
 
+    // --- the page in front of the mirror ---------------------------------------
+    //
+    // Entry points go THROUGH mirror.html, so a reader is told what the mirror
+    // is (and that it has no way back) before entering it. Deep links do not:
+    // a photograph's full-resolution original must stay a direct link into
+    // full/images/, because a reader who clicked a picture wants the picture,
+    // not a page about the archive.
+    const wrapper = await fetch(root + 'mirror.html').then((r) => r.ok ? r.text() : null);
+    ok('there is a page in front of the mirror', !!wrapper, wrapper ? 'mirror.html' : 'missing');
+    if (wrapper) {
+      ok('and it says what the mirror is, and that it has no way back',
+         /exactly as captured/i.test(wrapper) && /no way back/i.test(wrapper), '');
+      ok('and it enters the mirror by real links',
+         /href="full\/index\.html"/.test(wrapper) && /href="full\/JSSim\/"/.test(wrapper), '');
+    }
+    const overview = await fetch(root + 'index.html').then((r) => r.text());
+    ok('the overview\'s "Open the mirror" goes through the wrapper',
+       /href="mirror\.html"[^>]*>Open the mirror/.test(overview)
+       && !/class="go" href="full\/index\.html"/.test(overview), '');
+    ok('and so does the menu\'s "Original site" entry',
+       /href="mirror\.html"[^>]*>\s*<span class="navlink-label">Original site/.test(overview), '');
+    if (chipRel) {
+      const chipHtml = await fetch(root + chipRel).then((r) => r.text());
+      // The photograph links specifically. The page as a whole DOES mention
+      // mirror.html -- its header menu's "Original site" entry goes there,
+      // which is the redirect above working -- so "no mirror.html anywhere on
+      // the page" was the wrong negative, and failed on the correct behaviour.
+      // `dl` is the per-image "full-resolution original" link, present on
+      // every chip page. (`orig` is a description page or document beside the
+      // images, which only some chips have -- the first draft keyed on it and
+      // would have failed vacuously on a chip without one.)
+      const origLinks = chipHtml.match(/class="dl" href="[^"]+"/g) || [];
+      ok('but a photograph\'s original still links straight into full/images/',
+         origLinks.length > 0
+         && origLinks.every((h) => /href="\.\.\/full\/images\//.test(h))
+         && !origLinks.some((h) => /mirror\.html/.test(h)),
+         `${origLinks.length} original links on ${chipRel}`);
+    }
+
     // --- the mirror is NOT touched, and that is asserted -----------------------
     //
     // full/ is a symlink into the byte-exact copy of visual6502.org. It carries
@@ -156,7 +195,8 @@ f.addEventListener('load', async () => {
     // its self-link is checked to point at itself.
     // images.html is the wiki's contact sheet: ours, at the wiki's depth, so
     // its self-link is the wiki index rather than itself.
-    const depthCases = [['wiki/index.html', 'wiki', 'index.html', '../index.html'],
+    const depthCases = [['mirror.html', 'index', 'index.html', 'index.html'],
+                        ['wiki/index.html', 'wiki', 'index.html', '../index.html'],
                         ['wiki/images.html', 'wiki', 'index.html', '../index.html'],
                         ['gallery/index.html', 'gallery', 'index.html', '../index.html']];
     // A chip page is one level deeper still, so its self-link is ../index.html

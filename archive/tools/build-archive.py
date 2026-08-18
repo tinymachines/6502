@@ -20,6 +20,7 @@ no reason to hold them twice. nginx follows symlinks by default, and the deploy
 resolves it.
 """
 
+import html
 import json
 import shutil
 import subprocess
@@ -108,6 +109,41 @@ padding:.1rem .4rem;letter-spacing:.04em}
 .vf-rev:hover .vf-hash{color:var(--fg)}
 .vf-built{color:var(--muted)}
 .vf-built::before{content:"·";margin-right:.5rem;opacity:.6}
+"""
+
+
+def page(title: str, desc: str, body: str, *, active: str) -> str:
+    """One page of the archive's own, in its chrome.
+
+    Factored out the moment a second page needed it: the overview's head and
+    footer were inline, and a second inline copy is the copy that drifts. Both
+    of this builder's pages -- the overview and the page in front of the mirror
+    -- go through here, so they cannot disagree about the footer's attribution
+    or which scripts they load.
+    """
+    return f"""<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(title)}</title>
+<meta name="description" content="{html.escape(desc)}">
+<link rel="stylesheet" href="archive.css">
+</head><body>
+{shell.header("", shell.GROUPS, active=active)}
+<div class="wrap">{body}
+<footer>Mirrored for preservation by
+<a href="https://github.com/tinymachines/6502">tinymachines/6502</a>, which
+builds a transistor-level 6502 simulator from this project's data. Content
+&copy; the {ATTRIB}, licensed
+<a href="{LICENCE}" rel="noopener">CC BY-NC-SA 3.0</a>.
+<strong>Not affiliated with the Visual6502 project.</strong> If you are one of
+its authors and want any of this changed or taken down, open an issue on the
+repository and it will be.
+<span class="version-foot" data-version-footer></span></footer>
+</div>
+<script type="module" src="site-nav.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body></html>
 """
 
 
@@ -203,7 +239,7 @@ this material disappears. Not deleted, just orphaned.</p>
   <p>visual6502.org as it still stands, including the JavaScript simulator that
   started all of this and the SIGGRAPH&nbsp;2010 talk describing how the chip
   was photographed and vectorised.</p>
-  <a class="go" href="full/index.html">Open the mirror</a></li>
+  <a class="go" href="mirror.html">Open the mirror</a></li>
 </ul>
 
 <div class="eyebrow">Attribution</div>
@@ -241,32 +277,71 @@ permission-denied form instead of the editor. Those are served as archived HTML.
 Everything else is rebuilt from the original wikitext.</p>
 """
 
-    (PUBLIC / "index.html").write_text(f"""<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>visual6502.org, preserved</title>
-<meta name="description" content="A preservation mirror of visual6502.org: the
-wiki rebuilt from the Internet Archive, and {gb:.1f} GB of die photography made
-browsable again.">
-<link rel="stylesheet" href="archive.css">
-</head><body>
-{shell.header("", shell.GROUPS, active="Overview")}
-<div class="wrap">{body}
-<footer>Mirrored for preservation by
-<a href="https://github.com/tinymachines/6502">tinymachines/6502</a>, which
-builds a transistor-level 6502 simulator from this project's data. Content
-&copy; the {ATTRIB}, licensed
-<a href="{LICENCE}" rel="noopener">CC BY-NC-SA 3.0</a>.
-<strong>Not affiliated with the Visual6502 project.</strong> If you are one of
-its authors and want any of this changed or taken down, open an issue on the
-repository and it will be.
-<span class="version-foot" data-version-footer></span></footer>
-</div>
-<script type="module" src="site-nav.js"></script>
-<script type="module" src="version-footer.js"></script>
-</body></html>
-""", encoding="utf-8")
+    (PUBLIC / "index.html").write_text(
+        page("visual6502.org, preserved",
+             f"A preservation mirror of visual6502.org: the wiki rebuilt from the "
+             f"Internet Archive, and {gb:.1f} GB of die photography made browsable "
+             f"again.", body, active="Overview"),
+        encoding="utf-8")
+
+    # The page in FRONT of the mirror. The mirror itself is a byte-exact copy
+    # of visual6502.org and is never rewritten -- no header, no footer, no
+    # note of ours, because a preservation copy that has been edited is a
+    # different artefact presented as though it were not. So this is where a
+    # reader is told what the mirror is before entering it, and where the
+    # "changed since the previous deploy" note can honestly go: on OUR page,
+    # about OUR deploys, and not on pages whose whole meaning is that they have
+    # not changed since they were captured.
+    jssim_n = sum(1 for f in (MIRROR / "JSSim").rglob("*") if f.is_file()) \
+        if (MIRROR / "JSSim").exists() else 0
+    docs_n = sum(1 for f in (MIRROR / "docs").rglob("*") if f.is_file()) \
+        if (MIRROR / "docs").exists() else 0
+    mirror_body = f"""
+<h1>The original site, exactly as captured</h1>
+<p class="lede">What follows this page is visual6502.org itself: <strong>{site_n}
+files</strong> outside the image tree, mirrored byte for byte and served with
+none of this archive's chrome around them. No header, no footer, no note of
+ours. A preservation copy that has been edited is a different thing presented
+as though it were not, so these pages are left as they were captured, and this
+one stands in front of them to say so.</p>
+<section class="changed-since" data-changed-since='{{"index":{{"label":"The archive overview","href":"index.html"}},"wiki":{{"label":"The wiki","href":"wiki/index.html"}},"gallery":{{"label":"The die photography","href":"gallery/index.html"}}}}' hidden></section>
+<div class="eyebrow">What is behind this page</div>
+<ul class="cards">
+<li class="card"><span class="n">{jssim_n} files</span>
+  <h3>JSSim</h3>
+  <p>The JavaScript simulator that started all of this: the same transistor
+  network, animated in a browser in 2010. Its <code>segdefs.js</code> and
+  <code>transdefs.js</code> are the die data every page of the simulator on this
+  site is built from.</p>
+  <a class="go" href="full/JSSim/">Open JSSim</a></li>
+<li class="card"><span class="n">{docs_n} files</span>
+  <h3>Documents</h3>
+  <p>The project's own write-ups, including the SIGGRAPH&nbsp;2010 talk on how
+  the chip was photographed and vectorised.</p>
+  <a class="go" href="full/docs/">Open the documents</a></li>
+<li class="card"><span class="n">the front door</span>
+  <h3>The site as it stands</h3>
+  <p>The landing page, its links, and everything it still serves. Nothing here
+  has been touched; if a link is broken, it was broken when captured.</p>
+  <a class="go" href="full/index.html">Enter the mirror</a></li>
+</ul>
+<div class="eyebrow">Two things worth knowing before you go in</div>
+<p>The mirror has <strong>no way back</strong>. Its pages carry the original
+site's navigation and nothing else, because adding ours would mean editing them.
+Use your browser's back button, or bookmark this page. That is the one cost of
+keeping the copy exact, and it is a smaller cost than the alternative.</p>
+<p>The die photographs are also here, at <code>full/images/</code>, but the
+<a href="gallery/index.html">gallery</a> is the better way to reach them: it is
+built by this archive, it is browsable, and every photograph on it links to its
+full-resolution original in the mirror. The mirror serves the bytes; the gallery
+finds them.</p>
+"""
+    (PUBLIC / "mirror.html").write_text(
+        page("The original site, exactly as captured",
+             f"A page in front of the byte-exact mirror of visual6502.org: {site_n} "
+             "files served exactly as captured, with none of this archive's chrome.",
+             mirror_body, active="Original site"),
+        encoding="utf-8")
     (PUBLIC / "archive.css").write_text(CSS + shell.CSS)
 
     print("\n=== archive assembled ===")

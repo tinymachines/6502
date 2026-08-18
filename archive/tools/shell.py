@@ -212,7 +212,10 @@ GROUPS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
         ("Overview", "index.html", "what was recovered, and what was lost"),
         ("Wiki", "wiki/index.html", "127 pages rebuilt from their wikitext"),
         ("Die photos", "gallery/index.html", "40 chips, 516 photographs"),
-        ("Original site", "full/index.html", "the mirror, exactly as captured"),
+        # Through the page in front of the mirror, not straight into it: the
+        # mirror has no way back and no note saying what it is, deliberately,
+        # so the entry point is where a reader is told that first.
+        ("Original site", "mirror.html", "the mirror, exactly as captured"),
     )),
     # Out to the simulator. Absolute, because the archive nests two deep and a
     # relative path would resolve differently on a wiki page than on the index.
