@@ -201,21 +201,35 @@ def rescan_page(pdf, page):
                              check=True, capture_output=True, text=True).stdout
 
     rows = {}
-    for line in out.splitlines():
+    lines = out.splitlines()
+    for n, line in enumerate(lines):
         m = MNEMONIC_ANYWHERE.search(line)
         if not m:
             continue
         mode = next((md for md in MODES if md in line), None)
         if mode is None:
             continue
-        # The trailing figures of the row: opcode, bytes, cycles.
-        parts = line.replace(",", " ").split()
-        fixed = ["".join(RESCAN_FIXES.get(c, c) for c in tok) for tok in parts]
-        tail = [t for t in fixed if re.fullmatch(r"[0-9A-F]{1,2}\*?", t)]
-        if len(tail) >= 3:
-            op, by, cy = tail[-3], tail[-2], tail[-1]
-            if re.fullmatch(r"[0-9A-F]{2}", op) and by.isdigit() and re.fullmatch(r"\d\*?", cy):
-                rows[(m.group(1), mode)] = (int(op, 16), int(by), int(cy[0]))
+        # Reading on into the following line was tried and removed. A row whose
+        # figures are missing is immediately followed by the NEXT row, so
+        # concatenating them hands this row its neighbour's numbers: ASL Zero
+        # Page came back carrying Zero Page,X's $16/2/6. It was thrown out by
+        # the cross-pass agreement check rather than shipped, but only because
+        # the first pass happened to hold the real opcode -- for a row where it
+        # does not, nothing would have caught it. One line only.
+        for candidate in (line,):
+            parts = candidate.replace(",", " ").split()
+            fixed = ["".join(RESCAN_FIXES.get(c, c) for c in tok) for tok in parts]
+            tail = [t for t in fixed if re.fullmatch(r"[0-9A-F]{1,2}\*?", t)]
+            # The same split-hex rejoin the first pass does: a lone hex letter
+            # after a lone digit is one opcode, not two numbers.
+            if len(tail) >= 4 and len(tail[0]) == 1 and re.fullmatch(r"[0-9A-F]", tail[1]):
+                tail = [tail[0] + tail[1]] + tail[2:]
+            if len(tail) >= 3:
+                op, by, cy = tail[-3], tail[-2], tail[-1]
+                if (re.fullmatch(r"[0-9A-F]{2}", op) and by.isdigit()
+                        and re.fullmatch(r"\d\*?", cy)):
+                    rows.setdefault((m.group(1), mode), (int(op, 16), int(by), int(cy[0])))
+                    break
     return rows
 
 
@@ -259,7 +273,12 @@ def main():
         by_page = text.split("\f")
         pages = {}
         for n, page_text in enumerate(by_page, start=1):
-            if "APPENDIX B" not in text[:text.find(page_text) + 1] or "No." not in page_text:
+            # A page carrying the table has the column headings on it. A page
+            # that merely names the instruction in a sentence does not, and
+            # re-reading that one finds a heading rather than a row.
+            if "APPENDIX B" not in text[:text.find(page_text) + 1]:
+                continue
+            if "No." not in page_text or "OP" not in page_text:
                 continue
             for mne in want:
                 if re.search(r"\b" + mne + r"\b", page_text):

@@ -2561,6 +2561,25 @@ distance from an opcode's own fetch to the next one, both found by watching
   row landing exactly where nothing would check it.** The rule now requires the
   second half to be a hex *letter*, which a byte or cycle count can never be.
   The row it was wrecking is now correctly flagged and then recovered.
+- **The last six cannot be safely recovered, and trying it fabricated a row.**
+  One is not a row at all: `ADC` has no accumulator addressing mode, and the
+  word appears in its operation description. The other five are damaged in ways
+  that leave nothing to read -- a footnote sitting where the figures belong, a
+  row whose numbers are simply absent from both passes.
+  - **Reading on into the following line looked like the fix and is a trap.** A
+    row missing its figures is immediately followed by the *next* row, so
+    concatenating them hands this row its neighbour's numbers: `ASL Zero Page`
+    came back carrying `Zero Page,X`'s `$16 / 2 / 6`. The cross-pass agreement
+    check threw it out, but only because the first pass happened to hold the
+    real opcode. For `BRK`, `ROR` and `TXA` the first pass has no opcode at all,
+    so nothing would have caught the same mistake there. It was removed.
+  - **144 of 150 is the safe ceiling for this scan.** Getting further means
+    guessing, or consulting our own measurements, and either one turns the
+    oracle into a mirror.
+- **Two smaller fixes kept from that attempt**: the re-read now rejoins a split
+  hex opcode the way the first pass does, and it only looks at pages carrying
+  the table's column headings. `BRK` was being sought on a page of prose that
+  merely lists it, where a re-read finds a heading rather than a row.
 - **The remaining rows are genuinely unreadable** -- a footnote interrupting
   a row, figures missing from the scan entirely -- and are reported as skipped
   rather than guessed at. `tests/timing.rs` and `_timing-test.html` still cover
