@@ -51,6 +51,16 @@ export const MENU = [
         hint: 'the datapath as a block diagram, derived' },
     ],
   },
+  // Its own group rather than an entry under "The chip, drawn", because these
+  // are drawings somebody else made and this site checks. The derived ones sit
+  // above; reading the two together is the point, and the grouping says so.
+  {
+    title: 'Block diagram',
+    items: [
+      { label: 'The published figure', page: 'blockdiagram',
+        hint: 'the datasheet diagram as a dataset, resolved against the die' },
+    ],
+  },
   {
     title: 'One instruction at a time',
     items: [

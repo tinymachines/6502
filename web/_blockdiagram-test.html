@@ -1,0 +1,149 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  This page encodes a published figure as a dataset and answers it from the
+  measurements. So the harness re-resolves every block STRAIGHT OUT OF
+  schematic.json with its own code rather than importing blockdiagram.js: a
+  harness that called the page's own resolver would be asking the page whether
+  the page is right.
+
+  The load-bearing assertion is the same one the talk and designer pages have:
+  exactly one row differs, and it is the single-internal-bus row. An all-green
+  table is what a comparison that silently throws produces, and this page's
+  whole reason for existing is the one claim that does not survive.
+
+    http://localhost:8777/_blockdiagram-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1200px;height:800px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="blockdiagram.html"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 250 && $('bd-main').hidden; i++) await sleep(50);
+    ok('the page booted', !$('bd-main').hidden, $('bd-status').textContent);
+
+    const [sch, bp] = await Promise.all(['schematic.json', 'blueprint.json']
+      .map((x) => fetch(x).then((r) => r.json())));
+
+    // This harness's own index of `stem0..stemN`, built from the names table.
+    const bits = new Map();
+    sch.names.forEach((n, i) => {
+      if (!n) return;
+      const m = /^(.*?)(\d+)$/.exec(n);
+      if (!m || !m[1]) return;
+      if (!bits.has(m[1])) bits.set(m[1], []);
+      bits.get(m[1]).push(i);
+    });
+
+    // --- every slot filled ---------------------------------------------------
+    const slots = [...d.querySelectorAll('[data-fact]')];
+    const empty = slots.filter((s) => !s.textContent.trim() || s.textContent.trim() === '…');
+    ok('every fact slot was filled', slots.length > 0 && empty.length === 0,
+       `${slots.length} slots, ${empty.length} empty`);
+
+    // --- the table is the measurement, row by row ---------------------------
+    const rows = [...d.querySelectorAll('#bd-rows tr')].map((tr) =>
+      [...tr.children].map((td) => td.textContent.trim()));
+    ok('every block in the figure has a row', rows.length >= 12, `${rows.length} rows`);
+
+    const wrong = [];
+    for (const [label, stem, width] of rows) {
+      const mine = bits.get(stem);
+      if (!mine) { wrong.push(`${label}: ${stem} is not a stem here`); continue; }
+      if (String(mine.length) !== width) {
+        wrong.push(`${label}: page says ${width}, netlist says ${mine.length}`);
+      }
+    }
+    ok('and every width is the one in the netlist', wrong.length === 0,
+       wrong.slice(0, 3).join(' | ') || `${rows.length} checked`);
+
+    // The translation the page makes a point of: the figure's DL is idl here.
+    ok('the input data latch resolved to this die\'s own name for it',
+       rows.some((r) => /input data latch/i.test(r[0]) && r[1] === 'idl'),
+       rows.find((r) => /input data latch/i.test(r[0]))?.join(' / ') || 'no such row');
+
+    // --- the drawing contains what the table claims -------------------------
+    const boxes = [...d.querySelectorAll('#bd-svg .bd-box')];
+    ok('the drawing has a box per block', boxes.length === rows.length,
+       `${boxes.length} boxes, ${rows.length} rows`);
+    // The buses the published figure does not draw are marked, and there is at
+    // least one: that marking is the finding, not decoration.
+    const extra = [...d.querySelectorAll('#bd-svg .bd-rail-extra')];
+    ok('a bus the figure does not draw is marked as such', extra.length >= 1,
+       `${extra.length} marked`);
+
+    // --- re-derive the bus claim independently ------------------------------
+    const buses = bp.units.filter((u) => u.kind === 'bus').map((u) => u.name);
+    ok('this die derives both an sb and an idb',
+       ['sb', 'idb'].every((n) => buses.includes(n)), buses.join(', '));
+
+    // --- the verdicts --------------------------------------------------------
+    const cards = [...d.querySelectorAll('.claim')];
+    ok('every claim rendered a card', cards.length >= 3, `${cards.length} cards`);
+    const differs = cards.filter((c) => c.classList.contains('claim-differs'));
+    ok('exactly one claim differs', differs.length === 1,
+       differs.map((c) => c.querySelector('.claim-says').textContent.trim().slice(0, 40)).join(' | '));
+    ok('and it is the single-internal-bus claim',
+       differs.length === 1 && /single internal data bus/i.test(differs[0].textContent),
+       differs[0] ? differs[0].querySelector('.claim-says').textContent.trim().slice(0, 60) : 'none');
+    const agreed = cards.length - differs.length;
+    ok('the tally matches the cards',
+       $('bd-tally').textContent === `${agreed} of ${cards.length} agree`,
+       $('bd-tally').textContent);
+
+    // --- no number typed into the prose -------------------------------------
+    const stray = [];
+    for (const p of $('bd-main').querySelectorAll('p')) {
+      if (p.closest('#bd-checks')) continue;
+      const clone = p.cloneNode(true);
+      for (const kill of clone.querySelectorAll('[data-fact], .mono, code, a')) kill.remove();
+      const m = clone.textContent
+        .replace(/\b65C?[0-9]{2,3}\b/gi, '')
+        // Whitespace-tolerant: the licence sits at the end of a wrapped line,
+        // so a literal "CC BY-NC-SA 3.0" does not match and its version number
+        // reads as a stray measurement.
+        .replace(/CC BY-NC-SA\s+3\.0/g, '')
+        .replace(/\b(19|20)\d\d\b/g, '')
+        .match(/\b\d[\d,]*\b/g);
+      if (m) stray.push(`${m.join('/')} in "${clone.textContent.trim().slice(0, 40)}…"`);
+    }
+    ok('and no measurement was typed into the prose', stray.length === 0,
+       stray.slice(0, 3).join(' | '));
+
+    // --- it is part of the site ---------------------------------------------
+    for (let i = 0; i < 100 && !d.querySelector('#site-nav a'); i++) await sleep(50);
+    const current = [...d.querySelectorAll('#site-nav a[aria-current="page"]')];
+    ok('the menu marks this page as the current one', current.length === 1,
+       current.map((a) => a.textContent.trim().slice(0, 30)).join(', '));
+    const groups = [...d.querySelectorAll('#site-nav .navgroup-title')].map((h) => h.textContent);
+    ok('and it sits in its own Block diagram section',
+       groups.includes('Block diagram'), groups.join(' | '));
+    ok('the footer is the site footer, all four elements',
+       !!d.querySelector('footer.site-foot .wrap .mark')
+       && !!d.querySelector('footer.site-foot .wrap .foot-meta')
+       && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'), '');
+    ok('no em dash in the rendered page', !$('bd-main').textContent.includes('—'), '');
+  } catch (e) {
+    ok('the harness ran to the end', false, e && e.message ? e.message : String(e));
+  }
+
+  const bad = results.filter((r) => r.startsWith('FAIL'));
+  document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  document.body.appendChild(pre);
+});
+</script>
+</body></html>

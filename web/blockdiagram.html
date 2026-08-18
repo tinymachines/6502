@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The published block diagram</title>
+<meta name="description" content="Every 6502 datasheet opens with the same block diagram. Here it is as a dataset, drawn from that dataset, with every block it names resolved against the actual signals on the die.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">The figure, as data</p>
+    <h1>The diagram everyone learns this chip from, asked to prove itself.</h1>
+    <p class="lede">
+      Every datasheet for this processor opens with the same picture: a column
+      of registers, a couple of buses, an adder, and the decode logic off to one
+      side. It is how most people first meet the 6502. This page encodes what
+      that figure claims as a dataset, draws it from that dataset, and then puts
+      every block it names to the silicon.
+    </p>
+    <div class="statbar" id="bd-stats"></div>
+  </section>
+
+  <div id="bd-boot" class="bp-boot wrap"><p id="bd-status">Loading the chip…</p></div>
+
+  <div id="bd-main" hidden>
+
+    <section class="wrap sec bp-prose" id="figure">
+      <p class="lede bk-does">
+        Nothing below is traced. The dataset carries only the claim: a label for
+        each block, and the name this die uses for the thing being claimed. Where
+        each box sits, how wide the bus beside it is, which functional block owns
+        it and whether it exists at all are answered by the published
+        measurements, the same ones every other page here reads. A block that did
+        not resolve would say so in place of its width rather than quietly
+        disappearing.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">drawn from the dataset</span>
+          <span class="bar-note">the measurement sits beside each claim</span>
+        </div>
+        <div class="bd-stage">
+          <svg id="bd-svg" role="img"
+               aria-label="The published 6502 block diagram, drawn from a dataset"></svg>
+        </div>
+        <p class="bk-foot muted">
+          The rails are the buses. Two of them carry a dashed edge: those are
+          the ones the published figure does not draw, and finding them is the
+          point of the row that differs below.
+        </p>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="blocks">
+      <div class="sec-head">
+        <p class="eyebrow">Measured</p>
+        <h2>Every block the figure names, resolved</h2>
+      </div>
+      <p>
+        One row per block. The stem is what this die calls it, the width is how
+        many wires carry it, and the owning block is where
+        <b class="mono">blocks.rs</b> files those wires when it grows the twelve
+        functional regions out of the die's own names. The last column asks a
+        harder question: whether the datapath derivation, which knows nothing
+        about any datasheet, arrived at the same unit independently.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">interface · derived</span>
+          <span class="bar-note"><b class="mono" data-fact="claimed">…</b> blocks claimed</span>
+        </div>
+        <div class="tk-table-wrap">
+          <table class="tk-table">
+            <thead>
+              <tr>
+                <th>In the figure</th><th>On this die</th><th>Bits</th>
+                <th>Functional block</th><th>A derived unit</th>
+              </tr>
+            </thead>
+            <tbody id="bd-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="checked">
+      <div class="sec-head">
+        <p class="eyebrow">Measured, not written</p>
+        <h2>What the figure gets right, and the one thing it does not</h2>
+      </div>
+      <p class="lede">
+        Each row pairs a claim the figure makes with the same question put to the
+        chip. Nothing below is written down as a verdict: every row carries a
+        function that re-derives the answer from the published measurements, and
+        the verdict is the comparison.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">verdicts · computed</span>
+          <span class="bar-note" id="bd-tally"></span>
+        </div>
+        <div class="claim-list" id="bd-checks"></div>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="why">
+      <div class="sec-head">
+        <p class="eyebrow">Why this page exists</p>
+        <h2>A block diagram is a claim, not a photograph</h2>
+      </div>
+      <p>
+        The figure is a good one. It has taught this chip to more people than
+        anything else ever printed about it, and the measurements above agree
+        with nearly all of it: every block it names is a real, named structure,
+        and the wiring mostly respects the boxes it draws around them.
+      </p>
+      <p>
+        What it cannot show is the thing that only a switch-level model can. It
+        draws one internal bus because one bus is enough to explain what an
+        instruction does. The die has two, and the traffic between them runs
+        through a pass transistor that a box-and-line drawing has nowhere to put.
+        That is not an error in the figure so much as the boundary of what the
+        form can express, and it is exactly the boundary this whole site exists
+        on the other side of.
+      </p>
+      <p>
+        The <a href="blueprint">Blueprint</a> is the same diagram derived from
+        scratch: the units, the paths, the control line on each path and the
+        order they sit in are all computed from switch topology, with no figure
+        consulted. Reading the two together is the point.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="credit-here">
+      <div class="sec-head">
+        <p class="eyebrow">Credit</p>
+        <h2>Sources</h2>
+      </div>
+      <p>
+        The architecture described here is the one published in the MOS
+        Technology hardware manuals for this processor family. This page is not a
+        reproduction of that figure: it is our own dataset of what the figure
+        claims, laid out by our own rules and answered by our own measurements.
+        The original drawing belongs to whoever holds the rights to it.
+      </p>
+      <p>
+        The die trace those measurements come from is by Greg James, Brian
+        Silverman, Barry Silverman and Ed Spittles, and is licensed CC BY-NC-SA
+        3.0. Those terms carry to everything on this site.
+      </p>
+      <p class="tk-links">
+        <a class="btn" href="blueprint">The derived diagram</a>
+        <a class="btn btn-ghost" href="talk">Where the die data came from</a>
+        <a class="btn btn-ghost" href="./#credit">Credit and licence</a>
+      </p>
+    </section>
+
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="blockdiagram.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

@@ -472,6 +472,22 @@ def main() -> None:
                       where="designer.js")
     b.emit("designer.js", dz.encode())
 
+    # 3m. blockdiagram.js: the published figure as a dataset, resolved against
+    #     the die. It draws with sch-draw's element helper, colours by the block
+    #     palette and renders its verdicts with the shared claim card, so all
+    #     three specifiers need rewriting along with the files it reads.
+    bd = b.read("blockdiagram.js").decode()
+    for original, resolved in [
+        ("./claim-table.js", "./" + b.ref("claim-table.js")),
+        ("./block-palette.js", "./" + b.ref("block-palette.js")),
+        ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+    ]:
+        bd = replace_once(bd, f"'{original}'", f"'{resolved}'", where="blockdiagram.js")
+    for original in ["schematic.json", "blocks.json", "blueprint.json"]:
+        bd = replace_once(bd, f"'{original}'", f"'{b.ref(original)}'",
+                          where="blockdiagram.js")
+    b.emit("blockdiagram.js", bd.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -552,6 +568,14 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         tkh = replace_once(tkh, f'"{original}"', f'"{b.ref(original)}"', where="talk.html")
     b.emit("talk.html", tkh.encode(), hashed=False)
+
+    bdh = b.read("blockdiagram.html").decode()
+    for original in ["style.css", "blockdiagram.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        bdh = replace_once(bdh, f'"{original}"', f'"{b.ref(original)}"',
+                           where="blockdiagram.html")
+    b.emit("blockdiagram.html", bdh.encode(), hashed=False)
 
     dzh = b.read("designer.html").decode()
     for original in ["style.css", "designer.js", "version-footer.js", "site-menu.js",

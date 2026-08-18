@@ -34,6 +34,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
+| Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 2 of 3 agree. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
@@ -375,7 +376,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Twenty-six harnesses plus two probes, all prefixed `_` and **never shipped** —
+Twenty-seven harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -415,6 +416,9 @@ _talk-test.html        # the talk page: every claim re-derived from the JSON by 
 _designer-test.html    # the designer page: the clock generator re-walked by the
                        # harness, and the walk re-run WITHOUT its boundary clause
                        # to prove the clause is load-bearing
+_blockdiagram-test.html # the published figure: every block re-resolved from
+                       # schematic.json by the harness, and the one row that
+                       # DIFFERS pinned to the single-bus claim
 _ports-test.html       # the block bench's Ports drawer: the filter filters, a
                        # switched-on pill survives a filter that excludes it,
                        # and the drawer is capped to the strip and SCROLLS
@@ -2144,6 +2148,50 @@ differ.
   reaches the stack page and S still moves by three. That is why this chip comes
   out of reset with whatever S it had minus three, and why the study view's stack
   panel refuses to report a depth.
+
+### The published block diagram (`blockdiagram.html`, `blockdiagram.js`)
+
+The figure every datasheet for this processor opens with, encoded as a dataset,
+drawn from that dataset, and answered by the measurements. First page of the
+menu's **Block diagram** group, which is its own group rather than an entry
+under "The chip, drawn" because these are drawings *somebody else made* and this
+site checks. The derived ones sit above it; reading the two together is the
+point.
+
+**It is deliberately not a facsimile, and that is a licence decision as well as
+an editorial one.** The original plate is a copyrighted figure from a 1976
+publication, and tracing it coordinate for coordinate would be a derivative of
+it. What is encoded is the *factual content* -- which blocks a 6502 is said to
+contain and which buses join them -- laid out by `blockdiagram.js`'s own rules,
+in this site's palette rather than the plate's. How a chip is organised is not
+anyone's to own; a particular drawing of it is. The credit section says so, and
+`GEO` is the only geometry in the file.
+
+- **The dataset carries only the claim**: a label, and the stem this die uses
+  for the thing being claimed. Width, owning functional block, and whether the
+  datapath derivation found the same unit independently are all read out of
+  `schematic.json`, `blocks.json` and `blueprint.json`. A block that failed to
+  resolve is **drawn and marked**, never dropped -- `.bd-missing` exists for a
+  case that does not currently arise, which is the honest way round.
+- **All twelve resolve, and one needs a translation**: the figure's input data
+  latch is `DL` and this die calls it `idl`. That mapping is in the dataset and
+  the harness pins it, because it is exactly the sort of thing that would
+  otherwise look like a missing block.
+- **2 of 3 agree, and the row that differs is the reason the page exists.** The
+  figure hangs the datapath off a single internal data bus; this chip derives
+  `sb` *and* `idb`, and the traffic between them runs through a pass transistor
+  a box-and-line drawing has nowhere to put. That is the boundary of the form
+  rather than an error, and the page says so. It is also the same finding the
+  talk page arrived at from the other direction.
+- **The bus the figure does not draw is dashed in the drawing** (`bd-rail-extra`),
+  so the difference is visible before the caption explains it. `figure: false`
+  in the `BUSES` dataset is what marks it.
+- **`_blockdiagram-test.html` re-resolves every block itself** out of
+  `schematic.json`, rather than importing the page's resolver, and compares
+  widths row by row. It also pins that exactly one card differs and which one.
+  - **Its stray-digit scan had to be whitespace-tolerant.** The licence sits at
+    the end of a wrapped line, so a literal `CC BY-NC-SA 3.0` did not match and
+    the version number read as a stray measurement. `\s+` between the two.
 
 ### The designer (`designer.html`, `designer.js`)
 

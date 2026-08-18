@@ -2150,6 +2150,40 @@ body.no-scroll #view { z-index: 70; }
 .sch-pinio { font-size: .8rem; }
 
 /* ---------------------------------------------------------------------------
+   The published block diagram (blockdiagram.html)
+   ---------------------------------------------------------------------------
+   Drawn from the dataset rather than traced, so the styling is this site's own
+   and deliberately not the original plate's: dark, our palette, our fonts. The
+   measurement sits beside each claim inside the box rather than in a caption,
+   because the comparison is the whole page. */
+
+.bd-stage { overflow-x: auto; padding: 1rem 1.1rem; min-width: 0; }
+#bd-svg { width: 100%; height: auto; min-width: 34rem; display: block; }
+
+.bd-rail rect {
+  fill: color-mix(in srgb, var(--accent) 14%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 50%, transparent); stroke-width: 1.2;
+}
+/* A bus the published figure does not draw. Dashed because the difference IS
+   the finding, and a reader should see it without reading the caption. */
+.bd-rail-extra rect {
+  fill: color-mix(in srgb, var(--gold) 12%, transparent);
+  stroke: var(--gold); stroke-dasharray: 5 4;
+}
+.bd-raillabel {
+  font: 700 10px var(--font-mono); letter-spacing: .1em;
+  fill: var(--muted); text-transform: uppercase;
+}
+
+.bd-box { fill: var(--surface); stroke: var(--bd-hue, var(--line)); stroke-width: 1.6; }
+.bd-wire { stroke: color-mix(in srgb, var(--line) 80%, transparent); stroke-width: 1.4; }
+.bd-label { font: 600 13px var(--font-sans); fill: var(--foreground); }
+.bd-meas { font: 500 11px var(--font-mono); fill: var(--accent); }
+/* A claim the die does not answer. Nothing is hidden: it is drawn, and marked. */
+.bd-missing .bd-box { stroke: var(--warn); stroke-dasharray: 4 3; }
+.bd-missing .bd-meas { fill: var(--warn); }
+
+/* ---------------------------------------------------------------------------
    The functional block pages (block.html)
    ---------------------------------------------------------------------------
    One document serves all twelve, so there is one set of rules here rather than
