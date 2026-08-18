@@ -3165,6 +3165,22 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
       fetches a mirror page and asserts it is free of the section and of every
       other mark this archive adds, so a builder that started rewriting the
       mirror would fail the harness rather than break the preservation silently.
+    - **JSSim in particular is untouched, and is now guarded by name.** It was
+      asked for after the wrapper page and declined for a stronger reason than
+      the landing page: `full/JSSim/` is the original 2010 simulator, and
+      `segdefs.js` and `transdefs.js` beside it are **the die data every polygon
+      on this site is built from**. Injecting a section means rewriting Greg
+      James's HTML in the die data's own directory, and `expert.html` boots a
+      running program on load that the injection could break. The honest place
+      for our note is `mirror.html`'s JSSim card, which is ours. The harness
+      now fetches `full/JSSim/expert.html` and `segdefs.js` specifically -- a
+      check that only sampled the landing page could pass while JSSim had been
+      edited -- and asserts the copyright notice, the array, and no chrome.
+      - **The first draft asserted `var segdefs = [` at byte 0 and would have
+        failed on the untouched file**, reading as an edit that never happened:
+        the file opens with the authors' copyright notice. That notice is the
+        better invariant regardless, being the attribution. Check what a file
+        actually starts with before asserting it.
     - **`mirror.html` is the page in FRONT of the mirror**, built by
       `build-archive.py`, and it is where the entry points now go: the menu's
       "Original site" and the overview's "Open the mirror". It says what the

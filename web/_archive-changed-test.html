@@ -178,16 +178,36 @@ f.addEventListener('load', async () => {
     // true. This is a documented decision, and a builder that started
     // rewriting mirror pages would break it silently -- so a mirror page is
     // fetched and checked to be free of every mark this archive adds.
-    const mirror = await fetch(root + 'full/index.html').then((r) => r.ok ? r.text() : null);
-    if (mirror === null) {
-      ok('the mirror is served', false, 'full/index.html unreachable');
-    } else {
-      ok('the mirror carries no changed-since section', !mirror.includes('data-changed-since'), '');
-      ok('and none of this archive\'s chrome at all',
+    // Two pages, not one: the landing page, and JSSim's expert.html. JSSim is
+    // the part of the mirror that matters most -- the original 2010 simulator,
+    // with segdefs.js and transdefs.js beside it, the die data every polygon
+    // on this site is built from -- so a check that only sampled the landing
+    // page could pass while JSSim had been edited. It was asked for and
+    // declined; the check is what makes the decision hold.
+    for (const rel of ['full/index.html', 'full/JSSim/expert.html']) {
+      const mirror = await fetch(root + rel).then((r) => r.ok ? r.text() : null);
+      if (mirror === null) {
+        ok(`the mirror is served: ${rel}`, false, 'unreachable');
+        continue;
+      }
+      ok(`${rel} carries no changed-since section`, !mirror.includes('data-changed-since'), '');
+      ok(`${rel} carries none of this archive's chrome at all`,
          !mirror.includes('site-nav.js') && !mirror.includes('version-footer.js')
-         && !mirror.includes('class="site-head"'),
+         && !mirror.includes('class="site-head"') && !mirror.includes('changed-since'),
          'a byte-exact copy of the original');
     }
+    // And the die data itself is the die data: unedited, and the size the
+    // reference repository ships. A section could never land IN a .js file,
+    // but a builder that started "tidying" the mirror could touch anything.
+    const seg = await fetch(root + 'full/JSSim/segdefs.js').then((r) => r.ok ? r.text() : null);
+    // It opens with the authors' copyright notice, not with the array -- the
+    // first draft asserted `var segdefs = [` at byte 0 and would have failed
+    // on the UNTOUCHED file, reading as an edit that never happened. The
+    // notice is the better invariant regardless: it is the attribution.
+    ok('segdefs.js in the mirror is untouched, copyright notice and all',
+       !!seg && /^\/\*\s*Copyright \(c\) 2010 Greg James/.test(seg)
+       && seg.includes('var segdefs = [') && !seg.includes('changed-since'),
+       seg ? `${seg.length} bytes` : 'unreachable');
 
     // --- the wiki and gallery indexes, at their own depth --------------------
     //
