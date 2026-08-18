@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The chip as a graph</title>
+<meta name="description" content="Every node of the MOS 6502 drawn at its own centroid on the die, with every connection the netlist has. No layout algorithm: the positions are the ones the people who drew the chip chose.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Nothing here is laid out</p>
+    <h1>The graph, drawn where the silicon put it.</h1>
+    <p class="lede">
+      Every other drawing on this site chooses an arrangement. The schematic
+      lays a cone out in columns, the blueprint stacks buses as rails, the block
+      diagram places boxes by rule. This one decides nothing: each node sits at
+      its own centroid on the die and each line is a connection the netlist
+      already has.
+    </p>
+    <div class="statbar" id="dg-stats"></div>
+  </section>
+
+  <div id="dg-boot" class="bp-boot wrap"><p id="dg-status">Loading the chip…</p></div>
+
+  <div id="dg-main" hidden>
+
+    <section class="wrap sec bp-prose" id="view">
+      <p class="lede bk-does">
+        A chip is a graph that was already embedded in a plane, by the people who
+        drew it, forty years before anyone thought to ask a computer for a
+        layout. That embedding is not lost and does not have to be inferred: it
+        is in the polygons, and this page reads it out and connects it up.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">positions · measured</span>
+          <span class="bar-note">drag to pan, scroll to zoom, click a node</span>
+          <div class="bar-spacer"></div>
+          <span class="mono muted" id="dg-zoom">1.0×</span>
+          <button class="btn" type="button" id="dg-home">Fit</button>
+        </div>
+        <div class="sch-controls">
+          <div class="field">
+            <span>What to draw</span>
+            <div class="bk-dirs" role="group" aria-label="Which graph">
+              <button class="btn on" type="button" data-mode="filtered">named signals</button>
+              <button class="btn" type="button" data-mode="full">every node</button>
+            </div>
+          </div>
+          <div class="field">
+            <span>Node</span>
+            <span class="mono muted" id="dg-picked">Click a node to identify it.</span>
+          </div>
+        </div>
+        <div class="dg-stage">
+          <svg id="dg-svg" role="img"
+               aria-label="Every node of the 6502 at its position on the die"></svg>
+        </div>
+        <p class="bk-foot muted" id="dg-caption"></p>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="reading">
+      <div class="sec-head">
+        <p class="eyebrow">How to read it</p>
+        <h2>Two relations, and a colour that is a measurement</h2>
+      </div>
+      <p>
+        A brighter line is a pass transistor joining two wires: neither end
+        causes the other, and that is what a datapath is made of. A dimmer line
+        is a gate input reaching the output it helps produce, which is what
+        logic is made of. Keeping them apart is the same distinction the block
+        pages draw on their boundary panels, and it is why the datapath shows up
+        as structure rather than as more of the same.
+      </p>
+      <p>
+        The colour of a node is which functional block <b class="mono">blocks.rs</b>
+        filed it under, grown out of the die's own names. It is the same palette
+        the exploded view uses, so a region that looks like one thing here looks
+        like the same thing there. That colouring is a measurement rather than a
+        decoration, which is the reason the clusters mean anything at all.
+      </p>
+      <p>
+        The rails are not drawn. Ground and supply touch most of the chip, so
+        including them would put a star through the middle of the picture and
+        say nothing that the count of their connections does not say better.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="density">
+      <div class="sec-head">
+        <p class="eyebrow">Why the default is the smaller one</p>
+        <h2>The density is itself the finding</h2>
+      </div>
+      <p>
+        Named signals come to a drawing a person can read. Every node roughly
+        doubles it, and the second half is almost entirely gate outputs nobody
+        needed to name: the inverters and NORs that the functional blocks are
+        embedded in. Switching the view over is worth doing once, because the
+        thing it shows is not a prettier picture but a true proportion. Most of
+        this chip is logic, and the logic does not thin out anywhere.
+      </p>
+      <p>
+        That matches what the other pages measure from their own directions. The
+        blueprint can honestly draw only the bus fabric, a small slice of a chip
+        that is mostly pulldowns. The block pages find that a functional block is
+        not a closed circuit, because its gates are built out of static logic no
+        block claimed. This is the same fact seen from above.
+      </p>
+      <p>
+        The positions come from the same geometry the
+        <a href="./#explorer">die view</a> draws, so a cluster here is in the
+        place you can go and look at there.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="credit-here">
+      <div class="sec-head">
+        <p class="eyebrow">Credit</p>
+        <h2>Sources</h2>
+      </div>
+      <p>
+        The positions and the connections are both from the die trace by Greg
+        James, Brian Silverman, Barry Silverman and Ed Spittles, licensed
+        CC BY-NC-SA 3.0. Those terms carry to everything on this site.
+      </p>
+      <p class="tk-links">
+        <a class="btn" href="schematic">The workbench</a>
+        <a class="btn btn-ghost" href="exploded">The exploded view</a>
+        <a class="btn btn-ghost" href="./#credit">Credit and licence</a>
+      </p>
+    </section>
+
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="diegraph.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

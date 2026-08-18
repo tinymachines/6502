@@ -1,0 +1,170 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  This page's whole claim is that nothing on it was laid out: every node sits at
+  its own centroid on the die. So the harness recomputes those centroids from
+  layout.bin ITSELF and compares them against where the circles actually are. A
+  drawing whose positions came from anywhere else would pass every count and
+  fail that one, which is the only assertion here that tests the thesis.
+
+  It also pins the two views against an independent count of the netlist, and
+  that the rails are absent -- ground and supply touch most of the chip, and
+  including them would put a star through the middle of the picture.
+
+    http://localhost:8777/_diegraph-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1300px;height:900px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="diegraph.html"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const w = f.contentWindow;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 300 && $('dg-main').hidden; i++) await sleep(50);
+    ok('the page booted', !$('dg-main').hidden, $('dg-status').textContent);
+
+    const [sch, buf] = await Promise.all([
+      fetch('schematic.json').then((r) => r.json()),
+      fetch('layout.bin').then((r) => r.arrayBuffer()),
+    ]);
+    const rails = new Set([sch.vss, sch.vcc]);
+
+    // --- the thesis: positions are read off the geometry ---------------------
+    //
+    // Recomputed here from layout.bin rather than taken from the page. This is
+    // the assertion the page exists to earn.
+    const dv = new DataView(buf);
+    const vertexCount = dv.getUint32(12, true);
+    const ymin = dv.getUint16(26, true), ymax = dv.getUint16(30, true);
+    const vertexOffset = dv.getUint32(32, true);
+    const sx = new Float64Array(2048), sy = new Float64Array(2048);
+    const cnt = new Uint32Array(2048);
+    for (let i = 0; i < vertexCount; i++) {
+      const o = vertexOffset + i * 6;
+      const nd = dv.getUint16(o + 4, true);
+      sx[nd] += dv.getUint16(o, true); sy[nd] += dv.getUint16(o + 2, true); cnt[nd] += 1;
+    }
+    const mine = new Map();
+    for (let nd = 0; nd < 2048; nd++) {
+      if (cnt[nd]) mine.set(nd, { x: sx[nd] / cnt[nd], y: ymax - (sy[nd] / cnt[nd]) + ymin });
+    }
+    ok('the harness can place nodes from layout.bin too', mine.size > 1600,
+       `${mine.size} placed`);
+
+    const circles = () => [...d.querySelectorAll('#dg-svg .dg-n')];
+    const off = [];
+    for (const c of circles()) {
+      const nd = Number(c.dataset.node);
+      const p = mine.get(nd);
+      if (!p) { off.push(`${nd} has no geometry`); continue; }
+      const dx = Math.abs(Number(c.getAttribute('cx')) - p.x);
+      const dy = Math.abs(Number(c.getAttribute('cy')) - p.y);
+      if (dx > 0.6 || dy > 0.6) off.push(`${nd} off by ${dx.toFixed(1)},${dy.toFixed(1)}`);
+    }
+    ok('every node is drawn at the centroid of its own polygons',
+       off.length === 0, off.slice(0, 3).join(' | ') || `${circles().length} checked`);
+
+    // --- the rails are absent ------------------------------------------------
+    ok('and neither rail is drawn',
+       !circles().some((c) => rails.has(Number(c.dataset.node))),
+       'vss/vcc absent');
+
+    // --- the two views -------------------------------------------------------
+    const filtered = circles().length;
+    const edges = () => d.querySelectorAll('#dg-svg .dg-e').length;
+    const fEdges = edges();
+    ok('the default view is the named signals only',
+       circles().every((c) => !!sch.names[Number(c.dataset.node)]),
+       `${filtered} nodes, all named`);
+    ok('and it is the smaller of the two', filtered > 100 && filtered < 900,
+       `${filtered} nodes, ${fEdges} edges`);
+
+    const full = d.querySelector('[data-mode="full"]');
+    full.click();
+    await sleep(900);
+    const fullNodes = circles().length, fullEdges = edges();
+    ok('switching to every node grows both counts',
+       fullNodes > filtered && fullEdges > fEdges,
+       `${filtered}->${fullNodes} nodes, ${fEdges}->${fullEdges} edges`);
+    ok('and it now includes nodes nobody named',
+       circles().some((c) => !sch.names[Number(c.dataset.node)]),
+       `${circles().filter((c) => !sch.names[Number(c.dataset.node)]).length} unnamed drawn`);
+
+    // Independent count of what the full graph should contain.
+    const seen = new Set();
+    let want = 0;
+    const keep = (n) => mine.has(n) && !rails.has(n);
+    const push = (a, b, k) => {
+      if (a === b || !keep(a) || !keep(b)) return;
+      const key = a < b ? `${a}:${b}:${k}` : `${b}:${a}:${k}`;
+      if (seen.has(key)) return;
+      seen.add(key); want += 1;
+    };
+    for (const [out, , , legs] of sch.gates) for (const i of new Set(legs.flat())) push(i, out, 'gate');
+    for (const [, a, b] of sch.switches) push(a, b, 'switch');
+    ok('the full edge count is the netlist\'s own', fullEdges === want,
+       `page ${fullEdges}, harness ${want}`);
+
+    d.querySelector('[data-mode="filtered"]').click();
+    await sleep(700);
+    ok('switching back restores the smaller view', circles().length === filtered,
+       `${circles().length} vs ${filtered}`);
+
+    // --- identifying a node --------------------------------------------------
+    const target = circles().find((c) => sch.names[Number(c.dataset.node)]);
+    target.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(250);
+    const label = $('dg-picked').textContent;
+    ok('clicking a node names it and says which block it is in',
+       label.includes(sch.names[Number(target.dataset.node)])
+       && label.includes(sch.blockNames[sch.nodeBlock[Number(target.dataset.node)] & 0x7f]),
+       label.slice(0, 80));
+
+    // --- the camera ----------------------------------------------------------
+    const vb = () => $('dg-svg').getAttribute('viewBox').split(' ').map(Number);
+    const home = vb();
+    $('dg-svg').dispatchEvent(new w.WheelEvent('wheel',
+      { deltaY: -120, clientX: 600, clientY: 400, bubbles: true, cancelable: true }));
+    await sleep(200);
+    ok('scrolling zooms in', vb()[2] < home[2], `${home[2].toFixed(0)} -> ${vb()[2].toFixed(0)}`);
+    $('dg-home').click();
+    await sleep(200);
+    ok('and Fit puts it back', Math.abs(vb()[2] - home[2]) < 1,
+       `${vb()[2].toFixed(0)} vs ${home[2].toFixed(0)}`);
+
+    // --- it is part of the site ---------------------------------------------
+    for (let i = 0; i < 100 && !d.querySelector('#site-nav a'); i++) await sleep(50);
+    ok('the menu marks this page as the current one',
+       d.querySelectorAll('#site-nav a[aria-current="page"]').length === 1);
+    ok('and it sits under Block diagram',
+       [...d.querySelectorAll('#site-nav .navgroup')].some((g) =>
+         /Block diagram/.test(g.querySelector('.navgroup-title')?.textContent || '')
+         && /The graph/.test(g.textContent)), '');
+    ok('the footer is the site footer, all four elements',
+       !!d.querySelector('footer.site-foot .wrap .mark')
+       && !!d.querySelector('footer.site-foot .wrap .foot-meta')
+       && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'), '');
+    ok('no em dash in the rendered page', !$('dg-main').textContent.includes('—'), '');
+  } catch (e) {
+    ok('the harness ran to the end', false, e && e.message ? e.message : String(e));
+  }
+
+  const bad = results.filter((r) => r.startsWith('FAIL'));
+  document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  document.body.appendChild(pre);
+});
+</script>
+</body></html>

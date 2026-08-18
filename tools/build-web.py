@@ -488,6 +488,20 @@ def main() -> None:
                           where="blockdiagram.js")
     b.emit("blockdiagram.js", bd.encode())
 
+    # 3n. diegraph.js: the whole netlist drawn at its own die coordinates. It
+    #     reads layout.bin -- the same geometry the die view draws -- because
+    #     asking the polygons where a node is beats inventing a position for it.
+    dg = b.read("diegraph.js").decode()
+    for original, resolved in [
+        ("./block-palette.js", "./" + b.ref("block-palette.js")),
+        ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+    ]:
+        dg = replace_once(dg, f"'{original}'", f"'{resolved}'", where="diegraph.js")
+    for original in ["schematic.json", "layout.bin"]:
+        dg = replace_once(dg, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
+                          where="diegraph.js")
+    b.emit("diegraph.js", dg.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -576,6 +590,14 @@ def main() -> None:
         bdh = replace_once(bdh, f'"{original}"', f'"{b.ref(original)}"',
                            where="blockdiagram.html")
     b.emit("blockdiagram.html", bdh.encode(), hashed=False)
+
+    dgh = b.read("diegraph.html").decode()
+    for original in ["style.css", "diegraph.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        dgh = replace_once(dgh, f'"{original}"', f'"{b.ref(original)}"',
+                           where="diegraph.html")
+    b.emit("diegraph.html", dgh.encode(), hashed=False)
 
     dzh = b.read("designer.html").decode()
     for original in ["style.css", "designer.js", "version-footer.js", "site-menu.js",

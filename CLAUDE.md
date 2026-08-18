@@ -35,6 +35,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 5 of 6 agree. |
+| Die graph | Every node at its own centroid on the die, with every edge. Nothing laid out: the positions are read off the polygons. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
@@ -376,7 +377,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Twenty-seven harnesses plus two probes, all prefixed `_` and **never shipped** —
+Twenty-eight harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -419,6 +420,9 @@ _designer-test.html    # the designer page: the clock generator re-walked by the
 _blockdiagram-test.html # the published figure: every block re-resolved from
                        # schematic.json by the harness, and the one row that
                        # DIFFERS pinned to the single-bus claim
+_diegraph-test.html    # the die graph: the harness recomputes every centroid
+                       # from layout.bin itself and compares, which is the only
+                       # assertion that tests the page's thesis
 _ports-test.html       # the block bench's Ports drawer: the filter filters, a
                        # switched-on pill survives a filter that excludes it,
                        # and the drawer is capped to the strip and SCROLLS
@@ -2252,6 +2256,48 @@ anyone's to own; a particular drawing of it is. The credit section says so, and
   - **Its stray-digit scan had to be whitespace-tolerant.** The licence sits at
     the end of a wrapped line, so a literal `CC BY-NC-SA 3.0` did not match and
     the version number read as a stray measurement. `\s+` between the two.
+
+### The die graph (`diegraph.html`, `diegraph.js`)
+
+Every node drawn at its own centroid on the die, every edge a connection the
+netlist already has. Second page of the **Block diagram** group.
+
+**Nothing here is laid out, and that is the whole page.** Every other drawing on
+this site chooses an arrangement: the schematic lays a cone out in columns, the
+blueprint stacks buses as rails, the block diagram places boxes by rule. All
+three are honest and all three are decisions. This one makes none. A chip is a
+graph that was embedded in a plane by the people who drew it, and that embedding
+is a measurement we hold rather than something to infer, learn or force-direct.
+
+- **Positions come from `layout.bin`**, the same geometry the die view draws, so
+  a cluster here is somewhere you can go and look at there. A node's centroid is
+  the mean of its own vertices: crude for an L-shaped wire, right for the great
+  majority. **1702 of 1725 nodes have one.**
+- **The Y flip is the same single sign the die view's projection carries.**
+  Without it the chip is drawn upside down against every other picture on the
+  site, which is the kind of wrongness nobody notices until they compare two
+  pages.
+- **The rails are not drawn.** vss and vcc touch most of the chip; including
+  them puts a star through the middle of the picture and says nothing.
+- **Filtered by default: 586 named nodes, 1282 edges.** Full is 1544 nodes and
+  3041 edges, and the extra 839 are gate outputs nobody needed to name. The
+  density is the finding rather than a rendering problem: most of this chip is
+  logic and the logic does not thin out anywhere, which is the same fact the
+  blueprint's 159-of-3510 coverage and the block pages' static-logic result
+  report from their own directions.
+- **Switch edges are drawn apart from gate edges**, brighter and thicker. A pass
+  transistor joins two wires without either causing the other; a gate input
+  reaches the output it helps produce. Drawing them alike loses the only
+  structural distinction in the picture, and it is what makes the datapath
+  visible as long lines across an otherwise local graph.
+- **The camera is a viewBox and nothing else.** The drawing is in die
+  coordinates, so zoom is a smaller rectangle and pan is that rectangle moving.
+  No transform to keep in step with a projection, which is why the pointer maths
+  is two lines instead of the explorer's `screenToDie`.
+- **`_diegraph-test.html` recomputes every centroid from `layout.bin` itself**
+  and compares against where the circles actually are. That is the only
+  assertion that tests the thesis: a drawing whose positions came from anywhere
+  else would pass every count and fail that one.
 
 ### The designer (`designer.html`, `designer.js`)
 

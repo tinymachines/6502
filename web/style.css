@@ -2150,6 +2150,38 @@ body.no-scroll #view { z-index: 70; }
 .sch-pinio { font-size: .8rem; }
 
 /* ---------------------------------------------------------------------------
+   The die graph (diegraph.html)
+   ---------------------------------------------------------------------------
+   Node fill is set inline from block-palette.js, because the hue IS the
+   measurement's identity -- the same reason the block pages set it there and
+   not in CSS. Everything else is here. */
+
+.dg-stage {
+  overflow: hidden; touch-action: none; cursor: grab;
+  background: color-mix(in srgb, var(--space) 70%, #000);
+  border-top: 2px solid var(--line); border-bottom: 2px solid var(--line);
+}
+.dg-stage:active { cursor: grabbing; }
+/* Tall, because the die is nearly square and the console is wide: a short
+   stage letterboxes the chip and throws away most of the drawing area on
+   empty sides. The limiting dimension is the height, so that is what to give. */
+#dg-svg { width: 100%; height: min(86vh, 58rem); display: block; }
+
+/* Two relations, two weights. A pass transistor joins two wires without either
+   causing the other; a gate input reaches the output it helps produce. Drawing
+   them alike would lose the only structural distinction in the picture. */
+.dg-e { stroke-width: 3; }
+.dg-e-gate { stroke: color-mix(in srgb, var(--line) 55%, transparent); }
+.dg-e-switch { stroke: color-mix(in srgb, var(--accent) 62%, transparent); stroke-width: 5; }
+
+.dg-n { stroke: rgba(2, 6, 16, .55); stroke-width: 3; }
+.dg-named { stroke: rgba(2, 6, 16, .75); }
+.dg-n.on { stroke: var(--foreground); stroke-width: 14; }
+.dg-n:hover { stroke: var(--gold); stroke-width: 10; }
+
+#dg-picked { font-size: .76rem; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------------------
    The published block diagram (blockdiagram.html)
    ---------------------------------------------------------------------------
    Drawn from the dataset rather than traced, so the styling is this site's own

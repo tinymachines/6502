@@ -59,6 +59,8 @@ export const MENU = [
     items: [
       { label: 'The published figure', page: 'blockdiagram',
         hint: 'the datasheet diagram as a dataset, resolved against the die' },
+      { label: 'The graph', page: 'diegraph',
+        hint: 'every node at its own place on the die, and every edge' },
     ],
   },
   {
