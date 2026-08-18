@@ -530,8 +530,6 @@ def main() -> None:
     for original, resolved in [
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./programs.js", "./" + b.ref("programs.js")),
-        ("./program-nav.js", "./" + b.ref("program-nav.js")),
-        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
         ("./blueprint-draw.js", "./" + b.ref("blueprint-draw.js")),
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
