@@ -3088,6 +3088,19 @@ screen put the two halves of one sentence a metre apart. `body.no-scroll` hides
 it, as it already hid the header: a footer floating over a fullscreen die is
 worse than either. The archive keeps its own in-flow footer and is unaffected.
 
+- **It also says what changed since the previous deploy**, as the same
+  `changed` list the menu dots, so the two cannot disagree. Three states, and
+  telling the last two apart is the point: pages named and linked to the GitHub
+  compare between the two commits; `no page changed` when there is an anchor
+  but an empty list, because a footer that goes quiet is ambiguous; and nothing
+  at all when there was no previous deploy, since an empty list with no anchor
+  is not "nothing changed", it is "nothing to compare against". The archive's
+  stamp carries neither field and this file is shared, so their absence is a
+  normal state rather than an error.
+  - `_menu-test.html` asserts the footer agrees with the dots, that the diff
+    link names both commits, and that the separator's computed `::before`
+    content is a real `·` -- the check that would have caught the `␀b7` escape
+    below the first time.
 - **The elapsed time is computed on the client, and that is the point.** This
   site is served from content-hashed, long-cached files precisely so pages are
   *not* regenerated; a relative time baked into HTML is wrong within the hour.

@@ -922,6 +922,13 @@ body.no-scroll .site-foot { display: none; }
 .vf-rev:hover .vf-hash { color: var(--foreground); }
 .vf-built { color: var(--muted); }
 .vf-built::before { content: "·"; margin-right: .5rem; opacity: .6; }
+/* What changed since the previous deploy: the same list the menu dots, as
+   text. The dot answers "which page"; this answers "how many, and where is the
+   diff". A literal middot, not an escape -- see the note on the footer. */
+.vf-changed { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vf-changed::before { content: "·"; margin-right: .5rem; opacity: .6; }
+.vf-changed a { color: var(--mint); text-decoration: none; }
+.vf-changed a:hover { color: var(--foreground); text-decoration: underline; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

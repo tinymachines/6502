@@ -75,6 +75,38 @@ function render(host, info) {
   setInterval(tick, 30_000);
 
   host.append(link, built);
+
+  // What changed since the previous deploy, as the same list the menu dots.
+  // Three states, and the difference between the last two is the point:
+  //   pages changed   -> named, linking to the diff between the two commits
+  //   nothing changed -> said, since a footer that goes quiet is ambiguous
+  //   no previous     -> nothing at all: an empty list with no anchor is not
+  //                      "nothing changed", it is "nothing to compare against"
+  // Only the simulator's stamp carries these fields; the archive's does not,
+  // and this file is shared, so their absence is a normal state and not an
+  // error.
+  if (Array.isArray(info.changed) && info.previousDeploy) {
+    const changed = document.createElement('span');
+    changed.className = 'vf-changed';
+    if (info.changed.length) {
+      const names = info.changed.map((p) => (p === '' ? 'explorer' : p));
+      const shown = names.slice(0, 3).join(', ') + (names.length > 3
+        ? ` and ${names.length - 3} more` : '');
+      const a = document.createElement('a');
+      a.href = `${info.repo}/compare/${info.previousDeploy.slice(0, 12)}...${
+        (info.commitFull || '').slice(0, 12)}`;
+      a.rel = 'noopener';
+      a.title = `Changed since the previous deploy: ${names.join(', ')}. `
+        + 'Opens the diff between the two commits.';
+      a.textContent = `changed: ${shown}`;
+      changed.append(a);
+    } else {
+      changed.textContent = 'no page changed';
+      changed.title = 'Nothing a reader would see changed since the previous '
+        + 'deploy: this build touched only shared code, tools or data.';
+    }
+    host.append(changed);
+  }
 }
 
 async function init() {

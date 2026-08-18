@@ -147,6 +147,38 @@ const shape = (groups) =>
          && a.querySelector('.sr-only')),
        `${dotted.length} dotted`);
 
+    // --- the footer says the same thing the dots say -------------------------
+    //
+    // Both read `changed` from the same file, so they must agree with each
+    // other and with it. Three states: pages named and linked to the diff,
+    // "no page changed" when there is an anchor but an empty list, and nothing
+    // at all when there was no previous deploy -- an empty list with no anchor
+    // is not "nothing changed", it is "nothing to compare against".
+    for (let i = 0; i < 100 && !d.querySelector('.version-foot .vf-built'); i++) await sleep(50);
+    const foot = d.querySelector('.version-foot');
+    const note = foot && foot.querySelector('.vf-changed');
+    if (info.previousDeploy && info.changed.length) {
+      const names = info.changed.map((p) => (p === '' ? 'explorer' : p));
+      ok('the footer names the changed pages',
+         !!note && names.slice(0, 3).every((n) => note.textContent.includes(n)),
+         note ? note.textContent.trim() : 'no note');
+      const a = note && note.querySelector('a');
+      ok('and links to the diff between the two deploys',
+         !!a && a.href.includes('/compare/') && a.href.includes(info.previousDeploy.slice(0, 12))
+         && a.href.includes((info.commitFull || '').slice(0, 12)),
+         a ? a.href : 'no link');
+    } else if (info.previousDeploy) {
+      ok('the footer says no page changed, rather than going quiet',
+         !!note && /no page changed/.test(note.textContent), note ? note.textContent : 'no note');
+    } else {
+      ok('with no previous deploy the footer stays silent about changes',
+         !note, note ? note.textContent : 'silent');
+    }
+    ok('and the separator is a real middot, not an escape gone wrong',
+       !foot || !foot.textContent.includes('\u0000') && !/b7/.test(
+         (note && getComputedStyle(note, '::before').content) || ''),
+       note ? getComputedStyle(note, '::before').content : 'n/a');
+
     // --- every href reaches something --------------------------------------
     //
     // A typo'd page name is a 404 that looks exactly like a working link.
