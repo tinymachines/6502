@@ -3165,6 +3165,30 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
       fetches a mirror page and asserts it is free of the section and of every
       other mark this archive adds, so a builder that started rewriting the
       mirror would fail the harness rather than break the preservation silently.
+    - **`mirror.html` is the page in FRONT of the mirror**, built by
+      `build-archive.py`, and it is where the entry points now go: the menu's
+      "Original site" and the overview's "Open the mirror". It says what the
+      mirror is, that it has **no way back** (its pages carry the original
+      site's navigation and nothing else, because adding ours would mean
+      editing them), and offers three counted doors in -- JSSim, the documents,
+      the front door -- with the counts computed from the mirror rather than
+      typed. It carries the changed-since note honestly, being ours. The mirror
+      behind it is asserted byte-identical to its source.
+      - **Deep links are NOT diverted through it.** A photograph's
+        full-resolution original stays a direct `../full/images/…` link,
+        because a reader who clicked a picture wants the picture, not a page
+        about the archive. Asserted on a chip page's `class="dl"` links.
+      - **The overview's inline chrome became a `page()` helper** the moment a
+        second page of ours needed it. Two inline copies of a head and footer
+        is the copy that drifts.
+      - **Two harness assertions were wrong before the page was**, both in the
+        same way. "No `mirror.html` anywhere on a chip page" failed on correct
+        behaviour, because the header menu now points there from every page.
+        And keying the photograph check on `class="orig"` would have failed
+        vacuously on a chip with no description page beside its images; `dl`
+        is the per-image link and is on every chip page. **A negative has to be
+        aimed at the thing it means, and a positive has to be present on the
+        sample it runs against.**
     - **The slot is placed by each page's BODY, after the h1 and lede, never by
       `shell()` before the body.** The first version had every builder's
       `shell()` emit it, and it landed above the title everywhere: a reader
