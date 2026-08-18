@@ -60,7 +60,7 @@ f.addEventListener('load', async () => {
       section: tr.dataset.section,
       cells: [...tr.children].map((td) => td.textContent.trim()),
     }));
-    ok('every block in the figure has a row', rows.length >= 22, `${rows.length} rows`);
+    ok('every block in the figure has a row', rows.length >= 25, `${rows.length} rows`);
 
     // Kind and section are different questions and this checks both. Grouping
     // by kind alone counted the address and data buses as datapath, because
@@ -70,10 +70,33 @@ f.addEventListener('load', async () => {
     const regionRows = rows.filter((r) => r.kind === 'region');
     const sec = (n) => rows.filter((r) => r.section === n);
     ok('the figure has all three sections',
-       sec('datapath').length === 12 && sec('control').length === 4
-       && sec('pins').length === 6,
+       sec('datapath').length === 12 && sec('control').length === 5
+       && sec('pins').length === 8,
        `${sec('datapath').length} datapath, ${sec('control').length} control, `
        + `${sec('pins').length} pins`);
+
+    // --- the figure is a family portrait -------------------------------------
+    //
+    // These are the assertions that caught the page claiming things the plate
+    // does not draw. It was built from a second-hand tracing and had invented a
+    // "control pipeline" box while missing the clock generator; reading the
+    // actual figure fixed it. They pin both directions of the mismatch.
+    const missing = [...d.querySelectorAll('#bd-svg .bd-missing')];
+    ok('a pin the figure draws is absent here, and is marked rather than dropped',
+       missing.length === 1 && rows.some((r) => /data bus enable/i.test(r.cells[0])),
+       `${missing.length} marked missing`);
+    ok('and data bus enable really is absent from the netlist',
+       !sch.names.includes('dbe'),
+       sch.names.includes('dbe') ? 'dbe IS on the die' : 'no dbe in 1725 nodes');
+    const dieOnly = [...d.querySelectorAll('#bd-svg .bd-extra')];
+    ok('things this die has that the figure does not draw are marked too',
+       dieOnly.length >= 2, `${dieOnly.length} marked`);
+    ok('and set overflow and sync are among them',
+       ['so', 'sync'].every((n) => sch.names.includes(n)),
+       'so/sync on the die');
+    ok('the clock generator resolves to signals but to no single region',
+       rows.some((r) => r.kind === 'clocks' && /no region|spread across/.test(r.cells[2])),
+       rows.find((r) => r.kind === 'clocks')?.cells.join(' / ') || 'no clock row');
 
     const wrong = [];
     for (const { cells: [label, stem, size] } of bitRows) {
@@ -159,8 +182,13 @@ f.addEventListener('load', async () => {
        pinRows.map((r) => `${r.cells[1]}:${r.cells[2]}`).join(', '));
     const unnamed = pinRows.filter((r) => r.kind === 'pinset'
       && !/^(\d+) of \1 named$/.test(r.cells[2]));
-    ok('and every control, clock and power pin is named on the die',
-       unnamed.length === 0, unnamed.map((r) => `${r.cells[0]}: ${r.cells[2]}`).join(' | '));
+    // Data bus enable is expected NOT to resolve: it is a 6501 pin. Everything
+    // else must, so the exemption is named rather than the assertion loosened.
+    const shouldResolve = unnamed.filter((r) => !/data bus enable/i.test(r.cells[0]));
+    ok('and every pin group except the 6501 one is named on the die',
+       shouldResolve.length === 0,
+       shouldResolve.map((r) => `${r.cells[0]}: ${r.cells[2]}`).join(' | ')
+         || `${unnamed.length} unresolved, all expected`);
 
     // The translation the page makes a point of: the figure's DL is idl here.
     ok('the input data latch resolved to this die\'s own name for it',

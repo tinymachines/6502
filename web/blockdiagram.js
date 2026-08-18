@@ -65,12 +65,20 @@ const BUSES = [
 const CONTROL = [
   { id: 'decode', label: 'Instruction decode', region: 'Decode PLA',
     says: 'turns the opcode and the cycle into the terms everything else obeys' },
-  { id: 'pipeline', label: 'Control pipeline', region: 'Control pipeline',
-    says: 'latches those terms on the clock and drives the control lines' },
   { id: 'timing', label: 'Timing control', region: 'Timing chain',
     says: 'counts how far through the instruction the chip has got' },
   { id: 'interrupt', label: 'Interrupt logic', region: 'Interrupts & vectors',
     says: 'samples the interrupt pins and supplies the vectors' },
+  { id: 'clockgen', label: 'Clock generator', region: null, figure: true,
+    clocks: ['clk0', 'clk1out', 'clk2out', 'cclk', 'cp1'],
+    says: 'makes the two internal phases from the one clock pin' },
+  // On the die, not in the figure. The same treatment the special bus gets, and
+  // for the same reason: the difference is the finding. `blocks.rs` grew this
+  // out of the die's names as a region of its own, sitting between the decode
+  // array and the control lines it drives.
+  { id: 'pipeline', label: 'Control pipeline', region: 'Control pipeline',
+    figure: false,
+    says: 'latches the decoder\'s terms on the clock and drives the control lines' },
 ];
 
 /**
@@ -89,10 +97,18 @@ const PINS = [
   { id: 'ab', label: 'Address bus, A0 to A15', stem: 'ab', kind: 'bits' },
   { id: 'db', label: 'Data bus, D0 to D7', stem: 'db', kind: 'bits' },
   { id: 'ctrl', label: 'Control pins', kind: 'pinset',
-    pins: ['res', 'irq', 'nmi', 'rdy', 'so', 'rw', 'sync'] },
+    pins: ['res', 'irq', 'nmi', 'rdy', 'rw'] },
   { id: 'clk', label: 'Clock pins', kind: 'pinset',
     pins: ['clk0', 'clk1out', 'clk2out'] },
   { id: 'pwr', label: 'Power', kind: 'pinset', pins: ['vcc', 'vss'] },
+  // In the figure, absent here. The figure covers the whole MCS650X family and
+  // says so in its own notes; data bus enable is a 6501 pin and this die does
+  // not carry it. Kept in the dataset precisely so the page can show it as
+  // unresolved rather than quietly matching only what happens to be present.
+  { id: 'dbe', label: 'Data bus enable', kind: 'pinset', pins: ['dbe'] },
+  // On the die, not in this figure.
+  { id: 'extra', label: 'Also on this die', kind: 'pinset', figure: false,
+    pins: ['so', 'sync'] },
 ];
 
 /**
@@ -224,6 +240,19 @@ function resolve(d) {
                ids, width: ids.length, owner: ownerOf(d, b.stem), unit });
   }
   for (const b of CONTROL) {
+    if (b.clocks) {
+      // The clock generator is in the figure and is NOT a region here: its
+      // signals are spread across the blocks that use them rather than filed
+      // together. Reporting it as a missing region would say the die has no
+      // clock generator, which is false -- it has one, drawn in full on the
+      // designer page. What is measured is where its named signals ended up.
+      const found = b.clocks.filter((n) => d.byName.has(n));
+      const where = [...new Set(found.map((n) =>
+        d.sch.blockNames[d.sch.nodeBlock[d.byName.get(n)] & 0x7f]))];
+      out.push({ ...b, kind: 'clocks', section: 'control', found, where,
+                 owner: null, unit: null });
+      continue;
+    }
     // Measured as a region: how much of the chip is filed here. `blocks.rs`
     // grew these out of the die's own names, so a box the figure draws either
     // corresponds to one of them or it does not, and the page says which.
@@ -243,6 +272,9 @@ const measured = (r) => {
   }
   if (r.kind === 'buffer') {
     return r.buf.hops > 0 ? `${r.buf.drivers} out, ${r.buf.hops} steps in` : 'no route';
+  }
+  if (r.kind === 'clocks') {
+    return r.found.length ? `${r.found.length} signals, no region` : 'not on this die';
   }
   return r.meta ? `${r.meta.transistors} transistors` : 'no such region';
 };
@@ -339,7 +371,9 @@ function draw(rows) {
   // of a mess, and the count is on the page in words instead.
   ctrl.forEach((r, i) => {
     const y = GEO.top + i * GEO.rowH;
-    box(r, GEO.ctrlX, GEO.ctrlW, y, r.meta ? '' : 'bd-missing');
+    const ok = r.kind === 'clocks' ? r.found.length > 0 : !!r.meta;
+    const g = box(r, GEO.ctrlX, GEO.ctrlW, y, ok ? '' : 'bd-missing');
+    if (r.figure === false) g.classList.add('bd-extra');
   });
   // The pins, on the outside where they belong. The buffer among them is the
   // one box in the figure that is a journey rather than a place, and it is
@@ -351,6 +385,8 @@ function draw(rows) {
       : r.kind === 'pinset' ? r.found.length > 0 : r.buf.hops > 0;
     const g = box(r, GEO.pinX, GEO.pinW, y, ok ? '' : 'bd-missing');
     if (r.kind === 'buffer') g.classList.add('bd-journey');
+    // On the die, not in the figure: the same mark the special bus carries.
+    if (r.figure === false) g.classList.add('bd-extra');
     el('line', { x1: GEO.pinX + GEO.pinW, y1: y + GEO.boxH / 2,
                  x2: railX.adh, y2: y + GEO.boxH / 2, class: 'bd-wire' }, g);
   });
@@ -400,6 +436,11 @@ function table(rows) {
     } else if (r.kind === 'buffer') {
       cell('db to idb', 'mono');
       cell(`${r.buf.drivers} driver gates out, ${r.buf.hops} steps in`, 'mono');
+    } else if (r.kind === 'clocks') {
+      cell(r.found.join(' ') || '(none named)', 'mono');
+      cell(r.found.length
+        ? `${r.found.length} signals, spread across ${r.where.length} blocks`
+        : 'none', 'mono');
     } else {
       cell(r.meta ? r.region : '(no such region)', 'mono');
       cell(r.meta ? `${r.meta.nodes} signals, ${r.meta.transistors} transistors` : 'none',
@@ -522,6 +563,34 @@ const CHECKS = [
     },
     where: { href: 'block?b=data-bus', label: 'Blocks' },
   },
+  {
+    says: 'The figure describes a family rather than one part, and says so in its '
+      + 'own notes: the clock generator is absent on one member, and the control '
+      + 'options vary across them',
+    got: (d) => {
+      const rows = resolve(d);
+      const absent = rows.filter((r) => r.kind === 'pinset' && r.figure !== false
+        && r.found.length < r.pins.length);
+      const extra = rows.filter((r) => r.figure === false);
+      return `${absent.length} pin group in the figure is missing here `
+        + `(${absent.map((r) => r.pins.join(' ')).join(', ') || 'none'}), and `
+        + `${extra.length} things this die has are not drawn in it`;
+    },
+    // This is the figure being right about itself. It warns that the family
+    // varies, and the die bears that out in both directions at once.
+    holds: (d) => {
+      const rows = resolve(d);
+      return rows.some((r) => r.kind === 'pinset' && r.figure !== false
+        && r.found.length < r.pins.length)
+        && rows.some((r) => r.figure === false);
+    },
+    note: () => 'Data bus enable is drawn and is not on this die: it belongs to the '
+      + '6501. Set overflow and sync are on this die and are not drawn. So is the '
+      + 'control pipeline, which sits between the decode array and the lines it drives '
+      + 'and which the figure folds into one box. None of that is the figure being '
+      + 'wrong. It is a family portrait, and no single member looks exactly like it.',
+    where: { href: 'designer', label: 'Designer' },
+  },
 ];
 
 /** Index every `stem0..stemN` once, so a claim can be resolved by name. */
@@ -572,6 +641,7 @@ async function boot() {
       if (r.kind === 'bits') return r.width > 0;
       if (r.kind === 'pinset') return r.found.length === r.pins.length;
       if (r.kind === 'buffer') return r.buf.hops > 0;
+      if (r.kind === 'clocks') return r.found.length > 0;
       return !!r.meta;
     });
     const ctrlT = rows.filter((r) => r.kind === 'region' && r.meta)

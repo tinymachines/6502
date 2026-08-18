@@ -34,7 +34,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
-| Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 4 of 5 agree. |
+| Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 5 of 6 agree. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
@@ -2207,6 +2207,26 @@ anyone's to own; a particular drawing of it is. The credit section says so, and
     switches, and would report a chip with no way to read memory. Both the page
     and `_blockdiagram-test.html` follow gates *and* switch channels, and the
     harness re-derives the whole route independently.
+- **The dataset was checked against the primary source, and it was wrong.** It
+  was first built from a second-hand tracing of the plate, and reading the
+  figure itself found two errors in opposite directions: it had invented a
+  **Control pipeline** box the figure does not draw, and was missing the
+  **Clock generator** the figure does. Both are now in, marked for which side
+  of the line they fall on. *Encode a claim from the thing making it, not from
+  somebody's copy of it.*
+- **The figure is a family portrait and says so in its own notes**, which turns
+  the mismatches from errors into the point. Data bus enable is drawn and is not
+  on this die: it belongs to the 6501. Set overflow and sync are on this die and
+  are not drawn. The clock generator is drawn, and the figure's own note says it
+  is absent on the 6501.
+  - **`dbe` is why `.bd-missing` exists**, and until it was added that styling
+    had never fired. A "drawn and marked rather than dropped" affordance that
+    nothing ever triggers is a promise, not a feature.
+  - **The clock generator resolves to signals but to no region**: its five named
+    clocks are spread across three blocks, because `blocks.rs` files signals
+    where the wiring puts them and nothing on this die groups a clock generator
+    together. Reporting it as a missing region would have said the chip has no
+    clock generator, which is false -- the designer page derives it in full.
 - **The dataset carries only the claim**: a label, and the stem this die uses
   for the thing being claimed. Width, owning functional block, and whether the
   datapath derivation found the same unit independently are all read out of

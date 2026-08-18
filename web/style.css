@@ -2196,6 +2196,11 @@ body.no-scroll #view { z-index: 70; }
    should not look like one. */
 .bd-journey .bd-box { stroke-dasharray: 2 3; }
 
+/* On the die, not in the published figure. The same gold the omitted bus
+   carries, because it is the same kind of fact. */
+.bd-extra .bd-box { stroke: var(--gold); stroke-dasharray: 5 4; }
+.bd-extra .bd-meas { fill: var(--gold); }
+
 /* A claim the die does not answer. Nothing is hidden: it is drawn, and marked. */
 .bd-missing .bd-box { stroke: var(--warn); stroke-dasharray: 4 3; }
 .bd-missing .bd-meas { fill: var(--warn); }

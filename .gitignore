@@ -50,3 +50,9 @@ __pycache__/
 /archive/*.log
 /archive/harvest-wiki-failed.txt
 /archive/harvest-wiki-nosource.txt
+
+# Third-party reference manuals, fetched for checking claims against, never
+# redistributed. Same reasoning as extern/ and archive/: this repo points at
+# copyrighted material rather than carrying it. MOS Technology's manuals are
+# hosted by 6502.org; fetch them with tools/fetch-reference.sh.
+/reference
