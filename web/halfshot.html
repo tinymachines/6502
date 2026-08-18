@@ -20,10 +20,10 @@
     <nav aria-label="Site">
       <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
       <div class="navlinks" id="site-nav"></div>
-      <div class="nav-ctl">
-        <div class="nav-prog" data-program-nav></div>
-        <div class="nav-chip" data-chip-nav></div>
-      </div>
+      <!-- No program picker or transport in the header here: this page has its
+           own, in the console, because its transport moves through a recording
+           rather than driving a live chip, and Record and Reset belong beside
+           it. The store behind them is the same one the header uses. -->
       <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
         <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="mtxt">Menu</span>
@@ -61,13 +61,33 @@
         <button id="hs-back" class="btn" type="button">◀ Back</button>
         <button id="hs-run" class="btn btn-primary" type="button">Run</button>
         <button id="hs-next" class="btn" type="button">Next ▶</button>
+        <button id="hs-record" class="btn hs-rec" type="button" aria-pressed="true"
+                title="While off, running or stepping past the end moves the chip without keeping frames">Record</button>
+        <button id="hs-reset" class="btn" type="button" title="Power-cycle the chip and record again from the start">Reset</button>
         <button id="hs-export" class="btn" type="button" title="Every frame, every node, as one JSON file">Download</button>
       </div>
 
       <div id="hs-boot" class="bp-boot"><p id="hs-status">Loading the chip…</p></div>
 
       <div id="hs-main" hidden>
+        <div class="sch-controls hs-controls">
+          <label class="field">
+            <span>Program</span>
+            <select id="hs-program" aria-label="Program"></select>
+          </label>
+          <label class="field">
+            <span>Clock <span class="muted">while running</span></span>
+            <select id="hs-clock" aria-label="Simulated clock rate"></select>
+          </label>
+          <div class="field">
+            <span>Chip</span>
+            <p class="hs-machine mono" id="hs-machine"></p>
+          </div>
+        </div>
+
         <div class="hs-strip" id="hs-strip" role="listbox" aria-label="Frames, grouped by instruction"></div>
+
+        <div class="hs-scope" id="hs-scope"></div>
 
         <div class="hs-head mono" id="hs-head"></div>
 
@@ -82,11 +102,13 @@
           </section>
 
           <section class="hs-island panel-box" aria-label="This half-cycle: what switched">
-            <h3 class="tr-h">This half-cycle</h3>
-            <p class="tr-note" id="hs-island-note"></p>
-            <p class="tr-note hs-stats mono" id="hs-island-stats"></p>
-            <div class="hs-island-stage"><svg id="hs-island-svg"></svg></div>
-            <div class="hs-events" id="hs-events"></div>
+            <div class="hs-island-inner">
+              <h3 class="tr-h">This half-cycle</h3>
+              <p class="tr-note" id="hs-island-note"></p>
+              <p class="tr-note hs-stats mono" id="hs-island-stats"></p>
+              <div class="hs-island-stage"><svg id="hs-island-svg"></svg></div>
+              <div class="hs-events" id="hs-events"></div>
+            </div>
           </section>
         </div>
 
@@ -142,6 +164,29 @@
       Beneath it are the other things that happened at this edge that are not a
       switch: a memory read or write on the pins, a decode term arriving, a
       register whose stored value moved.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The clock</p>
+      <h2>Two phases, and the states under them</h2>
+    </div>
+    <p>
+      The trace under the strip is the manual's own figure for single-instruction
+      execution redrawn from the recording: the two clock phases the chip puts
+      out, then RDY, SYNC and the timing states, over the half-cycles either side
+      of the frame you are on. The two phases come off the
+      <span class="mono">clk1out</span> and <span class="mono">clk2out</span> pads
+      as levels, like every other pin here, so their non-overlap is measured
+      rather than drawn: neither is ever high while the other is.
+    </p>
+    <p>
+      Record can be switched off. Running or stepping past the end of the
+      recording then moves the chip without keeping frames, which is how you get
+      deep into a program quickly; switching it back on takes a frame where the
+      chip now is, marked on the strip as following a gap, with a fresh
+      snapshot of memory so the window stays honest about what the chip wrote
+      while nobody was looking. Reset power-cycles the chip and records again
+      from the start.
     </p>
 
     <div class="sec-head">

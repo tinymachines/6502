@@ -2014,9 +2014,54 @@ they are different kinds of picture:
 
 The strip along the top is one tick per frame grouped under the instruction
 that fetched it, so "one diagram per half-cycle per op" is also how you get
-around. Back, Next, the arrow keys, a click on a tick, and the header transport
-all move the same cursor; running paces through the frames at the clock rate.
+around. Under it, **the manual's Figure 3.4 redrawn from the recording**: φ1,
+φ2, RDY, SYNC and T0..T5 as a trace across the half-cycles either side of the
+cursor (`createScope` from `demos.js`, which grew a windowed `set(list, at)`
+for it). Back, Next, the arrow keys, Home/End and a click on a tick all move
+the same cursor; running paces through the frames at the clock rate.
 `?program=N&frame=K` deep-links.
+
+- **This page carries its own program and clock selects, and the header
+  carries none.** Its transport moves through a recording rather than driving a
+  live chip, and Record and Reset belong beside Back and Next. The store behind
+  run/pause and the rate is still `chip-controls.js` (`initClock()`, `setClock`,
+  `subscribe`), so `?speed=` and the saved rate work as everywhere; the program
+  select writes `setSelectedProgram`, so the site-wide choice travels both ways.
+  The header simply has no `.nav-ctl` in `halfshot.html`.
+- **Record is a toggle, and off means the chip moves and nothing is kept.**
+  Running or stepping past the end of the recording with Record off calls
+  `skip(n)`: the machine advances, `state.skipped` counts, the cursor stays on
+  the last frame and the "Chip" line says where the chip is. Switching Record
+  back on (`resume()`) takes one frame where the chip now is, with `gap` set to
+  the count and a **fresh 64 KiB memory snapshot**, because the writes in the
+  gap were never seen and `memAt()` would otherwise be wrong from there on. It
+  starts from the latest snapshot at or before k, then applies the recorded
+  writes. The strip marks the segment as after a gap, the head says how many,
+  the file carries `gap` and `mem` on that frame, and the harness runs an
+  independent chip straight to the post-gap half-cycle and compares the memory
+  window cell by cell.
+- **Reset power-cycles and records again from the start.** It is what the
+  header's ⏻ would have done, and it lives beside the transport for the same
+  reason the transport does.
+- **The two clock phases are pins.** `clk1out` and `clk2out` joined `PINS`, so
+  the plate reads them as levels and the trace draws them as such, and their
+  non-overlap is a measurement the harness makes: at no frame in the batch are
+  both high, each is high in half of them, and φ1 is the phase with `clk0` low.
+- **The console must not change height from frame to frame, and three things
+  made it.** The plate and the island sit in a two-column grid; the island's
+  event list varies in length, and any variation in either column moved the
+  whole page on every step. Fixes, all pinned by the harness comparing the
+  console's height on the busiest frame and the quietest: the island's contents
+  are `position: absolute; inset: 0; overflow-y: auto` inside a `position:
+  relative` panel at ≥ 72rem, so the row is sized by the plate alone and the
+  island scrolls inside it (in flow again on a phone); the register cards
+  always render their `was` line, blank when nothing moved, so a card does not
+  grow on the frames its value changed; and the head, the memory access line
+  and the written-so-far line each have a floor and centre their contents,
+  because a badge appearing on the baseline changed the line box by a pixel.
+  **Measure per element**: a throwaway probe printing each block's height on
+  six frames found all three in one pass, where the console's total said only
+  that something moved.
 
 - **`blueprint-draw.js` was extracted for this page**, exactly as `sch-draw.js`
   came out of `schematic.js`: two pages laying the accumulator out from two

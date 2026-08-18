@@ -23,13 +23,18 @@
 
 import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
-import { setupProgramNav } from './program-nav.js';
-import { setupChipNav } from './chip-nav.js';
-import { isRunning, setRunning, toggleRunning, subscribe, halfCyclesFor } from './chip-controls.js';
+// The store behind run/pause and the clock rate is the site's, but this page
+// carries its own controls for it rather than the header's: its transport moves
+// through a recording rather than driving a live chip, and Record and Reset
+// belong beside Back and Next.
+import {
+  CLOCKS, clockHz, initClock, isRunning, setClock, setRunning, toggleRunning, subscribe,
+  halfCyclesFor,
+} from './chip-controls.js';
 import { layOut, draw, placeLabels, unitValue, label } from './blueprint-draw.js';
 import { createDraw } from './sch-draw.js';
 import { disassemble } from './disasm.js';
-import { lamps, hex2, hex4 } from './demos.js';
+import { lamps, hex2, hex4, createScope } from './demos.js';
 import { encode } from './halfshot-codec.js';
 
 const $ = (id) => document.getElementById(id);
@@ -40,8 +45,22 @@ const $ = (id) => document.getElementById(id);
 export const BATCH = 256;
 export const MAX_FRAMES = 4096;
 
-// The pins the plate reports beside the two buses. Names as the die has them.
-const PINS = ['rw', 'sync', 'rdy', 'irq', 'nmi', 'res', 'so'];
+// The pins the plate reports beside the two buses. Names as the die has them;
+// the two clock phases the chip puts out are pins like any other, which is what
+// lets their non-overlap be measured rather than drawn.
+const PINS = ['clk1out', 'clk2out', 'rw', 'sync', 'rdy', 'irq', 'nmi', 'res', 'so'];
+const PIN_LABEL = { clk1out: 'φ1', clk2out: 'φ2' };
+
+// The trace under the strip: the manual's single-instruction figure (Figure 3.4
+// of the MCS6500 hardware manual) redrawn from the recording. Two clock phases,
+// RDY, SYNC, then the timing states.
+const SCOPE_CHANNELS = [
+  { key: 'clk1out', label: 'φ1' }, { key: 'clk2out', label: 'φ2' },
+  { key: 'rdy', label: 'RDY' }, { key: 'sync', label: 'SYNC', cls: 'dm-ch-sync' },
+  { key: 'T0', label: 'T0' }, { key: 'T1', label: 'T1' }, { key: 'T2', label: 'T2' },
+  { key: 'T3', label: 'T3' }, { key: 'T4', label: 'T4' }, { key: 'T5', label: 'T5' },
+];
+const SCOPE_SPAN = 32;   // half-cycles across the trace, the cursor in the middle
 
 const state = {
   m: null,
@@ -57,9 +76,9 @@ const state = {
   mem0: null,        // memory before the first frame
   pinNode: {},
   termNodes: [],
-  running: false,
-  lastFrame: 0,
-  nav: null,
+  recording: true,   // off: running or stepping past the end moves the chip, keeps nothing
+  skipped: 0,        // half-cycles the chip has moved since the last frame, unrecorded
+  scope: null,
 };
 
 const nameOf = (n) => state.sch.names[n] ?? `#${n}`;
@@ -80,6 +99,7 @@ function loadProgram(index) {
   state.frames = [];
   state.segs = [];
   state.cur = 0;
+  state.skipped = 0;
   record(BATCH);
 }
 
@@ -88,7 +108,7 @@ function loadProgram(index) {
  * at this instant. `levels` is the whole chip; the rest is derived from it and
  * from the bus, and is kept so a frame can be drawn without a machine.
  */
-function sample(prev) {
+function sample(prev, gap = 0) {
   const m = state.m;
   const levels = m.nodeLevels();
   const clk0 = m.clk0();
@@ -115,10 +135,32 @@ function sample(prev) {
       : !clk0 && read ? { kind: 'R', addr: m.addressBus(), val: m.dataBus() }
       : clk0 && !read ? { kind: 'W', addr: m.addressBus(), val: m.dataBus() }
       : null,
+    // How many half-cycles the chip moved, unrecorded, before this frame. A
+    // frame after a gap carries a fresh copy of memory, because the writes in
+    // the gap were never seen and the window would otherwise be wrong from here
+    // on. 64 KiB per gap, and gaps are rare.
+    gap,
+    snapshot: gap > 0 ? new Uint8Array(m.memorySlice(0, 65536)) : null,
     levels,
   };
   state.termNodes.forEach((n, i) => { if (levels[n]) f.terms.push(i); });
   return f;
+}
+
+/** Take a frame where the chip now is, if it has moved since the last one. */
+function resume() {
+  if (state.skipped === 0) return false;
+  const frames = state.frames;
+  frames.push(sample(frames[frames.length - 1], state.skipped));
+  state.skipped = 0;
+  segment();
+  return true;
+}
+
+/** Move the chip `n` half-cycles without keeping frames. */
+function skip(n) {
+  state.m.runHalfCycles(n);
+  state.skipped += n;
 }
 
 /** Extend the recording by `n` half-cycles (or start it). */
@@ -143,22 +185,37 @@ function record(n) {
 function segment() {
   const { frames } = state;
   const segs = [];
-  let open = { start: 0, label: 'reset', fetch: -1, op: null };
   const memEnd = memAt(frames.length - 1);
   const read = (a) => memEnd[a];
+  const isFetch = (k) => {
+    const f = frames[k];
+    return f.sync && !f.clk0 && f.fetch >= 0
+      && (k === 0 || !(frames[k - 1].sync && !frames[k - 1].clk0));
+  };
+  let open = null;
+  const close = (k) => { if (open) { open.end = k - 1; segs.push(open); } };
   for (let k = 0; k < frames.length; k++) {
     const f = frames[k];
-    if (f.sync && !f.clk0 && f.fetch >= 0 && (k === 0 || !(frames[k - 1].sync && !frames[k - 1].clk0))) {
-      if (k > 0) { open.end = k - 1; segs.push(open); }
-      // The operand bytes as they are at the END of the recording. A program
-      // that rewrote its own operands would mislabel here; none of these do,
-      // and the byte the chip fetched is the one shown beside the label.
+    if (f.gap > 0) {
+      // A frame after a gap opens a segment of its own, so the strip shows
+      // where the recording stopped and started. If that frame is itself a
+      // fetch it is labelled as the instruction, still marked as after a gap.
+      close(k);
+      open = { start: k, label: `after ${f.gap} unrecorded`, fetch: -1, op: null, gap: f.gap };
+    }
+    if (isFetch(k)) {
       const d = disassemble(f.op, f.fetch, read);
-      open = { start: k, label: d.text, fetch: f.fetch, op: f.op, len: d.length };
+      if (open && open.gap && open.start === k) {
+        Object.assign(open, { label: d.text, fetch: f.fetch, op: f.op, len: d.length });
+      } else {
+        close(k);
+        open = { start: k, label: d.text, fetch: f.fetch, op: f.op, len: d.length };
+      }
+    } else if (!open) {
+      open = { start: k, label: 'reset', fetch: -1, op: null };
     }
   }
-  open.end = frames.length - 1;
-  segs.push(open);
+  close(frames.length);
   state.segs = segs;
 }
 
@@ -172,9 +229,16 @@ function segment() {
  */
 const memCache = { k: -1, mem: null, mem0: null };
 function memAt(k) {
-  let from = 1;
-  if (memCache.mem0 === state.mem0 && memCache.k >= 0 && memCache.k <= k) from = memCache.k + 1;
-  else { memCache.mem = new Uint8Array(state.mem0); memCache.mem0 = state.mem0; }
+  // The image to start from: the latest snapshot at or before k (frame 0's is
+  // the program as loaded), then the recorded writes after it.
+  let base = 0;
+  for (let i = k; i > 0; i--) if (state.frames[i].snapshot) { base = i; break; }
+  let from = base + 1;
+  if (memCache.mem0 === state.mem0 && memCache.k >= base && memCache.k <= k) from = memCache.k + 1;
+  else {
+    memCache.mem = new Uint8Array(base ? state.frames[base].snapshot : state.mem0);
+    memCache.mem0 = state.mem0;
+  }
   const mem = memCache.mem;
   for (let i = from; i <= k; i++) {
     const a = state.frames[i].access;
@@ -216,7 +280,7 @@ function paintPins(f, prev) {
   const pinRow = PINS.map((p) => {
     const moved = prev && prev.pins[p] !== f.pins[p];
     return `<span class="hs-pin${f.pins[p] ? ' hi' : ''}${moved ? ' moved' : ''}" title="${p}: ${f.pins[p]}">`
-      + `<b>${p.toUpperCase()}</b><i>${f.pins[p]}</i></span>`;
+      + `<b>${PIN_LABEL[p] || p.toUpperCase()}</b><i>${f.pins[p]}</i></span>`;
   }).join('');
   $('hs-pins').innerHTML =
     `<div class="hs-bus${was('ab') !== f.ab ? ' moved' : ''}"><b>AB</b>${lamps(f.ab, 16)}<span class="hs-hex">$${hex4(f.ab)}</span></div>`
@@ -235,8 +299,10 @@ function paintRegs(f, prev) {
     const now = get(f);
     const was = prev ? get(prev) : now;
     const moved = now !== was;
+    // The "was" line is always there, blank when nothing moved, so a card does
+    // not grow on the frames where its value changed and the plate stays put.
     return `<div class="tr-reg${moved ? ' moved' : ''}"><span class="tr-reg-k">${k}</span>`
-      + `<span class="tr-reg-v">${now}</span>${moved ? `<span class="tr-reg-was">was ${was}</span>` : ''}</div>`;
+      + `<span class="tr-reg-v">${now}</span><span class="tr-reg-was">${moved ? `was ${was}` : '\u00a0'}</span></div>`;
   }).join('');
 }
 
@@ -456,8 +522,9 @@ function paintStrip() {
     host.replaceChildren();
     for (const s of segs) {
       const seg = document.createElement('div');
-      seg.className = 'hs-op' + (s.fetch < 0 ? ' reset' : '');
-      seg.title = s.fetch >= 0 ? `$${hex4(s.fetch)}  ${s.label}` : 'reset sequence';
+      seg.className = 'hs-op' + (s.fetch < 0 ? ' reset' : '') + (s.gap ? ' gap' : '');
+      seg.title = (s.gap ? `${s.gap} half-cycles unrecorded, then ` : '')
+        + (s.fetch >= 0 ? `$${hex4(s.fetch)}  ${s.label}` : 'reset sequence');
       const lab = document.createElement('span');
       lab.className = 'hs-op-label mono';
       lab.textContent = s.label;
@@ -485,6 +552,34 @@ function paintStrip() {
   }
 }
 
+/** The trace: a window of the recording with this frame in the middle. */
+function paintScope(k) {
+  const { frames } = state;
+  const lo = Math.max(0, Math.min(k - SCOPE_SPAN / 2, frames.length - SCOPE_SPAN));
+  const win = frames.slice(lo, lo + SCOPE_SPAN).map((f) => {
+    const s = { ...f.pins };
+    for (const st of f.t.split('+')) s[st] = 1;
+    return s;
+  });
+  state.scope.set(win, k - lo);
+}
+
+/** Where the chip itself is, which is only the cursor while recording. */
+function paintMachine() {
+  const m = state.m;
+  const last = state.frames[state.frames.length - 1];
+  $('hs-machine').textContent =
+    `half-cycle ${m.halfCycle()} · PC $${hex4(m.pc())} · `
+    + (state.recording
+      ? (state.skipped ? `recording, ${state.skipped} unrecorded since frame ${state.frames.length - 1}`
+                       : 'recording')
+      : `not recording: ${state.skipped} half-cycles since frame ${state.frames.length - 1} (h ${last.h})`);
+  const rec = $('hs-record');
+  rec.setAttribute('aria-pressed', String(state.recording));
+  rec.classList.toggle('on', state.recording);
+  rec.textContent = state.recording ? 'Record' : 'Record off';
+}
+
 function paintHead(k, f) {
   const s = segOf(k);
   const inOp = s ? k - s.start + 1 : 0;
@@ -495,6 +590,7 @@ function paintHead(k, f) {
     + `<span class="tr-sep">·</span><span>cycle <b>${Math.floor(f.h / 2)}</b> φ${f.ph}</span>`
     + `<span class="tr-sep">·</span><span class="mono">${f.t}</span>`
     + (f.sync ? '<span class="tr-flag">sync</span>' : '')
+    + (f.gap ? `<span class="tr-flag tr-tail">after ${f.gap} unrecorded</span>` : '')
     + (s ? `<span class="tr-sep">·</span><span class="tr-mn">${s.label}</span>`
            + (s.fetch >= 0 ? `<span class="muted"> at $${hex4(s.fetch)}</span>` : '')
            + `<span class="tr-sep">·</span><span>${inOp} of ${opLen} in this ${s.fetch >= 0 ? 'instruction' : 'sequence'}</span>`
@@ -523,6 +619,8 @@ function refresh() {
   paintMem(k, f);
   paintIsland(k);
   paintStrip();
+  paintScope(k);
+  paintMachine();
   paintCaption();
   $('hs-back').disabled = k === 0;
   $('hs-next').disabled = k >= MAX_FRAMES - 1;
@@ -535,12 +633,38 @@ function refresh() {
 /** Go to frame `want`, recording more if it is past the end. Returns whether it moved. */
 function seek(want) {
   let target = Math.max(0, want);
-  while (target > state.frames.length - 1 && state.frames.length < MAX_FRAMES) record(BATCH);
-  target = Math.min(target, state.frames.length - 1);
+  const last = () => state.frames.length - 1;
+  if (target > last()) {
+    if (!state.recording) {
+      // Past the end with Record off: the chip moves, nothing is kept, and the
+      // cursor stays on the last frame. What moved is the chip's own count.
+      skip(target - last());
+      target = last();
+      if (state.cur === target) { paintMachine(); return false; }
+    } else {
+      // Past the end with Record on: first a frame where the chip is now, if
+      // it moved while Record was off, then batches until the target is in.
+      if (resume()) target = Math.max(target, last());
+      while (target > last() && state.frames.length < MAX_FRAMES) record(BATCH);
+      target = Math.min(target, last());
+    }
+  }
   if (target === state.cur) return false;
   state.cur = target;
   refresh();
   return true;
+}
+
+function setRecording(on) {
+  state.recording = !!on;
+  if (state.recording && resume()) { state.cur = state.frames.length - 1; refresh(); }
+  else paintMachine();
+}
+
+function resetRecording() {
+  setRunning(false);
+  loadProgram(state.program);
+  refresh();
 }
 
 function paintRun() {
@@ -554,7 +678,8 @@ function tick(now = 0) {
   if (!isRunning()) return;
   const n = halfCyclesFor(now);
   if (n <= 0) return;
-  if (!seek(state.cur + n) && state.cur >= MAX_FRAMES - 1) setRunning(false);
+  const moved = seek(state.cur + n);
+  if (!moved && state.recording && state.cur >= MAX_FRAMES - 1) setRunning(false);
 }
 
 function exportRecording() {
@@ -567,7 +692,8 @@ function exportRecording() {
     units: state.bp.units.map((u) => u.name),
     controls: state.bp.links.map((l) => l.control),
     terms: state.termNodes.map((n, i) => state.dec.rows[i].name || `#${n}`),
-    instructions: state.segs.map((s) => ({ start: s.start, end: s.end, label: s.label, at: s.fetch, op: s.op })),
+    instructions: state.segs.map((s) => ({ start: s.start, end: s.end, label: s.label, at: s.fetch, op: s.op,
+                                           gap: s.gap || 0 })),
   });
   const blob = new Blob([JSON.stringify(file)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -624,34 +750,47 @@ async function boot() {
     state.layout = layOut(bp);
     draw($('hs-svg'), bp, state.layout);
 
+    // The trace, sized to sit under the strip at full width.
+    state.scope = createScope({ channels: SCOPE_CHANNELS, span: SCOPE_SPAN, height: 11, gap: 5, width: 1200 });
+    $('hs-scope').append(state.scope.el);
+
     const q = new URLSearchParams(location.search);
     const chosen = selectedProgram(location.search);
     loadProgram(chosen);
 
-    // One place changes the program: the header picker.
-    state.nav = setupProgramNav({ onChange: (i) => {
+    // The program: this page's own select, writing the site-wide choice, so
+    // arriving here from the Explorer records what the Explorer was running and
+    // leaving takes this choice along.
+    const progSel = $('hs-program');
+    PROGRAMS.forEach((pr, i) => progSel.add(new Option(pr.name, String(i))));
+    progSel.value = String(state.program);
+    progSel.addEventListener('change', () => {
+      const i = Number(progSel.value);
       setSelectedProgram(i);
       setRunning(false);
       loadProgram(i);
       refresh();
-    } });
-    if (state.nav) state.nav.set(chosen);
-
-    // The header transport drives the cursor. Its "reset" is frame 0; its
-    // "step" is the next frame; running paces through the frames at the clock
-    // rate, exactly as it paces a live chip on the other pages.
-    setupChipNav({
-      step: () => seek(state.cur + 1),
-      back: () => seek(state.cur - 1),
-      reset: () => seek(0),
-      halfCycle: () => state.frames[state.cur].h,
     });
-    subscribe(paintRun);
+
+    // The clock: the site's store, read from ?speed= and the saved value like
+    // every other page, painted from a subscription so it cannot drift.
+    initClock();
+    const clockSel = $('hs-clock');
+    for (const c of CLOCKS) clockSel.add(new Option(c.label, String(c.hz)));
+    clockSel.addEventListener('change', () => setClock(Number(clockSel.value)));
+    subscribe(() => {
+      paintRun();
+      const hz = String(clockHz());
+      if (clockSel.value !== hz) clockSel.value = hz;
+    });
     paintRun();
+    clockSel.value = String(clockHz());
 
     $('hs-back').addEventListener('click', () => { setRunning(false); seek(state.cur - 1); });
     $('hs-next').addEventListener('click', () => { setRunning(false); seek(state.cur + 1); });
     $('hs-run').addEventListener('click', () => toggleRunning());
+    $('hs-record').addEventListener('click', () => setRecording(!state.recording));
+    $('hs-reset').addEventListener('click', resetRecording);
     $('hs-export').addEventListener('click', () => exportRecording());
     $('hs-strip').addEventListener('click', (ev) => {
       const t = ev.target.closest('i[data-k]');
@@ -665,6 +804,7 @@ async function boot() {
       else if (ev.key === 'ArrowLeft') { setRunning(false); seek(state.cur - 1); ev.preventDefault(); }
       else if (ev.key === ' ') { toggleRunning(); ev.preventDefault(); }
       else if (ev.key === 'Home') { setRunning(false); seek(0); ev.preventDefault(); }
+      else if (ev.key === 'End') { setRunning(false); seek(state.frames.length - 1); ev.preventDefault(); }
     });
 
     $('hs-boot').hidden = true;
@@ -679,7 +819,8 @@ async function boot() {
     tick();
 
     // For the harness: the recording, the segments and the codec entry point.
-    window.__halfshot = { state, seek, record, memAt, islandCone, exportRecording, encode };
+    window.__halfshot = { state, seek, record, memAt, islandCone, exportRecording, encode,
+                          setRecording, resetRecording, skip };
   } catch (e) {
     status.textContent = 'Could not load: ' + (e && e.message ? e.message : e);
     status.classList.add('error');

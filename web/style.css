@@ -126,6 +126,13 @@ code {
 }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
 .btn:active { transform: translate(2px, 2px); }
+/* Stated rather than left to the user agent, for the same reason as the
+   background above: a disabled button with no author style takes whatever the
+   browser's disabled face is. */
+.btn:disabled, .btn:disabled:hover {
+  opacity: .45; cursor: default; transform: none;
+  border-color: var(--line); color: var(--foreground); background: var(--subtle);
+}
 .btn-primary {
   border-color: var(--accent); background: var(--accent);
   color: var(--accent-foreground); box-shadow: var(--hard);
@@ -2672,6 +2679,8 @@ body.no-scroll #view { z-index: 70; }
 .hs-op { flex: 0 0 auto; display: flex; flex-direction: column; gap: .25rem; }
 .hs-op-label { font-size: .6rem; color: var(--muted); white-space: nowrap; letter-spacing: .04em; }
 .hs-op.reset .hs-op-label { color: var(--hot); }
+.hs-op.gap { padding-left: .55rem; border-left: 2px dashed var(--hot); }
+.hs-op.gap .hs-op-label { color: var(--hot); }
 .hs-ticks { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 3px; }
 .hs-ticks i {
   display: block; width: 8px; height: 14px; border-radius: 1px;
@@ -2681,8 +2690,26 @@ body.no-scroll #view { z-index: 70; }
 .hs-ticks i:hover { background: var(--muted); }
 .hs-ticks i.here { background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
+/* The page's own program and clock selects, and where the chip is. */
+.hs-controls { grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+.hs-machine { margin: 0; font-size: .74rem; color: var(--muted); line-height: 1.5;
+  padding: .3rem 0; }
+.hs-rec.on { border-color: var(--warn); color: var(--warn); }
+.hs-rec.on::before { content: "●"; margin-right: .35rem; }
+.hs-rec:not(.on) { color: var(--muted); }
+
+/* The manual's figure, redrawn from the recording: the two clock phases, RDY,
+   SYNC and the timing states across the frames either side of the cursor. */
+.hs-scope { padding: .4rem .9rem 0; border-bottom: 2px solid var(--line); background: var(--surface);
+  overflow-x: auto; }
+.hs-scope .dm-scope { margin: 0 0 .3rem; min-width: 44rem; }
+
+/* Centred rather than on the baseline, with a floor: the sync badge and the
+   flags come and go from frame to frame, and on the baseline they changed the
+   line box by a pixel, which the whole console below then inherited. */
 .hs-head {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+  min-height: 2.75rem;
   padding: .6rem .9rem; margin: 0;
   border-bottom: 2px solid var(--line); background: var(--subtle);
   font-size: .8rem; color: var(--muted);
@@ -2725,7 +2752,10 @@ body.no-scroll #view { z-index: 70; }
 /* Memory: the window around the last access, and what the program has written. */
 .hs-mem { display: grid; gap: .3rem; padding: .5rem .6rem; border: 2px solid var(--line);
   border-radius: .3rem; background: var(--surface); font-size: .74rem; }
-.hs-memhead { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+/* Both lines have a floor and centre their contents for the same reason as
+   the head: what they hold changes size from frame to frame and the plate
+   must not. */
+.hs-memhead { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; min-height: 1.5rem; }
 .hs-memhead b, .hs-written b { font: 700 .62rem/1 var(--font-mono); letter-spacing: .1em;
   text-transform: uppercase; color: var(--muted); }
 .hs-access { font: 700 .78rem/1 var(--font-mono); }
@@ -2738,13 +2768,24 @@ body.no-scroll #view { z-index: 70; }
 .hs-memrow i.hit.rd { background: var(--accent); color: var(--accent-foreground); font-weight: 800; }
 .hs-memrow i.hit.wr { background: var(--hot); color: var(--accent-foreground); font-weight: 800; }
 .hs-memrow i.last { box-shadow: inset 0 0 0 1px var(--muted); }
-.hs-written { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: baseline; }
+.hs-written { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: center; min-height: 1.5rem; }
 .hs-w { font-size: .7rem; color: var(--hot); }
 .hs-mem .muted, .hs-events .muted { color: var(--muted); }
 
 /* The island: a small schematic on the same dark ground the workbench uses,
    sized to its drawing. */
 .hs-island { min-width: 0; }
+/* Beside the plate, the island is as tall as the plate and no taller: its
+   contents scroll inside it. Its own height must not reach the grid row, or a
+   frame with a long list of events would push the whole console taller and the
+   page would jump on every step. So the row is sized by the plate alone and the
+   island's contents are taken out of flow. On a phone the columns stack and it
+   is in flow again. */
+@media (min-width: 72rem) {
+  .hs-island { position: relative; min-height: 0; padding: 0; margin-top: 0; }
+  .hs-island-inner { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain;
+    padding: .75rem .85rem; scrollbar-width: thin; }
+}
 .hs-island-stage { background: #080c15; border: 2px solid var(--line); border-radius: .3rem;
   overflow-x: auto; }
 #hs-island-svg { display: block; width: 100%; min-height: 0; }

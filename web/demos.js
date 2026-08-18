@@ -158,8 +158,8 @@ export function transport(host, chip, { label = '' } = {}) {
  * boundaries are drawn every second sample, which is the entire point being
  * made: a cycle is two of these, not one.
  */
-export function createScope({ channels, span = 16, height = 26, gap = 8 }) {
-  const w = 480;
+export function createScope({ channels, span = 16, height = 26, gap = 8, width = 480 }) {
+  const w = width;
   const left = 46;
   const svg = svgEl('svg', {
     class: 'dm-scope', viewBox: `0 0 ${w} ${channels.length * (height + gap) + 16}`,
@@ -177,6 +177,9 @@ export function createScope({ channels, span = 16, height = 26, gap = 8 }) {
   });
 
   const samples = [];
+  // Where the "now" line is drawn: the newest sample while recording, or a
+  // chosen sample when a page hands over a window with a cursor in it.
+  let nowAt = null;
   const step = () => (w - left - 6) / span;
 
   function paint() {
@@ -203,7 +206,8 @@ export function createScope({ channels, span = 16, height = 26, gap = 8 }) {
       if (d) svgEl('path', { d, class: `dm-scope-trace ${ch.cls || ''}` }, traces);
     });
     if (samples.length) {
-      const x = left + (samples.length - 1) * dx + dx / 2;
+      const at = nowAt == null ? samples.length - 1 : Math.min(nowAt, samples.length - 1);
+      const x = left + at * dx + dx / 2;
       svgEl('line', {
         x1: x, y1: -2, x2: x, y2: channels.length * (height + gap) - gap + 2,
         class: 'dm-scope-now',
@@ -219,7 +223,18 @@ export function createScope({ channels, span = 16, height = 26, gap = 8 }) {
       while (samples.length > span) samples.shift();
       paint();
     },
-    clear() { samples.length = 0; paint(); },
+    clear() { samples.length = 0; nowAt = null; paint(); },
+    /**
+     * Show a window of samples with the cursor at index `at`, instead of the
+     * rolling record. The halfshot page uses this: its history is the recording,
+     * and the reader moves through it in both directions.
+     */
+    set(list, at) {
+      samples.length = 0;
+      samples.push(...list.slice(0, span));
+      nowAt = at;
+      paint();
+    },
     get length() { return samples.length; },
   };
 }

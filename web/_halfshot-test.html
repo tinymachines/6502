@@ -162,6 +162,54 @@ f.addEventListener('load', async () => {
     let bad = check(st.cur);
     ok('the plate shows frame 0: every unit, switch, register and bus', bad.length === 0, bad.slice(0, 3).join(' | '));
 
+    // --- the two clock phases -------------------------------------------------------
+    // Pins like any other, so their non-overlap is a measurement: at no frame are
+    // both high, and each is high in about half of them.
+    const both = frames.filter((x) => x.pins.clk1out && x.pins.clk2out).length;
+    const p1 = frames.filter((x) => x.pins.clk1out).length;
+    const p2 = frames.filter((x) => x.pins.clk2out).length;
+    ok('the two clock phases are never both high, and each is high about half the time',
+       both === 0 && Math.abs(p1 - N0 / 2) < 4 && Math.abs(p2 - N0 / 2) < 4, `both ${both}, φ1 ${p1}, φ2 ${p2}`);
+    ok('φ1 is the phase with clk0 low',
+       frames.every((x) => !!x.pins.clk1out === !x.clk0), '');
+    ok('and the pin row shows them', /φ1/.test($('hs-pins').textContent) && /φ2/.test($('hs-pins').textContent));
+    // The trace: ten channels, a cursor line, and the traces are the frames.
+    const scope = d.querySelector('#hs-scope svg');
+    ok('the trace draws the manual\'s channels and a cursor',
+       !!scope && scope.querySelectorAll('.dm-scope-label').length === 10 && !!scope.querySelector('.dm-scope-now')
+       && scope.querySelectorAll('.dm-scope-trace').length === 10, '');
+
+    // --- the console does not change height from frame to frame -----------------------
+    const consoleEl = d.querySelector('#view .console');
+    const h0 = consoleEl.getBoundingClientRect().height;
+    const plateH = d.querySelector('.hs-plate').getBoundingClientRect().height;
+    const islandH = d.querySelector('.hs-island').getBoundingClientRect().height;
+    ok('the island is as tall as the plate, no taller', Math.abs(plateH - islandH) < 2, `plate ${plateH}, island ${islandH}`);
+    // Find the frame with the most events and the one with the fewest.
+    let most = 1, fewest = 1;
+    for (let k = 1; k < N0; k++) {
+      const c = bp.units.filter((u, i) => frames[k].units[i].value !== frames[k - 1].units[i].value).length
+        + bp.links.filter((l, i) => frames[k].open[i] !== frames[k - 1].open[i]).length;
+      const cm = bp.units.filter((u, i) => frames[most].units[i].value !== frames[most - 1].units[i].value).length
+        + bp.links.filter((l, i) => frames[most].open[i] !== frames[most - 1].open[i]).length;
+      const cf = bp.units.filter((u, i) => frames[fewest].units[i].value !== frames[fewest - 1].units[i].value).length
+        + bp.links.filter((l, i) => frames[fewest].open[i] !== frames[fewest - 1].open[i]).length;
+      if (c > cm) most = k;
+      if (c < cf) fewest = k;
+    }
+    H.seek(most);
+    const hMost = consoleEl.getBoundingClientRect().height;
+    H.seek(fewest);
+    const hFew = consoleEl.getBoundingClientRect().height;
+    ok('the console is the same height on the busiest frame and the quietest',
+       Math.abs(hMost - hFew) < 2 && Math.abs(hMost - h0) < 2, `${h0} / ${hMost} / ${hFew}`);
+    ok('and the island scrolls inside itself when its contents are taller', (() => {
+      H.seek(most);
+      const inner = d.querySelector('.hs-island-inner');
+      return inner.scrollHeight >= inner.clientHeight && getComputedStyle(inner).overflowY === 'auto';
+    })());
+    H.seek(0);
+
     // --- stepping ---------------------------------------------------------------
     $('hs-next').click();
     ok('Next moves one frame', st.cur === 1, `cur ${st.cur}`);
@@ -169,10 +217,12 @@ f.addEventListener('load', async () => {
     ok('and the plate repaints on the action, without a frame', bad.length === 0, bad.slice(0, 3).join(' | '));
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     ok('the right arrow steps too', st.cur === 2, `cur ${st.cur}`);
-    // The header transport drives the cursor, like every chip page.
-    const stepBtn = [...d.querySelectorAll('.nav-tbtn')].find((b) => b.title === 'One half-cycle');
-    stepBtn.click();
-    ok('the header step advances the recording', st.cur === 3, `cur ${st.cur}`);
+    // This page carries its own controls and the header carries none.
+    ok('the header has no program picker and no transport on this page',
+       !d.querySelector('[data-program-nav]') && !d.querySelector('[data-chip-nav]') && !d.querySelector('.nav-tbtn'));
+    ok('the page has its own program and clock selects, agreeing with the store',
+       $('hs-program').value === '0' && $('hs-clock').options.length > 3
+       && [...$('hs-clock').options].some((o) => o.selected), `${$('hs-clock').value} Hz`);
     d.querySelector('#hs-strip i[data-k="40"]').click();
     ok('clicking a tick jumps to it', st.cur === 40 && d.querySelector('#hs-strip i.here').dataset.k === '40');
     ok('and the head names the instruction it is in',
@@ -262,6 +312,45 @@ f.addEventListener('load', async () => {
        `${frames.length} frames, cur ${st.cur}`);
     ok('and the strip grew with it', d.querySelectorAll('#hs-strip i[data-k]').length === frames.length);
 
+    // --- record off, record on ----------------------------------------------------
+    const nBefore = frames.length;
+    H.seek(nBefore - 1);
+    $('hs-record').click();
+    ok('Record off is shown on the button', $('hs-record').getAttribute('aria-pressed') === 'false');
+    H.seek(nBefore - 1 + 300);
+    ok('stepping past the end with Record off moves the chip and keeps no frame',
+       frames.length === nBefore && st.skipped === 300 && st.m.halfCycle() === frames[nBefore - 1].h + 300
+       && st.cur === nBefore - 1,
+       `${frames.length} frames, ${st.skipped} skipped, chip at ${st.m.halfCycle()}`);
+    ok('and the chip line says so', /not recording: 300 half-cycles/.test($('hs-machine').textContent), $('hs-machine').textContent);
+    $('hs-record').click();
+    const gk = frames.length - 1;
+    ok('Record on takes a frame where the chip now is, marked as after a gap',
+       frames.length === nBefore + 1 && frames[gk].gap === 300 && frames[gk].h === frames[nBefore - 1].h + 300
+       && st.cur === gk && !!frames[gk].snapshot,
+       `frame ${gk}: gap ${frames[gk].gap}, h ${frames[gk].h}`);
+    ok('the strip marks the segment as after a gap and the head says how many',
+       !!d.querySelector('#hs-strip .hs-op.gap') && /after 300 unrecorded/.test($('hs-head').textContent));
+    // Memory after the gap: the writes in it were never seen, so the window must
+    // come from the snapshot, and agree with a chip run straight there.
+    H.seek(gk + 2);
+    ok('memory after the gap agrees with an independent chip run to that half-cycle', (() => {
+      const mm = new Machine();
+      mm.powerCycle(); mm.load(LOAD_ADDR, new Uint8Array(prog.bytes)); mm.setResetVector(LOAD_ADDR); mm.powerCycle();
+      mm.runHalfCycles(frames[gk + 2].h);
+      const cells = [...d.querySelectorAll('#hs-mem .hs-memrow i')];
+      return cells.length === 48 && cells.every((c) => c.textContent === hex2(mm.peek(parseInt(c.title.slice(1), 16))));
+    })());
+    ok('the frames after the gap are contiguous again',
+       frames[gk + 1].h === frames[gk].h + 1 && frames[gk + 1].gap === 0);
+
+    // --- reset ----------------------------------------------------------------------
+    $('hs-reset').click();
+    ok('Reset power-cycles and records again from the start',
+       st.frames.length === 257 && st.cur === 0 && st.frames[0].h === 0 && st.skipped === 0
+       && d.querySelectorAll('#hs-strip i[data-k]').length === 257,
+       `${st.frames.length} frames, cur ${st.cur}`);
+
     // --- the file --------------------------------------------------------------------
     const file = H.encode(frames, {
       program: { id: prog.id }, nodes: sch.names.length, vss: sch.vss, vcc: sch.vcc,
@@ -314,8 +403,6 @@ f.addEventListener('load', async () => {
        && !!d.querySelector('footer.site-foot .wrap .foot-meta')
        && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'), '');
     ok('no em dash in the rendered page', !$('hs-main').textContent.includes('—') && !d.querySelector('main').textContent.includes('—'), '');
-    ok('the header has a program picker and a transport',
-       !!d.querySelector('[data-program-nav] select') && d.querySelectorAll('.nav-tbtn').length === 3);
   } catch (e) {
     ok('the harness ran to the end', false, e && e.stack ? e.stack.split('\n').slice(0, 2).join(' ') : String(e));
   }

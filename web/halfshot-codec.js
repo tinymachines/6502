@@ -26,6 +26,20 @@ export function packLevels(levels) {
   return btoa(s);
 }
 
+/** Raw bytes -> base64, for the memory image a frame after a gap carries. */
+export function packBytes(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+export function unpackBytes(b64) {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
 /** The inverse of `packLevels`, back to one byte per node (255 or 0). */
 export function unpackLevels(b64, count) {
   const s = atob(b64);
@@ -66,6 +80,12 @@ export function encode(frames, meta) {
       terms: f.terms,
       access: f.access,
     };
+    // A frame after a gap: how far the chip moved unrecorded, and memory as it
+    // stood, because the writes in between were never seen.
+    if (f.gap > 0) {
+      rec.gap = f.gap;
+      if (f.snapshot) rec.mem = packBytes(f.snapshot);
+    }
     if (k === 0) rec.levels = packLevels(f.levels);
     else {
       const d = delta(frames[k - 1].levels, f.levels);
