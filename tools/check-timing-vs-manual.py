@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check every measured cycle count against the published instruction table.
+"""Check every measured cycle count and byte length against the published table.
 
 `tests/timing.rs` and `_timing-test.html` already cross-check 33 documented
 opcodes against figures typed in by hand. This checks **117** against the table
@@ -128,10 +128,22 @@ def main():
     measured = {o["op"]: o for o in json.loads(TIMING.read_text())["opcodes"]}
 
     agree, explained, disagree = 0, [], []
+    b_agree, b_dis, b_none = 0, [], 0
     for op, (mne, mode, _bytes, cycles) in sorted(table.items()):
         m = measured.get(op)
         if m is None or m["jam"]:
             continue
+        # Byte length, measured as how far the program counter moved from this
+        # opcode's fetch to the next one. `null` where control went elsewhere,
+        # which is not a disagreement: the distance is simply not a length.
+        if m.get("bytes") is None:
+            b_none += 1
+        elif m["bytes"] == _bytes:
+            b_agree += 1
+        else:
+            b_dis.append(f"${op:02X} {mne} {mode}: manual {_bytes} bytes, "
+                         f"measured {m['bytes']}")
+
         if m["cycles"] == cycles:
             agree += 1
         elif op in BRANCHES and m["cycles"] == cycles + 1:
@@ -156,9 +168,12 @@ def main():
     print(f"  {agree} agree exactly")
     print(f"  {len(explained)} branches measured one cycle higher, taken in this run: "
           f"{', '.join(sorted(explained))}")
-    if disagree:
-        print(f"  {len(disagree)} DISAGREE:")
-        for d in disagree:
+    print(f"  {b_agree} byte lengths agree, {len(b_dis)} disagree, "
+          f"{b_none} not measurable (control went elsewhere)")
+    bad = disagree + b_dis
+    if bad:
+        print(f"  {len(bad)} DISAGREE:")
+        for d in bad:
             print("    ", d)
         return 1
     print("  0 disagree")

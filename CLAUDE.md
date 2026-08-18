@@ -2484,6 +2484,35 @@ than tautology.
   are otherwise supersets of the manual's, which is the expected direction: a
   term fires for the undocumented opcodes that share its mode.
 
+#### Instruction length, measured rather than looked up
+
+`timing.json` carries a `bytes` field per opcode, and like the cycle count it
+consults no instruction table. It is **how far the program counter moved**: the
+distance from an opcode's own fetch to the next one, both found by watching
+`sync`.
+
+- **238 of 256 opcodes have one.** The 18 that do not are fully accounted for:
+  the 12 JAMs never reach another fetch, and BRK, JSR, RTI, RTS and both JMPs
+  transfer control, so the distance to the next fetch says nothing about how
+  long the instruction was. Those are `null` rather than a number, because a
+  plausible figure beside an instruction that does not have one is worse than an
+  admission.
+- **Branches are measurable, and that is a property of the fixture.** The
+  operands are all `$00`, so a branch offset of zero lands on the following byte
+  whether it is taken or not. Either way the counter moved two.
+- **113 agree with the published column and none disagree.**
+- **The negative test failed the first time, and that is the finding.**
+  Corrupting `$A9` (LDA immediate) to three bytes did *not* make the checker
+  complain, because `$A9` is one of the 33 rows the scan does not read. The
+  proof-it-can-tell test had picked a blind spot. Repeated against `$01`, which
+  the parser does read, it fails correctly and the tool exits 1. **A negative
+  test has to be aimed at something the check actually covers, or it proves the
+  opposite of what it looks like it proves.**
+- **So the coverage is 118 of 151 rows, and roughly a third of the immediate
+  and accumulator forms are not verified by this route at all.** They are
+  covered by `tests/timing.rs` and `_timing-test.html`, which is why that
+  hand-typed set is still worth having rather than superseded.
+
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 
 Every instruction's length, measured from one `sync` to the next. **Nothing in

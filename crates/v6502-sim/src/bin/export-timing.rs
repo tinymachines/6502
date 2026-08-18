@@ -80,10 +80,13 @@ fn main() -> std::io::Result<()> {
         let arrived: Vec<String> = r.arrived.iter().map(usize::to_string).collect();
         let _ = writeln!(
             s,
-            "    {{\"op\":{},\"cycles\":{},\"states\":[{}],\"ending\":[{}],\
-             \"arrived\":[{}],\"jam\":{}}}{}",
+            "    {{\"op\":{},\"cycles\":{},\"bytes\":{},\"states\":[{}],\
+             \"ending\":[{}],\"arrived\":[{}],\"jam\":{}}}{}",
             r.opcode,
             r.cycles,
+            // `null` rather than a number for an instruction whose next fetch
+            // was somewhere else: a plausible figure there would be a claim.
+            r.advance.map_or_else(|| "null".to_string(), |b| b.to_string()),
             seq.join(","),
             ending.join(","),
             arrived.join(","),
@@ -128,6 +131,22 @@ struct Timed {
     /// `op-implied`, `op-store`, `op-shift` -- which were high the whole time
     /// and end nothing. What arrived in the last cycle is what stopped it.
     arrived: BTreeSet<usize>,
+    /// How far the program counter moved, measured as the distance from this
+    /// opcode's own fetch to the next one.
+    ///
+    /// That distance IS the instruction's length in bytes, for every
+    /// instruction that does not transfer control. For the ones that do -- a
+    /// jump, a subroutine call, a return, a break -- the next fetch is
+    /// somewhere else entirely and the distance says nothing about how long the
+    /// instruction was. Those are recorded as `None` rather than as a number,
+    /// because a plausible figure beside an instruction that does not have one
+    /// is worse than an admission.
+    ///
+    /// Nothing here consults a table of instruction lengths, exactly as nothing
+    /// in the cycle count does. The operands are all `$00`, which is also why a
+    /// branch is measurable: an offset of zero lands on the following byte
+    /// whether the branch is taken or not, and either way it moved two.
+    advance: Option<u16>,
     /// True for the opcodes that never reach another fetch. These are real:
     /// the undocumented JAM/KIL opcodes hang the chip, and the timing chain
     /// simply stops advancing.
@@ -157,6 +176,7 @@ fn trace(nl: &Arc<Netlist>, pla: &Pla, opcode: u8) -> Timed {
             states: Vec::new(),
             ending: BTreeSet::new(),
             arrived: BTreeSet::new(),
+            advance: None,
             jam: true,
         };
     }
@@ -164,6 +184,7 @@ fn trace(nl: &Arc<Netlist>, pla: &Pla, opcode: u8) -> Timed {
     let mut states = Vec::new();
     let mut half = 0u64;
     let mut jam = true;
+    let mut next_addr: Option<u16> = None;
     // `loop` breaks with the value, so nothing has to be pre-seeded with a
     // placeholder that is never read.
     let mut seen_earlier: BTreeSet<usize> = BTreeSet::new();
@@ -182,6 +203,7 @@ fn trace(nl: &Arc<Netlist>, pla: &Pla, opcode: u8) -> Timed {
         // the chain goes back to the start.
         if cpu.sync() {
             jam = false;
+            next_addr = cpu.last_fetch().map(|f| f.addr);
             break terms;
         }
         if half >= LIMIT {
@@ -191,5 +213,11 @@ fn trace(nl: &Arc<Netlist>, pla: &Pla, opcode: u8) -> Timed {
         seen_earlier.extend(terms);
     };
     let arrived: BTreeSet<usize> = ending.difference(&seen_earlier).copied().collect();
-    Timed { opcode, cycles: half / 2, states, ending, arrived, jam }
+    // A step of one to three bytes forward from this opcode is its length. Any
+    // other landing place means control went somewhere, and the distance is
+    // not a length.
+    let advance = next_addr
+        .map(|a| a.wrapping_sub(BASE))
+        .filter(|d| (1..=3).contains(d));
+    Timed { opcode, cycles: half / 2, states, ending, arrived, advance, jam }
 }
