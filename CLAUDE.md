@@ -3151,6 +3151,20 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
       not, and drives the chip page at depth 2, where its hrefs are
       `../index.html` for the collection and `../../index.html` for the
       overview -- computed from `depth`, which is why they are right.
+    - **The mirror under `full/` does NOT carry it, and now cannot quietly start
+      to.** `full/` is a symlink into the byte-exact copy of visual6502.org: no
+      builder writes those files, they are the original site's own HTML served
+      exactly as captured, and this file already records that they keep no
+      header for that reason. A changed-since note there would edit the
+      preserved copy and would claim change on pages whose whole meaning is
+      that they have not changed since 2010. It was asked for, considered, and
+      declined with the reasoning stated; the honest alternatives (a wrapper
+      page of ours in front of the mirror) were offered and not taken. The
+      section already appears on every page this archive *built*, which is
+      every page that can carry it truthfully. `_archive-changed-test.html`
+      fetches a mirror page and asserts it is free of the section and of every
+      other mark this archive adds, so a builder that started rewriting the
+      mirror would fail the harness rather than break the preservation silently.
     - **The slot is placed by each page's BODY, after the h1 and lede, never by
       `shell()` before the body.** The first version had every builder's
       `shell()` emit it, and it landed above the title everywhere: a reader

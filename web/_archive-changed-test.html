@@ -130,6 +130,26 @@ f.addEventListener('load', async () => {
     }
     ok('no em dash in the section', !sec || !sec.textContent.includes('—'), '');
 
+    // --- the mirror is NOT touched, and that is asserted -----------------------
+    //
+    // full/ is a symlink into the byte-exact copy of visual6502.org. It carries
+    // no section, no header, nothing of ours: it is a preservation copy, and a
+    // "changed since the previous deploy" note on a page whose whole meaning is
+    // that it has not changed since 2010 would be close to the opposite of
+    // true. This is a documented decision, and a builder that started
+    // rewriting mirror pages would break it silently -- so a mirror page is
+    // fetched and checked to be free of every mark this archive adds.
+    const mirror = await fetch(root + 'full/index.html').then((r) => r.ok ? r.text() : null);
+    if (mirror === null) {
+      ok('the mirror is served', false, 'full/index.html unreachable');
+    } else {
+      ok('the mirror carries no changed-since section', !mirror.includes('data-changed-since'), '');
+      ok('and none of this archive\'s chrome at all',
+         !mirror.includes('site-nav.js') && !mirror.includes('version-footer.js')
+         && !mirror.includes('class="site-head"'),
+         'a byte-exact copy of the original');
+    }
+
     // --- the wiki and gallery indexes, at their own depth --------------------
     //
     // A relative href is where depth goes wrong, so each is loaded for real and
