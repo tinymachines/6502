@@ -36,6 +36,8 @@ export const MENU = [
         hint: 'the die itself, lit by what it is doing' },
       { label: 'Programs', page: 'programs',
         hint: 'seven programs, assembled in the page' },
+      { label: 'Halfshot', page: 'halfshot',
+        hint: 'the chosen program, one frame per half-cycle' },
     ],
   },
   {

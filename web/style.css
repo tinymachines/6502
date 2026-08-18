@@ -2651,3 +2651,120 @@ body.no-scroll #view { z-index: 70; }
 .tk-table .mono { color: #dce9ff; }
 .tk-hit td { background: #16203a; }
 .tk-hit td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* ---------- halfshot (halfshot.html) ---------- */
+
+/* The console is a plate beside an island, and the plate is the Blueprint's
+   whole drawing; at the site's usual column width it would scroll sideways on
+   every screen. This one section is allowed wider, and the grid gives the plate
+   two thirds of it. */
+.hs-wide { max-width: 100rem; }
+
+/* The strip: one tick per frame, grouped under the instruction it belongs to.
+   It scrolls sideways inside its own box, never widening the page, and the
+   current frame is scrolled into view rather than the strip re-laid. */
+.hs-strip {
+  display: flex; gap: .55rem; align-items: flex-end;
+  overflow-x: auto; overflow-y: hidden; padding: .7rem .9rem .5rem;
+  border-bottom: 2px solid var(--line); background: var(--surface);
+  scrollbar-width: thin;
+}
+.hs-op { flex: 0 0 auto; display: flex; flex-direction: column; gap: .25rem; }
+.hs-op-label { font-size: .6rem; color: var(--muted); white-space: nowrap; letter-spacing: .04em; }
+.hs-op.reset .hs-op-label { color: var(--hot); }
+.hs-ticks { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 3px; }
+.hs-ticks i {
+  display: block; width: 8px; height: 14px; border-radius: 1px;
+  background: color-mix(in srgb, var(--line) 55%, transparent); cursor: pointer;
+}
+.hs-ticks i:nth-child(odd) { background: color-mix(in srgb, var(--line) 85%, transparent); }
+.hs-ticks i:hover { background: var(--muted); }
+.hs-ticks i.here { background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.hs-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem;
+  padding: .6rem .9rem; margin: 0;
+  border-bottom: 2px solid var(--line); background: var(--subtle);
+  font-size: .8rem; color: var(--muted);
+}
+.hs-head b { color: var(--foreground); }
+
+/* The plate on the left, the island on the right; stacked on a phone. The
+   plate's minimum matches the blueprint's own drawing, which is wider than a
+   phone and scrolls inside its stage. */
+.hs-grid { display: grid; gap: .8rem; grid-template-columns: minmax(0, 1fr); padding: .8rem .9rem; }
+@media (min-width: 72rem) {
+  .hs-grid { grid-template-columns: minmax(0, 2fr) minmax(19rem, 1fr); }
+}
+.hs-plate { display: grid; gap: .6rem; min-width: 0; align-content: start; }
+.hs-stage { padding: .4rem 0; border: 2px solid var(--line); border-radius: .3rem; background: #080c15; }
+.hs-svg { display: block; width: 100%; min-width: 58rem; height: auto; }
+
+/* Pins: the two buses as lamps with their hex beside them, then the control
+   pins as level readouts. A pin that just changed is marked like a register. */
+.hs-pins { display: grid; gap: .35rem; font-size: .74rem; }
+.hs-bus { display: flex; align-items: center; gap: .3rem; flex-wrap: wrap;
+  padding: .3rem .5rem; border: 2px solid var(--line); border-radius: .3rem; background: var(--surface); }
+.hs-bus b { font: 700 .62rem/1 var(--font-mono); letter-spacing: .1em; color: var(--muted); min-width: 1.6rem; }
+.hs-bus .dm-lamps { margin-left: 0; }
+.hs-hex { font: 800 .85rem/1 var(--font-mono); color: var(--gold); margin-left: .3rem; }
+.hs-bus.moved { border-color: var(--accent); }
+.hs-bus.moved .hs-hex { color: var(--accent); }
+.hs-pinrow { display: flex; flex-wrap: wrap; gap: .3rem; }
+.hs-pin { display: inline-flex; align-items: center; gap: .3rem; padding: .22rem .45rem;
+  border: 2px solid var(--line); border-radius: .3rem; background: var(--surface); }
+.hs-pin b { font: 700 .6rem/1 var(--font-mono); letter-spacing: .08em; color: var(--muted); }
+.hs-pin i { font: 800 .7rem/1 var(--font-mono); font-style: normal; color: var(--muted);
+  padding: .1rem .3rem; border-radius: .2rem; background: var(--subtle); }
+.hs-pin.hi i { background: var(--accent); color: var(--accent-foreground); }
+.hs-pin.moved { border-color: var(--accent); }
+
+.hs-regs { display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: .4rem; }
+.hs-regs .tr-reg-v { font-size: .92rem; }
+
+/* Memory: the window around the last access, and what the program has written. */
+.hs-mem { display: grid; gap: .3rem; padding: .5rem .6rem; border: 2px solid var(--line);
+  border-radius: .3rem; background: var(--surface); font-size: .74rem; }
+.hs-memhead { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; }
+.hs-memhead b, .hs-written b { font: 700 .62rem/1 var(--font-mono); letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); }
+.hs-access { font: 700 .78rem/1 var(--font-mono); }
+.hs-access.rd { color: var(--accent); }
+.hs-access.wr { color: var(--hot); }
+.hs-memrow { display: flex; gap: 3px; align-items: center; font-family: var(--font-mono); overflow-x: auto; }
+.hs-memrow b { color: var(--muted); font-weight: 500; font-size: .66rem; min-width: 3.4rem; }
+.hs-memrow i { font-style: normal; font-size: .72rem; padding: .08rem .18rem; border-radius: 2px;
+  color: var(--foreground); background: var(--subtle); }
+.hs-memrow i.hit.rd { background: var(--accent); color: var(--accent-foreground); font-weight: 800; }
+.hs-memrow i.hit.wr { background: var(--hot); color: var(--accent-foreground); font-weight: 800; }
+.hs-memrow i.last { box-shadow: inset 0 0 0 1px var(--muted); }
+.hs-written { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: baseline; }
+.hs-w { font-size: .7rem; color: var(--hot); }
+.hs-mem .muted, .hs-events .muted { color: var(--muted); }
+
+/* The island: a small schematic on the same dark ground the workbench uses,
+   sized to its drawing. */
+.hs-island { min-width: 0; }
+.hs-island-stage { background: #080c15; border: 2px solid var(--line); border-radius: .3rem;
+  overflow-x: auto; }
+#hs-island-svg { display: block; width: 100%; min-height: 0; }
+.hs-island .sch-switch.opened .sch-sw-plate, .hs-island .sch-switch.opened .sch-sw-gate { stroke: var(--accent); }
+.hs-island .sch-switch.closed .sch-sw-plate { stroke: var(--warn); }
+.hs-island .sch-switch.closed .sch-sw-gate { stroke: var(--warn); }
+.hs-stats { font-size: .66rem; }
+.hs-events ul { list-style: none; margin: .6rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+.hs-ev { padding: .35rem .5rem; border: 2px solid var(--line); border-radius: .3rem;
+  background: var(--surface); font-size: .76rem; }
+.hs-ev b { color: var(--foreground); }
+.hs-ev.rd b { color: var(--accent); }
+.hs-ev.wr b { color: var(--hot); }
+.hs-ev.unit { border-color: var(--accent); }
+.hs-ev.term.off { opacity: .7; }
+.hs-ev.n { border-style: dashed; color: var(--muted); }
+
+/* On the plate a unit whose stored value moved this frame, and a switch that
+   changed state this frame, are marked so the eye finds them. */
+.hs-svg .bp-block.moved .block-box { stroke: var(--accent); }
+.hs-svg .bp-block.moved .block-value, .hs-svg .bp-rail.moved .rail-value { fill: var(--accent); }
+.hs-svg .bp-edge.toggled .edge-switch { stroke: var(--hot); stroke-width: 3; }
+.hs-svg .bp-edge.toggled .edge-label { fill: var(--hot); }

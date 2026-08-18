@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Halfshot: a program, one frame per half-cycle</title>
+<meta name="description" content="The chosen program running on the transistor-level MOS 6502, photographed at every clock edge: the registers, buses and pins on a fixed plate, and what switched between one half-cycle and the next drawn beside it. Step through the frames or download the whole recording.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Recorded · one frame per half-cycle</p>
+    <h1>The program,<br><span class="hl">frame by frame.</span></h1>
+    <p class="lede">
+      The chosen program runs on the chip and a photograph is taken at every
+      clock edge. The plate stays put: the registers, the buses, the memory and
+      the pins are always in the same place, showing what they hold in this
+      frame. Beside it, the island is what <em>switched</em> between the last
+      frame and this one, drawn in the schematic's own symbols.
+    </p>
+    <p class="lede">
+      Nothing here is animated by hand. Every value is read back out of the
+      storage nodes at that half-cycle, and the whole recording, every node at
+      every edge, can be downloaded as one file.
+    </p>
+    <div class="statbar" id="hs-stat">…</div>
+  </section>
+
+  <section class="wrap hs-wide" id="view">
+    <div class="console">
+      <div class="console-bar">
+        <span class="tag live">halfshot · recorded</span>
+        <span class="bar-note">← → to step · space to run · home to restart</span>
+        <div class="bar-spacer"></div>
+        <button id="hs-back" class="btn" type="button">◀ Back</button>
+        <button id="hs-run" class="btn btn-primary" type="button">Run</button>
+        <button id="hs-next" class="btn" type="button">Next ▶</button>
+        <button id="hs-export" class="btn" type="button" title="Every frame, every node, as one JSON file">Download</button>
+      </div>
+
+      <div id="hs-boot" class="bp-boot"><p id="hs-status">Loading the chip…</p></div>
+
+      <div id="hs-main" hidden>
+        <div class="hs-strip" id="hs-strip" role="listbox" aria-label="Frames, grouped by instruction"></div>
+
+        <div class="hs-head mono" id="hs-head"></div>
+
+        <div class="hs-grid">
+          <section class="hs-plate" aria-label="The plate: what every component holds in this frame">
+            <div class="hs-pins" id="hs-pins"></div>
+            <div class="hs-regs" id="hs-regs"></div>
+            <div class="bp-stage hs-stage">
+              <svg id="hs-svg" class="hs-svg" role="img" aria-label="The datapath, with this frame's values"></svg>
+            </div>
+            <div class="hs-mem" id="hs-mem"></div>
+          </section>
+
+          <section class="hs-island panel-box" aria-label="This half-cycle: what switched">
+            <h3 class="tr-h">This half-cycle</h3>
+            <p class="tr-note" id="hs-island-note"></p>
+            <p class="tr-note hs-stats mono" id="hs-island-stats"></p>
+            <div class="hs-island-stage"><svg id="hs-island-svg"></svg></div>
+            <div class="hs-events" id="hs-events"></div>
+          </section>
+        </div>
+
+        <p class="sch-caption mono" id="hs-caption"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap sec bp-prose">
+    <div class="sec-head">
+      <p class="eyebrow">What a frame is</p>
+      <h2>A photograph, not a step of an emulator</h2>
+    </div>
+    <p class="lede">
+      A behavioural emulator has a loop: fetch, decode, execute, and a register
+      file it writes at the end of each instruction. This chip has none of that.
+      It has <span data-fact="nodes">…</span> wires and
+      <span data-fact="transistors">…</span> switches, and a clock that goes up
+      and down.
+      A frame here is the level of every one of those wires at one edge of that
+      clock, and everything printed on the plate is read out of them.
+    </p>
+    <p>
+      That is why the plate can show a value in the adder that is in no register
+      yet, or an accumulator that changes a whole cycle after the instruction that
+      changed it has ended. Those are not glitches in the recording. They are what
+      the silicon does, and the Trace page explains the overlap.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The island</p>
+      <h2>What switched, in the schematic's symbols</h2>
+    </div>
+    <p>
+      The datapath is joined by pass transistors, and a pass transistor is drawn
+      the way the schematic draws it: a break in the wire that a control line
+      closes. The island shows only the ones whose control line <em>changed</em>
+      between the previous frame and this one, one bit of each as a stand-in for
+      the eight, with the wire either side lit by its level.
+    </p>
+    <p>
+      The island is never empty, and that was a surprise. The first draft of this
+      page said an empty island was the common case, and the check written for it
+      found no such frame: some of the datapath's paths change at every edge,
+      whatever the instruction. The line under the island counts them over the
+      whole recording and names the paths that change most, and they are the ones
+      that reload the program counter from the address bus and the adder from
+      its two buses, machinery that runs whether or not the instruction needs it.
+      An emulator does none of that between instructions; the silicon does not
+      know it is between instructions.
+    </p>
+    <p>
+      Beneath it are the other things that happened at this edge that are not a
+      switch: a memory read or write on the pins, a decode term arriving, a
+      register whose stored value moved.
+    </p>
+
+    <div class="sec-head">
+      <p class="eyebrow">The file</p>
+      <h2>Every node at every edge, as deltas</h2>
+    </div>
+    <p>
+      Download gives you the recording as one JSON file: the first frame's node
+      levels in full and every later frame as the nodes that went up and the
+      nodes that went down, with the derived state kept beside each frame so the
+      file reads without the netlist. It is lossless, and the harness proves it
+      by replaying the deltas and comparing against what the chip said.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="halfshot.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

@@ -195,6 +195,12 @@ def main() -> None:
     # two cannot disagree about which wires are ports. A leaf: imports nothing,
     # so it only has to be emitted before its two importers.
     b.copy_hashed("block-cone.js")
+    # The blueprint's layout and symbols, shared by blueprint.js and halfshot.js
+    # so the two cannot lay the accumulator out in two places. A leaf.
+    b.copy_hashed("blueprint-draw.js")
+    # The halfshot recording format. A leaf, importable by a harness without
+    # booting the page, which is how the round trip is checked.
+    b.copy_hashed("halfshot-codec.js")
     b.copy_hashed("chip-controls.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
@@ -298,6 +304,7 @@ def main() -> None:
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./blueprint-draw.js", "./" + b.ref("blueprint-draw.js")),
     ]:
         bp = replace_once(bp, f"'{original}'", f"'{resolved}'", where="blueprint.js")
     bp = replace_once(bp, "fetch('blueprint.json')",
@@ -513,6 +520,31 @@ def main() -> None:
                       f"fetch('{b.ref('schematic.json')}')", where="pinout.js")
     b.emit("pinout.js", po.encode())
 
+    # 3p. halfshot.js: the program recorded one frame per half-cycle. It draws
+    #     the plate with the blueprint's own module, the island with sch-draw,
+    #     takes lamps from demos.js and the file format from halfshot-codec.js,
+    #     and reads three of the published files. Every one of those is a
+    #     specifier to rewrite, and replace_once fails loudly on any it cannot
+    #     find, which is the only reason a list this long is safe.
+    hs = b.read("halfshot.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./blueprint-draw.js", "./" + b.ref("blueprint-draw.js")),
+        ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+        ("./disasm.js", "./" + b.ref("disasm.js")),
+        ("./demos.js", "./" + b.ref("demos.js")),
+        ("./halfshot-codec.js", "./" + b.ref("halfshot-codec.js")),
+    ]:
+        hs = replace_once(hs, f"'{original}'", f"'{resolved}'", where="halfshot.js")
+    for original in ["blueprint.json", "schematic.json", "decode.json"]:
+        hs = replace_once(hs, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
+                          where="halfshot.js")
+    b.emit("halfshot.js", hs.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -623,6 +655,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         dzh = replace_once(dzh, f'"{original}"', f'"{b.ref(original)}"', where="designer.html")
     b.emit("designer.html", dzh.encode(), hashed=False)
+
+    hsh = b.read("halfshot.html").decode()
+    for original in ["style.css", "halfshot.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        hsh = replace_once(hsh, f'"{original}"', f'"{b.ref(original)}"', where="halfshot.html")
+    b.emit("halfshot.html", hsh.encode(), hashed=False)
 
     timh = b.read("timing.html").decode()
     for original in ["style.css", "timing.js", "version-footer.js", "site-menu.js",

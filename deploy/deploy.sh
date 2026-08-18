@@ -64,6 +64,7 @@ for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/trace.html web/trace.js web/primer.html web/primer.js web/demos.js \
          web/decode.html web/decode.js web/decode.json \
          web/timing.html web/timing.js web/timing.json \
+         web/halfshot.html web/halfshot.js web/halfshot-codec.js web/blueprint-draw.js \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
   [ -s "$f" ] || { echo "deploy: missing or empty $f" >&2; exit 1; }
 done

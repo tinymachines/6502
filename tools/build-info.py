@@ -42,6 +42,7 @@ PAGE_FILES = {
     "": ["web/index.html", "web/app.js"],
     "primer": ["web/primer.html", "web/primer.js"],
     "programs": ["web/programs.html", "web/programs-page.js"],
+    "halfshot": ["web/halfshot.html", "web/halfshot.js", "web/halfshot-codec.js"],
     "exploded": ["web/exploded.html", "web/exploded.js"],
     "block": ["web/block.html", "web/block.js", "web/block-notes.js"],
     "schematic": ["web/schematic.html", "web/schematic.js"],

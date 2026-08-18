@@ -1,0 +1,326 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The page's claim is that every frame is a photograph of the chip: registers,
+  buses, pins and memory read out of the node levels at that half-cycle, the
+  island the switches whose control changed since the last one, and the whole
+  recording exportable losslessly. So this harness runs a chip of its own,
+  loaded the same way, and compares what the page recorded against what its own
+  machine says at every one of the first batch of frames; it recomputes the
+  unit bytes and the island's switch set from the levels itself; and it replays
+  the exported deltas and compares them against the recorded levels byte for
+  byte.
+
+  It drives the real page in an iframe. That is safe here because nothing this
+  page draws waits for an animation frame: every paint happens on the action.
+
+    http://localhost:8777/_halfshot-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1300px;height:900px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="halfshot.html?program=0"></iframe>
+<script type="module">
+import init, { Machine } from './pkg/v6502_wasm.js';
+import { PROGRAMS, LOAD_ADDR } from './programs.js';
+import { OPCODES } from './disasm.js';
+import { encode, levelsAt, packLevels, unpackLevels } from './halfshot-codec.js';
+
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
+const hex4 = (v) => v.toString(16).padStart(4, '0').toUpperCase();
+const f = document.getElementById('f');
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const w = f.contentWindow;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 400 && $('hs-main').hidden; i++) await sleep(50);
+    ok('the page booted', !$('hs-main').hidden, $('hs-status').textContent);
+    for (let i = 0; i < 100 && !w.__halfshot; i++) await sleep(50);
+    const H = w.__halfshot;
+    const st = H.state;
+    const frames = st.frames;
+    const N0 = frames.length;
+    ok('a batch is recorded, plus the power-on frame', N0 === 257, `${N0} frames`);
+
+    // --- an independent chip, run the same way ------------------------------
+    await init();
+    const [bp, sch, timing, dec] = await Promise.all(
+      ['blueprint.json', 'schematic.json', 'timing.json', 'decode.json']
+        .map((n) => fetch(n).then((r) => r.json())));
+    const m = new Machine();
+    const prog = PROGRAMS[0];
+    m.powerCycle();
+    m.load(LOAD_ADDR, new Uint8Array(prog.bytes));
+    m.setResetVector(LOAD_ADDR);
+    m.powerCycle();
+    const byName = new Map(sch.names.map((n, i) => [n, i]).filter(([n]) => n));
+
+    const mismatch = [];
+    let accessBad = [];
+    let unitBad = 0;
+    let openBad = 0;
+    let termBad = 0;
+    for (let k = 0; k < N0; k++) {
+      if (k > 0) m.halfStep();
+      const fr = frames[k];
+      const mine = {
+        h: m.halfCycle(), sync: m.sync(), clk0: m.clk0(), ab: m.addressBus(), db: m.dataBus(),
+        rw: m.isRead() ? 'R' : 'W', pc: m.pc(), a: m.a(), x: m.x(), y: m.y(), s: m.s(),
+        p: m.p(), ir: m.ir(), t: m.timingStates() || 'none', fetch: m.lastFetchAddr(),
+      };
+      for (const key of Object.keys(mine)) {
+        if (mine[key] !== fr[key]) { mismatch.push(`frame ${k} ${key}: page ${fr[key]} mine ${mine[key]}`); break; }
+      }
+      // The levels, byte for byte, and everything derived from them.
+      const lv = m.nodeLevels();
+      let same = lv.length === fr.levels.length;
+      for (let i = 0; same && i < lv.length; i++) if (lv[i] !== fr.levels[i]) same = false;
+      if (!same) mismatch.push(`frame ${k}: node levels differ`);
+      bp.units.forEach((u, i) => {
+        let v = 0;
+        for (let b = 0; b < 8; b++) if (u.bits[b] != null && lv[u.bits[b]]) v |= 1 << b;
+        if (v !== fr.units[i].value) unitBad++;
+      });
+      bp.links.forEach((l, i) => { if ((lv[l.controlNode] > 0) !== fr.open[i]) openBad++; });
+      const terms = [];
+      dec.rows.forEach((r, i) => { if (lv[r.node]) terms.push(i); });
+      if (terms.join(',') !== fr.terms.join(',')) termBad++;
+      // The bus: a read is serviced as clk0 falls, a write as it rises, and
+      // the byte on the pins is the byte in memory.
+      const a = fr.access;
+      if (k === 0) { if (a) accessBad.push('frame 0 has an access'); continue; }
+      if (a && a.kind === 'R' && (mine.clk0 || mine.rw !== 'R')) accessBad.push(`frame ${k}: read on the wrong edge`);
+      if (a && a.kind === 'W' && (!mine.clk0 || mine.rw !== 'W')) accessBad.push(`frame ${k}: write on the wrong edge`);
+      if (!a && ((!mine.clk0 && mine.rw === 'R') || (mine.clk0 && mine.rw === 'W'))) accessBad.push(`frame ${k}: an access was missed`);
+      if (a && m.peek(a.addr) !== a.val) accessBad.push(`frame ${k}: ${a.kind} $${hex4(a.addr)} says $${hex2(a.val)}, memory holds $${hex2(m.peek(a.addr))}`);
+    }
+    ok('every frame agrees with an independent chip on registers, buses, pins and timing',
+       mismatch.length === 0, mismatch.slice(0, 3).join(' | ') || `${N0} frames compared`);
+    ok('unit bytes are the bits, reassembled by this harness', unitBad === 0, `${unitBad} wrong`);
+    ok('open switches are the control lines that are high', openBad === 0, `${openBad} wrong`);
+    ok('the decode terms recorded are the ones that are high', termBad === 0, `${termBad} frames wrong`);
+    ok('every memory access sits on the right edge and matches memory',
+       accessBad.length === 0, accessBad.slice(0, 3).join(' | ') || 'reads on the fall, writes on the rise');
+    const reads = frames.filter((x) => x.access && x.access.kind === 'R').length;
+    const writes = frames.filter((x) => x.access && x.access.kind === 'W').length;
+    ok('and the program both reads and writes memory in the first batch',
+       reads > 50 && writes > 0, `${reads} reads, ${writes} writes`);
+
+    // --- instructions ---------------------------------------------------------
+    const segs = st.segs;
+    const ops = segs.filter((s) => s.fetch >= 0);
+    const fetches = frames.filter((x, k) => x.sync && !x.clk0
+      && !(k > 0 && frames[k - 1].sync && !frames[k - 1].clk0)).length;
+    ok('one segment per opcode fetch', ops.length === fetches && ops.length > 20,
+       `${ops.length} instructions, ${fetches} fetches`);
+    // Every complete instruction is as long as the Timing page measured it,
+    // sync to sync. Two pages, two paths, one answer.
+    const lenBad = [];
+    for (let i = 0; i < ops.length - 1; i++) {
+      const s = ops[i];
+      const half = s.end - s.start + 1;
+      const want = timing.opcodes[s.op].cycles * 2;
+      const mode = OPCODES[s.op] ? OPCODES[s.op][1] : '';
+      const extra = ['rel', 'abx', 'aby', 'izy'].includes(mode) ? 4 : 0;
+      if (half < want || half > want + extra) lenBad.push(`${s.label}: ${half} half-cycles, timing says ${want}`);
+    }
+    ok('every complete instruction is as long as timing.json says, sync to sync',
+       lenBad.length === 0, lenBad.slice(0, 3).join(' | ') || `${ops.length - 1} checked`);
+    ok('the strip has one tick per frame, grouped by instruction',
+       d.querySelectorAll('#hs-strip i[data-k]').length === N0
+       && d.querySelectorAll('#hs-strip .hs-op').length === segs.length,
+       `${d.querySelectorAll('#hs-strip i[data-k]').length} ticks, ${d.querySelectorAll('#hs-strip .hs-op').length} groups`);
+
+    // --- the plate shows the frame ---------------------------------------------
+    const check = (k) => {
+      const fr = frames[k];
+      const bad = [];
+      bp.units.forEach((u, i) => {
+        const t = d.querySelector(`#hs-svg [data-value="${u.name}"]`);
+        const want = '$' + hex2(fr.units[i].value) + (fr.units[i].mask === 0xff ? '' : '*');
+        if (!t || t.textContent !== want) bad.push(`${u.name}: ${t && t.textContent} vs ${want}`);
+      });
+      bp.links.forEach((l, i) => {
+        const g = d.querySelector(`#hs-svg [data-control="${CSS.escape(l.control)}"]`);
+        if (!g || g.classList.contains('open') !== fr.open[i]) bad.push(`${l.control} open state`);
+      });
+      const regs = [...d.querySelectorAll('#hs-regs .tr-reg')].map((r) => r.querySelector('.tr-reg-v').textContent);
+      const wantRegs = [hex2(fr.a), hex2(fr.x), hex2(fr.y), hex2(fr.s), hex4(fr.pc), fr.flags, hex2(fr.ir)];
+      if (regs.join() !== wantRegs.join()) bad.push(`regs ${regs.join()} vs ${wantRegs.join()}`);
+      const ab = d.querySelector('#hs-pins .hs-bus .hs-hex');
+      if (!ab || ab.textContent !== '$' + hex4(fr.ab)) bad.push('AB');
+      return bad;
+    };
+    let bad = check(st.cur);
+    ok('the plate shows frame 0: every unit, switch, register and bus', bad.length === 0, bad.slice(0, 3).join(' | '));
+
+    // --- stepping ---------------------------------------------------------------
+    $('hs-next').click();
+    ok('Next moves one frame', st.cur === 1, `cur ${st.cur}`);
+    bad = check(1);
+    ok('and the plate repaints on the action, without a frame', bad.length === 0, bad.slice(0, 3).join(' | '));
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    ok('the right arrow steps too', st.cur === 2, `cur ${st.cur}`);
+    // The header transport drives the cursor, like every chip page.
+    const stepBtn = [...d.querySelectorAll('.nav-tbtn')].find((b) => b.title === 'One half-cycle');
+    stepBtn.click();
+    ok('the header step advances the recording', st.cur === 3, `cur ${st.cur}`);
+    d.querySelector('#hs-strip i[data-k="40"]').click();
+    ok('clicking a tick jumps to it', st.cur === 40 && d.querySelector('#hs-strip i.here').dataset.k === '40');
+    ok('and the head names the instruction it is in',
+       /frame 40/.test($('hs-head').textContent) && $('hs-head').textContent.includes(H.state.segs.find((s) => 40 >= s.start && 40 <= s.end).label),
+       $('hs-head').textContent.slice(0, 80));
+    $('hs-back').click();
+    ok('Back moves one frame back', st.cur === 39);
+    H.seek(0);
+    ok('Back is disabled at frame 0', $('hs-back').disabled && st.cur === 0);
+
+    // --- the island ----------------------------------------------------------------
+    // The first draft of the prose said an empty island was the common case.
+    // Counting says there is no such frame at all: every edge changes some of
+    // the datapath's paths. That is now the claim, and this is where it is
+    // checked, on this recording, with the counts recomputed here.
+    const perEdge = [];
+    const perCtl = new Map();
+    for (let k = 1; k < N0; k++) {
+      let n = 0;
+      bp.links.forEach((l, i) => {
+        if (frames[k].open[i] !== frames[k - 1].open[i]) { n++; perCtl.set(l.control, (perCtl.get(l.control) || 0) + 1); }
+      });
+      perEdge.push(n);
+    }
+    const sorted = perEdge.slice().sort((p, q) => p - q);
+    ok('the island is never empty: every edge changes some datapath path',
+       sorted[0] >= 1, `min ${sorted[0]}, max ${sorted[sorted.length - 1]}`);
+    const busy = 1 + perEdge.indexOf(sorted[sorted.length - 1]);
+    H.seek(busy);
+    const statsLine = $('hs-island-stats').textContent;
+    const top = [...perCtl.entries()].sort((p, q) => q[1] - p[1]).slice(0, 4).map(([c]) => c.replace(/^dpc-?\d*_?/, ''));
+    ok('the stats line under the island reports what this harness counts',
+       statsLine.includes(`${sorted[0]} to ${sorted[sorted.length - 1]} of the ${bp.links.length} paths`)
+       && statsLine.includes(`median ${sorted[Math.floor(sorted.length / 2)]}`)
+       && top.every((c) => statsLine.includes(c)),
+       `${statsLine} || harness: ${sorted[0]}..${sorted[sorted.length - 1]} median ${sorted[Math.floor(sorted.length / 2)]} n=${sorted.length}`);
+    // The prose points at the four that change most and says what they are:
+    // the program counter reloading from the address bus, and the adder's two
+    // inputs. That is a claim about the chip, so it is checked against the
+    // world here rather than only against the page.
+    ok('and the four that change most are the PC reload and the adder inputs',
+       new Set(top).size === 4 && ['ADLPCL', 'ADHPCH', 'DBADD', 'SBADD'].every((c) => top.includes(c)),
+       top.join(', '));
+    const wantSw = bp.links.filter((l, i) => frames[busy].open[i] !== frames[busy - 1].open[i]);
+    const drawn = [...d.querySelectorAll('#hs-island-svg .sch-switch')];
+    ok('the island draws exactly the switches whose control changed',
+       drawn.length === wantSw.length
+       && wantSw.every((l) => drawn.some((g) => Number(g.dataset.control) === l.controlNode)),
+       `${drawn.length} drawn, ${wantSw.length} changed`);
+    ok('each is marked opened or closed as its control now reads',
+       drawn.every((g) => {
+         const now = frames[busy].levels[Number(g.dataset.control)] > 0;
+         return g.classList.contains(now ? 'opened' : 'closed') && g.classList.contains('open') === now;
+       }));
+    const pills = [...d.querySelectorAll('#hs-island-svg .sch-node')];
+    ok('every pill on the island is lit by its level in this frame',
+       pills.length >= 2 && pills.every((g) => g.classList.contains('hot') === (frames[busy].levels[Number(g.dataset.node)] > 0)),
+       `${pills.length} pills`);
+    ok('and every pill is one bit of a unit the switch joins',
+       pills.every((g) => bp.units.some((u) => u.bits.includes(Number(g.dataset.node)))));
+    H.seek(0);
+    ok('frame 0 draws no island and says it is the power-on state',
+       d.querySelectorAll('#hs-island-svg .sch-switch').length === 0
+       && /power-on/.test($('hs-island-note').textContent),
+       $('hs-island-note').textContent.slice(0, 60));
+
+    // --- memory --------------------------------------------------------------------
+    const wk = frames.findIndex((x) => x.access && x.access.kind === 'W');
+    H.seek(wk);
+    const hit = d.querySelector('#hs-mem .hs-memrow i.hit.wr');
+    ok('a write frame marks the byte in the memory window',
+       !!hit && hit.title === '$' + hex4(frames[wk].access.addr) && hit.textContent === hex2(frames[wk].access.val),
+       hit ? `${hit.title} ${hit.textContent}` : 'no hit');
+    ok('and lists it under written so far', $('hs-mem').textContent.includes(`$${hex4(frames[wk].access.addr)}=${hex2(frames[wk].access.val)}`));
+    ok('the memory window agrees with the harness chip at that frame', (() => {
+      // Re-run to the frame and compare the three rows.
+      const mm = new Machine();
+      mm.powerCycle(); mm.load(LOAD_ADDR, new Uint8Array(prog.bytes)); mm.setResetVector(LOAD_ADDR); mm.powerCycle();
+      mm.runHalfCycles(wk);
+      return [...d.querySelectorAll('#hs-mem .hs-memrow i')].every((c) =>
+        c.textContent === hex2(mm.peek(parseInt(c.title.slice(1), 16))));
+    })());
+
+    // --- the recording grows, and stops ---------------------------------------------
+    H.seek(N0 + 3);
+    ok('stepping past the end records another batch', frames.length === N0 + 256 && st.cur === N0 + 3,
+       `${frames.length} frames, cur ${st.cur}`);
+    ok('and the strip grew with it', d.querySelectorAll('#hs-strip i[data-k]').length === frames.length);
+
+    // --- the file --------------------------------------------------------------------
+    const file = H.encode(frames, {
+      program: { id: prog.id }, nodes: sch.names.length, vss: sch.vss, vcc: sch.vcc,
+      units: bp.units.map((u) => u.name), controls: bp.links.map((l) => l.control), terms: [],
+    });
+    ok('the file carries one record per frame, the first in full and the rest as deltas',
+       file.frames.length === frames.length && typeof file.frames[0].levels === 'string'
+       && file.frames.slice(1).every((r) => Array.isArray(r.up) && Array.isArray(r.down) && r.levels === undefined));
+    let lossy = [];
+    for (const k of [0, 1, 7, 100, N0 - 1, frames.length - 1]) {
+      const back = levelsAt(file, k);
+      let same = back.length === frames[k].levels.length;
+      for (let i = 0; same && i < back.length; i++) if (back[i] !== frames[k].levels[i]) same = false;
+      if (!same) lossy.push(`frame ${k}`);
+    }
+    ok('replaying the deltas recovers every node level exactly', lossy.length === 0, lossy.join(', ') || '6 frames replayed');
+    ok('the delta size is a fraction of the chip', (() => {
+      const avg = file.frames.slice(1).reduce((s, r) => s + r.up.length + r.down.length, 0) / (file.frames.length - 1);
+      return avg > 20 && avg < 600;
+    })(), '');
+    // The pack/unpack pair is its own round trip, and can tell a flipped bit.
+    const probe = new Uint8Array(sch.names.length); probe[3] = 255; probe[1724] = 255;
+    const un = unpackLevels(packLevels(probe), probe.length);
+    ok('the bitset packs and unpacks exactly', un[3] === 255 && un[1724] === 255 && un[4] === 0 && un.length === probe.length);
+    ok('the JSON is a size a browser can hand over', JSON.stringify(file).length < 12 * 1024 * 1024,
+       `${(JSON.stringify(file).length / 1024).toFixed(0)} KiB for ${frames.length} frames`);
+
+    // --- prose and shell ------------------------------------------------------------
+    const facts = [...d.querySelectorAll('[data-fact]')];
+    ok('the two counts in the prose are filled from the JSON',
+       facts.length === 2 && facts.every((s) => s.textContent === String({ nodes: sch.names.length, transistors: sch.counts.transistors }[s.dataset.fact])),
+       facts.map((s) => s.textContent).join('/'));
+    const stray = [];
+    for (const p of d.querySelectorAll('.bp-prose p')) {
+      const clone = p.cloneNode(true);
+      for (const kill of clone.querySelectorAll('[data-fact], .mono, code, a')) kill.remove();
+      const mm = clone.textContent.replace(/\b65C?[0-9]{2,3}\b/gi, '').match(/\b\d[\d,]*\b/g);
+      if (mm) stray.push(`${mm.join('/')} in "${clone.textContent.trim().slice(0, 40)}"`);
+    }
+    ok('no measurement was typed into the prose', stray.length === 0, stray.slice(0, 3).join(' | '));
+    for (let i = 0; i < 100 && !d.querySelector('#site-nav a'); i++) await sleep(50);
+    ok('the menu marks this page as the current one',
+       d.querySelectorAll('#site-nav a[aria-current="page"]').length === 1);
+    ok('the footer is the site footer, all four elements',
+       !!d.querySelector('footer.site-foot .wrap .mark')
+       && !!d.querySelector('footer.site-foot .wrap .foot-meta')
+       && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'), '');
+    ok('no em dash in the rendered page', !$('hs-main').textContent.includes('—') && !d.querySelector('main').textContent.includes('—'), '');
+    ok('the header has a program picker and a transport',
+       !!d.querySelector('[data-program-nav] select') && d.querySelectorAll('.nav-tbtn').length === 3);
+  } catch (e) {
+    ok('the harness ran to the end', false, e && e.stack ? e.stack.split('\n').slice(0, 2).join(' ') : String(e));
+  }
+
+  const bad = results.filter((r) => r.startsWith('FAIL'));
+  document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  document.body.appendChild(pre);
+}, { once: true });
+</script>
+</body></html>

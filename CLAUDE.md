@@ -27,6 +27,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Controls | Program, transport and clock live in the header and drive every page. The rate is the simulated clock in Hz. |
 | Menu | One grouped list with sub-heads and a line per entry, shared by the simulator and the archive. |
 | Programs | Seven programs as **source**, assembled in the page, annotated, run on the chip. One choice, shared by every page. |
+| Halfshot | The chosen program recorded one frame per half-cycle: a fixed plate of registers, buses, pins and memory, and an island of what switched. Every node at every edge, exportable losslessly. |
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
@@ -433,6 +434,8 @@ _pinio-test.html       # pinned I/O chains, vs an independent search of the netl
 _asm-test.html         # the assembler round-trips, the old programs are byte-
                        # identical, and each new one is RUN until its answer lands
 _programs-test.html    # the Programs page vs the assembler, timing.json and the chip
+_halfshot-test.html    # every recorded frame vs an independent chip, the island's
+                       # switch set recomputed, and the exported deltas replayed
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _primer-test.html      # the primer's numbers re-derived, and its five examples run
@@ -1987,6 +1990,89 @@ arguing with whoever sent it.
   navigation — so comparing the Blueprint's view of a program with the
   Explorer's, which is the reason both pages exist, silently compared two
   different programs.
+
+### Halfshot (`halfshot.html`, `halfshot.js`, `halfshot-codec.js`, `blueprint-draw.js`)
+
+The chosen program on the chip, one photograph per half-cycle, walked like a
+gallery. Every other page that runs the chip shows it *now*; this one records,
+and keeps the level of every node at every step. Two pictures per frame, and
+they are different kinds of picture:
+
+- **The plate never moves.** The datapath is the Blueprint's own drawing, from
+  `blueprint-draw.js`, with the frame's byte on every unit and every open switch
+  lit; above it the address and data pins as lamps, the control pins as levels,
+  the registers with the moved ones marked; below it a window of memory around
+  the last access and everything the program has written so far. Anything a
+  block diagram puts a name on, in a fixed place, showing what it holds.
+- **The island is the transition.** The datapath switches whose control line
+  changed between the previous frame and this one, one bit of each, drawn by
+  `sch-draw.js` in the workbench's symbols with the wires either side lit by
+  their level and each switch marked for which way it went. Under it, the
+  things that happened at that edge and are not a switch: the memory access,
+  the decode terms that arrived or dropped, the units whose value moved, the
+  T-state change, and how many nodes changed level.
+
+The strip along the top is one tick per frame grouped under the instruction
+that fetched it, so "one diagram per half-cycle per op" is also how you get
+around. Back, Next, the arrow keys, a click on a tick, and the header transport
+all move the same cursor; running paces through the frames at the clock rate.
+`?program=N&frame=K` deep-links.
+
+- **`blueprint-draw.js` was extracted for this page**, exactly as `sch-draw.js`
+  came out of `schematic.js`: two pages laying the accumulator out from two
+  copies would put it in two places. `blueprint.js` keeps the page and imports
+  the layout, the drawing, `placeLabels` and `unitValue`. Verified by
+  `_blueprint-test.html` passing unchanged before and after.
+- **Frame 0 is the first opcode fetch, not the reset.** `powerCycle()` runs the
+  reset sequence itself, so the machine arrives at half-cycle 0 with `sync`
+  high and `$0200` on the bus. There is therefore no reset segment on the
+  strip, and the head says `1 of 4 in this instruction` from the start.
+- **The memory access rides on the edge, and the rule is `cpu.rs`'s.** A read
+  is serviced as `clk0` falls, a write as it rises, and R/W is tested after the
+  drive. So a frame taken after the falling edge with R/W high is one in which
+  memory was read at the address on the bus, and after the rising edge with
+  R/W low one in which it was written. `_halfshot-test.html` re-runs the same
+  program on a chip of its own and asserts every access is on the right edge and
+  matches `peek()`; swapping the rule fails it on frame 1.
+- **The recording grows by `BATCH` (256) when you step past the end, to
+  `MAX_FRAMES` (4096).** A program here loops forever, so a recording has to stop
+  somewhere, and both numbers are printed in the caption. 4096 frames of node
+  levels is 7 MB in memory and fine.
+- **The island is never empty, and that was measured against the prose.** The
+  first draft said an empty island was the common case. The harness went to look
+  for a quiet frame to assert on and found none: over 2000 half-cycles of each
+  of the seven programs, between 3 and 10 of the 21 paths change at *every*
+  edge, median 5 or 6, and the four that change most are always `ADLPCL`,
+  `ADHPCH`, `DBADD` and `SBADD`: the program counter reloading from the address
+  bus and the adder's two inputs, machinery that runs whether or not the
+  instruction needs it. The prose now says that, the page computes the numbers
+  from its own recording (`switchStats()`, printed under the island), and the
+  harness recounts them and pins the top four. **The assertion the page could
+  not satisfy was the finding**; a harness that had asserted only what the page
+  showed would have confirmed the wrong sentence.
+- **`halfshot-codec.js` is the file format, and it is a leaf.** The first frame
+  in full as a packed bitset, every later frame as the nodes that went up and
+  down, with the derived state kept beside each so the file reads without the
+  netlist. `levelsAt(file, k)` replays it; the harness compares the replay
+  against the recorded levels byte for byte on six frames including the last,
+  and the check goes red when the down list is not applied. It imports nothing
+  so the harness can load it without booting the page.
+- **The dangling-reference scan reads the quoted name inside `fetch(`.** The
+  page's first draft fetched its three files through a helper taking a name,
+  which the scan cannot see; it now calls `fetch('blueprint.json')` three times
+  so that a missing hash rewrite is a build failure. And the scan then failed on
+  the *comment* explaining this, which contained the string `fetch('...')`
+  and was read as a reference to a file called `...`. Say it in words.
+- **A grid child beside a taller sibling stretches its own auto rows.** The
+  plate is a grid of four rows inside a two-column grid whose other column, the
+  island, is taller; without `align-content: start` the extra height was shared
+  out among the plate's rows and the register cards came out 110px tall. It
+  looks like a padding mistake and is not one.
+- **The console section is `.hs-wide` (100rem), the rest of the page the usual
+  78rem.** The plate is the whole Blueprint drawing and at the site's column
+  width it scrolled sideways on every screen, which is the opposite of a plate
+  that stays put. Given two thirds of a wider section it fits without a
+  scrollbar at 1500px.
 
 ### The transport (`chip-controls.js`, `chip-nav.js`)
 
