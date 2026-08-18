@@ -82,6 +82,19 @@ text-transform:uppercase;transition:.15s}
 .vf-changed::before{content:"·";margin-right:.5rem;opacity:.6}
 .vf-changed a{color:var(--gold);text-decoration:none}
 .vf-changed a:hover{color:var(--fg);text-decoration:underline}
+/* The "changed since the previous deploy" section on the overview, filled at
+   runtime by version-footer.js from the same stamp the footer reads. Hidden
+   until filled, and hidden again when there is nothing to compare against. */
+.changed-since{margin:1.4rem 0 .4rem;padding:1rem 1.1rem;
+border:1px solid color-mix(in srgb,var(--line) 60%,transparent);border-radius:.4rem;
+background:color-mix(in srgb,var(--line) 12%,transparent)}
+.changed-since[hidden]{display:none}
+.changed-since .eyebrow{margin-top:0}
+.changed-list{margin:.5rem 0 .6rem;padding-left:1.2rem;line-height:1.7}
+.changed-list a{color:var(--gold);text-decoration:none}
+.changed-list a:hover{text-decoration:underline}
+.changed-none,.changed-diff{margin:.4rem 0 0;color:var(--muted);font-size:.92rem}
+.changed-diff a{color:var(--gold)}
 /* The source link is inserted by web/site-nav.js, which this site shares
    verbatim, so it appears here without any markup of ours. The style has to be
    restated because this page carries its own stylesheet rather than the

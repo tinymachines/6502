@@ -68,7 +68,12 @@ PREVIOUS_DEPLOY="$PREV_COMMIT" python3 tools/build-info.py archive/public --kind
 
 log "publishing archive ($(du -shL archive/public 2>/dev/null | cut -f1))"
 mkdir -p "$SITE/archive"
-rsync -a --delete archive/public/ "$SITE/archive/"
+# Underscore-prefixed files are development harnesses, the same convention as
+# web/. build-web.py protects the simulator by copying only files it names;
+# nothing protected the archive, so a harness copied into archive/public/ to
+# run against the archive's own origin would have shipped. This is the
+# backstop for that.
+rsync -a --delete --exclude='_*' archive/public/ "$SITE/archive/"
 
 # Precompress the text: the same reasoning as deploy.sh, since gzip_types is
 # commented out in this box's nginx.conf and only text/html would compress at

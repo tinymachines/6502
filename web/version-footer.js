@@ -109,14 +109,87 @@ function render(host, info) {
   }
 }
 
+/**
+ * A "changed since the previous deploy" section, for a page that carries a
+ * slot for one. The archive index does; the simulator's pages do not, and the
+ * slot simply being absent is what makes this a no-op there.
+ *
+ * Filled at runtime rather than written into the page by the builder, and that
+ * is the whole point: the index is built before the deploy, and only the deploy
+ * knows what was live before it. Baking the list into the HTML would be wrong
+ * within one deploy. Reading the same stamp the footer reads means the two can
+ * never disagree either.
+ *
+ * `data-changed-since` carries a JSON map from a page key in the stamp's
+ * `changed` list to what to show for it: a label and an href. A key with no
+ * entry is shown by its name, so a page added to the measurement before it is
+ * added to the map is not silently dropped from the list.
+ */
+function renderChangedSince(host, info) {
+  let names = {};
+  try {
+    names = JSON.parse(host.dataset.changedSince || '{}');
+  } catch {
+    names = {};
+  }
+  host.textContent = '';
+  if (!Array.isArray(info.changed) || !info.previousDeploy) {
+    // No previous deploy: nothing to compare against, so nothing to say. The
+    // slot stays empty and its CSS hides it, rather than announcing a first.
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  const h = document.createElement('div');
+  h.className = 'eyebrow';
+  h.textContent = 'Changed since the previous deploy';
+  host.append(h);
+
+  if (!info.changed.length) {
+    const p = document.createElement('p');
+    p.className = 'changed-none';
+    p.textContent = 'Nothing a reader would see. This deploy touched only shared '
+      + 'code, tools or the data behind the pages.';
+    host.append(p);
+    return;
+  }
+  const ul = document.createElement('ul');
+  ul.className = 'changed-list';
+  for (const key of info.changed) {
+    const li = document.createElement('li');
+    const meta = names[key];
+    if (meta && meta.href) {
+      const a = document.createElement('a');
+      a.href = meta.href;
+      a.textContent = meta.label || key;
+      li.append(a);
+    } else {
+      li.textContent = (meta && meta.label) || key || 'index';
+    }
+    ul.append(li);
+  }
+  host.append(ul);
+  const p = document.createElement('p');
+  p.className = 'changed-diff';
+  const a = document.createElement('a');
+  a.href = `${info.repo}/compare/${info.previousDeploy.slice(0, 12)}...${
+    (info.commitFull || '').slice(0, 12)}`;
+  a.rel = 'noopener';
+  a.textContent = 'See the diff between the two deploys';
+  p.append(a);
+  host.append(p);
+}
+
 async function init() {
   const hosts = document.querySelectorAll('[data-version-footer]');
-  if (!hosts.length) return;
+  const slots = document.querySelectorAll('[data-changed-since]');
+  if (!hosts.length && !slots.length) return;
   try {
     const res = await fetch(INFO, { cache: 'no-cache' });
     if (!res.ok) throw new Error(res.status);
     const info = await res.json();
     hosts.forEach((h) => render(h, info));
+    slots.forEach((el) => renderChangedSince(el, info));
   } catch {
     // A missing or unreadable build-info is not worth a visible error: the
     // footer simply stays empty rather than announcing its own plumbing.

@@ -411,7 +411,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Twenty-nine harnesses plus two probes, all prefixed `_` and **never shipped** —
+Thirty harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -454,6 +454,9 @@ _designer-test.html    # the designer page: the clock generator re-walked by the
 _blockdiagram-test.html # the published figure: every block re-resolved from
                        # schematic.json by the harness, and the one row that
                        # DIFFERS pinned to the single-bus claim
+_archive-changed-test.html  # the archive index's changed-since section vs the
+                       # stamp AND the footer, in all three states; run from
+                       # the archive's own root (see its header)
 _pinout-test.html      # the pinout: directions re-derived by the harness AND
                        # checked against what a 6502's pins are known to do,
                        # because the page and a naive harness could agree
@@ -3108,6 +3111,24 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
     anchor off the live copy's own `build-info.json` -- the same arrangement the
     simulator's deploy uses, for the same reason: it is the one fact about the
     previous deploy that cannot drift.
+  - **The archive index also carries the list as a section**, filled at
+    runtime by the same shared `version-footer.js` into a `[data-changed-since]`
+    slot. Runtime rather than baked by the builder, because the index is built
+    *before* the deploy and only the deploy knows what was live -- the same
+    timing gap the footer had. Reading the same stamp means the section and the
+    footer can never disagree, and `_archive-changed-test.html` asserts they do
+    not, in all three states. The hidden state (no previous deploy) is the one a
+    broken fetch would fake perfectly, which is why it is asserted directly.
+    - **That harness has to be served from the archive's own root.** From
+      `web/` on another port the stamp fetch is cross-origin and blocked, which
+      the first version found by failing on every state at once. It is copied
+      into `archive/public/` to run and removed afterwards.
+    - **`archive-deploy.sh` now excludes `_*`.** `rsync -a --delete
+      archive/public/` copies *everything*, so a harness left in that directory
+      would have shipped -- and the first draft of the harness's own comment
+      claimed the opposite. `build-web.py` protects the simulator by naming
+      what it copies; nothing had protected the archive. Proven with a dry run
+      with the harness present: zero would publish.
   - **The `.vf-changed` rule lives in `shell.CSS`, once.** The three builders
     each carry their own copy of the other footer rules already, which is
     exactly the duplication that let ten nav lists drift; a fourth copy in

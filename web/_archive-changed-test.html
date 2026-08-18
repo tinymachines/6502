@@ -1,0 +1,103 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The archive index carries a "changed since the previous deploy" section,
+  filled at runtime from the archive's build-info.json by the shared
+  version-footer.js. It is a second reader of the same field the footer reads,
+  so it must agree with the footer, and it has a HIDDEN state (no previous
+  deploy) that a broken fetch would reproduce perfectly. So this asserts the
+  section against the stamp directly, in whichever state the stamp is in.
+
+  It has to be served FROM the archive's own root, not from web/. The archive
+  is a different origin when it is on a different port, and the harness's own
+  fetch of the stamp is then cross-origin and blocked -- which the first version
+  of this file discovered by failing on every state at once. So copy it in:
+
+    cp web/_archive-changed-test.html archive/public/_changed-test.html
+    python3 tools/serve.py archive/public 8794
+    http://localhost:8794/_changed-test.html
+
+  Do not leave it there. rsync copies everything in archive/public/, so a
+  harness in that directory ships -- and the first draft of this comment
+  claimed the opposite. archive-deploy.sh now excludes underscore-prefixed
+  files as a backstop, but the copy is a temporary thing and should be removed
+  when the run is done.
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1100px;height:800px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Same origin: this file is copied into the archive's root to run.
+const root = new URL('./', location.href).href;
+const f = document.getElementById('f');
+f.src = root + 'index.html';
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  try {
+    let info = null;
+    try {
+      info = await fetch(root + 'build-info.json', { cache: 'no-cache' }).then((r) => r.json());
+    } catch (e) {
+      ok('the archive is being served at its own root', false, `${root}build-info.json unreachable`);
+    }
+    if (!info) throw new Error('no stamp');
+    ok('the stamp is the archive\'s own', info.kind === 'archive', `kind=${info.kind}`);
+
+    const sec = d.querySelector('section.changed-since');
+    ok('the index carries the slot', !!sec, sec ? 'present' : 'missing');
+    // Wait for the module to have filled (or hidden) it.
+    for (let i = 0; i < 100 && sec && sec.hidden && !sec.textContent.trim()
+         && info.previousDeploy; i++) await sleep(50);
+
+    const foot = d.querySelector('.version-foot');
+    for (let i = 0; i < 100 && foot && !foot.querySelector('.vf-built'); i++) await sleep(50);
+    const footNote = foot && foot.querySelector('.vf-changed');
+
+    if (!info.previousDeploy) {
+      ok('with no previous deploy the section stays hidden',
+         sec.hidden && !sec.textContent.trim(), `hidden=${sec.hidden}`);
+      ok('and the footer stays silent too', !footNote, footNote ? footNote.textContent : 'silent');
+    } else if (!info.changed.length) {
+      ok('with nothing changed the section says so rather than hiding',
+         !sec.hidden && /Nothing a reader would see/.test(sec.textContent),
+         sec.textContent.trim().slice(0, 60));
+      ok('and agrees with the footer', !!footNote && /no page changed/.test(footNote.textContent),
+         footNote ? footNote.textContent : 'no note');
+    } else {
+      const items = [...sec.querySelectorAll('.changed-list li')].map((li) => li.textContent.trim());
+      ok('the section lists one entry per changed page',
+         !sec.hidden && items.length === info.changed.length,
+         `${items.length} items for ${JSON.stringify(info.changed)}`);
+      const links = [...sec.querySelectorAll('.changed-list a')].map((a) => a.getAttribute('href'));
+      ok('and each known page links to itself',
+         links.every((h) => /^(index|wiki\/index|gallery\/index)\.html$/.test(h)),
+         links.join(', ') || 'no links');
+      const diff = sec.querySelector('.changed-diff a');
+      ok('and offers the diff between the two deploys',
+         !!diff && diff.href.includes('/compare/')
+         && diff.href.includes(info.previousDeploy.slice(0, 12)),
+         diff ? diff.href : 'no diff link');
+      ok('and agrees with the footer', !!footNote && info.changed.every((k) =>
+         footNote.textContent.includes(k === '' ? 'explorer' : k)),
+         footNote ? footNote.textContent : 'no note');
+    }
+    ok('no em dash in the section', !sec || !sec.textContent.includes('—'), '');
+  } catch (e) {
+    ok('the harness ran to the end', false, e && e.message ? e.message : String(e));
+  }
+  const bad = results.filter((r) => r.startsWith('FAIL'));
+  document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  document.body.appendChild(pre);
+});
+</script>
+</body></html>

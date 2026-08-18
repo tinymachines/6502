@@ -181,6 +181,8 @@ to them is dead and the directory listings return 403, so nothing on the open
 web points at them. Intact and unreachable at once &mdash; which is usually how
 this material disappears. Not deleted, just orphaned.</p>
 
+<section class="changed-since" data-changed-since='{{"index":{{"label":"This overview","href":"index.html"}},"wiki":{{"label":"The wiki","href":"wiki/index.html"}},"gallery":{{"label":"The die photography","href":"gallery/index.html"}}}}' hidden></section>
+
 <div class="eyebrow">The archive</div>
 <ul class="cards">
 <li class="card"><span class="n">{wiki_n} pages</span>
