@@ -50,6 +50,25 @@ function buildGrid() {
   }
 }
 
+/**
+ * How long the instruction is, and the honest answer when that cannot be said.
+ *
+ * The length is measured the same way the cycle count is: how far the program
+ * counter moved between this opcode's fetch and the next one. For an
+ * instruction that transfers control the next fetch is somewhere else entirely,
+ * so the distance is not a length, and `bytes` is null rather than a plausible
+ * number. Saying which of the two is the case beats printing either a figure
+ * that is wrong or a blank that reads as a bug.
+ */
+function lengthPhrase(rec) {
+  if (rec.bytes == null) {
+    return 'Its length cannot be measured this way: control goes somewhere else, '
+      + 'so the distance to the next fetch is not the length of this instruction.';
+  }
+  return `${rec.bytes} byte${rec.bytes === 1 ? '' : 's'} long, `
+    + 'measured as how far the program counter moved.';
+}
+
 function select(op) {
   state.opcode = op;
   for (const c of document.querySelectorAll('.op-cell')) {
@@ -73,7 +92,8 @@ function select(op) {
     <p class="muted">${rec.jam
       ? 'The chain stops advancing and no further opcode is ever fetched. '
         + 'This is not a hang in the simulation; it is what the silicon does.'
-      : `${rec.cycles} cycles, measured from this opcode's fetch to the next one.`}</p>
+      : `${rec.cycles} cycles, measured from this opcode's fetch to the next one. `
+        + lengthPhrase(rec)}</p>
     <div class="table-scroll"><table class="hc-table">
       <thead><tr><th>Cycle</th><th>Timing chain</th></tr></thead>
       <tbody>${steps}</tbody></table></div>
@@ -103,9 +123,16 @@ async function boot() {
     for (const r of timed) counts[r.cycles] = (counts[r.cycles] || 0) + 1;
     const range = Object.keys(counts).map(Number).sort((a, b) => a - b);
     const withT0 = timed.filter((r) => r.arrived.some((i) => isT0(state.data.terms[i])));
+    // Lengths as well as cycles, and how many could not be measured. A count
+    // of what is missing is part of the measurement rather than a footnote.
+    const sized = state.data.opcodes.filter((r) => r.bytes != null);
+    const byLen = {};
+    for (const r of sized) byLen[r.bytes] = (byLen[r.bytes] || 0) + 1;
+    const lens = Object.keys(byLen).sort().map((b) => `${byLen[b]}×${b}`).join(', ');
     $('stats').textContent =
       `${timed.length} instructions timed · ${range[0]}–${range[range.length - 1]} cycles · `
-      + `${jams} that never finish · ${withT0.length} end on a T0 term`;
+      + `${jams} that never finish · ${withT0.length} end on a T0 term · `
+      + `${sized.length} lengths measured (${lens} bytes)`;
 
     $('histogram').innerHTML = range.map((c) => {
       const n = counts[c];

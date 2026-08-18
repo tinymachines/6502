@@ -2501,6 +2501,11 @@ distance from an opcode's own fetch to the next one, both found by watching
   operands are all `$00`, so a branch offset of zero lands on the following byte
   whether it is taken or not. Either way the counter moved two.
 - **113 agree with the published column and none disagree.**
+- **The page shows it, and says when it cannot.** A jam keeps its existing
+  sentence and claims no length; an instruction that transfers control says its
+  length is not measurable this way and why. Only the 238 that have one print a
+  number. The statbar reports how many lengths were measured, because a count of
+  what is missing is part of a measurement rather than a footnote to it.
 - **The negative test failed the first time, and that is the finding.**
   Corrupting `$A9` (LDA immediate) to three bytes did *not* make the checker
   complain, because `$A9` is one of the 33 rows the scan does not read. The
