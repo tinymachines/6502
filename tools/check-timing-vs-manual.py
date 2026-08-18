@@ -23,6 +23,7 @@ import os
 import re
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -76,8 +77,10 @@ def appendix_b(text):
 
     out, i, seen = {}, 0, 0
     repaired = set()
-    dropped = {"no mnemonic in the row": 0, "numbers unreadable": 0,
+    unread = []
+    dropped = {"figures missing from the scan": 0, "opcode unreadable": 0,
                "opcode read twice": 0}
+    phantom = 0
     while i < len(toks):
         mode = next((m for m in MODES if toks[i] == m), None)
         if mode is None:
@@ -91,7 +94,7 @@ def appendix_b(text):
             # for the accumulator forms, "LDA # Oper" for the immediates. An
             # exact match drops every one of those, which is why the immediate
             # and accumulator rows were missing wholesale.
-            m = MNEMONIC_AT_START.match(toks[j])
+            m = MNEMONIC_AT_START.match(toks[j].lstrip(",.;:| "))
             if m:
                 mne = m.group(1)
                 break
@@ -99,7 +102,9 @@ def appendix_b(text):
                 break          # the next row started; this one has no mnemonic
             j += 1
         if mne is None:
-            dropped["no mnemonic in the row"] += 1
+            # A mode label with no instruction after it is a heading or a line
+            # of prose, not a row anybody could read.
+            phantom += 1
             i += 1
             continue
 
@@ -124,7 +129,17 @@ def appendix_b(text):
         # The scan splits some opcodes across two lines: "6D" arrives as "6"
         # then "D". Two single characters that form a byte, followed by a
         # plausible byte count, are one opcode rather than two numbers.
-        if len(nums) >= 4 and len(nums[0]) == 1 and len(nums[1]) == 1:
+        # The scan splits some opcodes across two lines: "6D" arrives as "6"
+        # then "D". Rejoin them ONLY when the second half is a hex letter.
+        #
+        # Requiring merely two single characters is far too loose, and it
+        # silently fabricated a row: where a damaged line left "2", "2", "3",
+        # "3", it manufactured opcode $22 out of a byte count and a cycle count
+        # and filed it under ASL. That went unnoticed because $22 is a JAM in
+        # our own measurements, so the comparison skipped it -- an invented row
+        # landing exactly where nothing would check it. A letter cannot be a
+        # byte or cycle count, which is what makes it a safe signal.
+        if len(nums) >= 4 and len(nums[0]) == 1 and re.fullmatch(r"[A-F]", nums[1]):
             merged = nums[0] + nums[1]
             if re.fullmatch(r"[0-9A-F]{2}", merged) and nums[2] in "123":
                 nums = [merged] + nums[2:]
@@ -136,10 +151,71 @@ def appendix_b(text):
                 dropped["opcode read twice"] += 1
             else:
                 out[op] = (mne, mode, int(nums[1]), int(nums[2][0]))
+        elif nums and re.fullmatch(r"[0-9A-F]{2}", nums[0]):
+            unread.append((mne, mode, int(nums[0], 16)))
+            # The opcode survived and its figures did not. The scan runs some
+            # tables' number columns together, and guessing which row they
+            # belonged to is what fabricates a plausible wrong answer.
+            dropped["figures missing from the scan"] += 1
         else:
-            dropped["numbers unreadable"] += 1
+            unread.append((mne, mode, None))
+            dropped["opcode unreadable"] += 1
         i = k if k > i else i + 1
-    return out, dropped, seen, repaired
+    return out, dropped, seen, repaired, phantom, unread
+
+
+# Characters the higher-resolution re-read confuses. A different engine makes
+# different mistakes -- a zero reads as G, a one as L -- which is precisely why
+# the two passes are worth having: they are wrong in different places.
+RESCAN_FIXES = {"G": "0", "L": "1", "|": "0", "O": "0", "S": "5", "l": "1", "I": "1"}
+
+# The same mnemonics, unanchored: a re-read line begins with whatever mark the
+# scanner made of the table rule, so the anchored pattern never matches it.
+MNEMONIC_ANYWHERE = re.compile(r"\b(" + "|".join(sorted(MNEMONICS)) + r")\b")
+
+
+def rescan_page(pdf, page):
+    """Read one page again at higher resolution, with a real OCR engine.
+
+    The primary extraction loses whole number columns on some tables: the
+    opcode survives and the bytes and cycles do not. Guessing them fabricates a
+    plausible wrong row, and looking them up in our own measurements would make
+    the comparison circular. Reading the same published page again, more
+    carefully, is neither.
+    """
+    import shutil
+    import tempfile
+    if not shutil.which("tesseract") or not shutil.which("pdftoppm"):
+        return {}
+    with tempfile.TemporaryDirectory() as tmp:
+        base = os.path.join(tmp, "pg")
+        subprocess.run(["pdftoppm", "-f", str(page), "-l", str(page), "-r", "400",
+                        "-gray", "-png", str(pdf), base],
+                       check=True, capture_output=True)
+        png = next((os.path.join(tmp, f) for f in sorted(os.listdir(tmp))
+                    if f.endswith(".png")), None)
+        if png is None:
+            return {}
+        out = subprocess.run(["tesseract", png, "stdout", "--psm", "6"],
+                             check=True, capture_output=True, text=True).stdout
+
+    rows = {}
+    for line in out.splitlines():
+        m = MNEMONIC_ANYWHERE.search(line)
+        if not m:
+            continue
+        mode = next((md for md in MODES if md in line), None)
+        if mode is None:
+            continue
+        # The trailing figures of the row: opcode, bytes, cycles.
+        parts = line.replace(",", " ").split()
+        fixed = ["".join(RESCAN_FIXES.get(c, c) for c in tok) for tok in parts]
+        tail = [t for t in fixed if re.fullmatch(r"[0-9A-F]{1,2}\*?", t)]
+        if len(tail) >= 3:
+            op, by, cy = tail[-3], tail[-2], tail[-1]
+            if re.fullmatch(r"[0-9A-F]{2}", op) and by.isdigit() and re.fullmatch(r"\d\*?", cy):
+                rows[(m.group(1), mode)] = (int(op, 16), int(by), int(cy[0]))
+    return rows
 
 
 def main():
@@ -160,7 +236,49 @@ def main():
         print("check-timing: pdftotext not installed, SKIPPING")
         return 0
 
-    table, dropped, seen, repaired = appendix_b(text)
+    table, dropped, seen, repaired, phantom, unread = appendix_b(text)
+
+    # Rows the first pass could not read get a second, higher-resolution look at
+    # the same page. Where the first pass DID recover the opcode, the two must
+    # agree on it before the figures are accepted: two engines wrong in
+    # different places agreeing on a value is worth something, and neither of
+    # them has consulted our measurements.
+    recovered = 0
+    if unread:
+        want = {m for m, _, _ in unread}
+        # Which page each row is on, taken from the text already extracted:
+        # pdftotext separates pages with a form feed, so the page number is just
+        # how many of those came before. Asking the PDF page by page instead
+        # cost twenty seconds of subprocesses for the same answer.
+        by_page = text.split("\f")
+        pages = {}
+        for n, page_text in enumerate(by_page, start=1):
+            if "APPENDIX B" not in text[:text.find(page_text) + 1] or "No." not in page_text:
+                continue
+            for mne in want:
+                if re.search(r"\b" + mne + r"\b", page_text):
+                    pages.setdefault(n, set()).add(mne)
+        seen_pages = set()
+        for pg in sorted(pages):
+            rows = rescan_page(PDF, pg)
+            if not rows:
+                continue
+            seen_pages.add(pg)
+            for mne, mode, op1 in unread:
+                hit = rows.get((mne, mode))
+                if hit is None:
+                    continue
+                op2, by, cy = hit
+                if op1 is not None and op1 != op2:
+                    continue          # the passes disagree; trust neither
+                if op2 in table:
+                    continue
+                table[op2] = (mne, mode, by, cy)
+                bucket = ("figures missing from the scan" if op1 is not None
+                          else "opcode unreadable")
+                if dropped[bucket]:
+                    dropped[bucket] -= 1
+                recovered += 1
     measured = {o["op"]: o for o in json.loads(TIMING.read_text())["opcodes"]}
 
     agree, explained, disagree = 0, [], []
@@ -193,18 +311,22 @@ def main():
     # truncation hides: the first version of this reported only the rows it
     # found AND failed to parse, so 30 rows it never saw at all looked like a
     # table that did not contain them.
-    print(f"  {seen} rows in the published table")
+    print(f"  {seen - phantom} rows in the published table "
+          f"({phantom} mode labels that were headings, not rows)")
     print(f"  {len(table)} read as opcodes")
     for why, n in dropped.items():
         if n:
             print(f"  {n} skipped: {why}")
+    if recovered:
+        print(f"  {recovered} rows recovered by re-reading their page at higher "
+              f"resolution, with both passes agreeing on the opcode")
     if repaired:
         # Never silent. A figure resting on a character repair should be
         # visible, because a repair that goes wrong makes a plausible row
         # rather than an obviously broken one.
         print(f"  {len(repaired)} tokens repaired from scan damage: "
               f"{', '.join(sorted(repaired))}")
-    total = len(table) + sum(dropped.values())
+    total = len(table) + sum(dropped.values()) + phantom
     if total != seen:
         raise SystemExit(f"check-timing: {seen} rows seen but {total} accounted for")
     print(f"  {agree} agree exactly")

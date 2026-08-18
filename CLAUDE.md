@@ -158,8 +158,8 @@ python3 tools/serve.py web 8777                    # http://localhost:8777/
 # that is web/_asm-test.html.)
 node tools/check-programs.mjs
 
-# Every measured cycle count against the published instruction table: 138 of
-# its 151 rows, against the 33 the hand-typed checks cover. SKIPS without the
+# Every measured cycle count against the published instruction table: 144 of
+# its 150 rows, against the 33 the hand-typed checks cover. SKIPS without the
 # manual in reference/ (which is gitignored and not redistributed);
 # REQUIRE_MANUAL=1 makes its absence a failure. deploy.sh runs it.
 python3 tools/check-timing-vs-manual.py
@@ -2445,7 +2445,7 @@ recognisable as one.
 
 `tests/timing.rs` and `_timing-test.html` cross-check **33** documented opcodes
 against figures typed in by hand. `tools/check-timing-vs-manual.py` checks
-**138** against Appendix B of the MCS6500 family programming manual, which is a
+**144** against Appendix B of the MCS6500 family programming manual, which is a
 much stronger form of the same statement: the measurement path consults no
 instruction table at all, so agreeing with a published one is evidence rather
 than tautology.
@@ -2513,7 +2513,7 @@ distance from an opcode's own fetch to the next one, both found by watching
   the parser does read, it fails correctly and the tool exits 1. **A negative
   test has to be aimed at something the check actually covers, or it proves the
   opposite of what it looks like it proves.**
-- **Coverage is 138 of 151 rows.** Getting from 118 to 138 was two structural
+- **Coverage is 144 of the 150 real rows.** Getting from 118 to 138 was two structural
   fixes to the scan reader, neither of which looks at any data:
   - **A mnemonic is not always its own token.** The scan writes the accumulator
     forms as `ASL A` and the immediates as `LDA # Oper`, so an exact match
@@ -2534,7 +2534,22 @@ distance from an opcode's own fetch to the next one, both found by watching
     has run two rows' number columns together there. It was caught by the guard
     failing loudly rather than absorbing it, and each surviving repair was then
     audited on its own rather than trusted because the total was green.
-- **The remaining 13 rows are genuinely unreadable** -- a footnote interrupting
+- **A second, higher-resolution read recovers what the first one lost.** Where
+  the primary extraction keeps an opcode but loses its figures, the page is
+  rendered at 400 DPI and read again with a real OCR engine. The two passes are
+  wrong in *different* places -- one reads a zero as `G`, the other loses the
+  column entirely -- so **requiring them to agree on the opcode** validates a
+  recovery without either of them ever consulting our measurements. It skips
+  where tesseract is absent, degrading from 144 rows to 138 rather than failing.
+- **The merge rule fabricated a row, and it hid where nothing would look.**
+  Rejoining any two single characters into an opcode is far too loose: on a
+  damaged line reading `2 2 3 3` it manufactured opcode `$22` out of a byte
+  count and a cycle count and filed it under ASL. It went unnoticed because
+  `$22` is a JAM in our own data, so the comparison skipped it -- **an invented
+  row landing exactly where nothing would check it.** The rule now requires the
+  second half to be a hex *letter*, which a byte or cycle count can never be.
+  The row it was wrecking is now correctly flagged and then recovered.
+- **The remaining rows are genuinely unreadable** -- a footnote interrupting
   a row, figures missing from the scan entirely -- and are reported as skipped
   rather than guessed at. `tests/timing.rs` and `_timing-test.html` still cover
   their own hand-typed set, which is why that set is worth keeping rather than
