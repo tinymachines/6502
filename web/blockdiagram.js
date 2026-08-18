@@ -89,7 +89,7 @@ const CONTROL = [
  * names and are answered by how many of them this die actually names.
  *
  * Deliberately NOT stated as "forty pins". The package has forty, but three are
- * unconnected and ground arrives on three of them, so a die that names 35
+ * unconnected and ground arrives on two of them, so a die that names 36
  * signals is not disagreeing with a datasheet that says 40 -- they are counting
  * different things. The page reports what it can see, which is the names.
  */

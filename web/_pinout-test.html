@@ -1,0 +1,173 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The page's claim is that only the pin NUMBERING came from a datasheet and
+  every other column was measured. So this harness re-derives the directions
+  itself out of schematic.json rather than importing pinout.js, and checks them
+  against a list of what a 6502's pins are known to do.
+
+  That second check is the unusual one and it is deliberate. Everywhere else on
+  this site an independent re-derivation is enough, because the question is
+  whether the page agrees with the netlist. Here the netlist could agree with
+  the page and both be wrong -- a driver rule that counted a permanently-off
+  pulldown as a driver reports RDY and S.O. as outputs, and the page and a naive
+  harness would have agreed about it perfectly. So the directions are also
+  checked against the world.
+
+    http://localhost:8777/_pinout-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1200px;height:800px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="pinout.html"></iframe>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const w = f.contentWindow;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 250 && $('po-main').hidden; i++) await sleep(50);
+    ok('the page booted', !$('po-main').hidden, $('po-status').textContent);
+
+    const sch = await fetch('schematic.json').then((r) => r.json());
+    const byName = new Map(sch.names.map((n, i) => [n, i]).filter(([n]) => n));
+
+    // This harness's own driver rule, including the part that matters: a gate
+    // whose every pulldown leg is gated by vss can never conduct.
+    const drives = new Set();
+    const feeds = new Map();
+    for (const [node, , pre, legs] of sch.gates) {
+      if (legs.some((leg) => !leg.every((x) => x === sch.vss))) drives.add(node);
+      for (const leg of legs) for (const i of leg) feeds.set(i, (feeds.get(i) || 0) + 1);
+      if (pre >= 0) feeds.set(pre, (feeds.get(pre) || 0) + 1);
+    }
+    const mine = (name) => {
+      const i = byName.get(name);
+      if (i === undefined) return 'absent';
+      const dr = drives.has(i), rd = (feeds.get(i) || 0) > 0;
+      return dr && rd ? 'bidirectional' : dr ? 'output' : rd ? 'input' : 'neither';
+    };
+
+    const rows = [...d.querySelectorAll('#po-rows tr')].map((tr) =>
+      [...tr.children].map((td) => td.textContent.trim()));
+    ok('there are forty pins', rows.length === 40, `${rows.length} rows`);
+    ok('numbered 1 to 40 in order',
+       rows.every((r, i) => Number(r[0]) === i + 1), rows.map((r) => r[0]).join(',').slice(0, 40));
+
+    // --- the direction of every signal pin, re-derived -----------------------
+    const RAILS = new Set(['vss', 'vcc']);
+    const wrong = [];
+    for (const [n, label, node, dir] of rows) {
+      if (node === 'not connected') {
+        if (dir !== 'none') wrong.push(`${n} ${label}: unconnected but says ${dir}`);
+        continue;
+      }
+      if (RAILS.has(node)) {
+        if (dir !== 'power') wrong.push(`${n} ${label}: a rail but says ${dir}`);
+        continue;
+      }
+      const want = mine(node);
+      if (want !== dir) wrong.push(`${n} ${label}: page ${dir}, harness ${want}`);
+    }
+    ok('and every direction is the one this harness measures', wrong.length === 0,
+       wrong.slice(0, 3).join(' | ') || `${rows.length} checked`);
+
+    // --- and the measurement agrees with what a 6502 actually does -----------
+    //
+    // The check the re-derivation cannot make on its own. A naive driver rule
+    // reports RDY and S.O. as outputs, and a harness sharing that rule would
+    // confirm it. These two are the reason the vss-gated case had to be found.
+    const KNOWN = {
+      RDY: 'input', IRQ: 'input', NMI: 'input', RES: 'input',
+      'PHI0 IN': 'input', 'S.O.': 'input',
+      SYNC: 'output', 'R/W': 'output', 'PHI1 OUT': 'output', 'PHI2 OUT': 'output',
+      A0: 'output', A15: 'output', D0: 'bidirectional', D7: 'bidirectional',
+    };
+    const bad = [];
+    for (const [, label, , dir] of rows) {
+      if (KNOWN[label] && KNOWN[label] !== dir) bad.push(`${label}: ${dir}, should be ${KNOWN[label]}`);
+    }
+    ok('and it agrees with what these pins are known to do', bad.length === 0,
+       bad.join(' | ') || `${Object.keys(KNOWN).length} known pins checked`);
+    ok('RDY and S.O. specifically read as inputs, not outputs',
+       rows.find((r) => r[1] === 'RDY')[3] === 'input'
+       && rows.find((r) => r[1] === 'S.O.')[3] === 'input',
+       `RDY ${rows.find((r) => r[1] === 'RDY')[3]}, `
+       + `S.O. ${rows.find((r) => r[1] === 'S.O.')[3]}`);
+
+    // --- two ways of counting ------------------------------------------------
+    const nc = rows.filter((r) => r[2] === 'not connected').length;
+    const distinct = new Set(rows.filter((r) => r[2] !== 'not connected').map((r) => r[2]));
+    ok('three pins are not connected', nc === 3, `${nc} unconnected`);
+    ok('and forty pins carry fewer than forty signals',
+       distinct.size < 40 && distinct.size === 36, `${distinct.size} distinct signals`);
+    ok('because ground arrives twice',
+       rows.filter((r) => r[2] === 'vss').length === 2,
+       `${rows.filter((r) => r[2] === 'vss').length} vss pins`);
+
+    // --- the drawing ---------------------------------------------------------
+    ok('the package draws a pad per pin',
+       d.querySelectorAll('#po-svg .po-pin').length === 40,
+       `${d.querySelectorAll('#po-svg .po-pin').length} pads`);
+    const p9 = d.querySelector('#po-svg .po-pin[data-pin="9"]');
+    ok('and pin 9 is A0, on the left-hand side',
+       !!p9 && p9.textContent.includes('A0')
+       && Number(p9.querySelector('.po-pad').getAttribute('x')) < 300,
+       p9 ? p9.textContent.trim() : 'missing');
+
+    // --- clicking ------------------------------------------------------------
+    d.querySelector('#po-svg .po-pin[data-pin="37"] .po-hit')
+      .dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(200);
+    ok('clicking a pin describes it',
+       /PHI0 IN/.test($('po-picked').textContent)
+       && /clk0/.test($('po-picked').textContent),
+       $('po-picked').textContent.slice(0, 70));
+
+    // --- no measurement typed into the prose ---------------------------------
+    const stray = [];
+    for (const p of $('po-main').querySelectorAll('p')) {
+      // The picked readout is generated from the measurements every time a pin
+      // is clicked, so a number in it is by construction a measurement. Same
+      // exemption the primer makes for its demos.
+      if (p.id === 'po-picked') continue;
+      const clone = p.cloneNode(true);
+      for (const kill of clone.querySelectorAll('[data-fact], .mono, code, a')) kill.remove();
+      const m = clone.textContent
+        .replace(/\b65C?[0-9]{2,3}\b/gi, '')
+        .replace(/CC BY-NC-SA\s+3\.0/g, '')
+        .match(/\b\d[\d,]*\b/g);
+      if (m) stray.push(`${m.join('/')} in "${clone.textContent.trim().slice(0, 40)}…"`);
+    }
+    ok('and no measurement was typed into the prose', stray.length === 0,
+       stray.slice(0, 3).join(' | '));
+
+    // --- it is part of the site ---------------------------------------------
+    for (let i = 0; i < 100 && !d.querySelector('#site-nav a'); i++) await sleep(50);
+    ok('the menu marks this page as the current one',
+       d.querySelectorAll('#site-nav a[aria-current="page"]').length === 1);
+    ok('the footer is the site footer, all four elements',
+       !!d.querySelector('footer.site-foot .wrap .mark')
+       && !!d.querySelector('footer.site-foot .wrap .foot-meta')
+       && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'), '');
+    ok('no em dash in the rendered page', !$('po-main').textContent.includes('—'), '');
+  } catch (e) {
+    ok('the harness ran to the end', false, e && e.message ? e.message : String(e));
+  }
+
+  const bad = results.filter((r) => r.startsWith('FAIL'));
+  document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  document.body.appendChild(pre);
+});
+</script>
+</body></html>

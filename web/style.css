@@ -2150,6 +2150,55 @@ body.no-scroll #view { z-index: 70; }
 .sch-pinio { font-size: .8rem; }
 
 /* ---------------------------------------------------------------------------
+   The pinout (pinout.html)
+   ---------------------------------------------------------------------------
+   A package has one shape, so this is the one drawing on the site whose layout
+   is not derived. Everything a pin is coloured or labelled BY still is. */
+
+.po-layout { display: grid; gap: 1rem; padding: 1rem 1.1rem; min-width: 0; }
+.po-stage { overflow-x: auto; min-width: 0; }
+#po-svg { width: 100%; max-width: 40rem; height: auto; display: block; margin: 0 auto;
+          min-width: 22rem; }
+
+.po-body { fill: var(--surface); stroke: var(--line); stroke-width: 2; }
+.po-notch { fill: var(--space); stroke: var(--line); stroke-width: 2; }
+.po-part { font: 700 11px var(--font-mono); letter-spacing: .16em; fill: var(--muted); }
+.po-pad { fill: var(--subtle); stroke: var(--line); stroke-width: 1.4; }
+.po-num { font: 500 9px var(--font-mono); fill: var(--muted); }
+.po-lab { font: 700 11px var(--font-mono); fill: var(--foreground); }
+/* An invisible target the height of the row, so a pin is clickable by its
+   label as well as by its pad. The pads are 16 units tall and a finger is not. */
+.po-hit { fill: transparent; cursor: pointer; }
+.po-pin { cursor: pointer; }
+.po-pin:hover .po-pad { fill: color-mix(in srgb, var(--accent) 30%, var(--subtle)); }
+.po-pin.on .po-pad { fill: var(--accent); stroke: var(--accent); }
+.po-pin.on .po-num { fill: var(--accent-foreground); }
+
+/* Direction, measured. A pin with nothing behind it gets neither. */
+.po-output .po-pad { stroke: var(--mint); }
+.po-input .po-pad { stroke: var(--gold); }
+.po-bidirectional .po-pad { stroke: var(--pink); }
+.po-none .po-pad { stroke-dasharray: 3 3; }
+/* Not a direction: a rail is not a signal, and the question does not apply. */
+.po-power .po-pad { fill: var(--line); stroke: var(--muted); }
+
+.po-picked {
+  margin: 0; padding: .7rem .8rem; font-size: .82rem; line-height: 1.55;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  border: 1.4px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-left: 3px solid var(--accent); border-radius: .4rem; min-height: 3.4rem;
+}
+#po-rows tr { cursor: pointer; }
+#po-rows tr:hover td { background: #16203a; }
+#po-rows tr.on td { background: #1b2947; }
+#po-rows tr.on td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.po-nc td { color: var(--muted); }
+
+@media (min-width: 56rem) {
+  .po-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); align-items: start; }
+}
+
+/* ---------------------------------------------------------------------------
    The die graph (diegraph.html)
    ---------------------------------------------------------------------------
    Node fill is set inline from block-palette.js, because the hue IS the

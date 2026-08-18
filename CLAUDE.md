@@ -35,6 +35,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
 | Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 5 of 6 agree. |
+| Pinout | The forty pins, with every column but the numbering derived. Direction measured from the switch network, not copied off an arrow. |
 | Die graph | Every node at its own centroid on the die, with every edge. Nothing laid out: the positions are read off the polygons. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
@@ -377,7 +378,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Twenty-eight harnesses plus two probes, all prefixed `_` and **never shipped** —
+Twenty-nine harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -420,6 +421,9 @@ _designer-test.html    # the designer page: the clock generator re-walked by the
 _blockdiagram-test.html # the published figure: every block re-resolved from
                        # schematic.json by the harness, and the one row that
                        # DIFFERS pinned to the single-bus claim
+_pinout-test.html      # the pinout: directions re-derived by the harness AND
+                       # checked against what a 6502's pins are known to do,
+                       # because the page and a naive harness could agree
 _diegraph-test.html    # the die graph: the harness recomputes every centroid
                        # from layout.bin itself and compares, which is the only
                        # assertion that tests the page's thesis
@@ -2197,9 +2201,13 @@ anyone's to own; a particular drawing of it is. The credit section says so, and
   bus-shaped claims that belong to the *pins*, and a harness grouping by kind
   alone reported "14 datapath" for a figure with 12.
   - **It does not say "forty pins".** The package has forty, three are
-    unconnected and ground arrives on three of them, so a die naming 35 signals
+    unconnected and ground arrives on two of them, so a die naming 36 signals
     is not disagreeing with a datasheet saying 40: they count different things.
     The page reports what it can see, which is the names.
+    - **That count was 35 here for two commits, and it was arithmetic.** 40
+      less 3 unconnected is 37 pins, and vss arriving twice makes 36 distinct
+      signals. `_pinout-test.html` counts it from the table rather than from a
+      sentence, which is how the slip surfaced.
 - **The data bus buffer is the one box that is a journey rather than a place**,
   and it is drawn dashed to say so. Out is eight gates, one per bit, whose
   output is the pad. In is not those gates reversed: there are **zero** pass
@@ -2256,6 +2264,40 @@ anyone's to own; a particular drawing of it is. The credit section says so, and
   - **Its stray-digit scan had to be whitespace-tolerant.** The licence sits at
     the end of a wrapped line, so a literal `CC BY-NC-SA 3.0` did not match and
     the version number read as a stray measurement. `\s+` between the two.
+
+### The pinout (`pinout.html`, `pinout.js`)
+
+The forty pins. Third page of the **Block diagram** group, and the one page on
+the site whose *layout* is authored: a DIP has one shape, pin 1 at the top left,
+counting down and back up. That is a fact about the part rather than a choice.
+
+**The numbering is the only thing taken from a datasheet.** Which functional
+block a pin belongs to, how far it reaches, and its direction are all read out
+of the switch network.
+
+- **Direction is derived, and that is the point of the page.** A pin is an
+  output if a gate drives it, an input if it feeds gates, both if both. The data
+  pins come out bidirectional with nobody saying so.
+- **The subtlety that makes it worth deriving: a gate whose every pulldown leg
+  is gated by `vss` can never conduct.** It is a pullup wearing a gate's
+  clothes. **RDY and S.O. have exactly that** -- both inputs, held high by a
+  permanently-off transistor -- and the naive rule reported both as *outputs*.
+  Those are two of the seventeen vss-gated transistors this file already
+  documents as physically correct and permanently off.
+- **`_pinout-test.html` checks the directions twice, and the second check is
+  unusual for this site.** Everywhere else an independent re-derivation settles
+  it, because the question is whether the page agrees with the netlist. Here the
+  page and a harness sharing the same naive driver rule would have agreed with
+  each other *and both been wrong*, so the directions are also checked against a
+  list of what a 6502's pins are known to do. **Re-derivation is not enough when
+  the rule itself is what might be wrong.**
+- **A rail is not a signal and the direction question does not apply.** Asked
+  anyway, the rule calls ground an *input*: true of the wire, nonsense about the
+  pin. VSS and VCC are marked `power` in the dataset and sit outside the
+  measurement.
+- **Forty pins is not forty signals.** Three are unconnected and ground arrives
+  twice, so the die names **36**. Neither number is wrong; one counts legs on a
+  package and the other counts wires on a chip.
 
 ### The die graph (`diegraph.html`, `diegraph.js`)
 

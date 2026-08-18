@@ -502,6 +502,17 @@ def main() -> None:
                           where="diegraph.js")
     b.emit("diegraph.js", dg.encode())
 
+    # 3o. pinout.js: the package, with every column but the numbering derived.
+    po = b.read("pinout.js").decode()
+    for original, resolved in [
+        ("./block-palette.js", "./" + b.ref("block-palette.js")),
+        ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+    ]:
+        po = replace_once(po, f"'{original}'", f"'{resolved}'", where="pinout.js")
+    po = replace_once(po, "fetch('schematic.json')",
+                      f"fetch('{b.ref('schematic.json')}')", where="pinout.js")
+    b.emit("pinout.js", po.encode())
+
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
     for entry in manifest.get("icons", []):
@@ -590,6 +601,13 @@ def main() -> None:
         bdh = replace_once(bdh, f'"{original}"', f'"{b.ref(original)}"',
                            where="blockdiagram.html")
     b.emit("blockdiagram.html", bdh.encode(), hashed=False)
+
+    poh = b.read("pinout.html").decode()
+    for original in ["style.css", "pinout.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        poh = replace_once(poh, f'"{original}"', f'"{b.ref(original)}"', where="pinout.html")
+    b.emit("pinout.html", poh.encode(), hashed=False)
 
     dgh = b.read("diegraph.html").decode()
     for original in ["style.css", "diegraph.js", "version-footer.js", "site-menu.js",

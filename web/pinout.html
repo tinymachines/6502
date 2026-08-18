@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The forty pins</title>
+<meta name="description" content="The MOS 6502 package, pin by pin, with each signal resolved against the die: which functional block it belongs to, how far it reaches, and whether it is an input or an output measured from the switch network rather than copied off an arrow.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Where the chip meets everything else</p>
+    <h1>Forty pins, and what the silicon says about each one.</h1>
+    <p class="lede">
+      This is the whole of the chip's contact with the world: a package, two
+      rows of twenty, and a notch so you can tell which end is which. The
+      numbering is a fact and is the one thing here taken from a datasheet.
+      Everything beside it is read back out of the switch network, including the
+      part a datasheet gives you as an arrow.
+    </p>
+    <div class="statbar" id="po-stats"></div>
+  </section>
+
+  <div id="po-boot" class="bp-boot wrap"><p id="po-status">Loading the chip…</p></div>
+
+  <div id="po-main" hidden>
+
+    <section class="wrap sec bp-prose" id="package">
+      <p class="lede bk-does">
+        Click a pin. The label's colour is which functional block
+        <b class="mono">blocks.rs</b> filed that signal under, the same palette
+        the exploded view uses, so a pin here is the same colour as the region
+        it belongs to there. Three of the forty are not connected to anything,
+        and they are drawn rather than skipped.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">direction · measured</span>
+          <span class="bar-note">the package is authored, everything else is derived</span>
+        </div>
+        <div class="po-layout">
+          <div class="po-stage">
+            <svg id="po-svg" role="img" aria-label="The 6502 package, pin by pin"></svg>
+          </div>
+          <p class="po-picked" id="po-picked"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="direction">
+      <div class="sec-head">
+        <p class="eyebrow">Measured, not written</p>
+        <h2>Which way a pin points, asked of the transistors</h2>
+      </div>
+      <p>
+        A datasheet gives you an arrow. An arrow is somebody's summary, and the
+        silicon will tell you itself if you ask it the right way: a pin is an
+        output if a gate drives it, an input if it feeds gates, and both if both.
+        The data pins come out bidirectional without anybody saying so, which is
+        the answer you want, because a byte really does travel both ways through
+        them.
+      </p>
+      <p>
+        There is one subtlety, and it is the reason this is derived rather than
+        transcribed. A gate whose every pulldown is wired to <b class="mono">vss</b>
+        can never pull anything down: it is a pullup wearing a gate's clothes.
+        Two pins have exactly that, and both are inputs, held high by a
+        permanently-off transistor when nothing outside is driving them. Counting
+        those as drivers reports two input pins as outputs, which is what the
+        first version of this page did before the transistor was looked at.
+      </p>
+      <p>
+        The chip is warned about this elsewhere too. The die has a handful of
+        transistors gated by ground, which are physically correct and
+        permanently off, and they are exactly this kind of structure.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="all">
+      <div class="sec-head">
+        <p class="eyebrow">Measured</p>
+        <h2>Every pin, resolved</h2>
+      </div>
+      <p>
+        The reach column is how many places a signal actually goes: gates that
+        read it, plus pass transistors with a channel on it. It is why the
+        address pins and the data pins do not look alike here even though a
+        package drawing gives them the same weight, and it is worth comparing
+        against <a href="diegraph">the graph</a>, where the same signals are
+        drawn where they physically sit.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">interface · derived</span>
+          <span class="bar-note"><b class="mono" data-fact="connected">…</b> of
+            <b class="mono" data-fact="pins">…</b> pins connected,
+            <b class="mono" data-fact="signals">…</b> distinct signals</span>
+        </div>
+        <div class="tk-table-wrap">
+          <table class="tk-table">
+            <thead>
+              <tr>
+                <th>Pin</th><th>Package</th><th>On this die</th>
+                <th>Direction</th><th>Functional block</th><th>Reach</th>
+              </tr>
+            </thead>
+            <tbody id="po-rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="counting">
+      <div class="sec-head">
+        <p class="eyebrow">Two ways of counting</p>
+        <h2>Forty pins is not the same as forty signals</h2>
+      </div>
+      <p>
+        The package has forty pins. Three are not connected to anything, and
+        ground arrives on two of them, so the number of distinct signals the die
+        actually names is smaller. Neither figure is wrong and they are not in
+        disagreement: one counts legs on a package and the other counts wires on
+        a chip.
+      </p>
+      <p>
+        It is worth saying plainly because the difference is the sort of thing
+        that quietly turns into an error somewhere downstream. The
+        <a href="blockdiagram">published block diagram</a> counts the same
+        boundary a third way again, since it draws a family rather than one part,
+        and shows a pin this die does not have.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="credit-here">
+      <div class="sec-head">
+        <p class="eyebrow">Credit</p>
+        <h2>Sources</h2>
+      </div>
+      <p>
+        The pin numbering is the one published in the MOS Technology hardware
+        manual for this processor family. That assignment is a fact about the
+        part; the descriptions beside it are ours, and every other column is
+        measured here.
+      </p>
+      <p>
+        The die trace those measurements come from is by Greg James, Brian
+        Silverman, Barry Silverman and Ed Spittles, and is licensed CC BY-NC-SA
+        3.0. Those terms carry to everything on this site.
+      </p>
+      <p class="tk-links">
+        <a class="btn" href="diegraph">The graph</a>
+        <a class="btn btn-ghost" href="blockdiagram">The published figure</a>
+        <a class="btn btn-ghost" href="./#credit">Credit and licence</a>
+      </p>
+    </section>
+
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="pinout.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>
