@@ -297,3 +297,55 @@ fn the_network_always_settles() {
     assert_eq!(stats.contested_groups, 0, "pullup fought pulldown");
     assert!(stats.node_recalcs > 0);
 }
+
+/// The rails are definitions, not measurements: vss is low and vcc is high at
+/// every instant, whatever the network around them is doing.
+///
+/// This was not true for vcc. `recalc_node` writes the resolved level into
+/// every member of the group, and `build_group` records a rail it reaches as a
+/// member (it has to, to count the rail's drive). A group joined to both rails
+/// resolves to Vss, and vcc's own stored level went low with it: node 657
+/// dipped for half a cycle on most opcode fetches, forty times in the first
+/// 256 half-cycles of Fibonacci. The reference does the same, and neither
+/// engine ever *reads* a rail's stored level (its drive comes from identity,
+/// not from state), so the golden test could not see it -- `stateString`
+/// prints `g` and `v` for the rails without looking. What did see it was the
+/// halfshot export, where a reader found the declared vcc node toggling. This
+/// exercises the whole 256-half-cycle Fibonacci run rather than a handful of
+/// instructions, because the dip is a property of which groups form, and it
+/// did not happen on every fetch.
+#[test]
+fn rails_hold_their_level_at_every_half_cycle() {
+    // Fibonacci, the halfshot's default program: seeds at $F0/$F1, sum to $F2.
+    let program: [u8; 12] = [
+        0xA5, 0xF0, // LDA $F0
+        0x65, 0xF1, // ADC $F1
+        0x85, 0xF2, // STA $F2
+        0xA5, 0xF1, // LDA $F1
+        0x85, 0xF0, // STA $F0
+        0x4C, 0x00, // JMP $0200 (low byte; high byte follows)
+    ];
+    let mut mem = FlatMemory::new();
+    mem.load(0x0200, &program);
+    mem.load(0x020C, &[0x02]);
+    mem.load(0x00F0, &[1, 1]);
+    mem.set_reset_vector(0x0200);
+    let nl = Arc::new(mos6502());
+    let (vss, vcc) = (nl.vss(), nl.vcc());
+    let mut cpu = Cpu::new(nl, mem).unwrap();
+    cpu.power_cycle();
+    let mut dips = Vec::new();
+    for h in 0..512u64 {
+        let e = cpu.engine();
+        if e.is_high(vss) || !e.is_high(vcc) {
+            dips.push((h, e.is_high(vss), e.is_high(vcc)));
+        }
+        cpu.half_step();
+    }
+    assert!(
+        dips.is_empty(),
+        "rails moved at {} half-cycles (h, vss high, vcc high): {:?}",
+        dips.len(),
+        &dips[..dips.len().min(8)]
+    );
+}

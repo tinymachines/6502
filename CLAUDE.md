@@ -20,7 +20,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 83 tests, bit-exact against the original. |
+| Simulation | Complete. 84 tests, bit-exact against the original. |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
@@ -117,7 +117,7 @@ running under systemd's environment, not yours** — check the version, do not
 assume the binary.
 
 ```bash
-cargo test --workspace              # 86 tests: netlist, functional, golden,
+cargo test --workspace              # 87 tests: netlist, functional, golden,
                                     # rewind, blueprint, pla, decode, blocks,
                                     # interrupts
 cargo test -p v6502-sim --test golden      # differential vs the reference
@@ -167,6 +167,13 @@ node tools/check-programs.mjs
 # a failure. deploy.sh runs the fast path.
 python3 tools/check-timing-vs-manual.py
 RESCAN=1 python3 tools/check-timing-vs-manual.py
+
+# A halfshot export, checked cold: header, deltas replayed, rails pinned, every
+# access on its edge, reads against the program bytes and earlier writes, and
+# (with the JSON beside it) pins, units, switches and terms recomputed from the
+# levels. Exit 1 on any failure. Get an export without a browser click from
+# web/_halfshot-dump.html (see the harness list).
+node tools/check-halfshot.mjs halfshot-fibonacci-256.json
 
 # Web app, production shape: content-hashed bundle + service worker into dist/
 python3 tools/build-web.py web dist
@@ -435,7 +442,10 @@ _asm-test.html         # the assembler round-trips, the old programs are byte-
                        # identical, and each new one is RUN until its answer lands
 _programs-test.html    # the Programs page vs the assembler, timing.json and the chip
 _halfshot-test.html    # every recorded frame vs an independent chip, the island's
-                       # switch set recomputed, and the exported deltas replayed
+                       # switch set recomputed, the exported deltas replayed, and
+                       # the file's stated encoding decoded by hand and pinned
+_halfshot-dump.html    # the export as JSON in a <pre>, for check-halfshot.mjs:
+                       # ?gap=1 drives the Record-off path first, ?frames=N grows
 _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _primer-test.html      # the primer's numbers re-derived, and its five examples run
@@ -614,6 +624,33 @@ first thing to suspect.
 - **17 transistors are gated by vss** → permanently off, which is physically
   correct. `build.rs` warns only about vcc-gated ones (none exist), which *would*
   be wrong: permanently on in silicon, permanently off in this model.
+
+**One deliberate departure: a rail is never written.** `recalc_node` writes the
+resolved level into every member of the group, and `build_group` records a
+rail it reaches as a member (it has to, to count the rail's drive), so a group
+joined to both rails resolved to Vss and wrote `false` into vcc's own storage.
+The reference does exactly the same and neither engine ever *reads* a rail's
+stored level -- a rail resolves by identity -- so it was unobservable to the
+solver, and the golden test could not see it either: the reference's
+`stateString` prints the rails as `g`/`v` without looking, and ours mirrors
+it. What saw it was the halfshot export, where a reader found the declared vcc
+node toggling forty times in a batch, low for half a cycle on most opcode
+fetches. `recalc_node` now skips rails in the write loop;
+`rails_hold_their_level_at_every_half_cycle` in `tests/functional.rs` fails
+without that line. Two consequences worth knowing:
+
+- **The Z80 now converges from a cold power-on**, where `halfphi`'s
+  `tests/chips.rs` used to record that it did not and attribute that to the
+  missing per-chip `support.js`. The attribution was wrong: the Z80 has 32
+  transistors gated by vcc (the 6502 has none), the write loop turns a node's
+  gated transistors on and off with its level, and vcc's level was bouncing.
+  With the rail pinned they stay where the model documents them, permanently
+  off, and it settles. Same lesson as everywhere else here: a recorded
+  measurement is what catches a change of mind.
+- **A bit-exact golden test is only as wide as its encoding.** Every node,
+  every half-cycle, and still blind to two of them by construction. When
+  something reads a value out that the tests only ever *mask*, expect the mask
+  to be hiding something.
 
 ### Timing and state
 
@@ -2102,6 +2139,40 @@ the same cursor; running paces through the frames at the clock rate.
   against the recorded levels byte for byte on six frames including the last,
   and the check goes red when the down list is not applied. It imports nothing
   so the harness can load it without booting the page.
+  - **The format is written down in the codec's header and in the file
+    itself** (`encoding`, version 2), because the first person to read an
+    export cold had to guess three things and guessed one of them wrong in a
+    way that happened to decode: the bitset is bit *i* for node *i*, LSB-first
+    within each byte, zero-padded to 216 bytes for 1725 nodes; a unit is a
+    bare byte when all eight bits have a storage node and `[value, mask]` when
+    not, so `p` is `[v, 0xDF]` and the reader who decoded it as
+    `[true, complement]` got the right number by luck; the node numbering is
+    visual6502's own. The harness now decodes frame 0 by hand rather than
+    through the codec and pins all three, and `check-halfshot.mjs` does the
+    same on a file after the fact.
+  - **The same reader found the rail bug**, which nothing on the site could
+    have: see "One deliberate departure" under the simulation model. The
+    export declared `rails.vcc: 657` and 657 toggled. Version 1 files carry
+    the dip; the validator reports rather than fails it on those.
+  - **A recording never ends on a phi1.** It was 257 frames (frame 0 plus a
+    batch of 256), which ends on a lone phi1 that a reader pairing the phases
+    trips over. Frame 0 now counts as one of the first batch and `record()`
+    takes one more frame if the batch would end on phi1, so a fresh recording
+    is 256 frames, h 0..255, and every growth ends on a completed cycle unless
+    the cap intervenes. Pinned after the first batch, after growth, and after
+    a gap.
+  - **`tools/check-halfshot.mjs` validates an export cold**, from the bytes in
+    it plus the published JSON when it is beside it: header, h contiguity
+    across gaps, phase alternation, deltas naming only nodes at the other
+    level and never a rail, rails pinned, units well formed, every access on
+    its edge, every opcode fetch a read of `op` at `fetch`, reads against the
+    program bytes, earlier writes and the post-gap image, and pins, units,
+    switches and terms recomputed from the replayed levels. Nine corruptions
+    (a rail dip, a bad delta, a lone phi1, a lying read, a p unit claiming bit
+    5, changed program bytes, a shifted open string, a flipped pin, a shifted
+    instruction) were each injected and each caught. `_halfshot-dump.html`
+    exists because an export is a click on a blob URL and there was otherwise
+    no way to obtain one headlessly.
 - **The dangling-reference scan reads the quoted name inside `fetch(`.** The
   page's first draft fetched its three files through a helper taking a name,
   which the scan cannot see; it now calls `fetch('blueprint.json')` three times

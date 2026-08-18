@@ -13,11 +13,76 @@
 //
 // A leaf module: it imports nothing, so a harness can load it without booting
 // the page, and the page and the harness cannot disagree about the format.
+//
+// The format, as a reader of the file needs it. Every one of these was asked
+// about by the first person to read an export cold, so they are written down
+// here and, where a field can carry it, in the file itself (`encoding`).
+//
+//   format, version   'v6502.halfshot', 2. Version 1 files are the same shape
+//                     minus `encoding`; in them the vcc rail's level can dip
+//                     (see below), and the last frame may be a lone phi1.
+//   nodes             1725: the length of every level array, and the node
+//                     numbering is visual6502's own (nodenames.js), so
+//                     `rails.vss` is 558 and `rails.vcc` is 657.
+//   rails             Definitions, not measurements: vss reads 0 and vcc reads
+//                     1 in every frame. That was NOT true of version 1: the
+//                     solver wrote a group's resolved level into a rail it had
+//                     reached, so 657 went low for half a cycle on most opcode
+//                     fetches. Found by a reader replaying an export.
+//   units, controls,  Names, in the order the per-frame `units`, `open` and
+//   terms             `terms` fields use.
+//   frames[k]         One half-cycle. `h` is the chip's half-cycle count and
+//                     `ph` the internal phase (1 or 2, from the die's own
+//                     phase-1 node); `clk0` is the input pin, which is not the
+//                     same thing. A recording never ends on a phi1: a batch
+//                     that would takes one more frame, so every phi1 has its
+//                     phi2 (except across a gap, where `h` says how far the
+//                     chip moved).
+//     units[i]        The byte a datapath unit holds. A bare number means all
+//                     eight bits have a storage node; `[value, mask]` means
+//                     only the bits set in `mask` do, and the others in `value`
+//                     are 0 and mean nothing. `p` is `[v, 0xDF]` because the
+//                     status register has no bit 5. This is `unitValue()` in
+//                     blueprint-draw.js; the register field `p` beside it is
+//                     the readout, with bit 5 forced to 1 as the silicon does.
+//     open            One character per control line, '1' where the switches
+//                     it gates conduct.
+//     terms           Indices into `terms` of the decode-PLA product terms
+//                     that are high.
+//     access          `{kind: 'R'|'W', addr, val}` for the memory access the
+//                     edge before this frame serviced (a read as clk0 falls,
+//                     a write as it rises), or null.
+//     levels          Frame 0 only: base64 of a bitset, 216 bytes for 1725
+//                     nodes. Bit i of the stream is node i, LSB-FIRST within
+//                     each byte (node 0 is bit 0 of byte 0, node 8 is bit 0 of
+//                     byte 1). The three bits past node 1724 are padding and
+//                     zero.
+//     up, down        Every later frame: the nodes that went high and the
+//                     nodes that went low since the previous frame. Applying
+//                     them in order to frame 0's levels reproduces every
+//                     frame's levels exactly; `levelsAt` does that.
+//     gap, mem        On a frame taken after Record was off: how many
+//                     half-cycles went unrecorded, and base64 of the whole
+//                     64 KiB of memory as it then stood.
+//   instructions      Frame ranges grouped by the opcode fetch that began them.
 
 export const FORMAT = 'v6502.halfshot';
-export const VERSION = 1;
+export const VERSION = 2;
 
-/** Levels (0/255 per node) -> base64 of a packed bitset, bit i = node i. */
+/**
+ * What a reader needs to decode the fields without this source in front of
+ * them, written into every file. Prose in a data file is unusual; a reader
+ * guessing MSB-first got vss reading high, which is worse.
+ */
+export const ENCODING = Object.freeze({
+  levels: 'base64 bitset, bit i = node i, LSB first within each byte, zero padded to whole bytes',
+  units: 'a byte where all eight bits have a storage node, else [value, mask] with mask marking the bits that do',
+  open: 'one char per control line, 1 = conducting',
+  rails: 'definitions: vss is 0 and vcc is 1 in every frame',
+  frames: 'one per half-cycle; ph is the internal phase, and the last frame is always a phi2 unless the cap intervened',
+});
+
+/** Levels (0/255 per node) -> base64 of a packed bitset, bit i = node i, LSB first in each byte. */
 export function packLevels(levels) {
   const bytes = new Uint8Array(Math.ceil(levels.length / 8));
   for (let i = 0; i < levels.length; i++) if (levels[i]) bytes[i >> 3] |= 1 << (i & 7);
@@ -96,6 +161,7 @@ export function encode(frames, meta) {
   }
   return {
     format: FORMAT, version: VERSION,
+    encoding: ENCODING,
     program: meta.program,
     nodes: meta.nodes,
     rails: { vss: meta.vss, vcc: meta.vcc },

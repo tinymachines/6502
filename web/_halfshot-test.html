@@ -48,7 +48,13 @@ f.addEventListener('load', async () => {
     const st = H.state;
     const frames = st.frames;
     const N0 = frames.length;
-    ok('a batch is recorded, plus the power-on frame', N0 === 257, `${N0} frames`);
+    ok('a batch is recorded, frame 0 counted as one of it', N0 === 256, `${N0} frames`);
+    // A reader pairing phi1 with phi2 must find the pair, so a recording never
+    // ends on a phi1. This one did, at 257 frames, until a reader of the file
+    // said so.
+    const endsWhole = () => frames[frames.length - 1].ph === 2;
+    ok('and the recording ends on a phi2: no cycle is left half done', endsWhole(),
+       `last frame h ${frames[frames.length - 1].h} ph ${frames[frames.length - 1].ph}`);
 
     // --- an independent chip, run the same way ------------------------------
     await init();
@@ -104,6 +110,13 @@ f.addEventListener('load', async () => {
     }
     ok('every frame agrees with an independent chip on registers, buses, pins and timing',
        mismatch.length === 0, mismatch.slice(0, 3).join(' | ') || `${N0} frames compared`);
+    // The rails are definitions: vss low and vcc high in every frame. vcc was
+    // not, for forty frames of this batch, until the solver stopped writing a
+    // group's level into a rail it had reached; a reader of the export found
+    // it, and the levels above agreeing with a chip of the same build could
+    // not have, which is why it is asserted on its own.
+    const railBad = frames.filter((f) => f.levels[sch.vss] !== 0 || f.levels[sch.vcc] === 0).length;
+    ok('vss is low and vcc is high in every frame', railBad === 0, `${railBad} frames with a rail off its level`);
     ok('unit bytes are the bits, reassembled by this harness', unitBad === 0, `${unitBad} wrong`);
     ok('open switches are the control lines that are high', openBad === 0, `${openBad} wrong`);
     ok('the decode terms recorded are the ones that are high', termBad === 0, `${termBad} frames wrong`);
@@ -310,6 +323,7 @@ f.addEventListener('load', async () => {
     H.seek(N0 + 3);
     ok('stepping past the end records another batch', frames.length === N0 + 256 && st.cur === N0 + 3,
        `${frames.length} frames, cur ${st.cur}`);
+    ok('and it still ends on a phi2', endsWhole());
     ok('and the strip grew with it', d.querySelectorAll('#hs-strip i[data-k]').length === frames.length);
 
     // --- record off, record on ----------------------------------------------------
@@ -343,12 +357,14 @@ f.addEventListener('load', async () => {
     })());
     ok('the frames after the gap are contiguous again',
        frames[gk + 1].h === frames[gk].h + 1 && frames[gk + 1].gap === 0);
+    ok('and a batch taken after a gap still ends on a phi2', endsWhole(),
+       `last frame h ${frames[frames.length - 1].h} ph ${frames[frames.length - 1].ph}`);
 
     // --- reset ----------------------------------------------------------------------
     $('hs-reset').click();
     ok('Reset power-cycles and records again from the start',
-       st.frames.length === 257 && st.cur === 0 && st.frames[0].h === 0 && st.skipped === 0
-       && d.querySelectorAll('#hs-strip i[data-k]').length === 257,
+       st.frames.length === 256 && st.cur === 0 && st.frames[0].h === 0 && st.skipped === 0
+       && d.querySelectorAll('#hs-strip i[data-k]').length === 256,
        `${st.frames.length} frames, cur ${st.cur}`);
 
     // --- the file --------------------------------------------------------------------
@@ -381,6 +397,39 @@ f.addEventListener('load', async () => {
     ok('the bitset packs and unpacks exactly', un[3] === 255 && un[1724] === 255 && un[4] === 0 && un.length === probe.length);
     ok('the JSON is a size a browser can hand over', JSON.stringify(file).length < 12 * 1024 * 1024,
        `${(JSON.stringify(file).length / 1024).toFixed(0)} KiB for ${frames.length} frames`);
+    // What a reader of the file asked about, now stated by the file and pinned:
+    // the bit order of the bitset, the padding, the shape of a partial unit,
+    // and the rails. Decoded here by hand rather than through the codec, so
+    // this is a second reading of the same bytes.
+    ok('the file says which version it is and how it is encoded',
+       file.version === 2 && file.encoding && /LSB first/.test(file.encoding.levels) && /\[value, mask\]/.test(file.encoding.units));
+    const raw = atob(file.frames[0].levels);
+    const bit = (i) => (raw.charCodeAt(i >> 3) >> (i & 7)) & 1;
+    ok('frame 0 is 216 bytes, LSB first, and the pad bits are zero',
+       raw.length === 216 && bit(sch.vss) === 0 && bit(sch.vcc) === 1
+       && [...Array(1725).keys()].every((i) => bit(i) === (frames[0].levels[i] ? 1 : 0))
+       && (raw.charCodeAt(215) >> 5) === 0,
+       `${raw.length} bytes, last byte ${raw.charCodeAt(215)}`);
+    const pi = bp.units.findIndex((u) => u.name === 'p');
+    ok('a unit with no storage node for a bit is [value, mask], and p is missing bit 5',
+       pi >= 0 && Array.isArray(file.frames[0].units[pi]) && file.frames[0].units[pi][1] === 0xDF
+       && file.frames.every((r) => (r.units[pi][0] | 0x20) === r.p)
+       && file.frames.every((r) => r.units.filter(Array.isArray).length === 1),
+       JSON.stringify(file.frames[0].units[pi]));
+    ok('the rails are declared, and the levels obey them in every frame',
+       file.rails.vss === sch.vss && file.rails.vcc === sch.vcc
+       && (() => { let lv = levelsAt(file, 0); for (let k = 0; k < file.frames.length; k++) {
+            if (k) { for (const n of file.frames[k].up) lv[n] = 255; for (const n of file.frames[k].down) lv[n] = 0; }
+            if (lv[sch.vss] || !lv[sch.vcc]) return false; } return true; })());
+    ok('no delta names a node already at that level, and none names a rail', (() => {
+      const lv = levelsAt(file, 0).slice();
+      for (let k = 1; k < file.frames.length; k++) {
+        const r = file.frames[k];
+        for (const n of r.up) { if (lv[n] || n === sch.vss || n === sch.vcc) return false; lv[n] = 255; }
+        for (const n of r.down) { if (!lv[n] || n === sch.vss || n === sch.vcc) return false; lv[n] = 0; }
+      }
+      return true;
+    })());
 
     // --- prose and shell ------------------------------------------------------------
     const facts = [...d.querySelectorAll('[data-fact]')];

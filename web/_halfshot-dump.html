@@ -1,0 +1,52 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>halfshot dump</title>
+<!--
+  Get a halfshot export without a browser click, for tools/check-halfshot.mjs.
+
+  Boots the real page in an iframe, waits for the first batch, and writes the
+  file exportRecording() would have downloaded into #out as JSON. Read it with
+  --dump-dom and cut the <pre> out (see the harness list in CLAUDE.md).
+
+    ?program=N   which program (the page honours it as everywhere)
+    ?gap=1       first drive the Record-off path: to the end of the batch, off,
+                 300 half-cycles unrecorded, on, two more frames. The export
+                 then carries a gap frame with its memory image, which is the
+                 branch of the format worth checking.
+    ?frames=N    grow the recording to at least N frames first (up to the cap)
+
+  The title reads DUMPED when #out is filled, or the error.
+-->
+<pre id="out"></pre>
+<iframe id="f" style="width:1200px;height:900px"></iframe>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const f = document.getElementById('f');
+const out = document.getElementById('out');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+f.src = 'halfshot.html' + (q.get('program') ? `?program=${q.get('program')}` : '');
+f.addEventListener('load', async () => {
+  try {
+    const d = f.contentDocument, w = f.contentWindow;
+    for (let i = 0; i < 600 && !(w.__halfshot && !d.getElementById('hs-main').hidden); i++) await sleep(50);
+    const H = w.__halfshot;
+    if (!H) throw new Error('page did not boot: ' + d.getElementById('hs-status').textContent);
+    const st = H.state;
+    const want = Number(q.get('frames') || 0);
+    if (want > st.frames.length) H.seek(want - 1);
+    if (q.get('gap') === '1') {
+      H.seek(st.frames.length - 1);
+      H.setRecording(false);
+      H.seek(st.frames.length - 1 + 300);
+      H.setRecording(true);
+      H.seek(st.frames.length + 1);
+    }
+    const file = H.exportRecording(false);
+    out.textContent = JSON.stringify(file);
+    document.title = `DUMPED ${file.frames.length} frames`;
+  } catch (e) {
+    document.title = 'ERROR ' + e.message;
+    out.textContent = String(e && e.stack || e);
+  }
+}, { once: true });
+</script>

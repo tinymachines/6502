@@ -200,6 +200,22 @@
       file reads without the netlist. It is lossless, and the harness proves it
       by replaying the deltas and comparing against what the chip said.
     </p>
+    <p>
+      The file says how it is encoded, in an <code>encoding</code> block, because
+      the first person to read one cold had to guess: the bitset is bit
+      <em>i</em> for node <em>i</em>, least significant bit first within each
+      byte, padded with zeros to a whole byte; a unit whose every bit has a
+      storage node is a bare byte and one that does not is
+      <code>[value, mask]</code>, which is how the status register, whose bit
+      five has no storage node, is written; the node numbering is visual6502's own; and the rails
+      are declared and hold their level in every frame. That last one is a fix
+      the same reader prompted: the supply node used to dip on most opcode
+      fetches, because the solver wrote a group's level back into a rail it had
+      touched, and nothing on the site could see it because nothing reads a
+      rail's level except this file. A recording also never ends on a
+      <span class="mono">&phi;1</span>, so a reader pairing the two phases of a
+      cycle finds both.
+    </p>
   </section>
 
 </main>

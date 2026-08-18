@@ -163,16 +163,22 @@ function skip(n) {
   state.skipped += n;
 }
 
-/** Extend the recording by `n` half-cycles (or start it). */
+/**
+ * Extend the recording by `n` half-cycles (or start it), and never leave a
+ * cycle half done: a reader pairing each phi1 frame with its phi2 should find
+ * the pair, so if the batch would end on phi1 it takes one more. The first
+ * batch counts frame 0 as one of its own, so a fresh recording is BATCH frames
+ * (h 0..255) rather than BATCH plus one; it used to be 257 and ended on a
+ * dangling phi1, which a reader of the file pointed out.
+ */
 function record(n) {
   const m = state.m;
   const frames = state.frames;
-  if (!frames.length) frames.push(sample(null));
+  if (!frames.length) { frames.push(sample(null)); n -= 1; }
   const stop = Math.min(MAX_FRAMES, frames.length + n);
-  while (frames.length < stop) {
-    m.halfStep();
-    frames.push(sample(frames[frames.length - 1]));
-  }
+  const take = () => { m.halfStep(); frames.push(sample(frames[frames.length - 1])); };
+  while (frames.length < stop) take();
+  if (frames.length < MAX_FRAMES && frames[frames.length - 1].ph === 1) take();
   segment();
 }
 
@@ -682,7 +688,7 @@ function tick(now = 0) {
   if (!moved && state.recording && state.cur >= MAX_FRAMES - 1) setRunning(false);
 }
 
-function exportRecording() {
+function exportRecording(download = true) {
   const prog = PROGRAMS[state.program];
   const file = encode(state.frames, {
     program: { id: prog.id, name: prog.name, loadAddr: LOAD_ADDR,
@@ -695,6 +701,9 @@ function exportRecording() {
     instructions: state.segs.map((s) => ({ start: s.start, end: s.end, label: s.label, at: s.fetch, op: s.op,
                                            gap: s.gap || 0 })),
   });
+  // `_halfshot-dump.html` asks for the file without the download, which is the
+  // only way to get one headlessly for tools/check-halfshot.mjs.
+  if (!download) return file;
   const blob = new Blob([JSON.stringify(file)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
