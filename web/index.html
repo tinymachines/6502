@@ -63,6 +63,13 @@
       <div class="statbar" id="chip-facts">…</div>
     </section>
 
+    <!-- What changed since the previous deploy. Filled at runtime by
+         version-footer.js from build-info.json, and hidden until it is: the
+         page cannot know at build time what was live before it. The labels
+         come from site-menu.js rather than being written here, so a page
+         renamed in the menu is renamed here in the same edit. -->
+    <section class="wrap changed-since" data-changed-since="menu" hidden></section>
+
     <!-- ── the explorer console ─────────────────────────────── -->
     <section class="wrap" id="explorer">
       <div class="console" id="console">

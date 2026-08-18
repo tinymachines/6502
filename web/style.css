@@ -930,6 +930,27 @@ body.no-scroll .site-foot { display: none; }
 .vf-changed a { color: var(--mint); text-decoration: none; }
 .vf-changed a:hover { color: var(--foreground); text-decoration: underline; }
 
+/* The "changed since the previous deploy" section on the index, filled at
+   runtime by version-footer.js from the same stamp the footer reads. Hidden
+   until filled and hidden again when there is nothing to compare against. The
+   [hidden] rule is stated with !important on purpose: the UA's own is only
+   specificity (0,1,0), and this file already lost that fight once on #boot and
+   #app, where a rule declaring display silently un-hid them. */
+.changed-since {
+  margin-top: 1.25rem; padding: 1rem 1.15rem;
+  border: 2px solid var(--line); border-radius: .45rem;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: var(--hard);
+}
+.changed-since[hidden] { display: none !important; }
+.changed-since .eyebrow { margin-top: 0; }
+.changed-list { margin: .55rem 0 .7rem; padding-left: 1.2rem; line-height: 1.7; }
+.changed-list a { color: var(--mint); text-decoration: none; font-weight: 600; }
+.changed-list a:hover { text-decoration: underline; }
+.changed-none, .changed-diff { margin: .4rem 0 0; color: var(--muted); font-size: .9rem; }
+.changed-diff a { color: var(--accent); }
+.changed-many summary { cursor: pointer; color: var(--foreground); font-weight: 600; margin: .4rem 0; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   * { transition: none !important; }

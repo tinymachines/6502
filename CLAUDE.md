@@ -3111,6 +3111,21 @@ worse than either. The archive keeps its own in-flow footer and is unaffected.
     anchor off the live copy's own `build-info.json` -- the same arrangement the
     simulator's deploy uses, for the same reason: it is the one fact about the
     previous deploy that cannot drift.
+  - **The simulator index carries the same section**, and its labels come from
+    the rendered menu rather than being written into the page: the slot says
+    `data-changed-since="menu"` and the module reads `.navlinks a[data-page]`
+    for label and href. Fifteen labels already live in `site-menu.js`, and a
+    second copy in the HTML would be the one that drifts. The module cannot
+    *import* the menu -- it is shared with the archive, which has no site menu
+    -- so it reads the DOM and waits for it, both being module scripts.
+    `_menu-test.html` asserts every label in the section is the menu's own by
+    comparing the two DOMs, which is the check that a renamed page has to pass.
+    - **Above six pages the list folds behind a `<details>` stating the count.**
+      A deploy touching every page is a real event -- a shell change, a rename
+      -- and should be said, but fifteen bullets is a wall that says less than
+      one line. Asserted both ways: three flat, fifteen folded.
+    - **Its `[hidden]` rule carries `!important`**, for the reason `#boot` and
+      `#app` already taught: the UA's own is only (0,1,0).
   - **The archive index also carries the list as a section**, filled at
     runtime by the same shared `version-footer.js` into a `[data-changed-since]`
     slot. Runtime rather than baked by the builder, because the index is built

@@ -120,17 +120,46 @@ function render(host, info) {
  * within one deploy. Reading the same stamp the footer reads means the two can
  * never disagree either.
  *
- * `data-changed-since` carries a JSON map from a page key in the stamp's
- * `changed` list to what to show for it: a label and an href. A key with no
- * entry is shown by its name, so a page added to the measurement before it is
- * added to the map is not silently dropped from the list.
+ * `data-changed-since` is either a JSON map from a page key in the stamp's
+ * `changed` list to what to show for it (a label and an href), or the word
+ * "menu", meaning: take both from the rendered site menu on this page. The
+ * simulator uses "menu" because its fifteen labels already live in
+ * site-menu.js, and writing them again here would be the second copy that
+ * drifts. This module cannot import that file -- it is shared with the
+ * archive, which has no site menu -- so it reads the menu's DOM instead, and
+ * waits for it, since both are module scripts and the menu may render after.
+ * A key with no entry either way is shown by its name, so a page added to the
+ * measurement before it is added to the map is not silently dropped.
  */
-function renderChangedSince(host, info) {
+async function labelsFromMenu() {
+  // The menu renders from another module; give it a moment to appear.
+  for (let i = 0; i < 40 && !document.querySelector('.navlinks a[data-page]'); i++) {
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  const out = {};
+  for (const a of document.querySelectorAll('.navlinks a[data-page]')) {
+    const key = a.dataset.page;
+    if (key in out) continue;              // first entry for a page wins
+    const label = a.querySelector('.navlink-label');
+    out[key] = {
+      label: label ? label.childNodes[0].textContent.trim() : key,
+      href: a.getAttribute('href'),
+    };
+  }
+  return out;
+}
+
+async function renderChangedSince(host, info) {
   let names = {};
-  try {
-    names = JSON.parse(host.dataset.changedSince || '{}');
-  } catch {
-    names = {};
+  const spec = host.dataset.changedSince || '{}';
+  if (spec === 'menu') {
+    names = await labelsFromMenu();
+  } else {
+    try {
+      names = JSON.parse(spec);
+    } catch {
+      names = {};
+    }
   }
   host.textContent = '';
   if (!Array.isArray(info.changed) || !info.previousDeploy) {
@@ -153,6 +182,22 @@ function renderChangedSince(host, info) {
     host.append(p);
     return;
   }
+  // A deploy that touched every page -- a shared shell change, a rename --
+  // is a real event and the list should say so, but fifteen bullets is a wall
+  // that says less than one line. Above a handful, name the count and fold the
+  // list behind a disclosure the reader can open.
+  const MANY = 6;
+  const many = info.changed.length > MANY;
+  let listHost = host;
+  if (many) {
+    const det = document.createElement('details');
+    det.className = 'changed-many';
+    const sum = document.createElement('summary');
+    sum.textContent = `${info.changed.length} pages changed`;
+    det.append(sum);
+    host.append(det);
+    listHost = det;
+  }
   const ul = document.createElement('ul');
   ul.className = 'changed-list';
   for (const key of info.changed) {
@@ -164,11 +209,11 @@ function renderChangedSince(host, info) {
       a.textContent = meta.label || key;
       li.append(a);
     } else {
-      li.textContent = (meta && meta.label) || key || 'index';
+      li.textContent = (meta && meta.label) || key || 'the explorer';
     }
     ul.append(li);
   }
-  host.append(ul);
+  listHost.append(ul);
   const p = document.createElement('p');
   p.className = 'changed-diff';
   const a = document.createElement('a');
@@ -189,7 +234,7 @@ async function init() {
     if (!res.ok) throw new Error(res.status);
     const info = await res.json();
     hosts.forEach((h) => render(h, info));
-    slots.forEach((el) => renderChangedSince(el, info));
+    await Promise.all([...slots].map((el) => renderChangedSince(el, info)));
   } catch {
     // A missing or unreadable build-info is not worth a visible error: the
     // footer simply stays empty rather than announcing its own plumbing.

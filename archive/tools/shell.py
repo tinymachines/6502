@@ -95,6 +95,7 @@ background:color-mix(in srgb,var(--line) 12%,transparent)}
 .changed-list a:hover{text-decoration:underline}
 .changed-none,.changed-diff{margin:.4rem 0 0;color:var(--muted);font-size:.92rem}
 .changed-diff a{color:var(--gold)}
+.changed-many summary{cursor:pointer;color:var(--fg);font-weight:600;margin:.4rem 0}
 /* The source link is inserted by web/site-nav.js, which this site shares
    verbatim, so it appears here without any markup of ours. The style has to be
    restated because this page carries its own stylesheet rather than the

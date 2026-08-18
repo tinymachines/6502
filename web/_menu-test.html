@@ -179,6 +179,52 @@ const shape = (groups) =>
          (note && getComputedStyle(note, '::before').content) || ''),
        note ? getComputedStyle(note, '::before').content : 'n/a');
 
+    // --- the index's changed-since section: a third reader of the same field --
+    //
+    // Menu dots, footer note and this section all read `changed` from one
+    // file, so all three must agree. This one adds a rule of its own: its
+    // labels come from the rendered menu ("menu" mode) rather than being
+    // written into the page, so a page renamed in the menu is renamed here in
+    // the same edit -- and that is asserted by comparing the two DOMs.
+    await load('./');
+    d = f.contentDocument;
+    for (let i = 0; i < 300 && !d.querySelector('.navlinks a[data-page]'); i++) await sleep(50);
+    const sec = d.querySelector('section.changed-since');
+    ok('the index carries the changed-since slot', !!sec, sec ? 'present' : 'missing');
+    // Wait for it to be filled or decisively hidden.
+    for (let i = 0; i < 100 && sec && !sec.textContent.trim()
+         && !(sec.hidden && !info.previousDeploy); i++) await sleep(50);
+    const menuLabel = (key) => {
+      const a = d.querySelector(`.navlinks a[data-page="${CSS.escape(key)}"]`);
+      return a ? a.querySelector('.navlink-label').childNodes[0].textContent.trim() : null;
+    };
+    if (!info.previousDeploy) {
+      ok('with no previous deploy the section stays hidden', sec.hidden, `hidden=${sec.hidden}`);
+    } else if (!info.changed.length) {
+      ok('with nothing changed the section says so',
+         !sec.hidden && /Nothing a reader would see/.test(sec.textContent),
+         sec.textContent.trim().slice(0, 50));
+    } else {
+      const items = [...sec.querySelectorAll('.changed-list li')].map((li) => li.textContent.trim());
+      ok('the section lists one entry per changed page', items.length === info.changed.length,
+         `${items.length} for ${info.changed.length}`);
+      const wantLabels = info.changed.map((k) => menuLabel(k) || (k || 'the explorer'));
+      ok('and every label is the menu\'s own, not a second copy',
+         wantLabels.every((w) => items.includes(w)),
+         `want ${JSON.stringify(wantLabels)} got ${JSON.stringify(items)}`);
+      const many = info.changed.length > 6;
+      ok(many ? 'a long list is folded behind a disclosure that states the count'
+              : 'a short list is shown flat',
+         many ? !!sec.querySelector('details > summary')
+                && sec.querySelector('summary').textContent.includes(String(info.changed.length))
+              : !sec.querySelector('details'),
+         many ? (sec.querySelector('summary') || {}).textContent : `${items.length} flat`);
+      const diff = sec.querySelector('.changed-diff a');
+      ok('and it links the diff between the two deploys',
+         !!diff && diff.href.includes('/compare/') && diff.href.includes(info.previousDeploy.slice(0, 12)),
+         diff ? diff.href : 'no link');
+    }
+
     // --- every href reaches something --------------------------------------
     //
     // A typo'd page name is a 404 that looks exactly like a working link.
