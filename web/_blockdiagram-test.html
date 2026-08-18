@@ -57,18 +57,23 @@ f.addEventListener('load', async () => {
     // --- the table is the measurement, row by row ---------------------------
     const rows = [...d.querySelectorAll('#bd-rows tr')].map((tr) => ({
       kind: tr.dataset.kind,
+      section: tr.dataset.section,
       cells: [...tr.children].map((td) => td.textContent.trim()),
     }));
-    ok('every block in the figure has a row', rows.length >= 16, `${rows.length} rows`);
+    ok('every block in the figure has a row', rows.length >= 22, `${rows.length} rows`);
 
-    // A bus claim and a region claim are checked against different things, so
-    // the row says which it is and this branches on that. Running the region
-    // rows through the width check would report them all as broken.
+    // Kind and section are different questions and this checks both. Grouping
+    // by kind alone counted the address and data buses as datapath, because
+    // they are bus-shaped claims -- so the assertion said "14 datapath" for a
+    // figure with 12, which was the label lying rather than the page.
     const bitRows = rows.filter((r) => r.kind === 'bits');
     const regionRows = rows.filter((r) => r.kind === 'region');
-    ok('the figure has both a datapath and a control side',
-       bitRows.length >= 12 && regionRows.length >= 4,
-       `${bitRows.length} datapath, ${regionRows.length} control`);
+    const sec = (n) => rows.filter((r) => r.section === n);
+    ok('the figure has all three sections',
+       sec('datapath').length === 12 && sec('control').length === 4
+       && sec('pins').length === 6,
+       `${sec('datapath').length} datapath, ${sec('control').length} control, `
+       + `${sec('pins').length} pins`);
 
     const wrong = [];
     for (const { cells: [label, stem, size] } of bitRows) {
@@ -98,6 +103,64 @@ f.addEventListener('load', async () => {
        regionRows.some((r) => /decode/i.test(r.cells[0]))
        && regionRows.some((r) => /timing/i.test(r.cells[0])),
        regionRows.map((r) => r.cells[0]).join(', '));
+
+    // --- the data bus buffer, re-derived -------------------------------------
+    //
+    // The page's most interesting new claim, so this harness measures it again
+    // with its own walk. The trap it is guarding is a real one: a walk that
+    // follows only gate inputs finds NO route from a data pin to the internal
+    // bus and would report a chip with no way to read memory, because the last
+    // two steps are switches.
+    const name2id = new Map(sch.names.map((n, i) => [n, i]).filter(([n]) => n));
+    const dbn = new Set([...Array(8).keys()].map((i) => name2id.get(`db${i}`)));
+    const idbn = new Set([...Array(8).keys()].map((i) => name2id.get(`idb${i}`)));
+    const idln = new Set([...Array(8).keys()].map((i) => name2id.get(`idl${i}`)));
+    const myDrivers = sch.gates.filter((g) => dbn.has(g[0])).length;
+    const myDirect = sch.switches.filter(([, a, c]) =>
+      (dbn.has(a) && idbn.has(c)) || (dbn.has(c) && idbn.has(a))).length;
+
+    const nbr = new Map();
+    const add = (a, b) => { if (!nbr.has(a)) nbr.set(a, new Set()); nbr.get(a).add(b); };
+    for (const [node, , pre, legs] of sch.gates) {
+      for (const leg of legs) for (const i of leg) add(i, node);
+      if (pre >= 0) add(pre, node);
+    }
+    for (const [, a, c] of sch.switches) { add(a, c); add(c, a); }
+    const seen = new Map([[name2id.get('db0'), null]]);
+    const q = [name2id.get('db0')];
+    let end = null;
+    while (q.length && end === null) {
+      const n = q.shift();
+      if (idbn.has(n)) { end = n; break; }
+      for (const t of nbr.get(n) || []) {
+        if (seen.has(t) || t === sch.vss || t === sch.vcc) continue;
+        seen.set(t, n); q.push(t);
+      }
+    }
+    const route = [];
+    for (let c = end; c != null; c = seen.get(c)) route.push(c);
+    const hops = route.length - 1;
+
+    const bufRow = rows.find((r) => r.kind === 'buffer');
+    ok('the data bus buffer row matches an independent walk',
+       !!bufRow && bufRow.cells[2] === `${myDrivers} driver gates out, ${hops} steps in`,
+       bufRow ? `page "${bufRow.cells[2]}", harness ${myDrivers}/${hops}` : 'no row');
+    ok('nothing joins a data pin straight to the internal bus', myDirect === 0,
+       `${myDirect} direct pass transistors`);
+    ok('and the way in goes through the input data latch',
+       route.some((n) => idln.has(n)),
+       route.map((n) => sch.names[n] || `#${n}`).reverse().join(' -> '));
+
+    // --- the pins ------------------------------------------------------------
+    const pinRows = rows.filter((r) => r.section === 'pins');
+    ok('the address and data buses are the widths the netlist has',
+       pinRows.some((r) => r.cells[1] === 'ab' && r.cells[2] === '16 wires')
+       && pinRows.some((r) => r.cells[1] === 'db' && r.cells[2] === '8 wires'),
+       pinRows.map((r) => `${r.cells[1]}:${r.cells[2]}`).join(', '));
+    const unnamed = pinRows.filter((r) => r.kind === 'pinset'
+      && !/^(\d+) of \1 named$/.test(r.cells[2]));
+    ok('and every control, clock and power pin is named on the die',
+       unnamed.length === 0, unnamed.map((r) => `${r.cells[0]}: ${r.cells[2]}`).join(' | '));
 
     // The translation the page makes a point of: the figure's DL is idl here.
     ok('the input data latch resolved to this die\'s own name for it',

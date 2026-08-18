@@ -34,7 +34,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
 | Blueprint | The datapath as a block diagram, **derived** from switch topology. |
-| Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 3 of 4 agree. |
+| Block diagram | The published datasheet figure as a dataset, drawn from it, and every block it names resolved against the die. 4 of 5 agree. |
 | Decode | All 122 PLA product terms + 32 of 46 control lines traced back to them. |
 | Timing | Every instruction's length, measured sync to sync, and what ends it. |
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
@@ -2185,6 +2185,28 @@ anyone's to own; a particular drawing of it is. The credit section says so, and
   - The control side is **four regions and 1113 transistors**, which is the
     quiet finding of adding it: the figure draws it as a small annex off to one
     side and the decode array alone is 749.
+- **The pins and the data bus buffer are two more kinds of claim again.** The
+  address and data buses resolve by width like the datapath's; the control,
+  clock and power pins have no width at all and carry a list of node names,
+  answered by how many this die actually names. `kind` and `section` are
+  separate fields because they are separate questions -- `ab` and `db` are
+  bus-shaped claims that belong to the *pins*, and a harness grouping by kind
+  alone reported "14 datapath" for a figure with 12.
+  - **It does not say "forty pins".** The package has forty, three are
+    unconnected and ground arrives on three of them, so a die naming 35 signals
+    is not disagreeing with a datasheet saying 40: they count different things.
+    The page reports what it can see, which is the names.
+- **The data bus buffer is the one box that is a journey rather than a place**,
+  and it is drawn dashed to say so. Out is eight gates, one per bit, whose
+  output is the pad. In is not those gates reversed: there are **zero** pass
+  transistors joining a data pin to the internal bus, so nothing from memory
+  reaches it directly. The route is `db0 -> #718 -> notidl0 -> idl0 -> #719 ->
+  idb0` -- five steps, through the input data latch, arriving only when the
+  decoder opens `dpc43_DL/DB`.
+  - **A gate-only walk finds no route at all**, because the last two steps are
+    switches, and would report a chip with no way to read memory. Both the page
+    and `_blockdiagram-test.html` follow gates *and* switch channels, and the
+    harness re-derives the whole route independently.
 - **The dataset carries only the claim**: a label, and the stem this die uses
   for the thing being claimed. Width, owning functional block, and whether the
   datapath derivation found the same unit independently are all read out of

@@ -73,6 +73,38 @@ const CONTROL = [
     says: 'samples the interrupt pins and supplies the vectors' },
 ];
 
+/**
+ * Where the chip meets the outside world.
+ *
+ * Two of these are buses and resolve by width like any datapath claim. The rest
+ * are individual pins, which have no width at all, so they carry a list of node
+ * names and are answered by how many of them this die actually names.
+ *
+ * Deliberately NOT stated as "forty pins". The package has forty, but three are
+ * unconnected and ground arrives on three of them, so a die that names 35
+ * signals is not disagreeing with a datasheet that says 40 -- they are counting
+ * different things. The page reports what it can see, which is the names.
+ */
+const PINS = [
+  { id: 'ab', label: 'Address bus, A0 to A15', stem: 'ab', kind: 'bits' },
+  { id: 'db', label: 'Data bus, D0 to D7', stem: 'db', kind: 'bits' },
+  { id: 'ctrl', label: 'Control pins', kind: 'pinset',
+    pins: ['res', 'irq', 'nmi', 'rdy', 'so', 'rw', 'sync'] },
+  { id: 'clk', label: 'Clock pins', kind: 'pinset',
+    pins: ['clk0', 'clk1out', 'clk2out'] },
+  { id: 'pwr', label: 'Power', kind: 'pinset', pins: ['vcc', 'vss'] },
+];
+
+/**
+ * The data bus buffer, which is the one box in the figure that is a *journey*
+ * rather than a place. It is measured as one: how many gates drive the pins on
+ * the way out, and how many steps a byte takes on the way in.
+ */
+const BUFFER = {
+  id: 'dbb', label: 'Data bus buffer', kind: 'buffer',
+  says: 'the drivers and receivers between the data pins and the internal bus',
+};
+
 const BLOCKS = [
   { id: 'abh', label: 'Address bus buffer, high', stem: 'abh', rail: 'adh',
     says: 'drives the top half of the address pins' },
@@ -113,9 +145,78 @@ function ownerOf(d, stem) {
   return { id: best[0], name: d.sch.blockNames[best[0]], share: best[1] / ids.length };
 }
 
+/**
+ * How a byte gets from a data pin to the internal bus, measured.
+ *
+ * The way OUT is gates: one driver per bit whose output is the pad itself. The
+ * way IN is not, and that is the thing worth measuring rather than assuming. A
+ * pad is an output driver, so nothing enters this chip through a pass
+ * transistor from a pin -- the way in is a receiver, which is a gate -- and the
+ * route from there to the internal bus crosses switches, so a walk that follows
+ * only gates finds nothing at all and reports a chip with no way to read
+ * memory. This one follows both.
+ */
+function buffer(d) {
+  const pin = (s, i) => d.byName.get(`${s}${i}`);
+  const dbn = new Set([...Array(8).keys()].map((i) => pin('db', i)));
+  const idbn = new Set([...Array(8).keys()].map((i) => pin('idb', i)));
+  const latch = new Set([...Array(8).keys()].map((i) => pin('idl', i)));
+
+  const drivers = d.sch.gates.filter((g) => dbn.has(g[0]));
+  const transistors = drivers.reduce((a, g) =>
+    a + g[3].reduce((s, leg) => s + leg.length, 0) + (g[2] >= 0 ? 1 : 0), 0);
+  const direct = d.sch.switches.filter(([, a, b]) =>
+    (dbn.has(a) && idbn.has(b)) || (dbn.has(b) && idbn.has(a))).length;
+
+  // Shortest route in, following gate inputs AND switch channels.
+  const step = new Map();
+  for (const [node, , pre, legs] of d.sch.gates) {
+    for (const leg of legs) for (const i of leg) {
+      if (!step.has(i)) step.set(i, new Set());
+      step.get(i).add(node);
+    }
+    if (pre >= 0) { if (!step.has(pre)) step.set(pre, new Set()); step.get(pre).add(node); }
+  }
+  for (const [, a, b] of d.sch.switches) {
+    if (!step.has(a)) step.set(a, new Set());
+    if (!step.has(b)) step.set(b, new Set());
+    step.get(a).add(b); step.get(b).add(a);
+  }
+  const start = pin('db', 0);
+  const prev = new Map([[start, null]]);
+  const queue = [start];
+  let hit = null;
+  while (queue.length && hit === null) {
+    const n = queue.shift();
+    if (idbn.has(n)) { hit = n; break; }
+    for (const t of step.get(n) || []) {
+      if (prev.has(t) || t === d.sch.vss || t === d.sch.vcc) continue;
+      prev.set(t, n); queue.push(t);
+    }
+  }
+  const route = [];
+  for (let c = hit; c != null; c = prev.get(c)) route.push(c);
+  route.reverse();
+  return { drivers: drivers.length, transistors, direct,
+           hops: route.length ? route.length - 1 : -1,
+           viaLatch: route.some((n) => latch.has(n)),
+           route: route.map((n) => d.sch.names[n] || `#${n}`) };
+}
+
 /** Every claim in the dataset, answered by the chip. */
 function resolve(d) {
   const out = [];
+  for (const p of PINS) {
+    if (p.kind === 'bits') {
+      const ids = d.bits.get(p.stem) || [];
+      out.push({ ...p, section: 'pins', ids, width: ids.length,
+                 owner: ownerOf(d, p.stem), unit: null });
+    } else {
+      const found = p.pins.filter((n) => d.byName.has(n));
+      out.push({ ...p, section: 'pins', found, owner: null, unit: null });
+    }
+  }
+  out.push({ ...BUFFER, section: 'pins', buf: buffer(d), owner: null, unit: null });
   for (const b of BLOCKS) {
     const ids = d.bits.get(b.stem) || [];
     const unit = d.bp.units.find((u) => u.name === b.stem) || null;
@@ -137,6 +238,12 @@ function resolve(d) {
 /** What was measured about one block, as the short string beside its box. */
 const measured = (r) => {
   if (r.kind === 'bits') return r.width ? `${r.stem} ×${r.width}` : 'no such signal';
+  if (r.kind === 'pinset') {
+    return r.found.length ? `${r.found.length} named` : 'none named';
+  }
+  if (r.kind === 'buffer') {
+    return r.buf.hops > 0 ? `${r.buf.drivers} out, ${r.buf.hops} steps in` : 'no route';
+  }
   return r.meta ? `${r.meta.transistors} transistors` : 'no such region';
 };
 
@@ -149,8 +256,10 @@ const measured = (r) => {
  * block to the dataset just works.
  */
 const GEO = {
-  w: 1160, top: 78, rowH: 58, boxW: 300, boxH: 40, railW: 22, gap: 26,
-  ctrlX: 800, ctrlW: 330,
+  w: 1290, top: 78, rowH: 58, boxH: 40, railW: 22, gap: 26,
+  pinX: 16, pinW: 250,
+  boxX: 400, boxW: 300,
+  ctrlX: 930, ctrlW: 330,
 };
 
 /**
@@ -171,10 +280,11 @@ function draw(rows) {
   svg.replaceChildren();
   const path = rows.filter((r) => r.section === 'datapath');
   const ctrl = rows.filter((r) => r.section === 'control');
-  const h = GEO.top + Math.max(path.length, ctrl.length + 1) * GEO.rowH + 60;
+  const pins = rows.filter((r) => r.section === 'pins');
+  const h = GEO.top + Math.max(path.length, ctrl.length + 1, pins.length) * GEO.rowH + 60;
   svg.setAttribute('viewBox', `0 0 ${GEO.w} ${h}`);
 
-  const boxX = 300;
+  const boxX = GEO.boxX;
   const leftX = boxX - GEO.gap - GEO.railW;
   const rightX = boxX + GEO.boxW + GEO.gap;
   const railX = { adh: leftX - 34, adl: leftX, sb: rightX, idb: rightX + 34 };
@@ -184,6 +294,7 @@ function draw(rows) {
     t.setAttribute('text-anchor', 'middle');
     t.textContent = text;
   };
+  heading(GEO.pinX, GEO.pinW, 'pins');
   heading(boxX, GEO.boxW, 'datapath');
   heading(GEO.ctrlX, GEO.ctrlW, 'control');
 
@@ -230,6 +341,20 @@ function draw(rows) {
     const y = GEO.top + i * GEO.rowH;
     box(r, GEO.ctrlX, GEO.ctrlW, y, r.meta ? '' : 'bd-missing');
   });
+  // The pins, on the outside where they belong. The buffer among them is the
+  // one box in the figure that is a journey rather than a place, and it is
+  // marked so, because "8 out, 5 steps in" is not the same kind of fact as a
+  // width and should not look like one.
+  pins.forEach((r, i) => {
+    const y = GEO.top + i * GEO.rowH;
+    const ok = r.kind === 'bits' ? r.width > 0
+      : r.kind === 'pinset' ? r.found.length > 0 : r.buf.hops > 0;
+    const g = box(r, GEO.pinX, GEO.pinW, y, ok ? '' : 'bd-missing');
+    if (r.kind === 'buffer') g.classList.add('bd-journey');
+    el('line', { x1: GEO.pinX + GEO.pinW, y1: y + GEO.boxH / 2,
+                 x2: railX.adh, y2: y + GEO.boxH / 2, class: 'bd-wire' }, g);
+  });
+
   const bx = GEO.ctrlX - 26;
   const by0 = GEO.top + GEO.boxH / 2;
   const by1 = GEO.top + (ctrl.length - 1) * GEO.rowH + GEO.boxH / 2;
@@ -255,6 +380,10 @@ function table(rows) {
     // The harness branches on this: a bus claim and a region claim are checked
     // against different things, and a row has to say which it is.
     tr.dataset.kind = r.kind;
+    // Kind and section are not the same thing and a row has to carry both: the
+    // address and data buses are bus-shaped claims like the datapath's, but
+    // they are pins. Grouping by kind alone counts them as datapath.
+    tr.dataset.section = r.section;
     const cell = (s, cls) => {
       const td = document.createElement('td');
       if (cls) td.className = cls;
@@ -265,6 +394,12 @@ function table(rows) {
     if (r.kind === 'bits') {
       cell(r.width ? r.stem : '(not on this die)', 'mono');
       cell(r.width ? `${r.width} wires` : 'none', 'mono');
+    } else if (r.kind === 'pinset') {
+      cell(r.found.join(' ') || '(none named)', 'mono');
+      cell(`${r.found.length} of ${r.pins.length} named`, 'mono');
+    } else if (r.kind === 'buffer') {
+      cell('db to idb', 'mono');
+      cell(`${r.buf.drivers} driver gates out, ${r.buf.hops} steps in`, 'mono');
     } else {
       cell(r.meta ? r.region : '(no such region)', 'mono');
       cell(r.meta ? `${r.meta.nodes} signals, ${r.meta.transistors} transistors` : 'none',
@@ -365,6 +500,28 @@ const CHECKS = [
     },
     where: { href: 'decode', label: 'Decode' },
   },
+  {
+    says: 'A data bus buffer sits between the data pins and the internal data bus',
+    got: (d) => {
+      const b = buffer(d);
+      return `${b.drivers} driver gates out (${b.transistors} transistors), `
+        + `${b.direct} direct connections in, and ${b.hops} steps from a pin to the bus`;
+    },
+    // It is there, and it is a buffer. What the measurement adds is that the
+    // way in and the way out are not the same circuit run backwards.
+    holds: (d) => buffer(d).drivers === 8 && buffer(d).hops > 0,
+    note: (d) => {
+      const b = buffer(d);
+      return 'The two directions are not each other reversed. Out is eight gates, one '
+        + 'per bit, whose output is the pad itself. In is not a gate at all at the far '
+        + `end: there are ${b.direct} pass transistors joining a data pin to the internal `
+        + 'bus, so nothing arriving from memory reaches it directly. The route is '
+        + `${b.route.join(' then ')}, which means a byte read from memory sits in the `
+        + 'input data latch first and only reaches the bus when the decoder opens the '
+        + 'switch that puts it there.';
+    },
+    where: { href: 'block?b=data-bus', label: 'Blocks' },
+  },
 ];
 
 /** Index every `stem0..stemN` once, so a claim can be resolved by name. */
@@ -383,7 +540,7 @@ function indexBits(sch) {
 // Only what the page actually has a slot for. An entry here with no `data-fact`
 // to fill is dead weight that reads as a fact the page states and does not.
 const FACTS = {
-  claimed: () => BLOCKS.length + CONTROL.length,
+  claimed: () => BLOCKS.length + CONTROL.length + PINS.length + 1,
 };
 
 async function boot() {
@@ -394,7 +551,8 @@ async function boot() {
         if (!r.ok) throw new Error(`${f}: HTTP ${r.status}`);
         return r.json();
       })));
-    const d = { sch, blk, bp, bits: indexBits(sch) };
+    const d = { sch, blk, bp, bits: indexBits(sch),
+                byName: new Map(sch.names.map((n, i) => [n, i]).filter(([n]) => n)) };
 
     const missing = [];
     for (const e of document.querySelectorAll('[data-fact]')) {
@@ -410,7 +568,12 @@ async function boot() {
     table(rows);
     renderClaims($('bd-checks'), $('bd-tally'), CHECKS, d);
 
-    const solved = rows.filter((r) => (r.kind === 'bits' ? r.width > 0 : !!r.meta));
+    const solved = rows.filter((r) => {
+      if (r.kind === 'bits') return r.width > 0;
+      if (r.kind === 'pinset') return r.found.length === r.pins.length;
+      if (r.kind === 'buffer') return r.buf.hops > 0;
+      return !!r.meta;
+    });
     const ctrlT = rows.filter((r) => r.kind === 'region' && r.meta)
       .reduce((a, r) => a + r.meta.transistors, 0);
     $('bd-stats').textContent =

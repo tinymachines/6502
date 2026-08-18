@@ -2191,6 +2191,11 @@ body.no-scroll #view { z-index: 70; }
 .bd-wire { stroke: color-mix(in srgb, var(--line) 80%, transparent); stroke-width: 1.4; }
 .bd-label { font: 600 13px var(--font-sans); fill: var(--foreground); }
 .bd-meas { font: 500 11px var(--font-mono); fill: var(--accent); }
+/* The one box in the figure that is a journey rather than a place. Marked,
+   because "8 out, 5 steps in" is not the same kind of fact as a width and
+   should not look like one. */
+.bd-journey .bd-box { stroke-dasharray: 2 3; }
+
 /* A claim the die does not answer. Nothing is hidden: it is drawn, and marked. */
 .bd-missing .bd-box { stroke: var(--warn); stroke-dasharray: 4 3; }
 .bd-missing .bd-meas { fill: var(--warn); }
