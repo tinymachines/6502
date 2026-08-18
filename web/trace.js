@@ -148,6 +148,7 @@ function sampleRow(prev) {
     sync: m.sync(),
     tstates: m.timingStates() || 'none',
     ab: m.addressBus(), db: m.dataBus(), read: m.isRead(),
+    fetchAddr: m.lastFetchAddr(),
     a: m.a(), x: m.x(), y: m.y(), s: m.s(), p: m.p(), pc: m.pc(), ir: m.ir(),
     flags: m.flagsString(),
     changed,
@@ -184,6 +185,18 @@ function trace() {
     state.m.halfStep();
   }
   state.rows = rows;
+  // How long the instruction is, measured the same way everything else on this
+  // page is: the distance from this opcode's own fetch to the next one. The
+  // page already runs past that fetch to show the tail, so the address is
+  // sitting in the rows and nothing extra has to be run.
+  //
+  // Null where control went elsewhere. A jump, a call, a return and a taken
+  // branch all land somewhere that is not the following byte, and the distance
+  // to it is not a length -- printing one anyway would be the single kind of
+  // number this page exists to avoid.
+  const onward = rows.find((r) => r.tail && r.fetchAddr !== SUBJECT);
+  const step = onward ? onward.fetchAddr - SUBJECT : null;
+  state.bytes = step !== null && step >= 1 && step <= 3 ? step : null;
   state.endHalf = rows[rows.length - 1].half;
   state.m.rewindTo(state.startHalf);
   return true;
@@ -307,6 +320,12 @@ function renderHead(row) {
     + `<span class="tr-mn">${subjectText()}</span>`
     + `<span class="tr-sep">·</span>`
     + `<span>cycle <b>${cycle}</b>${row.tail ? '' : ` of ${total}`}</span>`
+    + `<span class="tr-sep">·</span>`
+    + (state.bytes
+      ? `<span><b>${state.bytes}</b> byte${state.bytes === 1 ? '' : 's'}</span>`
+      : '<span class="muted" title="the next fetch is not the following byte, '
+        + 'so the distance to it is not this instruction\'s length">length not '
+        + 'measurable</span>')
     + `<span class="tr-sep">·</span><span>φ${row.phase}</span>`
     + `<span class="tr-sep">·</span><span class="mono">${row.tstates}</span>`
     + (row.sync ? '<span class="tr-flag">sync</span>' : '')

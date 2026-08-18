@@ -51,6 +51,27 @@ f.addEventListener('load', async () => {
       tail: tr.classList.contains('tail'),
       cells: [...tr.querySelectorAll('td')].map((td) => td.textContent.trim()),
     }));
+    // --- the measured instruction length ------------------------------------
+    //
+    // Read off this page's own run rather than from timing.json: the point is
+    // that it measures the distance from this opcode's fetch to the next one
+    // itself. The branch is the case worth pinning, because it is measurable on
+    // the timing page and NOT here -- that fixture uses an offset of zero and
+    // lands on the following byte, this one takes the branch. Both are right,
+    // and a page that imported the other's answer would be wrong on one of them.
+    const head = () => $('tr-head').textContent.replace(/\s+/g, ' ');
+    for (const [op, want] of [[0xEA, '1 byte'], [0xA9, '2 bytes'],
+                              [0x8D, '3 bytes'], [0x0A, '1 byte']]) {
+      await pick(op);
+      ok(`$${op.toString(16).toUpperCase()} reports ${want}`,
+         head().includes(want), head().slice(0, 70));
+    }
+    for (const op of [0x4C, 0x20, 0x60, 0xD0]) {
+      await pick(op);
+      ok(`$${op.toString(16).toUpperCase()} declines to state a length`,
+         head().includes('length not measurable'), head().slice(0, 70));
+    }
+
     const A = 6, DELTA = 12;
 
     // --- cycle counts, counted rather than looked up -------------------------

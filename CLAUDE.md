@@ -761,6 +761,23 @@ the *group* a node is joined to, not to the node.
   produced plausible output**; both were found by dumping the console and the
   DOM, not by reasoning.
 
+#### The instruction's length, measured on this page
+
+The head line carries the length beside the cycle count, and this page measures
+it itself rather than reading `timing.json`: the distance from this opcode's own
+fetch to the next one, taken from rows it had already recorded because it runs
+past that fetch to show the tail.
+
+- **It declines where a length cannot be had.** A jump, a call, a return and a
+  taken branch all land somewhere that is not the following byte, and the
+  distance to it is not a length. Those say so instead of printing a number.
+- **The branch is the case worth understanding, and the two pages disagree
+  correctly.** Timing's fixture assembles an offset of `$00`, so a branch lands
+  on the following byte and measures two either way. This page's operand is
+  `$02`, so the branch is taken and lands outside. Both are right about their
+  own run, and a page that imported the other's answer would be wrong on one of
+  them. `_trace-test.html` pins both halves.
+
 #### What the measurement said before any of it was drawn
 
 `cargo run --release -p v6502-sim --example activity`. Run this before designing
