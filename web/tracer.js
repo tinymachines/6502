@@ -37,6 +37,7 @@ import { chainCells } from './chain-cells.js';
 import { clockGen } from './clock-gen.js';
 import { interruptPaths } from './interrupt-paths.js';
 import { branchLogic } from './branch-logic.js';
+import { decimalCorrection } from './decimal-correction.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -152,6 +153,13 @@ export const INTR_R = 90;
 // Beads like the others, dash-dot, each in its own hue; the card lists what
 // each reads at its boundary and what it feeds, both measured.
 export const BRANCH_R = 90;
+// The decimal correction (decimal-correction.js): everything the decimal-named
+// nodes are wired into, walked both ways inside the static logic; one piece of
+// 51 nodes, drawn as one region in its own hue. The card sorts it into detect,
+// enable and adjust by which walk found each node, and lists what it reads
+// (the adder's products) and feeds (the carries and the adjusted bus).
+export const DECIMAL_R = 120;
+const DECIMAL_COLOR = 'rgb(255 150 70)';
 const BRANCH_COLOR = { taken: 'rgb(190 240 110)', direction: 'rgb(255 150 210)', cross: 'rgb(140 255 225)' };
 const INTR_COLOR = { irq: 'rgb(255 190 80)', nmi: 'rgb(255 115 115)', res: 'rgb(170 185 215)', go: 'rgb(245 245 255)', vector: 'rgb(200 150 255)' };
 const INTR_LABEL = { irq: 'irq', nmi: 'nmi', res: 'res', go: 'interrupt go', vector: 'vector' };
@@ -215,6 +223,10 @@ const state = {
   branchRegionData: null,
   branch: null,      // the selected branch group id, or null
   branchRegions: true,
+  decimals: null,    // [{id:'bcd', nodes, parts, reads, feeds, ...}] the decimal correction
+  decimalRegionData: null,
+  decimal: null,     // 'bcd' when the decimal correction is selected, or null
+  decimalRegions: true,
   pinRegions: true,
   collapsed: new Set(), // container keys ('block:8', 'stem:sb', 'cluster:12', 'stage:T0', 'control:8') drawn as one node
   supers: [],           // the collapsed containers' single nodes, from applyCollapse()
@@ -599,6 +611,53 @@ function stageAt(pt) {
 }
 
 /** The control lines grouped by the block holding most of what they gate. */
+/** The decimal correction, from decimal-correction.js: one container. */
+function decimalList() {
+  if (state.decimals) return state.decimals;
+  const { pos, sch } = state;
+  const r = decimalCorrection(sch);
+  const keep = (ns) => ns.filter((n) => pos.has(n));
+  const out = [{ id: 'bcd', nodes: keep(r.nodes), parts: { detect: keep(r.parts.detect), enable: keep(r.parts.enable), adjust: keep(r.parts.adjust) },
+                 reads: r.reads, feeds: r.feeds, seeds: r.seeds, transistors: r.transistors, components: r.components }];
+  state.decimals = out;
+  state.decimalStats = { nodes: r.nodes.length, transistors: r.transistors, seeds: r.seeds.length, components: r.components,
+                         detect: r.parts.detect.length, enable: r.parts.enable.length, adjust: r.parts.adjust.length };
+  return out;
+}
+
+function decimalRegionData() {
+  if (state.decimalRegionData) return state.decimalRegionData;
+  const list = decimalList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: DECIMAL_R, cell: 25 });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.decimalRegionData = out;
+  return out;
+}
+
+function drawDecimalRegions(g) {
+  const data = decimalRegionData();
+  for (const c of decimalList()) {
+    const r = data.get(c.id);
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-dg' + (state.decimal === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-decimal': c.id, style: `--bc: ${DECIMAL_COLOR}` }, g);
+    path.setAttribute('aria-label', `decimal correction, ${c.nodes.length} nodes`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y - DECIMAL_R - 30, class: 'tc-dg-lb' + (state.decimal === c.id ? ' sel' : ''), 'data-decimal': c.id, style: `--bc: ${DECIMAL_COLOR}` }, g);
+      t.textContent = 'decimal correction';
+    }
+  }
+  g.classList.toggle('off', !state.decimalRegions);
+}
+
+function decimalAt(pt) {
+  const data = decimalRegionData();
+  for (const c of decimalList()) if (inRegion(pt, data.get(c.id).loops)) return c.id;
+  return null;
+}
+
 /** The branch logic, from branch-logic.js: taken, direction, cross. */
 function branchList() {
   if (state.branches) return state.branches;
@@ -1049,7 +1108,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -1058,7 +1117,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1067,7 +1126,7 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1076,7 +1135,16 @@ function selectCluster(id, { fly = false } = {}) {
 function selectStage(id, { fly = false } = {}) {
   const c = id === null ? null : stageList().find((x) => x.id === id);
   state.stage = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select the decimal correction. */
+function selectDecimal(id, { fly = false } = {}) {
+  const c = id === null ? null : decimalList().find((x) => x.id === id);
+  state.decimal = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1085,7 +1153,7 @@ function selectStage(id, { fly = false } = {}) {
 function selectBranch(id, { fly = false } = {}) {
   const c = id === null ? null : branchList().find((x) => x.id === id);
   state.branch = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.decimal = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1094,7 +1162,7 @@ function selectBranch(id, { fly = false } = {}) {
 function selectIntr(id, { fly = false } = {}) {
   const c = id === null ? null : intrList().find((x) => x.id === id);
   state.intr = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.branch = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.branch = null; state.decimal = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1103,7 +1171,7 @@ function selectIntr(id, { fly = false } = {}) {
 function selectClock(id, { fly = false } = {}) {
   const c = id === null ? null : clockList().find((x) => x.id === id);
   state.clock = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.intr = null; state.branch = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.intr = null; state.branch = null; state.decimal = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1112,7 +1180,7 @@ function selectClock(id, { fly = false } = {}) {
 function selectChain(id, { fly = false } = {}) {
   const c = id === null ? null : chainList().find((x) => x.id === id);
   state.chain = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; state.intr = null; state.branch = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1121,7 +1189,7 @@ function selectChain(id, { fly = false } = {}) {
 function selectControl(id, { fly = false } = {}) {
   const c = id === null ? null : controlList().find((x) => x.id === id);
   state.control = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1130,7 +1198,7 @@ function selectControl(id, { fly = false } = {}) {
 function selectPins(id, { fly = false } = {}) {
   const c = id === null ? null : pinList().find((x) => x.id === id);
   state.pin = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1155,6 +1223,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-stage-regions .tc-tg, #tc-stage-regions .tc-tg-lb')) {
     p.classList.toggle('sel', state.stage !== null && p.dataset.stage === state.stage);
+  }
+  for (const p of document.querySelectorAll('#tc-decimal-regions .tc-dg, #tc-decimal-regions .tc-dg-lb')) {
+    p.classList.toggle('sel', state.decimal !== null && p.dataset.decimal === state.decimal);
   }
   for (const p of document.querySelectorAll('#tc-branch-regions .tc-bg, #tc-branch-regions .tc-bg-lb')) {
     p.classList.toggle('sel', state.branch !== null && p.dataset.branch === state.branch);
@@ -1218,8 +1289,9 @@ function paintBlock() {
   if (b === null && state.clock !== null) { paintClockCard(box); return; }
   if (b === null && state.intr !== null) { paintIntrCard(box); return; }
   if (b === null && state.branch !== null) { paintBranchCard(box); return; }
+  if (b === null && state.decimal !== null) { paintDecimalCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -1287,6 +1359,33 @@ function paintStageCard(box) {
   const html = `<span class="tc-bk-name">decode terms, ${c.id === 'any' ? 'any stage' : c.id}</span> · ${c.nodes.length} terms`
     + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high, ' tc-hi') : ''}`
     + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}` + collapseButton();
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/**
+ * The card for the decimal correction: its size, the three parts by which
+ * walk found them, what it reads and feeds, all as pills with levels.
+ */
+function paintDecimalCard(box) {
+  const c = decimalList().find((x) => x.id === state.decimal);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  const high = [], moved = [];
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) high.push(n);
+    if (L && P && P[n] !== L[n]) moved.push(n);
+  }
+  const nameOf = (n) => sch.names[n] || `#${n}`;
+  const pill = (n, cls) => `<button type="button" class="tc-node ${L && L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${nameOf(n)}<i>${L && L[n] ? 1 : 0}</i></button>`;
+  const st = state.decimalStats;
+  const html = `<span class="tc-bk-name">decimal correction</span> · ${c.nodes.length} nodes in ${st.components === 1 ? 'one piece' : `${st.components} pieces`}, ${st.transistors} transistors by the legs of their gates`
+    + ` (the five nodes the designer page counts are 21 of them) · walked both ways from the ${st.seeds} decimal-named nodes inside the static logic`
+    + ` · <b>detect</b> ${c.parts.detect.length}, a nibble over nine: ${c.parts.detect.map((n) => pill(n, '')).join(' ')}`
+    + ` · <b>enable</b> ${c.parts.enable.length}, how the two control lines are made: ${c.parts.enable.map((n) => pill(n, '')).join(' ')}`
+    + ` · <b>adjust</b> ${c.parts.adjust.length}, the latches and the gates that write the adjusted bus: ${c.parts.adjust.map((n) => pill(n, '')).join(' ')}`
+    + ` · reads ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`
+    + ` · feeds ${c.feeds.map((n) => pill(n, ' tc-hi')).join(' ')}`
+    + ` · <span class="tc-bk-moved">${moved.length}</span> moved at this half-cycle · ${high.length} high` + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -1478,6 +1577,7 @@ function draw() {
   drawClockRegions(el('g', { class: 'tc-clock-regions', id: 'tc-clock-regions' }, cam));
   drawIntrRegions(el('g', { class: 'tc-intr-regions', id: 'tc-intr-regions' }, cam));
   drawBranchRegions(el('g', { class: 'tc-branch-regions', id: 'tc-branch-regions' }, cam));
+  drawDecimalRegions(el('g', { class: 'tc-decimal-regions', id: 'tc-decimal-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
   drawControlRegions(el('g', { class: 'tc-control-regions', id: 'tc-control-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
@@ -1523,6 +1623,7 @@ function draw() {
   else if (state.clock !== null) selectClock(state.clock);
   else if (state.intr !== null) selectIntr(state.intr);
   else if (state.branch !== null) selectBranch(state.branch);
+  else if (state.decimal !== null) selectDecimal(state.decimal);
   applyCollapse();
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
@@ -1630,7 +1731,16 @@ function branchCaption() {
   const st = state.branchStats;
   if (!st) return '';
   return `The dash-dot beads are the branch logic, the backward cones of the ${st.seeds} branch-named nodes split where the wiring `
-    + `splits them (${st.groups.map(([id, n]) => `${id} ${n}`).join(', ')}): is it taken, which way, and does it cross a page.`;
+    + `splits them (${st.groups.map(([id, n]) => `${id} ${n}`).join(', ')}): is it taken, which way, and does it cross a page. `
+    + decimalCaption();
+}
+
+function decimalCaption() {
+  const st = state.decimalStats;
+  if (!st) return '';
+  return `The orange outline is the decimal correction, everything the ${st.seeds} decimal-named nodes are wired into inside the static logic: `
+    + `${st.nodes} nodes in ${st.components === 1 ? 'one piece' : `${st.components} pieces`}, ${st.transistors} transistors, `
+    + `${st.detect} that detect a nibble over nine, ${st.enable} that make the two control lines, ${st.adjust} that write the adjusted bus.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -1875,7 +1985,7 @@ function paint() {
 // share of its members that are high, ringed if any changed, and a bundle
 // flashes if any edge in it fired or toggled.
 
-const KINDS = ['control', 'clock', 'intr', 'branch', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
+const KINDS = ['control', 'clock', 'intr', 'branch', 'decimal', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
 
 /** What a container key stands for: its members, a label and a colour. */
 function container(key) {
@@ -1925,6 +2035,10 @@ function container(key) {
     const c = branchList().find((x) => x.id === id);
     return c ? { kind, id, nodes: c.nodes, label: `branch ${id}`, css: BRANCH_COLOR[id] || STAGE_COLOR.any } : null;
   }
+  if (kind === 'decimal') {
+    const c = decimalList().find((x) => x.id === id);
+    return c ? { kind, id, nodes: c.nodes, label: 'decimal correction', css: DECIMAL_COLOR } : null;
+  }
   return null;
 }
 
@@ -1934,6 +2048,7 @@ function selectedKey() {
   if (state.clock !== null) return `clock:${state.clock}`;
   if (state.intr !== null) return `intr:${state.intr}`;
   if (state.branch !== null) return `branch:${state.branch}`;
+  if (state.decimal !== null) return `decimal:${state.decimal}`;
   if (state.chain !== null) return `chain:${state.chain}`;
   if (state.pin !== null) return `pins:${state.pin}`;
   if (state.stem !== null) return `stem:${state.stem}`;
@@ -1956,6 +2071,7 @@ function selectKey(key) {
   else if (c.kind === 'clock') selectClock(c.id);
   else if (c.kind === 'intr') selectIntr(c.id);
   else if (c.kind === 'branch') selectBranch(c.id);
+  else if (c.kind === 'decimal') selectDecimal(c.id);
 }
 
 function setCollapsed(key, on) {
@@ -2353,6 +2469,12 @@ function setControlRegions(on) {
   $('tc-control-regions')?.classList.toggle('off', !on);
 }
 
+function setDecimalRegions(on) {
+  state.decimalRegions = on;
+  $('tc-decimal-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-decimal-regions')?.classList.toggle('off', !on);
+}
+
 function setBranchRegions(on) {
   state.branchRegions = on;
   $('tc-branch-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2562,6 +2684,8 @@ async function boot() {
     if (q.get('interrupts') === '0') setIntrRegions(false);
     $('tc-branch-btn').addEventListener('click', () => setBranchRegions(!state.branchRegions));
     if (q.get('branches') === '0') setBranchRegions(false);
+    $('tc-decimal-btn').addEventListener('click', () => setDecimalRegions(!state.decimalRegions));
+    if (q.get('decimal') === '0') setDecimalRegions(false);
     $('tc-collapse-blocks').addEventListener('click', () => {
       const all = [...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`));
       collapseAllBlocks(!all);
@@ -2653,6 +2777,8 @@ async function boot() {
       if (ic !== null) { selectIntr(ic === state.intr ? null : ic); return; }
       const bc = state.branchRegions ? branchAt(pt) : null;
       if (bc !== null) { selectBranch(bc === state.branch ? null : bc); return; }
+      const dc = state.decimalRegions ? decimalAt(pt) : null;
+      if (dc !== null) { selectDecimal(dc === state.decimal ? null : dc); return; }
       const hc = state.chainRegions ? chainAt(pt) : null;
       if (hc !== null) { selectChain(hc === state.chain ? null : hc); return; }
       const stem = state.stemRegions ? stemAt(pt) : null;
@@ -2723,6 +2849,8 @@ async function boot() {
     if (q.has('intr')) selectIntr(q.get('intr'), { fly: true });
     // ?branch=taken (direction, cross) selects that piece of the branch logic.
     if (q.has('branch')) selectBranch(q.get('branch'), { fly: true });
+    // ?bcd=1 selects the decimal correction and frames it.
+    if (q.get('bcd') === '1') selectDecimal('bcd', { fly: true });
     // ?cluster=N selects the cluster holding node N and frames it.
     if (q.has('cluster')) {
       const n = Number(q.get('cluster'));
@@ -2741,5 +2869,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, selectIntr, intrList, intrRegionData, setIntrRegions, selectBranch, branchList, branchRegionData, setBranchRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, intrAt, branchAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, INTR_R, BRANCH_R, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, selectIntr, intrList, intrRegionData, setIntrRegions, selectBranch, branchList, branchRegionData, setBranchRegions, selectDecimal, decimalList, decimalRegionData, setDecimalRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, intrAt, branchAt, decimalAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, INTR_R, BRANCH_R, DECIMAL_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

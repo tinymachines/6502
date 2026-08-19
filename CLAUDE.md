@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Ten kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, and the branch logic split where the wiring splits it. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Eleven kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, and the decimal correction as everything its names are wired into. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1209,6 +1209,33 @@ this is that graph with a clock.
     "bit 5 ... bits 6 and 7"** in the new prose: bit indices, not counts,
     but the scan cannot tell and the exemption is `.mono`, so the prose says
     "the polarity bit (`ir5`) against the flag its top two bits select".
+
+- **The decimal correction is a container as everything its names are wired
+  into.** The designer page counts it by five names (21 transistors);
+  `decimal-correction.js` (a leaf) walks both ways from every decimal-named
+  node (`dpc18_#DAA`, `dpc22_#DSA`, `DC34`, `DC78`, `DC78.phi2`, the `DA-*`
+  family in the ALU: eleven) with **the static logic as home and the seeds
+  as roots**, boundary rule as elsewhere. **51 nodes, one piece, 96
+  transistors**, converging by depth 6. Its measured `feeds` are the whole
+  mechanism: `#C34` and `notalucout` (the carries the detectors inject) and
+  `dasb1..3`, `dasb5..7` (the adjusted special bus `dpc23_SBAC` opens onto A:
+  +6 in each nibble); its `reads` are the adder's products, the D flag's
+  pipeline copy (`pipeUNK22`) and the `sbc` decode. The card sorts the nodes
+  by which walk found them: detect 16, enable 10, adjust 25.
+  - **Seeds must be roots, not home.** Counting them as home let the walk
+    take one more step and pick up `#936` and `#647`, the adder's own
+    NOT(A.B) gates for bits 1 and 5, which the detectors read but which are
+    the adder's: the tell was the circuit "feeding" `AxB1`, `AxB5`, `#C12`,
+    `#C56`. With the home the static logic alone they stay in `reads`, where
+    they belong, and the harness pins that.
+  - One orange outline at `DECIMAL_R` (120), running down two columns
+    through the ALU's bit slices; `decimal:bcd`, `?bcd=1`, `?decimal=0`;
+    priority control, clock, intr, branch, decimal, chain, capsule, stage,
+    cluster, pins, block. The harness re-derives the walk, pins feeds and
+    reads by name, counts 21 and 96 by the same rule, checks every pill on
+    the card against its chip, clicks (through the `alu` capsule under it),
+    collapses, deep-links. **The harness's boot wait had to grow**: eleven
+    kinds derived at boot pushed the page past the 20 s it allowed.
 
 ### `graph.json`: the chip as one node-and-edge file
 

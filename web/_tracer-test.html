@@ -39,7 +39,9 @@ f.addEventListener('load', async () => {
   const w = f.contentWindow;
   const $ = (id) => d.getElementById(id);
   try {
-    for (let i = 0; i < 400 && $('tc-main').hidden; i++) await sleep(50);
+    // The boot derives eleven container kinds before it shows; give it
+    // room. A page that never boots still fails, just later.
+    for (let i = 0; i < 2000 && $('tc-main').hidden; i++) await sleep(50);
     ok('the page booted', !$('tc-main').hidden, $('tc-status').textContent);
     for (let i = 0; i < 100 && !w.__tracer; i++) await sleep(50);
     const T = w.__tracer;
@@ -757,7 +759,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -1044,6 +1046,85 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 200 && !(f7.contentWindow.__tracer && !f7.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?branch=cross selects the piece on a fresh page', f7.contentWindow.__tracer.state.branch === 'cross' && f7.contentDocument.getElementById('tc-block').textContent.includes('branch logic, cross'));
         f7.remove();
+      }
+
+      // --- the decimal correction -----------------------------------------------------
+      // The rule re-done here: both-way bounded walks from the decimal-named
+      // nodes with the static logic as home and the seeds as roots; the union
+      // compared node for node, then what it feeds and reads pinned by name,
+      // the transistor count against the designer page's five, and the card.
+      {
+        const STATIC = sch.blockNames.indexOf('Static logic');
+        const blkD = (n) => sch.nodeBlock[n] & 0x7f;
+        const backD = new Map(), fwdD = new Map(); const addD = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addD(backD, out, i); addD(fwdD, i, out); } if (pre >= 0) { addD(backD, out, pre); addD(fwdD, pre, out); } }
+        for (const [, a, b] of sch.switches) { addD(backD, a, b); addD(backD, b, a); addD(fwdD, a, b); addD(fwdD, b, a); }
+        const nbD = (m, n) => m.get(n) || new Set();
+        const seedsD = []; sch.names.forEach((x, n) => { if (x && /^#?DA-|^DC\d|_#DAA$|_#DSA$/.test(x)) seedsD.push(n); });
+        const seedSetD = new Set(seedsD);
+        const walkD = (dir) => { const reached = new Set(); for (const o of seedsD) { const dd = new Map([[o, 0]]); const q = [o]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; if (n !== o && [...nbD(dir, n)].some((x) => !rails.has(x) && blkD(x) !== STATIC)) continue; for (const x of nbD(dir, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (blkD(x) === STATIC) q.push(x); } } for (const n of dd.keys()) if (blkD(n) === STATIC || seedSetD.has(n)) reached.add(n); } return reached; };
+        const wantD = [...new Set([...walkD(backD), ...walkD(fwdD)])].filter((n) => mine.has(n)).sort((a, b) => a - b);
+        const gotD = T.decimalList()[0];
+        const nmD = (n) => sch.names[n] || `#${n}`;
+        ok('the decimal correction is the harness\'s own walk, node for node, from eleven decimal-named nodes', gotD.nodes.join() === wantD.join() && seedsD.length === 11 && gotD.components === 1, `page ${gotD.nodes.length}, harness ${wantD.length}, ${seedsD.length} seeds, ${gotD.components} piece(s)`);
+        ok('it feeds the two carries the detectors inject and the adjusted bus bits 1..3 and 5..7, and no other bus bit',
+           ['#C34', 'notalucout', 'dasb1', 'dasb2', 'dasb3', 'dasb5', 'dasb6', 'dasb7'].every((x) => gotD.feeds.map(nmD).includes(x)) && !gotD.feeds.map(nmD).some((x) => /^dasb[04]$|^sb\d|^a\d$/.test(x)),
+           gotD.feeds.map(nmD).join(' '));
+        ok('it reads the adder\'s products and the sbc decode, and the adder\'s own NOT(A.B) gates stay outside', ['#(A+B)0', '#A.B2', 'AxB3', 'op-T0-sbc', '#936', '#647'].every((x) => gotD.reads.map(nmD).includes(x)) && !gotD.nodes.map(nmD).includes('#936'), gotD.reads.map(nmD).join(' '));
+        const costD = (n) => { const g = sch.gates.find((x) => x[0] === n); return g ? g[3].reduce((a, leg) => a + leg.length, 0) + (g[2] >= 0 ? 1 : 0) : 0; };
+        const five = ['dpc18_#DAA', 'dpc22_#DSA', 'DC34', 'DC78', 'DC78.phi2'].map((x) => byName.get(x));
+        ok('the five nodes the designer page counts cost 21 transistors, and the whole circuit 96, by the same count', five.reduce((a, n) => a + costD(n), 0) === 21 && wantD.reduce((a, n) => a + costD(n), 0) === 96 && st.decimalStats.transistors === 96, `${five.reduce((a, n) => a + costD(n), 0)} / ${st.decimalStats.transistors}`);
+        ok('the three parts partition the set', gotD.parts.detect.length + gotD.parts.enable.length + gotD.parts.adjust.length === gotD.nodes.length && gotD.parts.detect.map(nmD).includes('DC34') && gotD.parts.adjust.map(nmD).includes('#700'), `${gotD.parts.detect.length}/${gotD.parts.enable.length}/${gotD.parts.adjust.length}`);
+        const dpath = d.querySelector('#tc-decimal-regions .tc-dg[data-decimal="bcd"]');
+        let outD = 0; for (const n of gotD.nodes) { const p = mine.get(n); if (!hit2(dpath, p.x, p.y)) outD++; }
+        ok('every node lies inside the outline', outD === 0, `${outD} outside`);
+        T.selectDecimal('bcd');
+        const cardD = $('tc-block');
+        const pillsD = [...cardD.querySelectorAll('.tc-node')].map((b) => [b.textContent.replace(/[01]$/, ''), b.querySelector('i').textContent]);
+        const wantPD = [...gotD.nodes, ...gotD.reads, ...gotD.feeds].map((n) => [nmD(n), L41[n] > 0 ? '1' : '0']);
+        ok('the card lists the nodes, what it reads and what it feeds, each with the level the harness chip has', pillsD.length === wantPD.length && wantPD.every(([nm, v]) => pillsD.some(([pn, pv]) => pn === nm && pv === v)), `${pillsD.length} pills vs ${wantPD.length}`);
+        const decSet = new Set(gotD.nodes);
+        let dimD = 0; for (const c of circles()) if (c.classList.contains('sel-out') === decSet.has(Number(c.dataset.node))) dimD++;
+        ok('every node but the correction\'s steps back', dimD === 0, `${dimD} wrong`);
+        let dspot = null;
+        for (const n of gotD.nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(dpath, x, y)) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
+            dspot = { x, y, n }; break;
+          }
+          if (dspot) break;
+        }
+        ok('a point inside the outline, clear of nodes and outranking outlines, exists', !!dspot);
+        T.selectDecimal(null);
+        T.frameNodes([dspot.n]);
+        f.style.height = '2600px'; await sleep(100);
+        const tgD = click2(dspot.x, dspot.y);
+        ok('the click lands on the outline', tgD.classList.contains('tc-dg'), tgD.tagName + '.' + tgD.className.baseVal);
+        ok('and selects the correction, clearing every other kind, the capsule under it included', st.decimal === 'bcd' && st.stem === null && st.block === null && st.branch === null, `${st.decimal} / ${st.stem}`);
+        click2(dspot.x, dspot.y);
+        ok('clicking the selected outline again clears it', st.decimal === null);
+        T.selectDecimal('bcd'); T.selectBranch('taken');
+        ok('a branch piece clears the correction, and the correction a branch piece', st.decimal === null && st.branch === 'taken' && (T.selectDecimal('bcd'), st.branch === null && st.decimal === 'bcd'));
+        T.setCollapsed('decimal:bcd', true);
+        const snD = d.querySelector('#tc-supers .tc-sn[data-key="decimal:bcd"]');
+        let dx2 = 0, dy2 = 0; for (const n of gotD.nodes) { const p = mine.get(n); dx2 += p.x; dy2 += p.y; }
+        ok('the correction collapses into one node at its mean, fifty-one members', !!snD && Math.abs(Number(snD.getAttribute('cx')) - dx2 / gotD.nodes.length) < 0.6 && Math.abs(Number(snD.getAttribute('cy')) - dy2 / gotD.nodes.length) < 0.6 && d.querySelector('.tc-sn-lb[data-key="decimal:bcd"]').textContent === `decimal correction · ${gotD.nodes.length}`);
+        T.setCollapsed('decimal:bcd', false);
+        T.selectDecimal(null);
+        T.setDecimalRegions(false);
+        ok('the decimal toggle hides the outline', w.getComputedStyle($('tc-decimal-regions')).display === 'none' && $('tc-decimal-btn').getAttribute('aria-pressed') === 'false');
+        T.setDecimalRegions(true);
+        const f8 = d.createElement('iframe');
+        f8.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f8);
+        await new Promise((res) => { f8.addEventListener('load', res, { once: true }); f8.src = 'tracer.html?program=1&step=41&bcd=1'; });
+        for (let i = 0; i < 200 && !(f8.contentWindow.__tracer && !f8.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?bcd=1 selects the correction on a fresh page', f8.contentWindow.__tracer.state.decimal === 'bcd' && f8.contentDocument.getElementById('tc-block').textContent.includes('decimal correction'));
+        f8.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

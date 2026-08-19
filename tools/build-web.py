@@ -214,6 +214,8 @@ def main() -> None:
     b.copy_hashed("interrupt-paths.js")
     # The branch logic, split where the wiring splits it; a leaf the tracer draws.
     b.copy_hashed("branch-logic.js")
+    # The decimal correction, everything its names are wired into; a leaf the tracer draws.
+    b.copy_hashed("decimal-correction.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -595,6 +597,7 @@ def main() -> None:
         ("./clock-gen.js", "./" + b.ref("clock-gen.js")),
         ("./interrupt-paths.js", "./" + b.ref("interrupt-paths.js")),
         ("./branch-logic.js", "./" + b.ref("branch-logic.js")),
+        ("./decimal-correction.js", "./" + b.ref("decimal-correction.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

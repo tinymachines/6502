@@ -92,6 +92,7 @@
               <button class="btn" type="button" id="tc-clock-btn" aria-pressed="true">clock generator</button>
               <button class="btn" type="button" id="tc-intr-btn" aria-pressed="true">interrupt logic</button>
               <button class="btn" type="button" id="tc-branch-btn" aria-pressed="true">branch logic</button>
+              <button class="btn" type="button" id="tc-decimal-btn" aria-pressed="true">decimal correction</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -115,7 +116,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -352,6 +353,22 @@
         ends early, on the wire this piece feeds into the timing chain's
         reset. The card for each lists the nodes, what the piece reads at
         its edge and what it feeds, all measured, with the levels now.
+        The orange outline is the decimal correction, the circuit the
+        <a href="designer">designer</a> page counts by five names, here
+        taken as everything those names and their kin are wired into: from
+        every node the die gave a decimal name (the two control lines
+        <span class="mono">#DAA</span> and <span class="mono">#DSA</span>, the
+        two nibble detectors <span class="mono">DC34</span> and
+        <span class="mono">DC78</span>, and the <span class="mono">DA-</span>
+        family in the adder) the rule walks both ways inside the static
+        logic, stopping where a node reads or writes anything outside. It
+        comes out as one piece, and what it reads and feeds is the whole
+        mechanism read off the wires: it reads the adder's products and the
+        D flag's pipeline copy, and it feeds the two carries the detectors
+        inject and the adjusted special bus, bits one to three and five to
+        seven, which is where six is added to a nibble over nine on the way
+        to the accumulator. The card sorts the nodes by which walk found them,
+        detect, enable and adjust, with the levels now.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

@@ -2978,6 +2978,18 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.z-labels .tc-bg-lb { font-size: 46px; stroke-width: 8px; }
 .tc-cam.has-sel .tc-bg-lb:not(.sel) { opacity: .3; }
 
+/* The decimal correction: one orange outline around everything the decimal names are wired into. */
+.tc-decimal-regions.off { display: none; }
+.tc-dg { fill: color-mix(in srgb, var(--bc) 10%, transparent); stroke: color-mix(in srgb, var(--bc) 80%, transparent);
+         stroke-width: 7; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-dg:hover { fill: color-mix(in srgb, var(--bc) 20%, transparent); }
+.tc-dg.sel { fill: color-mix(in srgb, var(--bc) 30%, transparent); stroke: var(--bc); stroke-width: 13; }
+.tc-cam.has-sel .tc-dg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 25%, transparent); fill: none; }
+.tc-dg-lb { font: 800 96px var(--font-sans); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 16px; }
+.tc-cam.z-labels .tc-dg-lb { font-size: 50px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-dg-lb:not(.sel) { opacity: .3; }
+
 /* The pins by measured direction: a halo on each pad, in the direction's hue. */
 .tc-pin-regions.off { display: none; }
 .tc-pg { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);
