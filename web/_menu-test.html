@@ -37,7 +37,7 @@ const load = (src) => new Promise((r) => {
   f.src = src;
 });
 
-const PAGES = ['index.html', 'programs', 'primer', 'trace', 'exploded',
+const PAGES = ['index.html', 'programs', 'primer', 'trace', 'tracer', 'exploded',
                'block', 'schematic', 'blueprint', 'decode', 'timing'];
 
 /** Read the rendered menu out of the iframe. */
@@ -97,7 +97,7 @@ const shape = (groups) =>
     // reader they are in five places at once.
     const wrongCurrent = [];
     const expect = { 'index.html': 'Explorer', programs: 'Programs', primer: 'Primer',
-                     trace: 'Trace', exploded: 'Exploded', block: 'Blocks',
+                     trace: 'Trace', tracer: 'Tracer', exploded: 'Exploded', block: 'Blocks',
                      schematic: 'Schematic',
                      blueprint: 'Blueprint', decode: 'Decode', timing: 'Timing' };
     for (const [page, cur] of Object.entries(currents)) {

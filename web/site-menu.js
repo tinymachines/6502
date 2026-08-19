@@ -74,6 +74,8 @@ export const MENU = [
         hint: 'four instructions, opcode to register' },
       { label: 'Trace', page: 'trace',
         hint: 'any of the 256 opcodes, half-cycle by half-cycle' },
+      { label: 'Tracer', page: 'tracer',
+        hint: 'the whole circuit lit beside the code, half-cycle by half-cycle' },
     ],
   },
   {

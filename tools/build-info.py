@@ -49,6 +49,7 @@ PAGE_FILES = {
     "blueprint": ["web/blueprint.html", "web/blueprint.js"],
     "blockdiagram": ["web/blockdiagram.html", "web/blockdiagram.js"],
     "diegraph": ["web/diegraph.html", "web/diegraph.js"],
+    "tracer": ["web/tracer.html", "web/tracer.js"],
     "pinout": ["web/pinout.html", "web/pinout.js"],
     "trace": ["web/trace.html", "web/trace.js"],
     "decode": ["web/decode.html", "web/decode.js"],

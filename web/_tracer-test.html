@@ -1,0 +1,279 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The tracer's claim is that the whole circuit is on screen at its own die
+  positions and that, at each half-cycle, every mark is a comparison of two
+  readings of the chip: a ring is a node whose level changed, a flashed line a
+  gate whose output changed, a bright line a switch whose control is high. So
+  the harness runs a chip of its OWN to the same half-cycle and recomputes all
+  of it: the changed set, the levels, the fired and toggled edges, the watch
+  bytes, the current line of the code, and the positions from layout.bin. A
+  page that lit the right number of things for the wrong reason would pass a
+  count and fail these.
+
+  It boots the real page in an iframe under a deep link that exercises the
+  program, step, watch, fly and only parameters at once, then drives it.
+
+    http://localhost:8777/_tracer-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1400px;height:1000px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f" src="tracer.html?program=1&step=41&watch=abl,pcl,nosuch&fly=abl&only=1"></iframe>
+<script type="module">
+import init, { Machine } from './pkg/v6502_wasm.js';
+import { PROGRAMS, LOAD_ADDR } from './programs.js';
+
+const results = [];
+const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
+const hex4 = (v) => v.toString(16).padStart(4, '0').toUpperCase();
+
+f.addEventListener('load', async () => {
+  const d = f.contentDocument;
+  const w = f.contentWindow;
+  const $ = (id) => d.getElementById(id);
+  try {
+    for (let i = 0; i < 400 && $('tc-main').hidden; i++) await sleep(50);
+    ok('the page booted', !$('tc-main').hidden, $('tc-status').textContent);
+    for (let i = 0; i < 100 && !w.__tracer; i++) await sleep(50);
+    const T = w.__tracer;
+    const st = T.state;
+
+    // --- an independent chip, and the published files -------------------------
+    await init();
+    const [sch, buf] = await Promise.all([
+      fetch('schematic.json').then((r) => r.json()),
+      fetch('layout.bin').then((r) => r.arrayBuffer()),
+    ]);
+    const rails = new Set([sch.vss, sch.vcc]);
+    const byName = new Map(sch.names.map((n, i) => [n, i]).filter(([n]) => n));
+    const prog = PROGRAMS[1];
+    const m = new Machine();
+    m.load(LOAD_ADDR, new Uint8Array(prog.bytes));
+    m.setResetVector(LOAD_ADDR);
+    m.powerCycle();
+    const runTo = (h) => { while (m.halfCycle() < h) m.halfStep(); };
+    // Levels at h-1 and h, from the harness's chip.
+    const pair = (h) => { runTo(h - 1); const a = m.nodeLevels(); m.halfStep(); return [a, m.nodeLevels()]; };
+    const changedBetween = (a, b) => { const c = []; for (let i = 0; i < a.length; i++) if (a[i] !== b[i] && !rails.has(i)) c.push(i); return c; };
+
+    // --- the deep link -----------------------------------------------------------
+    ok('?program=1 chose the second program on the page and in the header',
+       $('tc-program').value === '1' && d.querySelector('.nav-prog select')?.value === '1'
+       && $('tc-code').textContent.includes(prog.name), `${$('tc-program').value} / ${prog.name}`);
+    ok('?step=41 landed on half-cycle 41', st.m.halfCycle() === 41 && /half-cycle 41\b/.test($('tc-head').textContent), $('tc-head').textContent.slice(0, 40));
+    ok('?watch= set the watch, and an unknown stem says so rather than vanishing',
+       $('tc-watch-input').value === 'abl pcl nosuch' && [...d.querySelectorAll('#tc-watch .tc-w')].length === 3
+       && /no such stem/.test(d.querySelector('#tc-watch .tc-w-none')?.textContent || ''), $('tc-watch-input').value);
+    const vb = () => $('tc-svg').getAttribute('viewBox').split(' ').map(Number);
+    ok('?fly=abl framed the drawing on the latch rather than the whole die', vb()[2] < st.home[2] * 0.6, `view ${vb()[2].toFixed(0)} of ${st.home[2].toFixed(0)}`);
+    ok('?only=1 turned on "only what moved"', $('tc-only').getAttribute('aria-pressed') === 'true' && $('tc-cam').classList.contains('only'));
+    ok('the header carries the program picker and the transport on this page',
+       !!d.querySelector('.nav-prog select') && !!d.querySelector('.nav-transport'));
+
+    // --- the drawing is the die graph -------------------------------------------
+    const dv = new DataView(buf);
+    const vertexCount = dv.getUint32(12, true);
+    const ymin = dv.getUint16(26, true), ymax = dv.getUint16(30, true);
+    const vertexOffset = dv.getUint32(32, true);
+    const sx = new Float64Array(2048), sy = new Float64Array(2048), cnt = new Uint32Array(2048);
+    for (let i = 0; i < vertexCount; i++) {
+      const o = vertexOffset + i * 6;
+      const nd = dv.getUint16(o + 4, true);
+      sx[nd] += dv.getUint16(o, true); sy[nd] += dv.getUint16(o + 2, true); cnt[nd] += 1;
+    }
+    const mine = new Map();
+    for (let nd = 0; nd < 2048; nd++) if (cnt[nd]) mine.set(nd, { x: sx[nd] / cnt[nd], y: ymax - (sy[nd] / cnt[nd]) + ymin });
+    const circles = () => [...d.querySelectorAll('#tc-svg .tc-n')];
+    const off = [];
+    for (const c of circles()) {
+      const nd = Number(c.dataset.node);
+      const p = mine.get(nd);
+      if (!p) { off.push(`${nd} has no geometry`); continue; }
+      if (Math.abs(Number(c.getAttribute('cx')) - p.x) > 0.6 || Math.abs(Number(c.getAttribute('cy')) - p.y) > 0.6) off.push(`${nd} off`);
+    }
+    ok('every node is drawn at the centroid of its own polygons', off.length === 0, off.slice(0, 3).join(' | ') || `${circles().length} checked`);
+    ok('and neither rail is drawn', !circles().some((c) => rails.has(Number(c.dataset.node))));
+    // The full graph, counted independently.
+    const seen = new Set(); let want = 0;
+    const keep = (n) => mine.has(n) && !rails.has(n);
+    const push = (a, b, k) => { if (a === b || !keep(a) || !keep(b)) return; const key = a < b ? `${a}:${b}:${k}` : `${b}:${a}:${k}`; if (seen.has(key)) return; seen.add(key); want++; };
+    for (const [out, , , legs] of sch.gates) for (const i of new Set(legs.flat())) push(i, out, 'gate');
+    for (const [, a, b] of sch.switches) push(a, b, 'switch');
+    const edgesEl = () => [...d.querySelectorAll('#tc-svg .tc-e')];
+    ok('the default view is every node, and the edge count is the netlist\'s own',
+       edgesEl().length === want && circles().some((c) => !sch.names[Number(c.dataset.node)]), `page ${edgesEl().length}, harness ${want}`);
+
+    // --- what moved at half-cycle 41, against the harness chip ---------------------
+    const [L40, L41] = pair(41);
+    const chg41 = changedBetween(L40, L41);
+    const drawn = new Set(circles().map((c) => Number(c.dataset.node)));
+    const ringed = circles().filter((c) => c.classList.contains('chg')).map((c) => Number(c.dataset.node)).sort((a, b) => a - b);
+    const wantRinged = chg41.filter((n) => drawn.has(n)).sort((a, b) => a - b);
+    ok('the ringed nodes are exactly the drawn nodes whose level changed at this half-cycle',
+       ringed.join() === wantRinged.join(), `${ringed.length} ringed, harness ${wantRinged.length}, of ${chg41.length} changed`);
+    ok('the moved list counts them, and the head line names the half-cycle',
+       new RegExp(`^${chg41.length} nodes changed level`).test($('tc-moved-sum').textContent), $('tc-moved-sum').textContent);
+    let hiBad = 0;
+    for (const c of circles()) if (c.classList.contains('hi') !== (L41[Number(c.dataset.node)] > 0)) hiBad++;
+    ok('every drawn node is lit exactly when the harness chip has it high', hiBad === 0, `${hiBad} wrong`);
+    // Edges: fired = gate edge whose output moved; on = switch conducting; tog = control moved.
+    const chgSet = new Set(chg41);
+    let edgeBad = 0, fired = 0, tog = 0, on = 0;
+    const gateOut = new Map();
+    for (const [out, , , legs] of sch.gates) for (const i of new Set(legs.flat())) gateOut.set(`${i}:${out}`, out);
+    for (let i = 0; i < st.edges.length; i++) {
+      const e = st.edges[i];
+      const cls = e.el.classList;
+      if (e.kind === 'gate') {
+        const wantFired = chgSet.has(e.out);
+        if (cls.contains('fired') !== wantFired) edgeBad++;
+        if (wantFired) fired++;
+      } else {
+        const wantOn = L41[e.control] > 0, wantTog = chgSet.has(e.control);
+        if (cls.contains('on') !== wantOn || cls.contains('tog') !== wantTog) edgeBad++;
+        if (wantOn) on++;
+        if (wantTog) tog++;
+      }
+    }
+    ok('flashed lines are gates whose output moved; bright and marked lines are switches by their control',
+       edgeBad === 0 && fired > 0 && tog > 0 && on > 0, `${edgeBad} wrong; ${fired} fired, ${on} on, ${tog} toggled`);
+    // The watch: bits from the harness levels.
+    const watchVal = (stem) => { let v = 0; for (let b = 0; b < 16; b++) { const n = byName.get(`${stem}${b}`); if (n !== undefined && L41[n]) v |= 1 << b; } return v; };
+    const rowVal = (stem) => d.querySelector(`#tc-watch [data-stem="${stem}"] .tc-w-v`)?.textContent;
+    ok('the watch rows read the bits the harness reads',
+       rowVal('abl') === `$${hex2(watchVal('abl'))}` && rowVal('pcl') === `$${hex2(watchVal('pcl'))}`, `abl ${rowVal('abl')} pcl ${rowVal('pcl')}`);
+    const movedBits = [...d.querySelectorAll('#tc-watch [data-stem="abl"] .tc-lamps i.moved')].length;
+    const wantMoved = [...Array(8).keys()].filter((b) => chgSet.has(byName.get(`abl${b}`))).length;
+    ok('and mark the bits that moved this half-cycle', movedBits === wantMoved, `${movedBits} vs ${wantMoved}`);
+    ok('the watched bits are ringed in the drawing and labelled at any zoom',
+       [...Array(8).keys()].every((b) => st.nodeEl.get(byName.get(`abl${b}`))?.classList.contains('wt')
+                                     && st.labelEl.get(byName.get(`abl${b}`))?.classList.contains('wt'))
+       && d.querySelectorAll('#tc-svg .tc-bus').length === 2, `${d.querySelectorAll('#tc-svg .tc-bus').length} bus lines`);
+    // Registers and the code.
+    ok('the register cards read the harness chip', $('tc-regs').querySelector('[data-reg="pc"] .tc-reg-v').textContent === `$${hex4(m.pc())}`
+       && $('tc-regs').querySelector('[data-reg="a"] .tc-reg-v').textContent === `$${hex2(m.a())}`);
+    const cur = d.querySelector('#tc-code .tc-row.cur');
+    ok('the code marks the instruction being fetched', !!cur && Number(cur.dataset.addr) === m.lastFetchAddr(), cur ? `$${hex4(Number(cur.dataset.addr))} vs $${hex4(m.lastFetchAddr())}` : 'no current row');
+    // Only what moved: what is visible is exactly rings, last rings and the watch.
+    const shown = circles().filter((c) => w.getComputedStyle(c).display !== 'none').length;
+    const wantShown = circles().filter((c) => ['chg', 'was', 'wt', 'on-pick'].some((k) => c.classList.contains(k))).length;
+    ok('"only what moved" hides every node that is not ringed, was not ringed, or watched', shown === wantShown && shown < circles().length / 2, `${shown} of ${circles().length} shown`);
+    // The moved list matches the change set.
+    const pills = [...d.querySelectorAll('#tc-moved .tc-node[data-node]')].map((b) => Number(b.dataset.node));
+    const unnamedCount = [...d.querySelectorAll('#tc-moved .tc-unnamed')].reduce((s, e) => s + parseInt(e.textContent, 10), 0);
+    ok('the moved list is the change set: every named node as a pill, the unnamed as counts',
+       pills.length + unnamedCount === chg41.length && pills.every((n) => chgSet.has(n) && sch.names[n]), `${pills.length} pills + ${unnamedCount} unnamed = ${chg41.length}`);
+
+    // --- stepping ------------------------------------------------------------------
+    T.setOnly(false);
+    const before = vb();
+    d.querySelector('#tc-moved .tc-node[data-node]').click();
+    await sleep(100);
+    ok('clicking a name in the list picks it and flies to it', st.picked === pills[0] && $('tc-picked').textContent.includes(sch.names[pills[0]]) && vb().join() !== before.join(), $('tc-picked').textContent.slice(0, 60));
+    $('tc-step').click();
+    await sleep(50);
+    const [L41b, L42] = pair(42);
+    const chg42 = changedBetween(L41b, L42);
+    const ringed42 = circles().filter((c) => c.classList.contains('chg')).map((c) => Number(c.dataset.node)).sort((a, b) => a - b);
+    ok('½ cycle steps once and re-marks: the rings are the new change set, without a frame',
+       st.m.halfCycle() === 42 && ringed42.join() === chg42.filter((n) => drawn.has(n)).sort((a, b) => a - b).join(), `${ringed42.length} ringed at 42`);
+    const wasSet = circles().filter((c) => c.classList.contains('was')).map((c) => Number(c.dataset.node));
+    ok('and the previous half-cycle\'s nodes keep a fainter ring',
+       wasSet.length > 0 && wasSet.every((n) => chgSet.has(n) && !chg42.includes(n)), `${wasSet.length} faint`);
+    $('tc-back').click();
+    await sleep(50);
+    ok('Back rewinds one half-cycle', st.m.halfCycle() === 41 && /half-cycle 41\b/.test($('tc-head').textContent));
+    $('tc-cycle').click();
+    await sleep(50);
+    ok('Cycle steps two, and says two half-cycles passed since the last frame', st.m.halfCycle() === 43 && /2 half-cycles since/.test($('tc-head').textContent), $('tc-head').textContent.slice(-60));
+    // Run through a fetch and see the count on the code go up.
+    const countOf = (addr) => Number(d.querySelector(`#tc-code .tc-row[data-addr="${addr}"] .tc-c-n`)?.textContent || 0);
+    const firstAddr = Number(d.querySelector('#tc-code .tc-row[data-addr]').dataset.addr);
+    const c0 = countOf(firstAddr);
+    T.advance(60); T.paint();
+    // Counted at every clock: the harness chip agrees on how many fetches of
+    // each address there were between reset and now, which a listing counting
+    // only at slow clocks could not.
+    const mm = new Machine(); mm.load(LOAD_ADDR, new Uint8Array(prog.bytes)); mm.setResetVector(LOAD_ADDR); mm.powerCycle();
+    const wantFetches = new Map();
+    let lastSeen = -1;
+    for (let hh = 0; hh <= st.m.halfCycle(); hh++) {
+      if (hh) mm.halfStep();
+      if (mm.sync() && !mm.clk0() && mm.halfCycle() !== lastSeen) { lastSeen = mm.halfCycle(); wantFetches.set(mm.lastFetchAddr(), (wantFetches.get(mm.lastFetchAddr()) || 0) + 1); }
+    }
+    const disagree = [...wantFetches].filter(([a, n]) => countOf(a) !== n);
+    ok('fetches are counted on the listing as the chip runs through them, at any clock, from the first',
+       disagree.length === 0 && wantFetches.size > 3 && countOf(firstAddr) === 1
+       && [...wantFetches.values()].some((n) => n > 1),
+       `${wantFetches.size} addresses, ${disagree.length} disagree; first instruction ${countOf(firstAddr)}`);
+    void c0;
+    // Keyboard.
+    const h0 = st.m.halfCycle();
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await sleep(50);
+    ok('the right arrow steps', st.m.halfCycle() === h0 + 1);
+
+    // --- the watch and the views ---------------------------------------------------
+    d.querySelector('[data-preset="address"]').click();
+    await sleep(50);
+    ok('a preset replaces the watch and redraws the bus lines',
+       $('tc-watch-input').value === 'abh abl adh adl pch pcl' && d.querySelectorAll('#tc-svg .tc-bus').length === 6
+       && d.querySelectorAll('#tc-watch .tc-w').length === 6, $('tc-watch-input').value);
+    d.querySelector('[data-mode="named"]').click();
+    await sleep(600);
+    ok('named signals only draws no unnamed node, and the marks are recomputed',
+       circles().every((c) => !!sch.names[Number(c.dataset.node)]) && circles().length < 900
+       && circles().filter((c) => c.classList.contains('hi')).length > 0, `${circles().length} nodes`);
+    d.querySelector('[data-mode="full"]').click();
+    await sleep(800);
+    ok('and back to every node', circles().length === drawn.size);
+    // Zoom labels.
+    $('tc-in').click(); $('tc-in').click(); $('tc-in').click();
+    await sleep(50);
+    ok('zooming past the threshold shows every named label', $('tc-cam').classList.contains('z-labels') && st.home[2] / vb()[2] >= 3, `${(st.home[2] / vb()[2]).toFixed(1)}x`);
+    $('tc-home').click();
+    ok('Fit goes home', vb().join() === st.home.join());
+
+    // --- reset and program change --------------------------------------------------
+    $('tc-reset').click();
+    await sleep(50);
+    ok('Reset power-cycles: half-cycle 0, no change set, and the listing forgets its counts',
+       st.m.halfCycle() === 0 && st.changed.length === 0 && /Power-on state/.test($('tc-moved-sum').textContent) && st.fetches.size === 1);
+    T.state.choose(0);
+    await sleep(50);
+    ok('choosing a program reloads and the header agrees', $('tc-code').textContent.includes(PROGRAMS[0].name) && d.querySelector('.nav-prog select').value === '0');
+
+    // --- prose and shell -----------------------------------------------------------
+    const stray = [];
+    for (const p of d.querySelectorAll('.bp-prose p')) {
+      const clone = p.cloneNode(true);
+      for (const kill of clone.querySelectorAll('[data-fact], .mono, code, a')) kill.remove();
+      const mm = clone.textContent.replace(/\b65C?[0-9]{2,3}\b/gi, '').match(/\b\d[\d,]*\b/g);
+      if (mm) stray.push(`${mm.join('/')} in "${clone.textContent.trim().slice(0, 40)}"`);
+    }
+    ok('no measurement was typed into the prose', stray.length === 0, stray.slice(0, 3).join(' | '));
+    for (let i = 0; i < 100 && !d.querySelector('#site-nav a'); i++) await sleep(50);
+    ok('the menu marks this page as the current one', d.querySelectorAll('#site-nav a[aria-current="page"]').length === 1);
+    ok('the footer is the site footer, all four elements',
+       !!d.querySelector('footer.site-foot .wrap .mark') && !!d.querySelector('footer.site-foot .wrap .foot-meta')
+       && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'), '');
+    ok('no em dash in the rendered page', !d.querySelector('main').textContent.includes('—'), '');
+  } catch (e) {
+    ok('the harness ran to the end', false, e && e.stack ? e.stack.split('\n').slice(0, 2).join(' ') : String(e));
+  }
+
+  const bad = results.filter((r) => r.startsWith('FAIL'));
+  document.title = bad.length ? `${bad.length} FAIL` : 'ALL PASS';
+  const pre = document.createElement('pre');
+  pre.textContent = results.join('\n');
+  document.body.appendChild(pre);
+}, { once: true });
+</script>
+</body></html>

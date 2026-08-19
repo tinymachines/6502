@@ -31,6 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -450,6 +451,9 @@ _lab-probe.html        # per-half-cycle dump: T-states, decode lines, every bus
 _lab-test.html         # every Lab claim, checked against the engine
 _primer-test.html      # the primer's numbers re-derived, and its five examples run
 _trace-test.html       # cycle counts counted, and ADC landing after the end
+_tracer-test.html      # the whole-circuit view: rings, flashed and bright edges,
+                       # watch bytes and the current line all recomputed from a
+                       # chip of its own; positions from layout.bin itself
 _schematic-test.html   # does the drawing contain everything the caption claims?
 _solo-test.html        # the study view, driven against the REAL page in an iframe
 _solo-shot.html        # ...and into a screenshot: fullscreen needs a click
@@ -866,6 +870,84 @@ obvious design:
   transistor — the way in is the input receiver, which is a gate. A trace that
   follows only switches can never leave the pad ring, which is why the watch
   list starts at `idl`/`idb`.
+
+### The Tracer (`tracer.html`, `tracer.js`, `die-centroids.js`)
+
+The whole circuit on one screen, lit half-cycle by half-cycle, beside the code
+that is running. Asked for as "a workbench with the code tracer in it, showing
+on each half-cycle ALL of the nodes impacted, the address latches setting, the
+data buses being set, with the entire circuit on the screen." One drawing on
+the site already had the entire circuit and no invented layout, the die graph;
+this is that graph with a clock.
+
+- **It is the die graph, not a laid-out schematic, and that is the design.**
+  A schematic of 1160 gates and 873 switches would need a whole-chip layout
+  engine and would still be an arrangement somebody chose. Every node here sits
+  at its own centroid on the die, so the address latches are where the address
+  latches are and the bits of a bus run down the chip; and because a node's
+  place never changes, lighting it costs a class and nothing else. `centroids()`
+  moved out of `diegraph.js` into `die-centroids.js` the moment a second page
+  wanted it, for the reason every other shared module exists.
+- **Every mark is a comparison of two readings of the chip, taken by the page.**
+  A ring is a node whose level changed since the last paint, a fainter ring one
+  that changed at the paint before (so a wave reads as motion rather than as
+  flicker); a flashed gate edge is one whose output moved; a bright switch edge
+  is one whose control is high, and it is marked when the control just moved.
+  Only what changed is touched per paint: the previous change set is
+  un-marked, the new one marked, and the fill class of exactly the changed
+  nodes flipped. `_tracer-test.html` runs a chip of its own to the same
+  half-cycle and recomputes all four sets; a page that lit the right *number*
+  of things would fail it.
+- **The watch is stems, and a latch is eight nodes on the die.** `abh abl adh
+  adl db idb sb` by default, presets for address, data, registers and ALU, and
+  a free text field. Each stem is a byte readout with the moved bits marked, a
+  ringed and labelled dot per bit in the drawing, and a thin dashed polyline
+  through the bits so the latch reads as one thing. Clicking a row flies to
+  it. `p` reads through the same code as everywhere and has no bit 5. A stem
+  the die does not have stays listed and says so; vanishing would read as a
+  typo the page silently forgave.
+- **The code tracer is the program's own source** (`asm.lines`), the fetching
+  instruction marked by `lastFetchAddr`, with a count of fetches per line.
+  Fetches are observed on **every** half-cycle, at any clock: the first version
+  observed only when fewer than sixteen half-cycles passed in a frame, so a
+  deep link counted nothing and a fast clock would have quietly under-counted.
+  The four readouts a fetch check costs are nothing beside a settle. **A rewind
+  un-counts**: `fetchLog` records `(h, addr)` and `forgetFetchesAfter()` pops
+  past the chip's half-cycle, because stepping back over a fetch and forward
+  again counted it twice, which the harness caught by comparing the whole map
+  against its own chip. The fetch the chip powers on into is counted too, or
+  every program's first instruction reads as never having run.
+- **The head line says when a frame spans more than one half-cycle.** At the
+  fastest clocks the chip runs many half-cycles between paints and the change
+  set is the union; a drawing claiming one half-cycle while showing forty would
+  be the wrong kind of convincing. `?step=N` lands showing what the *last*
+  half-cycle changed (run to N-1, paint, step, paint), not everything since
+  power-on, which is what the first version did and what 411 ringed nodes at
+  `?step=40` looked like.
+- **"Only what moved"** hides every node that is not ringed, was not ringed at
+  the previous paint, and is not watched, and every edge that did not fire or
+  toggle. Named labels: watched bits and moved names always, every name past 3×
+  zoom (`LABEL_ZOOM`); on a drawing of 1544 nodes a label per node is a wall.
+- **The moved list is the change set in words**, grouped by block, named nodes
+  as pills with the way they went and unnamed as a count, each pill flying the
+  drawing to its node. It is the same list the trace page shows for one opcode.
+- **Deep links:** `?program=N&run=1&step=N&watch=abl,pcl&fly=abl&mode=named&only=1`.
+  `?fly=STEM` frames a watched stem and exists because it is also the only way
+  to photograph a zoomed view headlessly.
+- **Two layout bugs, both measured off a screenshot.** `scrollIntoView` on the
+  current code row scrolled every ancestor, so loading the page dragged the
+  document down to the listing (and the screenshot came back with a blank
+  band); the box is scrolled by hand now. And the side column, a grid
+  stretched to the stage's height, squeezed its two scroll boxes to one line:
+  a scroll container's automatic minimum is zero, so with a definite height
+  the grid gave them nothing. It is a flex column the stage's height now, the
+  code box fixed and the moved list taking what remains.
+- **Header picker and transport drive it**, as on the blueprint; the console's
+  own Run, Back, ½ cycle, Cycle and Reset are a second view of the store, and
+  Back is `stepBack()` (rewind, so bounded by the keyframes). Arrow keys and
+  space work when focus is not in a field; the key handler guards
+  `e.target.closest`, because a harness dispatching at the document has no
+  `closest` and the first version threw.
 
 ### The Exploded view (`exploded.html`, `exploded-gl.js`, `blocks.rs`)
 

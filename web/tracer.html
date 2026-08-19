@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tracer: the whole circuit, one half-cycle at a time</title>
+<meta name="description" content="Every node and every edge of the MOS 6502 on one screen, at their positions on the die, lit by the transistor-level simulation and re-marked at each half-cycle with everything that moved, beside the program that is running.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Every node · every edge · live</p>
+    <h1>The whole circuit, one half-cycle at a time.</h1>
+    <p class="lede">
+      Every node of the chip at its own place on the die, every connection the
+      netlist has between them, and the program running on it. At each
+      half-cycle the drawing marks everything that moved: the nodes whose level
+      changed, the gates whose output changed, the switches that opened or
+      closed. Beside it, the code that is running, the buses, the registers, and
+      the address latches and data buses read out bit by bit.
+    </p>
+    <div class="statbar" id="tc-stats">…</div>
+  </section>
+
+  <div id="tc-boot" class="bp-boot wrap"><p id="tc-status">Loading the chip…</p></div>
+
+  <div id="tc-main" hidden>
+    <section class="wrap hs-wide" id="bench">
+      <div class="console">
+
+        <div class="console-bar">
+          <span class="tag live">circuit · live</span>
+          <label class="field prog">
+            <span>Program</span>
+            <select id="tc-program"></select>
+          </label>
+          <div class="bar-spacer"></div>
+          <span class="mono muted" id="tc-zoom">1.0×</span>
+          <button class="btn" type="button" id="tc-out" title="Zoom out">−</button>
+          <button class="btn" type="button" id="tc-in" title="Zoom in">+</button>
+          <button class="btn" type="button" id="tc-home">Fit</button>
+          <label class="field">
+            <span>Clock</span>
+            <select id="tc-speed"></select>
+          </label>
+        </div>
+
+        <div class="sch-controls tc-controls">
+          <div class="field">
+            <span>What to draw</span>
+            <div class="bk-dirs" role="group" aria-label="Which graph">
+              <button class="btn on" type="button" data-mode="full">every node</button>
+              <button class="btn" type="button" data-mode="named">named signals</button>
+              <button class="btn" type="button" id="tc-only" aria-pressed="false">show only what moved</button>
+            </div>
+          </div>
+          <div class="field tc-watch-field">
+            <span>Watch (stems, as the die names them)</span>
+            <div class="tc-watch-row">
+              <input id="tc-watch-input" type="text" class="mono" spellcheck="false" autocomplete="off"
+                     aria-label="Stems to watch, separated by spaces">
+              <div class="bk-dirs" role="group" aria-label="Watch presets">
+                <button class="btn" type="button" data-preset="address">address</button>
+                <button class="btn" type="button" data-preset="data">data</button>
+                <button class="btn" type="button" data-preset="registers">registers</button>
+                <button class="btn" type="button" data-preset="alu">ALU</button>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <span>Node</span>
+            <span class="mono muted" id="tc-picked">Click a node in the drawing, or a name in the list.</span>
+          </div>
+        </div>
+
+        <div class="tc-grid">
+          <div class="dg-stage tc-stage">
+            <svg id="tc-svg" role="img"
+                 aria-label="Every node of the 6502 at its position on the die, lit by its level"></svg>
+          </div>
+
+          <div class="tc-side">
+            <div class="tc-head" id="tc-head"></div>
+            <div class="bp-transport tc-transport">
+              <button class="btn btn-ghost" type="button" id="tc-back" title="Back one half-cycle">◀</button>
+              <button class="btn btn-primary" type="button" id="tc-run">Run</button>
+              <button class="btn btn-ghost" type="button" id="tc-step">½ cycle</button>
+              <button class="btn btn-ghost" type="button" id="tc-cycle">Cycle</button>
+              <button class="btn btn-ghost" type="button" id="tc-reset">Reset</button>
+            </div>
+            <div class="tc-regs" id="tc-regs"></div>
+            <div class="tc-watch" id="tc-watch"></div>
+            <div class="tc-code" id="tc-code" aria-label="The program"></div>
+            <div class="tc-moved-wrap">
+              <p class="tc-moved-sum mono" id="tc-moved-sum"></p>
+              <div class="tc-moved" id="tc-moved"></div>
+            </div>
+          </div>
+        </div>
+
+        <p class="bk-foot muted" id="tc-caption"></p>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="reading">
+      <div class="sec-head">
+        <p class="eyebrow">How to read it</p>
+        <h2>A ring is a node that moved</h2>
+      </div>
+      <p class="lede">
+        The drawing is the die graph with a clock. Nothing in it is laid out:
+        each node sits at its own centroid on the die, so the address latches
+        are where the address latches are, and the bits of a bus run down the
+        chip the way they run down the silicon. What the simulation adds is the
+        level of every node, and the difference between one half-cycle and the
+        next.
+      </p>
+      <p>
+        A filled node is high and a dark one is low, in the colour of the
+        functional block that owns it. A bright ring is a node whose level
+        changed at this half-cycle; a fainter ring is one that changed at the
+        previous one, so a wave of activity reads as motion rather than as a
+        flicker. A brighter line is a pass transistor whose control is high, so
+        the two wires it joins are one wire for the moment; a line that flashes
+        is a gate whose output just moved. Every one of those marks is a
+        comparison of two readings of the chip, taken by this page.
+      </p>
+      <p>
+        The list under the code says the same thing in words: every node that
+        changed level, grouped by block, with the way it went. Click a name and
+        the drawing flies to it. Turn on <em>show only what moved</em> and the
+        rest of the chip steps aside.
+      </p>
+
+      <div class="sec-head">
+        <p class="eyebrow">The watch</p>
+        <h2>A latch is eight nodes on the die</h2>
+      </div>
+      <p>
+        The watch list takes stems as the die names them (<span class="mono">abl</span>,
+        <span class="mono">adh</span>, <span class="mono">idb</span>) and shows each as
+        the bits it is, high bit first, with the ones that moved at this half-cycle
+        marked, and as a thin line through those bits on the drawing so the latch
+        reads as one thing. Click a row to fly to it. The default set is the two
+        address latches, the two internal address buses, and the three data
+        buses, which is enough to watch an address form and a byte arrive.
+      </p>
+      <p>
+        The code beside it is the program's own source, with the instruction
+        being fetched marked and a count of how many times each has been. At the
+        slowest clocks every fetch is seen; at the fastest the chip runs many
+        half-cycles between frames and the head line says how many, because a
+        drawing that claims to show one half-cycle while showing forty would be
+        the wrong kind of convincing.
+      </p>
+
+      <div class="sec-head">
+        <p class="eyebrow">Where the pieces come from</p>
+        <h2>Three files and a chip</h2>
+      </div>
+      <p>
+        Positions are the same centroids the <a href="diegraph">die graph</a>
+        draws, read out of the geometry the explorer uses. Edges and blocks come
+        from <span class="mono">schematic.json</span>, the file the
+        <a href="schematic">workbench</a> walks. Levels come from the running
+        chip, the same one every page here runs. The <a href="trace">trace</a>
+        follows one opcode through the same half-cycles with the wires that are
+        one wire; the <a href="halfshot">halfshot</a> records them. This page is
+        for watching all of it happen at once.
+      </p>
+    </section>
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="tracer.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

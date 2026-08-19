@@ -23,6 +23,7 @@
 
 import { blockCss } from './block-palette.js';
 import { el } from './sch-draw.js';
+import { centroids } from './die-centroids.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,46 +36,6 @@ const state = {
   home: null,
   picked: null,
 };
-
-/**
- * Node centroids, straight out of the geometry the die view draws.
- *
- * `layout.bin` is the same file the explorer fetches, so this asks the polygons
- * where each node is rather than inventing a position for it. A node's centroid
- * is the mean of its own vertices: crude for an L-shaped wire that wanders
- * across the die, exactly right for the great majority that do not.
- */
-function centroids(buffer) {
-  const dv = new DataView(buffer);
-  const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 8));
-  if (magic !== 'V6502LAY') throw new Error(`layout.bin: bad magic ${JSON.stringify(magic)}`);
-  const vertexCount = dv.getUint32(12, true);
-  const bounds = {
-    xmin: dv.getUint16(24, true), ymin: dv.getUint16(26, true),
-    xmax: dv.getUint16(28, true), ymax: dv.getUint16(30, true),
-  };
-  const vertexOffset = dv.getUint32(32, true);
-  const sx = new Float64Array(2048);
-  const sy = new Float64Array(2048);
-  const n = new Uint32Array(2048);
-  for (let i = 0; i < vertexCount; i++) {
-    const o = vertexOffset + i * 6;
-    const node = dv.getUint16(o + 4, true);
-    sx[node] += dv.getUint16(o, true);
-    sy[node] += dv.getUint16(o + 2, true);
-    n[node] += 1;
-  }
-  const pos = new Map();
-  for (let node = 0; node < 2048; node++) {
-    if (!n[node]) continue;
-    // Y is flipped for display, the same single sign the die view's projection
-    // carries. Without it the chip is drawn upside down against every other
-    // picture on this site, which is the kind of wrongness nobody notices until
-    // they try to compare two pages.
-    pos.set(node, { x: sx[node] / n[node], y: bounds.ymax - (sy[node] / n[node]) + bounds.ymin });
-  }
-  return { pos, bounds };
-}
 
 /**
  * The graph, at whichever size was asked for.

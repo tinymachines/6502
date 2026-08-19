@@ -2809,3 +2809,143 @@ body.no-scroll #view { z-index: 70; }
 .hs-svg .bp-block.moved .block-value, .hs-svg .bp-rail.moved .rail-value { fill: var(--accent); }
 .hs-svg .bp-edge.toggled .edge-switch { stroke: var(--hot); stroke-width: 3; }
 .hs-svg .bp-edge.toggled .edge-label { fill: var(--hot); }
+
+/* ---------------------------------------------------------------------------
+   The tracer (tracer.html)
+   ---------------------------------------------------------------------------
+   The die graph with a clock. Node fill is the block colour, set inline from
+   block-palette.js as the die graph does; level, change and watch are classes,
+   because they change every half-cycle and a class is the cheapest thing to
+   change on three thousand elements. */
+
+.tc-grid { display: grid; gap: .8rem; grid-template-columns: minmax(0, 1fr); padding: .8rem .9rem; }
+@media (min-width: 72rem) {
+  .tc-grid { grid-template-columns: minmax(0, 1fr) minmax(21rem, 26rem); }
+}
+/* The whole circuit is the point, so the stage gets the height. On a wide
+   screen the side column scrolls inside itself to match. */
+.tc-stage { border: 2px solid var(--line); border-radius: .3rem; }
+#tc-svg { width: 100%; height: min(82vh, 60rem); display: block; }
+/* The side column is a flex column exactly the stage's height on a wide
+   screen: everything above the moved list keeps its size (flex-shrink 0), the
+   code box has a fixed height, and the moved list takes what is left and
+   scrolls inside itself. The first version was a grid stretched to the stage's
+   height, and a scroll box's automatic minimum is zero, so the grid squeezed
+   the code box to one line to fit the rest. Measured, then rebuilt. */
+.tc-side { display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
+.tc-side > * { flex: 0 0 auto; }
+.tc-moved-wrap { flex: 1 1 auto; min-height: 8rem; }
+@media (min-width: 72rem) {
+  .tc-side { height: min(82vh, 60rem); }
+}
+.tc-controls { grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.tc-watch-field { grid-column: 1 / -1; }
+.tc-watch-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.tc-watch-row input { flex: 1 1 14rem; min-width: 0; font-size: 16px; }
+.tc-controls .bk-dirs { flex-wrap: wrap; }
+.tc-controls .btn[aria-pressed="true"] { border-color: var(--hot); color: var(--hot); }
+#tc-picked { font-size: .76rem; overflow-wrap: anywhere; }
+
+/* Edges. A gate edge reaches an output; a switch edge joins two wires. A
+   switch is bright while its control is high (the two wires are one wire), and
+   marked when the control just moved; a gate edge flashes when its output did. */
+.tc-e { stroke-width: 3; }
+.tc-e-gate { stroke: color-mix(in srgb, var(--line) 40%, transparent); }
+.tc-e-gate.fired { stroke: color-mix(in srgb, var(--hot) 75%, transparent); stroke-width: 5; }
+.tc-e-switch { stroke: color-mix(in srgb, var(--accent) 28%, transparent); stroke-width: 5; }
+.tc-e-switch.on { stroke: color-mix(in srgb, var(--accent) 80%, transparent); stroke-width: 7; }
+.tc-e-switch.tog { stroke: var(--hot); stroke-width: 9; }
+
+/* Nodes. Dark when low, lit when high; a ring for this half-cycle, a fainter
+   ring for the last one. */
+.tc-n { stroke: rgba(2, 6, 16, .6); stroke-width: 3; opacity: .38; }
+.tc-n.hi { opacity: 1; }
+.tc-n.was { stroke: color-mix(in srgb, var(--hot) 55%, transparent); stroke-width: 12; opacity: .8; }
+.tc-n.chg { stroke: var(--hot); stroke-width: 20; opacity: 1; }
+.tc-n.wt { stroke: var(--gold); stroke-width: 10; }
+.tc-n.wt.chg { stroke: var(--hot); }
+.tc-n.on-pick { stroke: var(--foreground); stroke-width: 22; }
+.tc-n:hover { stroke: var(--foreground); stroke-width: 14; }
+.tc-bus { fill: none; stroke: color-mix(in srgb, var(--gold) 45%, transparent); stroke-width: 4; stroke-dasharray: 26 18; pointer-events: none; }
+
+/* Labels: watched bits and moved names always, every name when zoomed in. */
+.tc-lb { display: none; font: 700 44px var(--font-mono); fill: var(--muted); pointer-events: none;
+         paint-order: stroke; stroke: #080c15; stroke-width: 10px; }
+.tc-lb.wt { display: block; fill: var(--gold); }
+.tc-lb.chg { display: block; fill: var(--hot); }
+.tc-cam.z-labels .tc-lb { display: block; }
+
+/* Only what moved: everything else steps aside, the watch stays. */
+.tc-cam.only .tc-n:not(.chg):not(.was):not(.wt):not(.on-pick) { display: none; }
+.tc-cam.only .tc-e:not(.fired):not(.tog) { display: none; }
+.tc-cam.only .tc-lb:not(.chg):not(.wt) { display: none; }
+
+/* The side column. */
+.tc-head {
+  padding: .55rem .7rem; border: 2px solid var(--line); border-radius: .4rem; background: var(--subtle);
+  font-size: .78rem; color: var(--muted); line-height: 1.7; min-height: 2.6rem;
+}
+.tc-head b { color: var(--foreground); }
+.tc-sep { color: var(--line); }
+.tc-span { color: var(--hot); }
+.tc-transport { flex-wrap: wrap; }
+.tc-regs { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.4rem, 1fr)); gap: .35rem; }
+.tc-reg { padding: .35rem .45rem; border: 2px solid var(--line); border-radius: .3rem; background: var(--surface); min-width: 0; }
+.tc-reg.moved { border-color: var(--hot); }
+.tc-reg-k { display: block; font: 700 .58rem/1 var(--font-mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.tc-reg-v { display: block; font: 800 .92rem/1.3 var(--font-mono); color: var(--foreground); overflow-wrap: anywhere; }
+.tc-reg.moved .tc-reg-v { color: var(--hot); }
+.tc-reg-flags { grid-column: 1 / -1; }
+
+.tc-watch { display: grid; gap: .25rem; }
+.tc-w {
+  display: flex; align-items: center; gap: .5rem; width: 100%; text-align: left;
+  padding: .3rem .5rem; border: 2px solid var(--line); border-radius: .3rem;
+  background: var(--surface); color: var(--foreground); cursor: pointer; font: inherit;
+}
+.tc-w:hover { border-color: var(--gold); }
+.tc-w-none { cursor: default; color: var(--muted); border-style: dashed; }
+.tc-w-k { font-weight: 800; font-size: .74rem; min-width: 2.6rem; color: var(--gold); }
+.tc-w-v { margin-left: auto; font-weight: 800; font-size: .8rem; }
+.tc-w-note { font-size: .7rem; }
+.tc-lamps { display: inline-flex; flex-wrap: wrap; gap: 1px; }
+.tc-lamps i {
+  font: 700 .5rem/1 var(--font-mono); font-style: normal;
+  width: .74rem; padding: .2rem 0; text-align: center;
+  color: #4a5a78; background: var(--subtle); border-radius: 1px;
+}
+.tc-lamps i.on { color: var(--accent-foreground); background: var(--accent); }
+.tc-lamps i.moved { box-shadow: 0 0 0 2px var(--hot); }
+.tc-lamps i.none { color: var(--line); background: transparent; }
+
+.tc-code {
+  border: 2px solid var(--line); border-radius: .3rem; background: #080c15;
+  height: 13rem; overflow: auto; font-size: .72rem; padding: .3rem 0;
+}
+.tc-code-title { padding: .2rem .6rem .35rem; font: 700 .62rem/1 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.tc-row { display: grid; grid-template-columns: 1.6rem 3.4rem 5.4rem minmax(0, 1fr); gap: .4rem; padding: .12rem .6rem; align-items: baseline; }
+.tc-row.cur { background: color-mix(in srgb, var(--hot) 22%, transparent); }
+.tc-row.cur .tc-c-src { color: var(--hot); }
+.tc-c-n { color: var(--muted); font-size: .62rem; text-align: right; }
+.tc-c-addr { color: var(--accent); }
+.tc-c-bytes { color: var(--muted); }
+.tc-c-src { color: var(--foreground); white-space: pre; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
+.tc-row:not(.has-op) .tc-c-src { color: var(--muted); }
+
+.tc-moved-wrap { display: flex; flex-direction: column; gap: .3rem; }
+.tc-moved-sum { margin: 0; font-size: .68rem; color: var(--muted); }
+.tc-moved { display: flex; flex-direction: column; gap: .45rem; flex: 1 1 auto; min-height: 6rem; overflow: auto; }
+@media (max-width: 71.99rem) { .tc-moved { max-height: 22rem; } }
+.tc-blk h4 { margin: 0 0 .2rem; font-size: .64rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.tc-blk h4 span { color: var(--foreground); margin-left: .3rem; }
+.tc-blk p { margin: 0; line-height: 1.9; }
+.tc-node {
+  font: 700 .62rem/1 var(--font-mono); padding: .16rem .3rem; margin: 0 .15rem .15rem 0;
+  border: 0; border-radius: .2rem; background: var(--subtle); color: var(--muted);
+  white-space: nowrap; cursor: pointer;
+}
+.tc-node:hover { outline: 2px solid var(--gold); }
+.tc-node.up { color: var(--accent); }
+.tc-node.down { color: var(--muted); }
+.tc-node i { font-style: normal; opacity: .7; margin-left: .1rem; }
+.tc-node.tc-unnamed { cursor: default; color: var(--line); }

@@ -201,6 +201,9 @@ def main() -> None:
     # The halfshot recording format. A leaf, importable by a harness without
     # booting the page, which is how the round trip is checked.
     b.copy_hashed("halfshot-codec.js")
+    # Node centroids from layout.bin, shared by diegraph.js and tracer.js so
+    # the two cannot put a node in two places. A leaf.
+    b.copy_hashed("die-centroids.js")
     b.copy_hashed("chip-controls.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
@@ -502,6 +505,7 @@ def main() -> None:
     for original, resolved in [
         ("./block-palette.js", "./" + b.ref("block-palette.js")),
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+        ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
     ]:
         dg = replace_once(dg, f"'{original}'", f"'{resolved}'", where="diegraph.js")
     for original in ["schematic.json", "layout.bin"]:
@@ -542,6 +546,27 @@ def main() -> None:
         hs = replace_once(hs, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
                           where="halfshot.js")
     b.emit("halfshot.js", hs.encode())
+
+    # 3q. tracer.js: the whole circuit lit half-cycle by half-cycle beside the
+    #     code. The die graph's positions, the header's picker and transport,
+    #     the programs, and two of the published files.
+    tc = b.read("tracer.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./block-palette.js", "./" + b.ref("block-palette.js")),
+        ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+        ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
+        ("./demos.js", "./" + b.ref("demos.js")),
+    ]:
+        tc = replace_once(tc, f"'{original}'", f"'{resolved}'", where="tracer.js")
+    for original in ["schematic.json", "layout.bin"]:
+        tc = replace_once(tc, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
+                          where="tracer.js")
+    b.emit("tracer.js", tc.encode())
 
     # 4. manifest: rewrite icon paths, then hash it too.
     manifest = json.loads(b.read("manifest.webmanifest").decode())
@@ -653,6 +678,13 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         dzh = replace_once(dzh, f'"{original}"', f'"{b.ref(original)}"', where="designer.html")
     b.emit("designer.html", dzh.encode(), hashed=False)
+
+    tch = b.read("tracer.html").decode()
+    for original in ["style.css", "tracer.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        tch = replace_once(tch, f'"{original}"', f'"{b.ref(original)}"', where="tracer.html")
+    b.emit("tracer.html", tch.encode(), hashed=False)
 
     hsh = b.read("halfshot.html").decode()
     for original in ["style.css", "halfshot.js", "version-footer.js", "site-menu.js",
