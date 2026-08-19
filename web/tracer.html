@@ -103,6 +103,9 @@
               <button class="btn" type="button" id="tc-sbus-btn" aria-pressed="true">special bus</button>
               <button class="btn" type="button" id="tc-sdp-btn" aria-pressed="true">store pipeline</button>
               <button class="btn" type="button" id="tc-rdy-btn" aria-pressed="true">ready logic</button>
+              <button class="btn" type="button" id="tc-pcr-btn" aria-pressed="true">PC storage</button>
+              <button class="btn" type="button" id="tc-pipe-btn" aria-pressed="true">pipe latches</button>
+              <button class="btn" type="button" id="tc-sync-btn" aria-pressed="true">SYNC</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -126,7 +129,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit's hue for a slice of the adder, a teal or orange bead for the data latch or the data out register, a gold bead for the instruction register or its predecode, a gold bead on the bus bits for the special bus and its lines, an amber bead for the store-data pipeline, a sky bead for the ready logic, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit's hue for a slice of the adder, a teal or orange bead for the data latch or the data out register, a gold bead for the instruction register or its predecode, a gold bead on the bus bits for the special bus and its lines, an amber bead for the store-data pipeline, a sky bead for the ready logic, a blue bead for the program counter's own bytes, a grey bead for the pipeline latch file, a cyan halo on the SYNC pad, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -547,6 +550,20 @@
         it, which is how a consumer asks whether the chip was ready last
         cycle. The receiver's card reads the pin, the master's says stalled
         or ready off the chip, the copies' names what they feed.
+        Three last pieces round out the set. The program counter's own
+        storage is four bytes of eight pure bits each, the counter pair and
+        the next-value pair, with six lines: hold, load from the buses (a
+        jump landing), and drive onto them (the next fetch); the high pair's
+        lines read the hidden T1 and the branch logic, which is a taken
+        branch reloading the high byte a cycle after the low. The pipeline
+        latch file is every node the die names pipe-something, fifty-two
+        latches and every one under the same clock, the file where the
+        decoder's phase-one answers are re-timed onto phase two; fifteen
+        carry names, thirty-seven are pipeUNK, named by the reverse
+        engineers for what they could not yet place. And the SYNC generator
+        is four nodes: the pin that says this cycle is an opcode fetch is
+        the hidden T1, inverted twice and sent off chip, the whole
+        generator reading exactly one wire.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

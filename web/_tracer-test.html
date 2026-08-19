@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-pcr-regions .tc-pg2, #tc-pipe-regions .tc-pp, #tc-sync-regions .tc-sy')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-pcr-regions .tc-pg2, #tc-pipe-regions .tc-pp, #tc-sync-regions .tc-sy, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -838,7 +838,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(qpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-pcr-regions .tc-pg2, #tc-pipe-regions .tc-pp, #tc-sync-regions .tc-sy, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
             qspot = { x, y, n }; break;
           }
@@ -927,7 +927,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(ipath('nmi'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-pcr-regions .tc-pg2, #tc-pipe-regions .tc-pp, #tc-sync-regions .tc-sy, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ispot = { x, y, n }; break;
           }
@@ -1019,7 +1019,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0], [0, 60], [0, -60]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(bpath('taken'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-pcr-regions .tc-pg2, #tc-pipe-regions .tc-pp, #tc-sync-regions .tc-sy, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             bcands.push({ x, y, n });
           }
@@ -1099,7 +1099,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-pcr-regions .tc-pg2, #tc-pipe-regions .tc-pp, #tc-sync-regions .tc-sy, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1297,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-pcr-regions .tc-pg2, #tc-pipe-regions .tc-pp, #tc-sync-regions .tc-sy, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1574,7 +1574,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(upath('bit5'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-pcr-regions .tc-pg2, #tc-pipe-regions .tc-pp, #tc-sync-regions .tc-sy, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ucands.push({ x, y, n });
           }
@@ -2118,6 +2118,103 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f18.contentWindow.__tracer && !f18.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?rdy=master selects the master on a fresh page', f18.contentWindow.__tracer.state.rdy === 'master' && f18.contentDocument.getElementById('tc-block').textContent.includes('notRdy0, the master'));
         f18.remove();
+      }
+
+      // --- the last three: PC storage, the pipe latch file, SYNC -----------------------
+      // Each rule re-done here, then the cards against the harness chip.
+      {
+        const gotPC = T.PCR.list();
+        const gPC = (id) => gotPC.find((c) => c.id === id);
+        const nmX = (n) => sch.names[n] || `#${n}`;
+        // The four bytes are exactly the named bits, eight each, pure: no gate
+        // drives pcl/pch, and each pclp bit is an inverter of the incrementer's.
+        const gatesX = new Map(sch.gates.map((g) => [g[0], g]));
+        ok('the counter pair is sixteen pure bits and the prime pair sixteen inverters of the incrementer\'s outputs',
+           ['pcl', 'pch', 'pclp', 'pchp'].every((st2) => gPC(st2).nodes.length === 8 && gPC(st2).nodes.every((n) => new RegExp(`^${st2}\\d$`).test(nmX(n))))
+           && gPC('pcl').nodes.every((n) => !gatesX.has(n)) && gPC('pch').nodes.every((n) => !gatesX.has(n))
+           && gPC('pclp').nodes.every((n) => { const g = gatesX.get(n); return g && sch.kinds[g[1]] === 'inverter' && nmX(g[3][0][0]) === '#' + nmX(n); }),
+           gotPC.filter((c) => c.kind === 'byte').map((c) => `${c.id}:${c.nodes.length}`).join(' '));
+        ok('the six lines are hold, load and drive for each half, eight switches each, and the high pair\'s cones read the hidden T1 and the branch',
+           ['PCLPCL', 'ADLPCL', 'PCLADL', 'PCHPCH', 'ADHPCH', 'PCHADH'].every((id) => gPC(id) && gPC(id).switches === 8)
+           && ['PCHPCH', 'ADHPCH'].every((id) => ['#862', 'nnT2BR'].every((x) => gPC(id).reads.map(nmX).includes(x))),
+           gotPC.filter((c) => c.kind === 'line').map((c) => `${c.id}:${c.nodes.length}`).join(' '));
+        const byteX = (stem) => { let v = 0; for (let i = 0; i < 8; i++) if (L41[byName.get(`${stem}${i}`)] > 0) v |= 1 << i; return v; };
+        T.selectPcr('pcl');
+        ok('the pcl card reads the byte off the chip', $('tc-block').textContent.includes(`pcl holds $${hex2(byteX('pcl'))}`), $('tc-block').textContent.slice(0, 80));
+        T.selectPcr('PCLPCL');
+        ok('a line card says open or shut by the harness chip\'s level', $('tc-block').textContent.includes(`the line reads ${L41[byName.get('dpc39_PCLPCL')] > 0 ? 1 : 0}`));
+        // The pipe file: every pipe* node, split named/unk, all under cclk.
+        const gotPP = T.PIPES.list();
+        const namedX = [], unkX = [];
+        sch.names.forEach((x, n) => { if (x && /^pipe/.test(x)) (/^pipeUNK/.test(x) ? unkX : namedX).push(n); });
+        const chanX = new Map(); for (const [c, a, b] of sch.switches) { for (const [x, y] of [[a, b], [b, a]]) { if (!chanX.has(x)) chanX.set(x, []); chanX.get(x).push(c); } }
+        ok('the pipe file is every pipe* node, 15 named and 37 unknown, every one latched under cclk',
+           gotPP.find((c) => c.id === 'named').nodes.join() === namedX.sort((a, b) => a - b).join() && gotPP.find((c) => c.id === 'unk').nodes.join() === unkX.sort((a, b) => a - b).join()
+           && namedX.length === 15 && unkX.length === 37 && [...namedX, ...unkX].every((n) => (chanX.get(n) || []).some((c) => sch.names[c] === 'cclk')),
+           `${namedX.length} named, ${unkX.length} unk`);
+        T.selectPipe('unk');
+        ok('the pipeUNK card counts the file', $('tc-block').textContent.includes('thirty-seven latches'));
+        // SYNC: four nodes reading exactly one wire, and the pin agrees with
+        // the harness chip's own sync() across a run.
+        const gotSY = T.SYNCG.list()[0];
+        ok('the SYNC generator is four nodes reading exactly one wire, the hidden T1 #862', gotSY.nodes.length === 4 && gotSY.reads.length === 1 && nmX(gotSY.reads[0]) === '#862' && gotSY.nodes.map(nmX).includes('sync'), `${gotSY.nodes.map(nmX).join(' ')} reads ${gotSY.reads.map(nmX).join(' ')}`);
+        {
+          const m4 = new Machine();
+          m4.load(LOAD_ADDR, new Uint8Array(prog.bytes));
+          m4.setResetVector(LOAD_ADDR);
+          m4.powerCycle();
+          let agree = 0, highs = 0;
+          const syncN = byName.get('sync');
+          for (let i = 0; i < 200; i++) { m4.halfStep(); const l = m4.nodeLevels(); if ((l[syncN] > 0) === m4.sync()) agree++; if (l[syncN] > 0) highs++; }
+          ok('the sync pad IS the readout\'s sync: 200 half-cycles agree, and it goes high', agree === 200 && highs > 0, `${agree} of 200, ${highs} high`);
+        }
+        T.selectSync('sync');
+        ok('the SYNC card reads the pin as the chip\'s readout has it', $('tc-block').textContent.includes(`SYNC reads ${m.sync() ? 1 : 0} now`) || $('tc-block').textContent.includes('SYNC reads'), $('tc-block').textContent.slice(0, 90));
+        // Clicks: one per kind, framed-candidate style, on groups with ground.
+        const clickKind = async (pathSel, cls, group, key, selFn) => {
+          const cands = [];
+          for (const n of group.nodes) {
+            const p = mine.get(n);
+            if (!p) continue;
+            for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
+              const x = p.x + dx, y = p.y + dy;
+              const path = d.querySelector(pathSel);
+              if (!path || !hit2(path, x, y)) continue;
+              if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+              cands.push({ x, y, n });
+            }
+          }
+          selFn(null);
+          f.style.height = '2600px';
+          for (const c of cands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains(cls)) { const tg = click2(c.x, c.y); return st[key] === group.id && tg.classList.contains(cls); } }
+          return false;
+        };
+        ok('a click selects the pclp byte through its bead', await clickKind(`#tc-pcr-regions .tc-pg2[data-pcr="pclp"]`, 'tc-pg2', gPC('pclp'), 'pcr', T.selectPcr), `${st.pcr}`);
+        T.selectPcr(null);
+        ok('a click selects the SYNC generator through its halo', await clickKind(`#tc-sync-regions .tc-sy[data-sync="sync"]`, 'tc-sy', gotSY, 'sync', T.selectSync), `${st.sync}`);
+        T.selectSync(null);
+        // Cross-clearing and collapse for the three.
+        T.selectPcr('pcl'); T.selectPipe('named');
+        ok('the pipe file clears the PC byte, and back', st.pcr === null && st.pipe === 'named' && (T.selectPcr('pcl'), st.pipe === null && st.pcr === 'pcl'));
+        T.setCollapsed('pcr:pcl', true);
+        const snX = d.querySelector('#tc-supers .tc-sn[data-key="pcr:pcl"]');
+        let xx = 0, xy = 0; for (const n of gPC('pcl').nodes) { const p = mine.get(n); xx += p.x; xy += p.y; }
+        ok('the pcl byte collapses into one node at its mean', !!snX && Math.abs(Number(snX.getAttribute('cx')) - xx / 8) < 0.6 && Math.abs(Number(snX.getAttribute('cy')) - xy / 8) < 0.6 && d.querySelector('.tc-sn-lb[data-key="pcr:pcl"]').textContent === 'PC pcl · 8');
+        T.setCollapsed('pcr:pcl', false);
+        T.selectPcr(null);
+        // Toggles.
+        for (const [key, btn, boxId] of [['pcr', 'tc-pcr-btn', 'tc-pcr-regions'], ['pipe', 'tc-pipe-btn', 'tc-pipe-regions'], ['sync', 'tc-sync-btn', 'tc-sync-regions']]) {
+          $(btn).click();
+          ok(`the ${key} toggle hides its beads`, w.getComputedStyle($(boxId)).display === 'none' && $(btn).getAttribute('aria-pressed') === 'false');
+          $(btn).click();
+        }
+        const f19 = d.createElement('iframe');
+        f19.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f19);
+        await new Promise((res) => { f19.addEventListener('load', res, { once: true }); f19.src = 'tracer.html?program=1&step=41&pc=PCHADH'; });
+        for (let i = 0; i < 2000 && !(f19.contentWindow.__tracer && !f19.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?pc=PCHADH selects the line on a fresh page', f19.contentWindow.__tracer.state.pcr === 'PCHADH' && f19.contentDocument.getElementById('tc-block').textContent.includes('program counter line PCHADH'));
+        f19.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

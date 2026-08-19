@@ -236,6 +236,8 @@ def main() -> None:
     b.copy_hashed("store-pipeline.js")
     # The ready logic; a leaf the tracer draws.
     b.copy_hashed("ready-logic.js")
+    # The PC's own storage, the pipe latch file and the SYNC generator; a leaf the tracer draws.
+    b.copy_hashed("pc-pipe-sync.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -628,6 +630,7 @@ def main() -> None:
         ("./special-bus.js", "./" + b.ref("special-bus.js")),
         ("./store-pipeline.js", "./" + b.ref("store-pipeline.js")),
         ("./ready-logic.js", "./" + b.ref("ready-logic.js")),
+        ("./pc-pipe-sync.js", "./" + b.ref("pc-pipe-sync.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),
