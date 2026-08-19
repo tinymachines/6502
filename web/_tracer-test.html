@@ -566,6 +566,9 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
+            // The stack pointer's beads outrank a control outline (they are
+            // the more specific claim about the same lines), so keep clear.
+            if ([...d.querySelectorAll('#tc-stack-regions .tc-kg2')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -759,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-stack-regions .tc-kg2')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -1092,7 +1095,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-stack-regions .tc-kg2')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1125,6 +1128,98 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 200 && !(f8.contentWindow.__tracer && !f8.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?bcd=1 selects the correction on a fresh page', f8.contentWindow.__tracer.state.decimal === 'bcd' && f8.contentDocument.getElementById('tc-block').textContent.includes('decimal correction'));
         f8.remove();
+      }
+
+      // --- the stack pointer logic ----------------------------------------------------
+      // The rule re-done here: the register as the closure of s0..s7 inside the
+      // Registers block; the lines as the controls of its switches less the
+      // clocks (forty or more switches); each line's bounded backward cone
+      // inside the control pipeline and the static logic, clocks never
+      // expanded; shared nodes split out. Then what each is made from, by name,
+      // and the cards against the harness chip.
+      {
+        const REGB = sch.blockNames.indexOf('Registers');
+        const homeS = new Set(['Control pipeline', 'Static logic'].map((x) => sch.blockNames.indexOf(x)));
+        const blkS = (n) => sch.nodeBlock[n] & 0x7f;
+        const backS = new Map(), undS = new Map(); const addS = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addS(backS, out, i); addS(undS, out, i); addS(undS, i, out); } if (pre >= 0) { addS(backS, out, pre); addS(undS, out, pre); addS(undS, pre, out); } }
+        const ctlOfS = new Map(), ctlCountS = new Map();
+        for (const [c, a, b] of sch.switches) { addS(backS, a, b); addS(backS, b, a); addS(undS, a, b); addS(undS, b, a); addS(ctlOfS, a, c); addS(ctlOfS, b, c); ctlCountS.set(c, (ctlCountS.get(c) || 0) + 1); }
+        const nbS = (m, n) => m.get(n) || new Set();
+        const clocksS = new Set([...ctlCountS].filter(([, c]) => c >= 40).map(([n]) => n));
+        const bitsS = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => byName.get(`s${i}`));
+        const regS = new Set(bitsS); { const q = [...bitsS]; while (q.length) { const n = q.shift(); for (const m of nbS(undS, n)) if (!regS.has(m) && !rails.has(m) && blkS(m) === REGB) { regS.add(m); q.push(m); } } }
+        const linesS = new Set(); for (const n of regS) for (const c of nbS(ctlOfS, n)) if (!clocksS.has(c)) linesS.add(c);
+        const coneS = (l) => { const dd = new Map([[l, 0]]); const q = [l]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const bnd = [...nbS(backS, n)].some((x) => !rails.has(x) && !homeS.has(blkS(x))); if (n !== l && (bnd || clocksS.has(n))) continue; for (const x of nbS(backS, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeS.has(blkS(x)) && !clocksS.has(x)) q.push(x); } } return [...dd.keys()].filter((n) => (homeS.has(blkS(n)) && !clocksS.has(n)) || n === l); };
+        const conesS = new Map([...linesS].map((l) => [l, coneS(l)]));
+        const ownersS = new Map(); for (const [l, c] of conesS) for (const n of c) { if (!ownersS.has(n)) ownersS.set(n, []); ownersS.get(n).push(l); }
+        const nmS = (n) => sch.names[n] || `#${n}`;
+        const idS = (l) => nmS(l).slice(nmS(l).indexOf('_') + 1);
+        const gotS = T.stackList();
+        const gS = (id) => gotS.find((c) => c.id === id);
+        const wantReg = [...regS].filter((n) => mine.has(n)).sort((a, b) => a - b);
+        ok('the S register is the harness\'s own closure of s0..s7 inside the Registers block: 32 nodes, four a bit', gS('reg').nodes.join() === wantReg.join() && wantReg.length === 32 && [0, 1, 2, 3, 4, 5, 6, 7].every((i) => gS('reg').nodes.map(nmS).includes(`nots${i}`)), `${gS('reg').nodes.length} vs ${wantReg.length}`);
+        ok('its switches reach exactly sb0..7 and adl0..7 outside it', gS('reg').outside.map(nmS).sort().join() === [...Array(8).keys()].flatMap((i) => [`sb${i}`, `adl${i}`]).sort().join(), gS('reg').outside.map(nmS).join(' '));
+        const wantLines = [...linesS].map(idS).sort();
+        ok('the lines are SS, SBS, SSB and SADL, the clocks left out', wantLines.join() === ['SADL', 'SBS', 'SS', 'SSB'].join() && gotS.filter((c) => c.kind === 'line').map((c) => c.id).sort().join() === wantLines.join() && gotS.filter((c) => c.kind === 'line').every((c) => c.onRegister === 8),
+           `${wantLines.join(' ')}; page ${gotS.filter((c) => c.kind === 'line').map((c) => `${c.id}:${c.onRegister}`).join(' ')}`);
+        let coneOk = 0;
+        for (const [l, c] of conesS) { const own = c.filter((n) => ownersS.get(n).length === 1 && mine.has(n)).sort((a, b) => a - b); if (gS(idS(l)) && gS(idS(l)).nodes.join() === own.join()) coneOk++; }
+        const sharedS = [...ownersS].filter(([, ls]) => ls.length > 1).map(([n]) => n).filter((n) => mine.has(n)).sort((a, b) => a - b);
+        ok('each line\'s group is its cone less what it shares, and the shared nodes are their own group', coneOk === 4 && gotS.filter((c) => c.kind === 'shared').length === 1 && gS('SS-SBS') && gS('SS-SBS').nodes.join() === sharedS.join(), `${coneOk} of 4 cones; shared ${sharedS.map(nmS).join(' ')}`);
+        ok('SADL is made from the JSR and stack terms, SSB from TSX, SS and SBS from TXS: the instruction set in the wires',
+           ['op-T0-jsr', 'op-T2-stack'].every((x) => gS('SADL').reads.map(nmS).includes(x)) && gS('SSB').reads.map(nmS).includes('op-T0-tsx') && gS('SS').reads.map(nmS).includes('op-T0-txs') && gS('SBS').reads.map(nmS).includes('op-T0-txs'),
+           gotS.filter((c) => c.kind === 'line').map((c) => `${c.id}: ${c.reads.map(nmS).join(' ')}`).join(' | '));
+        const spath = (id) => d.querySelector(`#tc-stack-regions .tc-kg2[data-stack="${id}"]`);
+        let outS = 0; for (const c of gotS) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(spath(c.id), p.x, p.y)) outS++; }
+        ok('every node lies inside its group\'s beads', outS === 0, `${outS} outside`);
+        T.selectStack('reg');
+        ok('the register card reads S off the chip as the harness chip has it', $('tc-block').textContent.includes(`S reads $${hex2(m.s())}`), $('tc-block').textContent.slice(0, 80));
+        let lineOk = 0;
+        for (const c of gotS.filter((x) => x.kind === 'line')) { T.selectStack(c.id); const txt = $('tc-block').textContent; const open = L41[c.node] > 0; if (txt.includes(`the line reads ${open ? 1 : 0}`) && txt.includes(open ? 'are open now' : 'are shut now')) lineOk++; }
+        ok('each line card says open or shut by the level the harness chip has', lineOk === 4, `${lineOk} of 4`);
+        T.selectStack('reg');
+        const regSet = new Set(gS('reg').nodes);
+        let dimS = 0; for (const c of circles()) if (c.classList.contains('sel-out') === regSet.has(Number(c.dataset.node))) dimS++;
+        ok('every node but the register\'s steps back', dimS === 0, `${dimS} wrong`);
+        let sspot = null;
+        for (const n of gS('reg').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(spath('reg'), x, y)) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            sspot = { x, y, n }; break;
+          }
+          if (sspot) break;
+        }
+        ok('a point inside the register\'s beads, clear of nodes, exists', !!sspot);
+        T.selectStack(null);
+        T.frameNodes([sspot.n]);
+        f.style.height = '2600px'; await sleep(100);
+        const tgS = click2(sspot.x, sspot.y);
+        ok('the click lands on a stack bead', tgS.classList.contains('tc-kg2'), tgS.tagName + '.' + tgS.className.baseVal);
+        ok('and selects the register, over the s capsule and the Registers region under it', st.stack === 'reg' && st.stem === null && st.block === null && st.control === null, `${st.stack} / ${st.stem} / ${st.block}`);
+        click2(sspot.x, sspot.y);
+        ok('clicking the selected bead again clears it', st.stack === null);
+        T.selectStack('SS'); T.selectStem('s');
+        ok('a capsule clears a stack group, and a stack group a capsule', st.stack === null && st.stem === 's' && (T.selectStack('SS'), st.stem === null && st.stack === 'SS'));
+        T.setCollapsed('stack:reg', true);
+        const snS = d.querySelector('#tc-supers .tc-sn[data-key="stack:reg"]');
+        let sx2 = 0, sy2 = 0; for (const n of gS('reg').nodes) { const p = mine.get(n); sx2 += p.x; sy2 += p.y; }
+        ok('the register collapses into one node at its mean, thirty-two members', !!snS && Math.abs(Number(snS.getAttribute('cx')) - sx2 / 32) < 0.6 && Math.abs(Number(snS.getAttribute('cy')) - sy2 / 32) < 0.6 && d.querySelector('.tc-sn-lb[data-key="stack:reg"]').textContent === 'S register · 32');
+        T.setCollapsed('stack:reg', false);
+        T.selectStack(null);
+        T.setStackRegions(false);
+        ok('the stack toggle hides the beads', w.getComputedStyle($('tc-stack-regions')).display === 'none' && $('tc-stack-btn').getAttribute('aria-pressed') === 'false');
+        T.setStackRegions(true);
+        const f9 = d.createElement('iframe');
+        f9.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f9);
+        await new Promise((res) => { f9.addEventListener('load', res, { once: true }); f9.src = 'tracer.html?program=1&step=41&stack=SADL'; });
+        for (let i = 0; i < 400 && !(f9.contentWindow.__tracer && !f9.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?stack=SADL selects the line on a fresh page', f9.contentWindow.__tracer.state.stack === 'SADL' && f9.contentDocument.getElementById('tc-block').textContent.includes('stack pointer, SADL'));
+        f9.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

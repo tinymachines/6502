@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Eleven kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, and the decimal correction as everything its names are wired into. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Twelve kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, and the stack pointer as the register the die builds and the lines that move it. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1236,6 +1236,36 @@ this is that graph with a clock.
     the card against its chip, clicks (through the `alu` capsule under it),
     collapses, deep-links. **The harness's boot wait had to grow**: eleven
     kinds derived at boot pushed the page past the 20 s it allowed.
+
+- **The stack pointer is a container as the register the die builds and the
+  lines that move it.** `stack-pointer.js` (a leaf): the register is the
+  closure of `s0..s7` inside the Registers block (**32 nodes, four a bit**:
+  the bit, `nots`, two latch nodes), and its switches reach exactly
+  `sb0..7` and `adl0..7` outside it, the two buses S can meet. The lines are
+  the controls of those switches less the clocks (a node controlling forty
+  or more switches: `cclk` 243, `cp1` 96, nothing else near), and each comes
+  with its bounded backward cone in the control pipeline and the static
+  logic, **clocks never expanded** (`dpc7_SS` reads `cclk` as a gate input
+  and a walk through it reaches the clock generator). Measured: **SS 5, SBS
+  4, SADL 5, SSB 5**, each holding eight switches on the register, and three
+  nodes shared by SS and SBS (hold and load: one TXS decode latched once and
+  read by both), their own group. What each line reads is the instruction
+  set in the wires: SADL from `op-T0-jsr` and `op-T2-stack`, SSB from
+  `op-T0-tsx`, SS and SBS from `op-T0-txs`.
+  - Square-dotted beads at `STACK_R` (90); keys `stack:reg`, `stack:SS`,
+    `stack:SS-SBS` (the shared id joins with `-`, because `+` in a query is
+    a space and `?stack=SS+SBS` found nothing); `?stack=SADL`,
+    `?stackptr=0`. **The stack outranks everything on click and is drawn
+    last**: its beads sit over the `s` capsule and the Registers' control
+    outline, and the first run had the click selecting the register while
+    `elementFromPoint` returned the capsule; z-order has to agree with click
+    priority or the element under the pointer is not what a click selects.
+    The control cluster's own click spot now keeps clear of stack beads.
+  - The register card reads S off the chip; a line card says whether its
+    eight switches are open at this half-cycle (the line's level) and what
+    it is made from. The harness re-derives the closure, the lines, the
+    cones and the shared split, pins the reads by name, checks the cards
+    against its chip, clicks, collapses, deep-links.
 
 ### `graph.json`: the chip as one node-and-edge file
 

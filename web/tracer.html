@@ -93,6 +93,7 @@
               <button class="btn" type="button" id="tc-intr-btn" aria-pressed="true">interrupt logic</button>
               <button class="btn" type="button" id="tc-branch-btn" aria-pressed="true">branch logic</button>
               <button class="btn" type="button" id="tc-decimal-btn" aria-pressed="true">decimal correction</button>
+              <button class="btn" type="button" id="tc-stack-btn" aria-pressed="true">stack pointer</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -116,7 +117,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for the stack pointer or one of its lines, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -369,6 +370,24 @@
         seven, which is where six is added to a nibble over nine on the way
         to the accumulator. The card sorts the nodes by which walk found them,
         detect, enable and adjust, with the levels now.
+        The square-dotted beads are the stack pointer logic: the S register
+        as the die builds it, and the lines that move it. The register is
+        everything reachable from its eight bits inside the Registers block,
+        four nodes a bit (the bit, its inverse, two latch nodes), and its
+        switches reach exactly the special bus and the address-low bus
+        outside it, the two buses S can meet. The lines are the controls of
+        those switches, less the clocks, and each comes with the cone that
+        makes it, walked back inside the control pipeline and the static
+        logic to where it reads a decode term: <span class="mono">SS</span>
+        holds S (asserted by the absence of any term), <span class="mono">SBS</span>
+        loads it from the special bus and is made from TXS,
+        <span class="mono">SSB</span> drives it onto the special bus and is
+        made from TSX, <span class="mono">SADL</span> drives it onto the
+        address-low bus, the stack address, and is made from JSR and the
+        stack terms. Hold and load share three nodes, one decode read by
+        both, and those are their own bead. The register's card reads S off
+        the chip; a line's card says whether its eight switches are open at
+        this half-cycle and what it is made from.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty
