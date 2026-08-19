@@ -459,6 +459,76 @@ f.addEventListener('load', async () => {
       T.setClusterRegions(false);
       ok('the cluster toggle hides them', w.getComputedStyle($('tc-cluster-regions')).display === 'none' && $('tc-clusters-btn').getAttribute('aria-pressed') === 'false');
       T.setClusterRegions(true);
+
+      // --- the decode terms by stage ----------------------------------------------
+      // The grouping is re-derived from the names (role 1 = a product term) and
+      // compared node for node; the card's high list is checked against the
+      // harness chip, which is the point of the cluster.
+      const wantStages = new Map();
+      let unnamedTerms = 0, termsN = 0;
+      sch.nodeRole.forEach((role, n) => {
+        if (role !== 1 || !mine.has(n)) return;
+        termsN++;
+        const nm = sch.names[n];
+        if (!nm) { unnamedTerms++; return; }
+        const mm = /^op-(T[0-5]|T\+)-/.exec(nm);
+        const id = mm ? mm[1] : 'any';
+        if (!wantStages.has(id)) wantStages.set(id, []);
+        wantStages.get(id).push(n);
+      });
+      const gotStages = T.stageList();
+      ok('the stage clusters are the harness\'s own, term for term',
+         gotStages.length === [...wantStages].filter(([, v]) => v.length >= 2).length
+         && gotStages.every((c) => (wantStages.get(c.id) || []).sort((a, b) => a - b).join() === c.nodes.join()),
+         `page ${gotStages.map((c) => `${c.id}:${c.nodes.length}`).join(' ')}; ${termsN} terms, ${unnamedTerms} unnamed`);
+      ok('122 terms, one unnamed and left out, seven stages', termsN === 122 && unnamedTerms === 1 && gotStages.length === 7);
+      const spath = (id) => d.querySelector(`#tc-stage-regions .tc-tg[data-stage="${id}"]`);
+      let outT = 0;
+      for (const c of gotStages) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(spath(c.id), p.x, p.y)) outT++; }
+      ok('every term lies inside its stage\'s beads', outT === 0, `${outT} outside`);
+      ok('the stages are interleaved along the PLA: T0\'s beads are many pieces, not one', T.stageRegionData().get('T0').pieces > 5, `${T.stageRegionData().get('T0').pieces} pieces`);
+      // A click on a T0 bead: a point inside T0's beads, no capsule, and near
+      // a T0 term more than any other stage's term (the nearest-member rule).
+      let tspot = null;
+      const t0 = wantStages.get('T0');
+      for (const n of t0) {
+        const p = mine.get(n);
+        for (const [dx, dy] of [[40, 0], [-40, 0], [0, 40], [0, -40], [30, 30]]) {
+          const x = p.x + dx, y = p.y + dy;
+          if (!hit2(spath('T0'), x, y) || caps.some((c) => hit2(c, x, y))) continue;
+          if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+          tspot = { x, y, n }; break;
+        }
+        if (tspot) break;
+      }
+      ok('a point beside a T0 term, inside its bead and clear of nodes, exists', !!tspot);
+      T.frameNodes([tspot.n]);
+      f.style.height = '2600px'; await sleep(100);
+      const tg4 = click2(tspot.x, tspot.y);
+      ok('the click lands on a stage bead', tg4.classList.contains('tc-tg'), tg4.tagName + '.' + tg4.className.baseVal);
+      ok('and selects T0, clearing every other kind', st.stage === 'T0' && st.block === null && st.stem === null && st.cluster === null, `${st.stage}`);
+      const t0Set = new Set(t0);
+      let dimT = 0; for (const c of circles()) if (c.classList.contains('sel-out') === t0Set.has(Number(c.dataset.node))) dimT++;
+      ok('every node but the T0 terms steps back', dimT === 0, `${dimT} wrong`);
+      const highT0 = t0.filter((n) => L41[n] > 0).map((n) => sch.names[n]).sort();
+      const cardT = $('tc-block');
+      const pillsT = [...cardT.querySelectorAll('.tc-node.up')].map((b) => b.textContent).sort();
+      ok('the card lists exactly the T0 terms the harness chip has high', cardT.textContent.includes(`${highT0.length} high`) && pillsT.join() === highT0.join(), `page ${pillsT.join(' ')} | harness ${highT0.join(' ')}`);
+      // That can pass on an empty list, so also the stage with the most terms
+      // high right now, which must list some.
+      const busiest = [...wantStages].map(([id, ns]) => [id, ns.filter((n) => L41[n] > 0).map((n) => sch.names[n]).sort()]).sort((a, b) => b[1].length - a[1].length)[0];
+      T.selectStage(busiest[0]);
+      const pillsB = [...cardT.querySelectorAll('.tc-node.up')].map((b) => b.textContent).sort();
+      ok(`and for the busiest stage (${busiest[0]}) the list is non-empty and exact`, busiest[1].length > 0 && pillsB.join() === busiest[1].join(), `page ${pillsB.join(' ')} | harness ${busiest[1].join(' ')}`);
+      T.selectStage('T0');
+      click2(tspot.x, tspot.y);
+      ok('clicking the selected stage again clears it', st.stage === null && !circles().some((c) => c.classList.contains('sel-out')));
+      T.selectStage('T2'); T.selectCluster(cspot.id);
+      ok('a cluster clears a stage, and a stage a cluster', st.stage === null && st.cluster === cspot.id && (T.selectStage('T2'), st.cluster === null && st.stage === 'T2'));
+      T.selectStage(null);
+      T.setStageRegions(false);
+      ok('the stage toggle hides the beads', w.getComputedStyle($('tc-stage-regions')).display === 'none' && $('tc-stages-btn').getAttribute('aria-pressed') === 'false');
+      T.setStageRegions(true);
       f.style.height = '1000px';
       T.frameNodes([byName.get('abl0')]);  // the view the checks below were written against
     }

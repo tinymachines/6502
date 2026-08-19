@@ -85,6 +85,7 @@
               <button class="btn" type="button" id="tc-regions-btn" aria-pressed="true">block regions</button>
               <button class="btn" type="button" id="tc-stems-btn" aria-pressed="true">bus capsules</button>
               <button class="btn" type="button" id="tc-clusters-btn" aria-pressed="true">gate clusters</button>
+              <button class="btn" type="button" id="tc-stages-btn" aria-pressed="true">decode stages</button>
             </div>
           </div>
           <div class="field tc-watch-field" id="tc-watch-field">
@@ -106,7 +107,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage; click it again to clear.</span>
           </div>
         </div>
 
@@ -249,7 +250,16 @@
         cluster is tinted by the block it drives, lavender when it drives no
         single block; click one and the card says how many gates, which block,
         how many are high and how many moved. A capsule wins over a cluster,
-        and a cluster over the block region under it. A convex hull per block was measured first and rejected, because
+        and a cluster over the block region under it.
+        The beads along the decode PLA are its product terms, clustered by
+        the stage their names serve: the die calls a term
+        <span class="mono">op-T0-lda</span> or <span class="mono">op-T2-ind-y</span>,
+        and a name with no T-state serves any stage. That cluster is a set
+        rather than a place, because the stages are interleaved along the row
+        of terms, so its beads are scattered and coloured by stage, warm early
+        to cool late. Click one to select the stage: the card says how many of
+        its terms are high at this half-cycle and names them, which is the
+        decoder's answer to what the chip is doing right now. A convex hull per block was measured first and rejected, because
         the datapath blocks are interleaved bit-slices: the address latches'
         hull contained every node of the ALU and the program counter, which is
         the opposite of a container. The unclassified residue and the static

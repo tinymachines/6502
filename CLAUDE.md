@@ -993,6 +993,24 @@ this is that graph with a clock.
     and the centroids, hit-tests all 511 gates into their outlines, clicks a
     point inside one cluster and a block region and no capsule, and checks
     the card's high and moved counts against its own chip.
+- **The decode terms cluster by stage, and a stage cluster is a set, not a
+  place.** The 122 product terms (`nodeRole` 1) lie in a row along the PLA a
+  median 49 die units apart, and the stages are interleaved along it (82 runs
+  of alternating stage in 122), so no radius separates them spatially; the
+  grouping is what the die's names carry: `op-T0-…`, `op-T2-…` .. `op-T5-…`,
+  `op-T+-…`, and a name with no T-state serving any stage. Measured: T0 33,
+  T2 17, T3 10, T4 9, T5 8, T+ 11, any 33, and the one unnamed term (the
+  `irline3` generator) left out and counted. Drawn as beads (`TERM_R` 70,
+  cell 25) coloured by stage (`STAGE_COLOR`, presentation), T0's beads coming
+  out as 21 pieces, which is the interleaving made visible. Clicking selects
+  the stage's terms as a set; the card lists which are high now as pills that
+  fly to the term, which is the decoder's answer to "what is the chip doing".
+  `?stage=T0` deep-links; priority is capsule, stage bead, gate cluster,
+  block region.
+  - **The harness's card check passed vacuously first**: no T0 term is high at
+    half-cycle 41, so an empty list matched an empty list. It now also checks
+    the stage with the most terms high and requires the list non-empty. A
+    check that can pass on nothing has to be made to see something.
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same

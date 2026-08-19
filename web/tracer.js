@@ -85,6 +85,22 @@ export const STEM_R = 220;
 // already use), then by proximity, two gates joined when within 2 x CLUSTER_R.
 // A cluster of one is not a cluster and is not drawn; the caption counts them.
 export const CLUSTER_R = 120;
+// The decode terms, clustered by the stage their names serve. The 122 product
+// terms lie in a row along the PLA a median 49 die units apart, and the stages
+// are interleaved along it (82 runs in 122), so a term cluster is a SET rather
+// than a place: `op-T0-lda` is a T0 term wherever it sits. The die names the
+// stage on 88 of them; the 33 whose name carries no T-state serve any stage;
+// the one unnamed term (the irline3 generator) is a cluster of one and is
+// left out and counted. Drawn as beads of TERM_R around each term, which run
+// together where same-stage terms are neighbours and overlap other stages'
+// beads where they are not, as the blocks' regions do.
+export const TERM_R = 70;
+export const STAGES = ['T0', 'T2', 'T3', 'T4', 'T5', 'T+', 'any'];
+// Presentation: one hue per stage, warm early to cool late, grey for any.
+const STAGE_COLOR = {
+  T0: 'rgb(255 120 90)', T2: 'rgb(255 170 70)', T3: 'rgb(250 220 80)', T4: 'rgb(150 230 120)',
+  T5: 'rgb(90 210 230)', 'T+': 'rgb(170 150 255)', any: 'rgb(170 175 190)',
+};
 
 const state = {
   m: null,
@@ -109,6 +125,10 @@ const state = {
   clusterRegionData: null,
   cluster: null,     // the selected cluster id (its lowest node number), or null
   clusterRegions: true,
+  stages: null,      // [{id, nodes}] decode terms by stage
+  stageRegionData: null,
+  stage: null,       // the selected stage id, or null
+  stageRegions: true,
   watch: DEFAULT_WATCH.slice(),
   program: 0,
   // The drawing.
@@ -420,6 +440,72 @@ function clusterAt(pt) {
   return best;
 }
 
+/** The decode terms grouped by the stage their names serve. */
+function stageList() {
+  if (state.stages) return state.stages;
+  const { sch, pos } = state;
+  const groups = new Map(STAGES.map((id) => [id, []]));
+  let unnamed = 0, terms = 0;
+  sch.nodeRole.forEach((role, n) => {
+    if (role !== 1 || !pos.has(n)) return;
+    terms++;
+    const nm = sch.names[n];
+    if (!nm) { unnamed++; return; }
+    const m = /^op-(T[0-5]|T\+)-/.exec(nm);
+    const id = m ? m[1] : 'any';
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(n);
+  });
+  const out = [];
+  for (const [id, nodes] of groups) if (nodes.length >= 2) out.push({ id, nodes: nodes.sort((a, b) => a - b) });
+  state.stages = out;
+  state.stageStats = { stages: out.length, terms, unnamed };
+  return out;
+}
+
+function stageRegionData() {
+  if (state.stageRegionData) return state.stageRegionData;
+  const list = stageList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: TERM_R, cell: 25 });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.stageRegionData = out;
+  return out;
+}
+
+function drawStageRegions(g) {
+  const data = stageRegionData();
+  for (const c of stageList()) {
+    const r = data.get(c.id);
+    const css = STAGE_COLOR[c.id] || STAGE_COLOR.any;
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-tg' + (state.stage === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-stage': c.id, style: `--bc: ${css}` }, g);
+    path.setAttribute('aria-label', `${c.nodes.length} decode terms, ${c.id === 'any' ? 'any stage' : c.id}`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y - TERM_R - 20, class: 'tc-tg-lb' + (state.stage === c.id ? ' sel' : ''), 'data-stage': c.id, style: `--bc: ${css}` }, g);
+      t.textContent = c.id;
+    }
+  }
+  g.classList.toggle('off', !state.stageRegions);
+}
+
+function stageAt(pt) {
+  const data = stageRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const c of stageList()) {
+    if (!inRegion(pt, data.get(c.id).loops)) continue;
+    for (const n of c.nodes) {
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = c.id; }
+    }
+  }
+  return best;
+}
+
 function drawStemRegions(g) {
   const data = stemRegionData();
   for (const [stem, r] of data) {
@@ -505,7 +591,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -514,7 +600,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -523,7 +609,16 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select a stage's decode terms, as a set. */
+function selectStage(id, { fly = false } = {}) {
+  const c = id === null ? null : stageList().find((x) => x.id === id);
+  state.stage = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -545,6 +640,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-cluster-regions .tc-cg, #tc-cluster-regions .tc-cl-lb')) {
     p.classList.toggle('sel', state.cluster !== null && Number(p.dataset.cluster) === state.cluster);
+  }
+  for (const p of document.querySelectorAll('#tc-stage-regions .tc-tg, #tc-stage-regions .tc-tg-lb')) {
+    p.classList.toggle('sel', state.stage !== null && p.dataset.stage === state.stage);
   }
   for (const [n, c] of state.nodeEl) {
     const out = on && !isMember(n);
@@ -574,8 +672,9 @@ function paintBlock() {
   const b = state.block;
   if (b === null && state.stem !== null) { paintStemCard(box); return; }
   if (b === null && state.cluster !== null) { paintClusterCard(box); return; }
+  if (b === null && state.stage !== null) { paintStageCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -591,6 +690,23 @@ function paintBlock() {
     + `<span class="tc-bk-moved">${moved}</span> moved at this half-cycle · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}, `
     + `${pct}% of the die`
     + (slug ? ` · <a href="block?b=${slug}">its page</a>` : '');
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/** The card for a stage's decode terms: how many are high now, and which. */
+function paintStageCard(box) {
+  const c = stageList().find((x) => x.id === state.stage);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  const high = [], moved = [];
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) high.push(n);
+    if (L && P && P[n] !== L[n]) moved.push(n);
+  }
+  const pills = (ns) => ns.map((n) => `<button type="button" class="tc-node ${L[n] ? 'up' : 'down'}" data-node="${n}">${sch.names[n]}</button>`).join(' ');
+  const html = `<span class="tc-bk-name">decode terms, ${c.id === 'any' ? 'any stage' : c.id}</span> · ${c.nodes.length} terms`
+    + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high) : ''}`
+    + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved) : ''}`;
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -659,6 +775,7 @@ function draw() {
   const cam = el('g', { class: 'tc-cam' + (state.only ? ' only' : ''), id: 'tc-cam' }, svg);
   drawRegions(el('g', { class: 'tc-regions', id: 'tc-regions' }, cam));
   drawClusterRegions(el('g', { class: 'tc-cluster-regions', id: 'tc-cluster-regions' }, cam));
+  drawStageRegions(el('g', { class: 'tc-stage-regions', id: 'tc-stage-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
   g.edges.forEach((e, i) => {
@@ -694,6 +811,7 @@ function draw() {
   if (state.block !== null) selectBlock(state.block);
   else if (state.stem !== null) selectStem(state.stem);
   else if (state.cluster !== null) selectCluster(state.cluster);
+  else if (state.stage !== null) selectStage(state.stage);
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
   $('tc-caption').textContent =
@@ -734,7 +852,17 @@ function clusterCaption() {
   if (!st) return '';
   return `The dashed outlines are the static logic in clusters: the ${st.gates} gates that belong to no `
     + `block, grouped by the block they drive and then by proximity at ${CLUSTER_R} die units, `
-    + `${st.clusters} clusters of two or more and ${st.singles} gates that sit alone and get none.`;
+    + `${st.clusters} clusters of two or more and ${st.singles} gates that sit alone and get none. `
+    + stageCaption();
+}
+
+function stageCaption() {
+  const st = state.stageStats;
+  if (!st) return '';
+  const list = stageList();
+  return `The beads along the decode PLA are its ${st.terms} product terms in ${list.length} clusters by the `
+    + `stage their names serve (${list.map((c) => `${c.id} ${c.nodes.length}`).join(', ')}), a set rather than `
+    + `a place, because the stages are interleaved along the row; the ${st.unnamed} unnamed term is left out.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -1219,6 +1347,12 @@ function setMode(m) {
   paint();
 }
 
+function setStageRegions(on) {
+  state.stageRegions = on;
+  $('tc-stages-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-stage-regions')?.classList.toggle('off', !on);
+}
+
 function setClusterRegions(on) {
   state.clusterRegions = on;
   $('tc-clusters-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1380,7 +1514,11 @@ async function boot() {
     if (q.get('buses') === '0') setStemRegions(false);
     $('tc-clusters-btn').addEventListener('click', () => setClusterRegions(!state.clusterRegions));
     if (q.get('clusters') === '0') setClusterRegions(false);
+    $('tc-stages-btn').addEventListener('click', () => setStageRegions(!state.stageRegions));
+    if (q.get('terms') === '0') setStageRegions(false);
     $('tc-block').addEventListener('click', (e) => {
+      const pill = e.target.closest('.tc-node[data-node]');
+      if (pill) { pick(Number(pill.dataset.node), true); return; }
       const b = e.target.closest('.tc-bk-watch');
       if (!b) return;
       const stem = b.dataset.stem;
@@ -1449,6 +1587,8 @@ async function boot() {
       const pt = atClient(e);
       const stem = state.stemRegions ? stemAt(pt) : null;
       if (stem !== null) { selectStem(stem === state.stem ? null : stem); return; }
+      const sg = state.stageRegions ? stageAt(pt) : null;
+      if (sg !== null) { selectStage(sg === state.stage ? null : sg); return; }
       const cl = state.clusterRegions ? clusterAt(pt) : null;
       if (cl !== null) { selectCluster(cl === state.cluster ? null : cl); return; }
       const b = state.regions ? blockAt(pt) : null;
@@ -1482,6 +1622,8 @@ async function boot() {
     if (q.has('block')) selectBlockBySlug(q.get('block'));
     // ?bus=STEM selects a bus or latch and frames it.
     if (q.has('bus')) selectStem(q.get('bus').toLowerCase(), { fly: true });
+    // ?stage=T0 selects that stage's decode terms and frames them.
+    if (q.has('stage')) selectStage(q.get('stage'), { fly: true });
     // ?cluster=N selects the cluster holding node N and frames it.
     if (q.has('cluster')) {
       const n = Number(q.get('cluster'));
@@ -1500,5 +1642,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, blockAt, stemAt, clusterAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, blockAt, stemAt, clusterAt, stageAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();
