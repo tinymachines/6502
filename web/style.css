@@ -2856,6 +2856,18 @@ body.no-scroll #view { z-index: 70; }
 .tc-e-switch.on { stroke: color-mix(in srgb, var(--accent) 80%, transparent); stroke-width: 7; }
 .tc-e-switch.tog { stroke: var(--hot); stroke-width: 9; }
 
+/* The block regions behind the graph: a tinted, outlined union of discs per
+   block in its own hue (block-regions.js). Pointer-transparent, so a click
+   still reaches the node under it; the label goes when node labels arrive,
+   because by then the reader is inside one block. */
+.tc-regions.off { display: none; }
+.tc-rg { fill: color-mix(in srgb, var(--bc) 10%, transparent); stroke: color-mix(in srgb, var(--bc) 38%, transparent);
+         stroke-width: 9; stroke-linejoin: round; pointer-events: none; }
+.tc-rg-lb { font: 800 170px var(--font-sans); fill: color-mix(in srgb, var(--bc) 75%, transparent);
+            text-anchor: middle; dominant-baseline: middle; letter-spacing: .02em; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .7); stroke-width: 24px; }
+.tc-cam.z-labels .tc-rg-lb { display: none; }
+
 /* Nodes. Dark when low, lit when high; a ring for this half-cycle, a fainter
    ring for the last one. */
 .tc-n { stroke: rgba(2, 6, 16, .6); stroke-width: 3; opacity: .38; }

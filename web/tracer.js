@@ -30,6 +30,7 @@ import {
 import { blockCss } from './block-palette.js';
 import { el } from './sch-draw.js';
 import { centroids } from './die-centroids.js';
+import { blockRegions, loopsToPath, inRegion, gridCells } from './block-regions.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -58,6 +59,14 @@ export const PRESETS = {
 };
 /** Zoom (home width / view width) at which every named label is shown. */
 export const LABEL_ZOOM = 3;
+// A block's region is everything within REGION_R die units of one of its
+// member nodes, evaluated on a REGION_CELL grid (block-regions.js). 300 is
+// about three times the median spacing between neighbours inside a datapath
+// block, measured: the program counter then comes out as one piece, the
+// registers as two, and the timing chain, whose 25 nodes are genuinely spread
+// across the control side, as a dozen. Both numbers are printed in the caption.
+export const REGION_R = 300;
+export const REGION_CELL = 50;
 
 const state = {
   m: null,
@@ -69,6 +78,9 @@ const state = {
   view: null,
   mode: 'full',
   only: false,
+  regions: true,    // draw the block regions behind the graph
+  regionData: null, // block -> {loops, cells, pieces, label, members}, computed once
+  regionStats: null,
   watch: DEFAULT_WATCH.slice(),
   program: 0,
   // The drawing.
@@ -213,6 +225,57 @@ function buildGraph() {
   return { nodes: [...nodes], edges };
 }
 
+/**
+ * The functional blocks as regions on the die, behind the graph.
+ *
+ * Computed once from the centroids and `nodeBlock`, because neither changes:
+ * the region is a fact about the die, not about which nodes the current mode
+ * draws. Twelve blocks, ids 1..12 in blocks.json order; the unclassified
+ * residue (0) and the static logic (13) are the background the blocks sit in
+ * and get no region. The pads come out as the ring they are.
+ */
+function regionData() {
+  if (state.regionData) return state.regionData;
+  const { sch, pos, bounds } = state;
+  const blocks = [];
+  for (let b = 1; b < sch.blockNames.length - 1; b++) blocks.push(b);
+  const nb = sch.nodeBlock.map((v) => v & 0x7f);
+  const rails = new Set([sch.vss, sch.vcc]);
+  const posNoRails = new Map([...pos].filter(([n]) => !rails.has(n)));
+  const data = blockRegions(posNoRails, nb, blocks, bounds, { radius: REGION_R, cell: REGION_CELL });
+  // How much the regions overlap: functional-block nodes that also sit inside
+  // another block's region. A fact worth printing, because it is the reason
+  // these are regions and not hulls.
+  let members = 0, shared = 0, pieces = 0;
+  for (const [n, p] of posNoRails) {
+    const b = nb[n];
+    if (!data.has(b)) continue;
+    members++;
+    for (const [ob, r] of data) {
+      if (ob !== b && inRegion(p, r.loops)) { shared++; break; }
+    }
+  }
+  for (const r of data.values()) pieces += r.pieces;
+  state.regionStats = { members, shared, pieces, blocks: data.size, grid: gridCells(bounds, { radius: REGION_R, cell: REGION_CELL }) };
+  state.regionData = data;
+  return data;
+}
+
+function drawRegions(g) {
+  const data = regionData();
+  const { sch } = state;
+  for (const [b, r] of data) {
+    const css = blockCss(b);
+    el('path', { d: loopsToPath(r.loops), class: 'tc-rg', 'fill-rule': 'evenodd',
+                 'data-block': b, style: `--bc: ${css}` }, g);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y, class: 'tc-rg-lb', 'data-block': b, style: `--bc: ${css}` }, g);
+      t.textContent = sch.blockNames[b];
+    }
+  }
+  g.classList.toggle('off', !state.regions);
+}
+
 function draw() {
   const svg = $('tc-svg');
   svg.replaceChildren();
@@ -231,6 +294,7 @@ function draw() {
   state.edges = g.edges;
 
   const cam = el('g', { class: 'tc-cam' + (state.only ? ' only' : ''), id: 'tc-cam' }, svg);
+  drawRegions(el('g', { class: 'tc-regions', id: 'tc-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
   g.edges.forEach((e, i) => {
     const p = pos.get(e.a), q = pos.get(e.b);
@@ -271,7 +335,19 @@ function draw() {
                              : 'Named signals only. ')
     + 'A ring is a node that changed level at this half-cycle, a fainter ring one that '
     + 'changed at the previous one; a bright line is a switch conducting, a flashed line '
-    + 'a gate whose output moved.';
+    + 'a gate whose output moved. '
+    + regionCaption();
+}
+
+function regionCaption() {
+  const st = state.regionStats;
+  if (!st) return '';
+  const pct = Math.round(100 * st.shared / st.members);
+  return `The tinted regions are the ${st.blocks} functional blocks, each drawn as everything `
+    + `within ${REGION_R} die units of one of its nodes: ${st.pieces} pieces in all, and they `
+    + `overlap, because ${st.shared} of the ${st.members} block nodes (${pct}%) sit inside `
+    + 'another block\'s region too. A convex hull per block was measured first and rejected: '
+    + 'the datapath blocks are interleaved bit-slices, and a hull claims the neighbour\'s silicon.';
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -754,6 +830,12 @@ function setMode(m) {
   paint();
 }
 
+function setRegions(on) {
+  state.regions = on;
+  $('tc-regions-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-regions')?.classList.toggle('off', !on);
+}
+
 function setOnly(on) {
   state.only = on;
   $('tc-only').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -883,6 +965,8 @@ async function boot() {
     for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => setMode(b.dataset.mode));
     $('tc-only').addEventListener('click', () => setOnly(!state.only));
     if (q.get('only') === '1') setOnly(true);
+    $('tc-regions-btn').addEventListener('click', () => setRegions(!state.regions));
+    if (q.get('regions') === '0') setRegions(false);
     $('tc-home').addEventListener('click', () => { setView(state.home.slice()); });
 
     // Fullscreen, as the workbench has it: the drawing covers the viewport and
@@ -974,5 +1058,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setWatch, frameNodes, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, regionData, setWatch, frameNodes, setView, REGION_R, REGION_CELL, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

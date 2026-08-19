@@ -204,6 +204,7 @@ def main() -> None:
     # Node centroids from layout.bin, shared by diegraph.js and tracer.js so
     # the two cannot put a node in two places. A leaf.
     b.copy_hashed("die-centroids.js")
+    b.copy_hashed("block-regions.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -566,6 +567,7 @@ def main() -> None:
         ("./block-palette.js", "./" + b.ref("block-palette.js")),
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
         ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
+        ("./block-regions.js", "./" + b.ref("block-regions.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

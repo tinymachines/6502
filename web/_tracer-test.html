@@ -80,7 +80,7 @@ f.addEventListener('load', async () => {
     // --- the drawing is the die graph -------------------------------------------
     const dv = new DataView(buf);
     const vertexCount = dv.getUint32(12, true);
-    const ymin = dv.getUint16(26, true), ymax = dv.getUint16(30, true);
+    const xmin = dv.getUint16(24, true), ymin = dv.getUint16(26, true), xmax = dv.getUint16(28, true), ymax = dv.getUint16(30, true);
     const vertexOffset = dv.getUint32(32, true);
     const sx = new Float64Array(2048), sy = new Float64Array(2048), cnt = new Uint32Array(2048);
     for (let i = 0; i < vertexCount; i++) {
@@ -100,6 +100,74 @@ f.addEventListener('load', async () => {
     }
     ok('every node is drawn at the centroid of its own polygons', off.length === 0, off.slice(0, 3).join(' | ') || `${circles().length} checked`);
     ok('and neither rail is drawn', !circles().some((c) => rails.has(Number(c.dataset.node))));
+
+    // --- the block regions, checked against the rule rather than the module ------
+    // A region is every point within REGION_R of a member of the block. The SVG's
+    // own hit test (isPointInFill) decides what the page drew, and the rule is
+    // re-derived here from schematic.json and the centroids, so the module that
+    // traced the outline is not consulted.
+    {
+      const R = w.__tracer.REGION_R ?? 300, CELL = w.__tracer.REGION_CELL ?? 50;
+      const paths = [...d.querySelectorAll('#tc-regions .tc-rg')];
+      const nBlocks = sch.blockNames.length - 2;  // neither the residue nor the static logic
+      ok(`one region per functional block: ${nBlocks}`, paths.length === nBlocks
+         && paths.every((p) => Number(p.dataset.block) >= 1 && Number(p.dataset.block) <= nBlocks), `${paths.length} paths`);
+      ok('each carries a label with the block\'s name',
+         paths.every((p) => { const t = d.querySelector(`#tc-regions .tc-rg-lb[data-block="${p.dataset.block}"]`); return t && t.textContent === sch.blockNames[Number(p.dataset.block)]; }));
+      const svg = $('tc-svg');
+      const pt = svg.createSVGPoint();
+      const hits = (path, x, y) => { pt.x = x; pt.y = y; return path.isPointInFill(pt); };
+      const byBlock = new Map(paths.map((p) => [Number(p.dataset.block), p]));
+      const membersOf = new Map();
+      for (const [n, p] of mine) {
+        if (rails.has(n)) continue;
+        const b = sch.nodeBlock[n] & 0x7f;
+        if (!byBlock.has(b)) continue;
+        if (!membersOf.has(b)) membersOf.set(b, []);
+        membersOf.get(b).push(p);
+      }
+      let outMembers = 0, members = 0;
+      for (const [b, pts] of membersOf) for (const p of pts) { members++; if (!hits(byBlock.get(b), p.x, p.y)) outMembers++; }
+      ok('every member node lies inside its own block\'s region, by the SVG\'s own hit test', outMembers === 0, `${outMembers} of ${members} outside`);
+      // The rule on a lattice of sample points: inside iff the nearest member is
+      // within R, judged only where the point is more than a cell from the line.
+      let tested = 0, wrong = 0;
+      const stepX = (xmax - xmin) / 60, stepY = (ymax - ymin) / 60;
+      for (const [b, pts] of membersOf) {
+        const path = byBlock.get(b);
+        for (let x = xmin; x <= xmax; x += stepX) for (let y = ymin; y <= ymax; y += stepY) {
+          let dmin = Infinity;
+          for (const p of pts) { const dd = Math.hypot(p.x - x, p.y - y); if (dd < dmin) dmin = dd; }
+          if (Math.abs(dmin - R) <= CELL * 1.5) continue;
+          tested++;
+          if (hits(path, x, y) !== (dmin <= R)) wrong++;
+        }
+      }
+      ok(`and on a lattice of sample points the drawing agrees with the rule "within ${R} of a member"`, tested > 5000 && wrong === 0, `${wrong} of ${tested} disagree`);
+      // The caption's overlap count, recounted with the hit test.
+      let shared = 0;
+      for (const [b, pts] of membersOf) for (const p of pts) {
+        for (const [ob, path] of byBlock) if (ob !== b && hits(path, p.x, p.y)) { shared++; break; }
+      }
+      const cap = $('tc-caption').textContent;
+      ok('the caption\'s overlap count is what the hit test counts', cap.includes(`${shared} of the ${members} block nodes`), `harness ${shared} of ${members} :: ${cap.slice(cap.indexOf('overlap'), cap.indexOf('overlap') + 90)}`);
+      ok('the overlap is real, not a rounding: more than a fifth of block nodes sit in another region', shared / members > 0.2, `${Math.round(100 * shared / members)}%`);
+      const capPieces = Number((cap.match(/(\d+) pieces in all/) || [])[1]);
+      ok('the caption counts more pieces than blocks, so a block is not claimed to be one place', capPieces > nBlocks, `${capPieces} pieces`);
+      // The toggle hides the group and the button says so.
+      w.__tracer.setRegions(false);
+      ok('the toggle hides the regions', w.getComputedStyle($('tc-regions')).display === 'none' && $('tc-regions-btn').getAttribute('aria-pressed') === 'false');
+      w.__tracer.setRegions(true);
+      ok('and shows them again', w.getComputedStyle($('tc-regions')).display !== 'none');
+      // The labels go once the reader is zoomed past LABEL_ZOOM.
+      const lbl = d.querySelector('#tc-regions .tc-rg-lb');
+      ok('a region label is shown at fit', w.getComputedStyle(lbl).display !== 'none');
+      w.__tracer.frameNodes([byName.get('a0')]);
+      ok('and hidden once node labels arrive', w.getComputedStyle(lbl).display === 'none', `zoom class ${$('tc-cam').className}`);
+      w.__tracer.setView(w.__tracer.state.home.slice());
+      // A point well outside the die is in no region.
+      ok('the die\'s far corner is in no region', ![...byBlock.values()].some((p) => hits(p, xmax + 2000, ymax + 2000)));
+    }
     // The full graph, counted independently.
     const seen = new Set(); let want = 0;
     const keep = (n) => mine.has(n) && !rails.has(n);

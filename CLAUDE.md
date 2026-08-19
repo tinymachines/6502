@@ -898,6 +898,43 @@ this is that graph with a clock.
   nodes flipped. `_tracer-test.html` runs a chip of its own to the same
   half-cycle and recomputes all four sets; a page that lit the right *number*
   of things would fail it.
+- **The block regions are a rule, not hulls, and the hull was measured first.**
+  `block-regions.js` (a leaf) draws each of the twelve functional blocks as
+  everything within `REGION_R` (300) die units of one of its member nodes, as
+  a distance field on a `REGION_CELL` (50) grid traced with marching squares:
+  outer loops and holes, `evenodd`, one path per block in its own hue behind
+  the graph, labelled on its largest piece (a label that falls in a hole or
+  outside a C-shape snaps to the nearest member). Computed once from the
+  centroids and `nodeBlock`, because the region is a fact about the die and
+  not about which nodes the current mode draws; ids 1..12, the residue (0) and
+  the static logic (13) being the background the blocks sit in, and the pads
+  come out as the ring they are.
+  - **A convex hull per block was measured before anything was drawn and
+    rejected**: the control pipeline's hull is 45% of the die, and the address
+    latches' hull contains every node of the ALU and the program counter,
+    because the datapath blocks are interleaved bit-slices. A hull claims the
+    neighbour's silicon.
+  - **The regions overlap, and the caption prints it**: 87 pieces across 12
+    blocks, and 603 of the 1024 block nodes (59%) sit inside another block's
+    region too. That is "affiliation is not location" drawn. R was chosen from
+    measured neighbour spacing (median 75..180 inside the datapath blocks; the
+    program counter is one piece at 300, the registers two, the timing chain,
+    whose 25 nodes really are spread, a dozen).
+  - **Two marching-squares bugs, both found by running a single disc through
+    it**: cases 13 and 14 picked the wrong edges (the orientation check passed
+    because it only tested which side was inside, not which edges cross; a
+    disc came out as half a circle plus fragments), and chaining by rounded
+    coordinates merged two crossings a hair apart on different edges (fixed
+    by chaining on *edge identity*). A sample exactly on the iso-line is
+    nudged inside. Test a geometry routine on the shape whose answer you know.
+  - **`_tracer-test.html` checks the rule, not the module**: every member node
+    inside its block's path by the SVG's own `isPointInFill`, a 60x60 lattice
+    of sample points agreeing with "within R of a member" wherever more than
+    1.5 cells from the line (42,096 points, 0 disagree), the caption's overlap
+    count recounted with the hit test, the toggle, and the label hiding once
+    node labels arrive at `LABEL_ZOOM`.
+  - `?regions=0` hides them; the "block regions" button toggles. Region
+    labels hide past `LABEL_ZOOM` because by then the reader is inside one.
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same
