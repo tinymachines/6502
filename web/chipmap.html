@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The chip as one schematic</title>
+<meta name="description" content="The whole MOS 6502 as a block-level schematic: every derived container a box, the wiring between them bundled, laid out by pin distance and die order, lit by the running chip.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">One box per derived container</p>
+    <h1>The whole chip, as one schematic.</h1>
+    <p class="lede">
+      A schematic of 1160 gates would need a layout somebody chose. At the
+      container level it does not: the derived groups cover every node exactly
+      once, the columns are the measured distance from the pins, the order
+      within a column is the order on the die, and every line is a counted
+      bundle of real gate edges and switches. The chip runs underneath it all.
+    </p>
+    <div class="statbar" id="cm-stats"></div>
+  </section>
+
+  <div id="cm-boot" class="bp-boot wrap"><p id="cm-status">Deriving the containers…</p></div>
+
+  <div id="cm-main" hidden>
+
+    <section class="wrap sec bp-prose" id="view">
+      <p class="lede bk-does">
+        This is the tracer's containers made disjoint: the same
+        derivations, applied in the tracer's own click order, the first
+        container to reach a node keeping it. What no container claims is
+        grouped by the block it is filed in, and the static logic by the block
+        its gates drive. Nothing here is a floorplan and nothing is a guess:
+        both axes of the layout are measurements, and the caption counts what
+        the bundles carry.
+      </p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="tag live">containers · derived</span>
+          <span class="bar-note">drag to pan, scroll to zoom, click a box</span>
+          <div class="bar-spacer"></div>
+          <span class="mono muted" id="cm-head"></span>
+          <span class="mono muted" id="cm-zoom">1.0×</span>
+          <button class="btn" type="button" id="cm-home">Fit</button>
+        </div>
+        <div class="dg-stage cm-stage">
+          <svg id="cm-svg" role="img"
+               aria-label="Every derived container of the 6502 as a box, with the wiring between them bundled"></svg>
+        </div>
+        <div class="cm-card" id="cm-card"></div>
+        <p class="bk-foot muted" id="cm-caption"></p>
+      </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="layout">
+      <div class="sec-head">
+        <p class="eyebrow">Measured</p>
+        <h2>Both axes are measurements</h2>
+      </div>
+      <p>
+        A column is how far a group sits from the outside world: the median,
+        over its nodes, of each node's distance from the input and
+        bidirectional pins, walking gate inputs to the outputs they help
+        produce and both ways through a switch channel. The pins land in the
+        first column, the deepest control logic about sixteen hops in, and the
+        two inert structures the pins can never reach are the last column,
+        which is the honest place to put them.
+      </p>
+      <p>
+        The order within a column is the median die position of the group's
+        members, from the same polygons the die view draws. That is what keeps
+        the address machinery beside the address machinery: the picture agrees
+        with the <a href="exploded">exploded view</a> about what is near what,
+        without borrowing anything from it.
+      </p>
+      <p>
+        A line is a bundle: every gate edge and every pass transistor joining
+        two groups, drawn once and weighted by the count. The brighter bundles
+        are the ones carrying switches, the same distinction every drawing on
+        this site keeps, because a switch joins two wires without either
+        causing the other. Nothing is thresholded away; a one-edge bundle is
+        simply faint.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="running">
+      <div class="sec-head">
+        <p class="eyebrow">Live</p>
+        <h2>The chip runs underneath it</h2>
+      </div>
+      <p>
+        The header transport drives the same simulation as every other page. A
+        box fills with the share of its members high right now and rings when
+        any of them changed at the last half-cycle; a switch bundle brightens
+        while one of its control lines holds it open, and a gate bundle
+        flashes when one of its outputs moved. Watch one instruction at the
+        slowest clock and the fetch runs left to right: pins, data latch,
+        instruction register, decode terms, control lines, datapath.
+      </p>
+      <p>
+        Clicking a box is the walk. The card lists the heaviest bundles as
+        pills that select the far end, and links to the same container on the
+        <a href="tracer">tracer</a>, where the identical set of nodes sits at
+        its die positions instead of in a diagram.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="ownership">
+      <div class="sec-head">
+        <p class="eyebrow">The one rule</p>
+        <h2>One owner per node, in the tracer's order</h2>
+      </div>
+      <p>
+        The tracer's containers overlap on purpose: the decimal correction runs
+        through the ALU's slices, and a click resolves the overlap by priority.
+        A schematic needs the opposite, so this page applies the same priority
+        as ownership. That order decides real things: the pipeline latch file
+        outranks the timing chain, so the chain's own re-timing latches file
+        with the latch file and the chain keeps its combinational cells; the
+        address latches outrank the store pipeline, so the hold logic their
+        load line reads files with the latches. The boxes say what survived,
+        and the tracer link on each card shows the container whole.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="credit-here">
+      <div class="sec-head">
+        <p class="eyebrow">Credit</p>
+        <h2>Sources</h2>
+      </div>
+      <p>
+        The containers are derived from the switch network of the die trace by
+        Greg James, Brian Silverman, Barry Silverman and Ed Spittles, licensed
+        CC BY-NC-SA 3.0. Those terms carry to everything on this site.
+      </p>
+      <p class="tk-links">
+        <a class="btn" href="tracer">The tracer</a>
+        <a class="btn btn-ghost" href="diegraph">The die graph</a>
+        <a class="btn btn-ghost" href="./#credit">Credit and licence</a>
+      </p>
+    </section>
+
+  </div>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="chipmap.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

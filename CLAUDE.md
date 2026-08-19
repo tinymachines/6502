@@ -32,6 +32,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, the special bus with its lines by measured direction, the store-data pipeline as the detect and the two latches the timing readout names, the ready logic as the receiver, the master and its re-timed copies, the program counter's own storage with its six lines, the 52-latch pipeline file, and the SYNC generator. Twenty-five kinds; the clustering arc is complete. |
+| Chip map | The whole chip as one schematic: the tracer's derivations made disjoint into 134 groups covering every node once, columns by measured pin distance, die order within a column, 540 counted bundles, live off the running chip, every box linking to its container on the tracer. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1692,6 +1693,67 @@ which every page flattens its own way), and the live graph
   space work when focus is not in a field; the key handler guards
   `e.target.closest`, because a harness dispatching at the document has no
   `closest` and the first version threw.
+
+### The chip map (`chipmap.html`, `chipmap.js`, `chip-groups.js`)
+
+The whole chip as one schematic: every derived container a box, the wiring
+between them bundled, the layout derived. Asked for as the final act once the
+clustering arc was complete: a schematic of 1160 gates would need a layout
+somebody chose, and at the container level it stops being true.
+
+- **`chip-groups.js` is the partition, and it is the tracer's containers made
+  disjoint.** The same leaf modules, applied in the tracer's own click order,
+  the first container to reach a node keeping it; the registers' global
+  sharing rule kept as is. One stated exception: **the control-line clusters
+  move to the end of the containers.** The tracer ranks them high because its
+  priority is about what a click should hit and a control outline is small on
+  screen; ownership is about which claim is more specific, and "the lines no
+  derivation explains, grouped by what they operate" is a catch-all. Left
+  where the tracer has it, it took `dpc18_#DAA` and `dpc22_#DSA` away from
+  the decimal correction's own walk, which the harness caught. What no
+  container claims groups by the block it is filed in, and the static logic
+  by `nodeDrives`. Measured: **134 groups over 24 kinds, covering all 1547
+  nodes exactly once** (the universe is every node the netlist touches, rails
+  out). The order decides real things and the page's prose names them: the
+  pipe latch file outranks the chain (the `pipeTnout` latches file with the
+  file, the chain keeps its combinational cells); the address latches outrank
+  the store pipeline (SD1 files with the `ADL/ABL` cone that reads it).
+- **Both layout axes are measurements.** A column is the median, over a
+  group's nodes, of each node's BFS distance from the input and bidirectional
+  pins (gate inputs to outputs, both ways through a switch channel: the pin
+  chains' neighbour rules). 15 columns; the two inert structures the pins
+  never reach are the last, stated in the caption. Within a column, order is
+  the median die Y from `layout.bin`. The harness recomputes every group's
+  column and every bundle's counts from the raw arrays and compares.
+- **A line is a bundle and nothing is thresholded away**: 540 bundles carrying
+  1686 gate edges and 310 switches between groups (880 and 313 stay inside
+  one; the caption counts both). Switch bundles brighter, as everywhere. A
+  one-edge bundle is simply faint (`--bw` sets opacity by weight, via the
+  CSSOM).
+- **Live off the running chip**: a box fills with the share of members high
+  (`--hi` via `style.setProperty`), rings when a member changed; a switch
+  bundle brightens while a control holds it open, a gate bundle flashes when
+  an output moved. Header transport and picker, the block pages' exact
+  arrangement, repaint on the action.
+- **Clicking a box is the walk**: the card lists the heaviest bundles as pills
+  that select the far end, reads a byte where the group's id is a stem with
+  eight named bits, and links to the same container on the tracer
+  (`tracer?chain=T3` and so on), where the identical node set sits at its die
+  positions. `?sel=kind:id` deep-links. The camera is the die graph's:
+  a viewBox, wheel, drag, one `pinchOf`.
+- **The pins groups are the measured directions less the pads a container
+  already names**: the sync pad is the SYNC generator's, the clock outputs
+  the clock generator's, `rw` the read/write control's. The harness asserts
+  the subtraction lands only in those containers, never loses a pad.
+- **`.statbar` takes plain strings**; b/span pairs run together there, which
+  bit this page first and was already documented against.
+- The hero types no counts: the statbar and caption carry the numbers, filled
+  from the derivation, so the prose cannot go stale when a derivation moves.
+- `_chipmap-test.html`: the partition complete and disjoint against its own
+  universe, the ownership joints by name, stages and pins re-derived in full,
+  every bundle recounted, every column recomputed, boxes non-intersecting,
+  the live fill against a chip of its own, click, pill walk, clear, deep
+  link. `_csp-test` covers `chipmap` and its `?sel=` deep link.
 
 ### The Exploded view (`exploded.html`, `exploded-gl.js`, `blocks.rs`)
 

@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>chipmap test</title>
+<!--
+  The chip map: the partition, the bundles, the columns and the live boxes,
+  re-derived here rather than taken from the page. The bundles and the columns
+  are recomputed in full from schematic.json and the page's own group list,
+  because they are the page's thesis: a layout that is a measurement. The
+  ownership order is spot-checked at the joints it decides (pipe over chain,
+  decimal over ALU, address latches over the store pipeline, the registers'
+  global sharing), each of which the prose claims by name.
+-->
+<style>body{background:#0b1120;color:#dbe6f4;font:14px monospace}
+iframe{width:1400px;height:900px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head>
+<body>
+<iframe id="f"></iframe>
+<script type="module">
+import { registerLogic } from './register-logic.js';
+import { decimalCorrection } from './decimal-correction.js';
+import { PACKAGE, direction, pinFacts } from './pins.js';
+
+const results = [];
+const ok = (name, cond, detail = '') => results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${cond ? '' : ' :: ' + detail}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once: true }); f.src = src; });
+
+(async () => {
+  try {
+    localStorage.removeItem('v6502.program');
+    localStorage.removeItem('v6502.clock');
+    const sch = await (await fetch('schematic.json')).json();
+
+    await load('chipmap.html');
+    const d = f.contentDocument;
+    const w = f.contentWindow;
+    for (let i = 0; i < 2000 && !w.__chipmap; i++) await sleep(50);
+    ok('the page boots and exposes its derivation', !!w.__chipmap, 'no __chipmap after 100s');
+    const { groups, bundles } = w.__chipmap;
+
+    // --- the partition ------------------------------------------------------
+    // Complete and disjoint against a universe computed HERE from the raw
+    // arrays, not through the page's own helper.
+    const universe = new Set();
+    for (const [out, , pre, legs] of sch.gates) {
+      universe.add(out);
+      for (const leg of legs) for (const i of leg) universe.add(i);
+      if (pre >= 0) universe.add(pre);
+    }
+    for (const [c, a, b] of sch.switches) { universe.add(c); universe.add(a); universe.add(b); }
+    sch.names.forEach((n, i) => { if (n) universe.add(i); });
+    universe.delete(sch.vss); universe.delete(sch.vcc);
+    const owner = new Map();
+    let dup = 0;
+    for (const g of groups) for (const n of g.nodes) { if (owner.has(n)) dup++; owner.set(n, g); }
+    ok('every node is in exactly one group', dup === 0 && owner.size === universe.size
+       && [...owner.keys()].every((n) => universe.has(n)),
+       `${dup} duplicated, ${owner.size} grouped of ${universe.size}`);
+    ok('group keys are unique', new Set(groups.map((g) => g.key)).size === groups.length);
+
+    // --- the ownership order, at the joints it decides ----------------------
+    const byName = new Map(sch.names.map((n, i) => [n, i]).filter(([n]) => n));
+    const pipeT = [...byName].filter(([n]) => /^pipeT\d(out)?/.test(n)).map(([, i]) => i);
+    ok('the pipe latch file outranks the chain: every pipeT* latch files with it',
+       pipeT.length > 0 && pipeT.every((n) => owner.get(n)?.kind === 'pipe'),
+       pipeT.map((n) => `${sch.names[n]}:${owner.get(n)?.key}`).join(' '));
+    const dec = decimalCorrection(sch).nodes;
+    ok('the decimal correction outranks the ALU: its walk is intact',
+       dec.every((n) => owner.get(n)?.key === 'decimal:bcd'),
+       dec.filter((n) => owner.get(n)?.key !== 'decimal:bcd').map((n) => `${n}:${owner.get(n)?.key}`).join(' '));
+    ok('the address latches outrank the store pipeline: SD1 files with their load line',
+       owner.get(440)?.kind === 'alat', `440 -> ${owner.get(440)?.key}`);
+    // The registers' sharing is global: a node in more than one register cone
+    // is in a regs shared group, never in one register's own.
+    const cones = [];
+    for (const stem of ['s', 'a', 'x', 'y']) {
+      const r = registerLogic(sch, { stem });
+      cones.push([stem, r.register.nodes]);
+      for (const L of r.lines) cones.push([`${stem}.${L.id}`, L.cone]);
+    }
+    const seen = new Map();
+    for (const [id, ns] of cones) for (const n of ns) {
+      if (!seen.has(n)) seen.set(n, []);
+      seen.get(n).push(id);
+    }
+    const multi = [...seen].filter(([, ids]) => ids.length > 1).map(([n]) => n);
+    ok('a node in two registers’ cones is in a shared group',
+       multi.length > 0 && multi.every((n) => owner.get(n)?.key.startsWith('regs:shared.')),
+       multi.filter((n) => !owner.get(n)?.key.startsWith('regs:shared.')).map((n) => `${n}:${owner.get(n)?.key}`).join(' '));
+
+    // --- the stage and pin groups, re-derived in full -----------------------
+    const stages = new Map();
+    sch.nodeRole.forEach((role, n) => {
+      if (role !== 1 || !sch.names[n]) return;
+      const m = /^op-(T[0-5]|T\+)-/.exec(sch.names[n]);
+      const id = m ? m[1] : 'any';
+      if (!stages.has(id)) stages.set(id, []);
+      stages.get(id).push(n);
+    });
+    let stageOk = true, stageWhy = '';
+    for (const [id, ns] of stages) {
+      const g = groups.find((x) => x.key === `stage:${id}`);
+      if (!g || g.nodes.join() !== ns.sort((a, b) => a - b).join()) { stageOk = false; stageWhy = id; }
+    }
+    ok('the decode terms group by stage exactly as the names say', stageOk, stageWhy);
+    const pf = pinFacts(sch);
+    const dirs = new Map();
+    const seenPins = new Set();
+    for (const p of PACKAGE) {
+      if (!p.node || p.power || seenPins.has(p.node)) continue;
+      seenPins.add(p.node);
+      const n = pf.byName.get(p.node);
+      if (n === undefined) continue;
+      const dir = direction(pf, p.node) || 'neither';
+      if (!dirs.has(dir)) dirs.set(dir, []);
+      dirs.get(dir).push(n);
+    }
+    // A pad an earlier container already claimed stays there: the sync pad is
+    // the SYNC generator's, the clock outputs the clock generator's, rw the
+    // read/write control's. What is left must match the measured directions
+    // exactly, and everything subtracted must be owned by a container that
+    // names it rather than lost.
+    let pinOk = true, pinWhy = '';
+    for (const [id, ns] of dirs) {
+      const kept = ns.filter((n) => owner.get(n)?.kind === 'pins').sort((a, b) => a - b);
+      const taken = ns.filter((n) => owner.get(n)?.kind !== 'pins');
+      const g = groups.find((x) => x.key === `pins:${id}`);
+      const gNodes = g ? g.nodes : [];
+      if (gNodes.join() !== kept.join()) { pinOk = false; pinWhy = `${id}: page [${gNodes}] vs mine [${kept}]`; }
+      if (!taken.every((n) => ['sync', 'clock', 'dbus'].includes(owner.get(n)?.kind))) {
+        pinOk = false; pinWhy = `${id}: pad taken by ${taken.map((n) => owner.get(n)?.key).join(' ')}`;
+      }
+    }
+    ok('the pins group by the pinout page’s measured directions, less the pads a container already names', pinOk, pinWhy);
+
+    // --- the bundles, recounted in full --------------------------------------
+    const gi = new Map(groups.map((g, i) => [g.key, i]));
+    const own = new Int16Array(sch.names.length).fill(-1);
+    groups.forEach((g, i) => { for (const n of g.nodes) own[n] = i; });
+    const mine = new Map();
+    const at = (a, b) => {
+      const k = Math.min(a, b) * 1024 + Math.max(a, b);
+      if (!mine.has(k)) mine.set(k, { g: 0, s: 0 });
+      return mine.get(k);
+    };
+    for (const [out, , pre, legs] of sch.gates) {
+      const ins = new Set(legs.flat());
+      if (pre >= 0) ins.add(pre);
+      for (const i of ins) {
+        if (i === sch.vss || i === sch.vcc) continue;
+        if (own[i] < 0 || own[out] < 0 || own[i] === own[out]) continue;
+        at(own[i], own[out]).g++;
+      }
+    }
+    for (const [c, a, b] of sch.switches) {
+      if ([a, b].some((n) => n === sch.vss || n === sch.vcc)) continue;
+      if (own[a] < 0 || own[b] < 0 || own[a] === own[b]) continue;
+      at(own[a], own[b]).s++;
+    }
+    let bundleOk = mine.size === bundles.length, bundleWhy = `${mine.size} vs ${bundles.length}`;
+    for (const bd of bundles) {
+      const m = mine.get(Math.min(bd.a, bd.b) * 1024 + Math.max(bd.a, bd.b));
+      if (!m || m.g !== bd.gates || m.s !== bd.switches) {
+        bundleOk = false;
+        bundleWhy = `${groups[bd.a].key}~${groups[bd.b].key}: page ${bd.gates}g/${bd.switches}s, mine ${m ? `${m.g}g/${m.s}s` : 'absent'}`;
+        break;
+      }
+    }
+    ok('every bundle carries exactly the edges the netlist has between its ends', bundleOk, bundleWhy);
+
+    // --- the columns, re-derived from the pins ------------------------------
+    const fwd = new Map();
+    const add = (x, y) => { if (!fwd.has(x)) fwd.set(x, []); fwd.get(x).push(y); };
+    for (const [out, , pre, legs] of sch.gates) {
+      for (const i of new Set(legs.flat())) add(i, out);
+      if (pre >= 0) add(pre, out);
+    }
+    for (const [, a, b] of sch.switches) { add(a, b); add(b, a); }
+    const start = [];
+    for (const g of groups) if (g.kind === 'pins' && (g.id === 'input' || g.id === 'bidirectional')) start.push(...g.nodes);
+    const dist = new Map(start.map((n) => [n, 0]));
+    const q = [...start];
+    while (q.length) {
+      const n = q.shift();
+      for (const m of fwd.get(n) || []) {
+        if (m === sch.vss || m === sch.vcc || dist.has(m)) continue;
+        dist.set(m, dist.get(n) + 1);
+        q.push(m);
+      }
+    }
+    const median = (xs) => { const t = xs.slice().sort((a, b) => a - b); return t.length ? t[Math.floor(t.length / 2)] : Infinity; };
+    const med = new Map(groups.map((g) => [g.key, median(g.nodes.map((n) => dist.get(n)).filter((x) => x !== undefined))]));
+    const cols = [...new Set([...med.values()])].sort((a, b) => (a === Infinity) - (b === Infinity) || a - b);
+    const colIx = new Map(cols.map((c, i) => [c, i]));
+    const badCol = groups.filter((g) => g.colIx !== colIx.get(med.get(g.key)));
+    ok('every group’s column is its median distance from the pins, recomputed here',
+       badCol.length === 0, badCol.map((g) => `${g.key}: page ${g.colIx}, mine ${colIx.get(med.get(g.key))}`).slice(0, 4).join(' | '));
+    ok('the pins are the first column',
+       groups.filter((g) => g.kind === 'pins' && g.id !== 'output' && g.id !== 'neither').every((g) => g.colIx === 0));
+
+    // --- the drawing: every group a box, and no two boxes intersect ----------
+    const boxes = [...d.querySelectorAll('.cm-box')];
+    ok('every group is drawn as a box, once', boxes.length === groups.length
+       && new Set(boxes.map((b) => b.dataset.key)).size === groups.length,
+       `${boxes.length} boxes for ${groups.length} groups`);
+    let clash = null;
+    for (let i = 0; i < groups.length && !clash; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        const a = groups[i], b = groups[j];
+        if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) { clash = `${a.key} ~ ${b.key}`; break; }
+      }
+    }
+    ok('no two boxes intersect', !clash, clash || '');
+
+    // --- live: the boxes against a chip of this harness's own ---------------
+    const { Machine, default: init } = await import('./pkg/v6502_wasm.js');
+    await init();
+    const { PROGRAMS, LOAD_ADDR } = await import('./programs.js');
+    const m = new Machine();
+    m.load(LOAD_ADDR, new Uint8Array(PROGRAMS[0].bytes));
+    m.setResetVector(LOAD_ADDR);
+    m.powerCycle();
+    const stepBtn = [...d.querySelectorAll('.nav-tbtn')].find((b) => b.title === 'One half-cycle');
+    ok('the header transport is on the page', !!stepBtn);
+    for (let i = 0; i < 7; i++) { stepBtn.click(); m.halfStep(); }
+    ok('the two chips agree about where they are', w.__chipmap.machine.halfCycle() === m.halfCycle(),
+       `${w.__chipmap.machine.halfCycle()} vs ${m.halfCycle()}`);
+    const levels = m.nodeLevels();
+    let hiOk = true, hiWhy = '';
+    for (const key of ['alu:bit3', 'stage:T0', 'pipe:unk']) {
+      const g = groups.find((x) => x.key === key);
+      const want = (0.5 * g.nodes.filter((n) => levels[n] > 0).length / g.nodes.length).toFixed(3);
+      const got = d.querySelector(`.cm-box[data-key="${key}"]`).style.getPropertyValue('--hi').trim();
+      if (Number(got) !== Number(want)) { hiOk = false; hiWhy = `${key}: page ${got}, mine ${want}`; break; }
+    }
+    ok('a box’s fill is the share of its members high on this harness’s chip', hiOk, hiWhy);
+
+    // --- the walk: click, card, deep link ------------------------------------
+    const box = d.querySelector('.cm-box[data-key="chain:T3"]');
+    box.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(50);
+    ok('clicking a box selects it', box.classList.contains('sel')
+       && d.getElementById('cm-svg').classList.contains('has-sel'));
+    const card = d.getElementById('cm-card').textContent;
+    ok('the card names the group and its wiring', /T3 cell/.test(card) && /wired to:/.test(card), card.slice(0, 120));
+    const link = d.querySelector('#cm-card a.btn');
+    ok('the card links to the same container on the tracer',
+       !!link && link.getAttribute('href') === 'tracer?chain=T3',
+       link ? link.getAttribute('href') : 'no link');
+    const pill = d.querySelector('#cm-card .cm-pill');
+    const pillName = pill.textContent.replace(/\s*×\d+$/, '');
+    pill.click();
+    await sleep(50);
+    const selNow = groups.find((g) => d.querySelector(`.cm-box[data-key="${g.key}"]`).classList.contains('sel'));
+    ok('a partner pill walks the selection to the far end',
+       !!selNow && selNow.label === pillName && selNow.key !== 'chain:T3',
+       `selected ${selNow?.key} after pill "${pillName}"`);
+    d.getElementById('cm-svg').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await sleep(50);
+    ok('clicking empty ground clears the selection',
+       !d.querySelector('.cm-box.sel') && !d.getElementById('cm-svg').classList.contains('has-sel'));
+
+    // --- the deep link -------------------------------------------------------
+    await load('chipmap.html?sel=regs:a');
+    const d2 = f.contentDocument;
+    for (let i = 0; i < 2000 && !f.contentWindow.__chipmap; i++) await sleep(50);
+    ok('?sel= arrives selected', !!d2.querySelector('.cm-box.sel[data-key="regs:a"]'),
+       d2.querySelector('.cm-box.sel')?.dataset.key || 'nothing selected');
+    ok('and its card reads the byte off the chip', /reads \$[0-9A-F]{2}/.test(d2.getElementById('cm-card').textContent),
+       d2.getElementById('cm-card').textContent.slice(0, 160));
+  } catch (e) {
+    results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e));
+  }
+  const lines = results.filter((r) => r.startsWith('PASS') || r.startsWith('FAIL'));
+  document.title = lines.length && lines.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
+  document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');
+})();
+</script>
+</body></html>

@@ -3313,3 +3313,47 @@ body.no-scroll #bench { z-index: 70; }
 .tc-node.down { color: var(--muted); }
 .tc-node i { font-style: normal; opacity: .7; margin-left: .1rem; }
 .tc-node.tc-unnamed { cursor: default; color: var(--line); }
+
+/* --- The chip map: the whole chip as one schematic (chipmap.html) --------- */
+/* The stage borrows .dg-stage; only the svg's height is its own, because the
+   drawing is wider than tall (sixteen columns of pin distance). */
+#cm-svg { width: 100%; height: min(78vh, 52rem); display: block; }
+
+.cm-bd {
+  stroke: color-mix(in srgb, var(--line) 60%, transparent);
+  opacity: var(--bw, 0.2);
+}
+.cm-bd-sw { stroke: color-mix(in srgb, var(--accent) 55%, transparent); }
+.cm-bd.open { stroke: var(--accent); }
+.cm-bd.fired { stroke: var(--gold); opacity: 0.9; }
+/* With a selection the drawing answers for it: its bundles read, the rest recede. */
+#cm-svg.has-sel .cm-bd { opacity: 0.05; }
+#cm-svg.has-sel .cm-bd.sel { opacity: 0.95; }
+
+.cm-box { cursor: pointer; }
+.cm-box .cm-bg {
+  fill: color-mix(in srgb, var(--surface) 82%, #000);
+  stroke: var(--line); stroke-width: 1.2;
+}
+/* The live overlay: the share of the group's members high right now. */
+.cm-box .cm-hi { fill: var(--accent); fill-opacity: var(--hi, 0); pointer-events: none; }
+.cm-box.mv .cm-bg { stroke: var(--gold); stroke-width: 2; }
+.cm-box.sel .cm-bg { stroke: var(--foreground); stroke-width: 2.5; }
+#cm-svg.has-sel .cm-box:not(.sel):not(.adj) { opacity: 0.35; }
+.cm-box:hover .cm-bg { stroke: var(--gold); }
+.cm-kind {
+  fill: var(--muted); font: 700 8px var(--font-mono, monospace);
+  letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none;
+}
+.cm-name { fill: var(--foreground); font: 600 10px var(--font-mono, monospace); pointer-events: none; }
+
+.cm-card { padding: 0.7rem 1rem; border-top: 1px solid var(--line); }
+.cm-card p { margin: 0 0 0.4rem; }
+.cm-card-head b { color: var(--gold); }
+.cm-pill {
+  font: 500 11px var(--font-mono, monospace);
+  color: var(--foreground); background: color-mix(in srgb, var(--surface) 70%, #000);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 0.1rem 0.55rem; margin: 0 0.15rem 0.25rem 0; cursor: pointer;
+}
+.cm-pill:hover { border-color: var(--gold); color: var(--gold); }

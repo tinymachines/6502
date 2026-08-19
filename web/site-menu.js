@@ -51,6 +51,8 @@ export const MENU = [
         hint: '1160 gates recognised from the switch network' },
       { label: 'Blueprint', page: 'blueprint',
         hint: 'the datapath as a block diagram, derived' },
+      { label: 'Chip map', page: 'chipmap',
+        hint: 'the whole chip as one schematic, a box per derived container' },
     ],
   },
   // Its own group rather than an entry under "The chip, drawn", because these

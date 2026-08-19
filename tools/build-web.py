@@ -602,6 +602,51 @@ def main() -> None:
                           where="halfshot.js")
     b.emit("halfshot.js", hs.encode())
 
+    # 3q0. chip-groups.js: the tracer's containers made disjoint, composed
+    #      from the same leaf modules; chipmap.js draws the result as one
+    #      schematic. The composer rewrites every leaf it imports.
+    cg = b.read("chip-groups.js").decode()
+    for leaf in [
+        "register-logic.js",
+        "flag-logic.js",
+        "address-latches.js",
+        "data-bus.js",
+        "ir-predecode.js",
+        "special-bus.js",
+        "store-pipeline.js",
+        "ready-logic.js",
+        "pc-pipe-sync.js",
+        "clock-gen.js",
+        "interrupt-paths.js",
+        "branch-logic.js",
+        "decimal-correction.js",
+        "alu-slices.js",
+        "pc-increment.js",
+        "chain-cells.js",
+        "pins.js",
+    ]:
+        cg = replace_once(cg, f"'./{leaf}'", f"'./{{}}'".format(b.ref(leaf)),
+                          where="chip-groups.js")
+    b.emit("chip-groups.js", cg.encode())
+
+    cm = b.read("chipmap.js").decode()
+    for original, resolved in [
+        ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+        ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./chip-groups.js", "./" + b.ref("chip-groups.js")),
+        ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
+        ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+        ("./block-notes.js", "./" + b.ref("block-notes.js")),
+    ]:
+        cm = replace_once(cm, f"'{original}'", f"'{resolved}'", where="chipmap.js")
+    for original in ["schematic.json", "blocks.json", "timing.json", "layout.bin"]:
+        cm = replace_once(cm, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
+                          where="chipmap.js")
+    b.emit("chipmap.js", cm.encode())
+
     # 3q. tracer.js: the whole circuit lit half-cycle by half-cycle beside the
     #     code. The die graph's positions, the header's picker and transport,
     #     the programs, and two of the published files.
@@ -747,6 +792,14 @@ def main() -> None:
         dgh = replace_once(dgh, f'"{original}"', f'"{b.ref(original)}"',
                            where="diegraph.html")
     b.emit("diegraph.html", dgh.encode(), hashed=False)
+
+    cmh = b.read("chipmap.html").decode()
+    for original in ["style.css", "chipmap.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        cmh = replace_once(cmh, f'"{original}"', f'"{b.ref(original)}"',
+                           where="chipmap.html")
+    b.emit("chipmap.html", cmh.encode(), hashed=False)
 
     dzh = b.read("designer.html").decode()
     for original in ["style.css", "designer.js", "version-footer.js", "site-menu.js",

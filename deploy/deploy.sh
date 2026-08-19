@@ -68,7 +68,7 @@ for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/decode.html web/decode.js web/decode.json \
          web/timing.html web/timing.js web/timing.json \
          web/halfshot.html web/halfshot.js web/halfshot-codec.js web/blueprint-draw.js \
-         web/tracer.html web/tracer.js web/die-centroids.js web/block-regions.js web/pins.js web/chain-cells.js web/clock-gen.js web/interrupt-paths.js web/branch-logic.js web/decimal-correction.js web/register-logic.js web/pc-increment.js web/flag-logic.js web/address-latches.js web/alu-slices.js web/data-bus.js web/ir-predecode.js web/special-bus.js web/store-pipeline.js web/ready-logic.js web/pc-pipe-sync.js web/solo-palette.js \
+         web/tracer.html web/tracer.js web/die-centroids.js web/block-regions.js web/pins.js web/chain-cells.js web/clock-gen.js web/interrupt-paths.js web/branch-logic.js web/decimal-correction.js web/register-logic.js web/pc-increment.js web/flag-logic.js web/address-latches.js web/alu-slices.js web/data-bus.js web/ir-predecode.js web/special-bus.js web/store-pipeline.js web/ready-logic.js web/pc-pipe-sync.js web/solo-palette.js web/chip-groups.js web/chipmap.html web/chipmap.js \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
   [ -s "$f" ] || { echo "deploy: missing or empty $f" >&2; exit 1; }
 done
