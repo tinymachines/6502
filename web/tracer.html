@@ -89,6 +89,7 @@
               <button class="btn" type="button" id="tc-controls-btn" aria-pressed="true">control lines</button>
               <button class="btn" type="button" id="tc-pins-btn" aria-pressed="true">pins</button>
               <button class="btn" type="button" id="tc-chain-btn" aria-pressed="true">timing chain</button>
+              <button class="btn" type="button" id="tc-clock-btn" aria-pressed="true">clock generator</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -112,7 +113,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -304,6 +305,16 @@
         whether the state is active now by the chip's own readout (the
         outputs are active low), names the nodes, and says which other cell
         it reads, which is the chain's order read off the wires.
+        The bright outline is the clock generator, the circuit the
+        <a href="designer">designer</a> page derives and the tracer takes from
+        the same module: walk forward from the clk0 pad through gate inputs,
+        include the four clocks it ends at, never expand them. Sixteen nodes
+        and forty-four transistors, of which twenty-one decide anything and
+        the rest are the four output stages; two transistors gated by a
+        generated clock land back inside it, and that feedback is the
+        non-overlap the whole circuit is on the die for. Click it and the
+        card reads the four clocks' levels off the chip and names what moved
+        at this half-cycle, which at any clock is the generator itself.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

@@ -2942,6 +2942,18 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.has-sel .tc-hg-lb:not(.sel) { opacity: .3; }
 #tc-block .tc-bk-active { color: var(--hot); }
 
+/* The clock generator: one bright outline around the circuit the designer page derives. */
+.tc-clock-regions.off { display: none; }
+.tc-qg { fill: color-mix(in srgb, var(--bc) 10%, transparent); stroke: color-mix(in srgb, var(--bc) 85%, transparent);
+         stroke-width: 8; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-qg:hover { fill: color-mix(in srgb, var(--bc) 20%, transparent); }
+.tc-qg.sel { fill: color-mix(in srgb, var(--bc) 30%, transparent); stroke: var(--bc); stroke-width: 14; }
+.tc-cam.has-sel .tc-qg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 25%, transparent); fill: none; }
+.tc-qg-lb { font: 800 96px var(--font-sans); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 16px; }
+.tc-cam.z-labels .tc-qg-lb { font-size: 50px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-qg-lb:not(.sel) { opacity: .3; }
+
 /* The pins by measured direction: a halo on each pad, in the direction's hue. */
 .tc-pin-regions.off { display: none; }
 .tc-pg { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);

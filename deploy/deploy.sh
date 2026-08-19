@@ -44,6 +44,9 @@ cargo run --quiet -p v6502-netlist --bin export-blocks -- web/blocks.json
 log "recognising the gate-level schematic"
 cargo run --quiet -p v6502-netlist --bin export-schematic -- web/schematic.json
 
+log "writing the chip as one graph"
+cargo run --quiet -p v6502-netlist --bin export-graph -- web/graph.json
+
 log "measuring the decode PLA"
 cargo run --release --quiet -p v6502-sim --bin export-decode -- web/decode.json
 
@@ -59,13 +62,13 @@ for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
          web/programs.html web/programs-page.js \
          web/blueprint.html web/blueprint.js web/blueprint.json \
          web/exploded.html web/exploded.js web/exploded-gl.js web/blocks.json \
-         web/schematic.html web/schematic.js web/schematic.json \
+         web/schematic.html web/schematic.js web/schematic.json web/graph.json \
          web/sch-draw.js web/block.html web/block.js web/block-notes.js \
          web/trace.html web/trace.js web/primer.html web/primer.js web/demos.js \
          web/decode.html web/decode.js web/decode.json \
          web/timing.html web/timing.js web/timing.json \
          web/halfshot.html web/halfshot.js web/halfshot-codec.js web/blueprint-draw.js \
-         web/tracer.html web/tracer.js web/die-centroids.js web/block-regions.js web/pins.js web/chain-cells.js web/solo-palette.js \
+         web/tracer.html web/tracer.js web/die-centroids.js web/block-regions.js web/pins.js web/chain-cells.js web/clock-gen.js web/solo-palette.js \
          web/layout.bin web/pkg/v6502_wasm.js web/pkg/v6502_wasm_bg.wasm; do
   [ -s "$f" ] || { echo "deploy: missing or empty $f" >&2; exit 1; }
 done
@@ -220,6 +223,27 @@ if sc["unresolved"] > 5:
     sys.exit(f"deploy: {sc['unresolved']} nodes failed to resolve")
 if len(sch["names"]) != 1725:
     sys.exit("deploy: schematic.json name table is the wrong length for this die")
+
+# The graph is the same netlist, schematic and layout written out as one
+# node-and-edge file, and it has to agree with them: every transistor present,
+# the interpreted edges exactly the schematic's gates and switches, every
+# endpoint a real node. An export that drifted from schematic.json would hand
+# a reader two different chips.
+gr = json.load(open("web/graph.json"))
+gc = gr["counts"]
+if gc["nodes"] != 1725 or gc["transistors"] != 3510 or len(gr["transistors"]) != 3510:
+    sys.exit(f"deploy: graph.json has {gc['nodes']} nodes / {len(gr['transistors'])} transistors")
+if gc["switchEdges"] != sc["switches"] or gc["gates"] != sc["gates"]:
+    sys.exit(f"deploy: graph.json ({gc['gates']} gates, {gc['switchEdges']} switches) "
+             f"disagrees with schematic.json ({sc['gates']}, {sc['switches']})")
+want_gate = {(i, g[0]) for g in sch["gates"] for leg in g[3] for i in leg}
+got_gate = {(e["a"], e["b"]) for e in gr["edges"] if e["kind"] == 0}
+if want_gate != got_gate:
+    sys.exit(f"deploy: graph.json gate edges ({len(got_gate)}) are not schematic.json's ({len(want_gate)})")
+if any(gr["nodes"][e["a"]] is None or gr["nodes"][e["b"]] is None for e in gr["edges"]):
+    sys.exit("deploy: graph.json has an edge on a node the die does not define")
+if any(gr["nodes"][n]["name"] != sch["names"][n] for n in range(1725) if gr["nodes"][n]):
+    sys.exit("deploy: graph.json and schematic.json disagree about a node's name")
 
 # The decode table is measured by running the chip, so a broken run yields a
 # well-formed file full of empty results rather than an error. Insist that the

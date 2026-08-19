@@ -34,6 +34,7 @@ import { blockRegions, loopsToPath, inRegion, gridCells } from './block-regions.
 import { SLUGS } from './block-notes.js';
 import { PACKAGE, direction, pinFacts } from './pins.js';
 import { chainCells } from './chain-cells.js';
+import { clockGen } from './clock-gen.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -128,6 +129,14 @@ export const PIN_R = 300;
 // shared logic grey. Active low on the die: a cell is active when its output
 // is LOW, and the card reads that off the chip's own T-state readout.
 export const CHAIN_R = 80;
+// The clock generator, as the designer page derives it (clock-gen.js): walk
+// forward from the clk0 pad through gate inputs, include the four clocks it
+// ends at, never expand them. 16 nodes, 44 transistors, and the two cp1-gated
+// transistors that land back inside it are the non-overlap interlock. One
+// container, drawn as a region of CLOCK_R around its nodes in its own hue;
+// the card reads the four clocks' levels off the chip and counts what moved.
+export const CLOCK_R = 150;
+const CLOCK_COLOR = 'rgb(120 225 255)';
 const PIN_COLOR = { input: 'rgb(125 211 252)', output: 'rgb(255 180 110)', bidirectional: 'rgb(150 235 160)', neither: 'rgb(170 175 190)' };
 const PIN_LABEL = { input: 'inputs', output: 'outputs', bidirectional: 'bidirectional', neither: 'neither' };
 export const STAGES = ['T0', 'T2', 'T3', 'T4', 'T5', 'T+', 'any'];
@@ -176,6 +185,10 @@ const state = {
   chainRegionData: null,
   chain: null,       // the selected chain cell id (T0..T5, shared), or null
   chainRegions: true,
+  clocks: null,      // [{id:'gen', nodes, ...}] the clock generator, from clock-gen.js
+  clockRegionData: null,
+  clock: null,       // 'gen' when the clock generator is selected, or null
+  clockRegions: true,
   pinRegions: true,
   collapsed: new Set(), // container keys ('block:8', 'stem:sb', 'cluster:12', 'stage:T0', 'control:8') drawn as one node
   supers: [],           // the collapsed containers' single nodes, from applyCollapse()
@@ -560,6 +573,52 @@ function stageAt(pt) {
 }
 
 /** The control lines grouped by the block holding most of what they gate. */
+/** The clock generator, from clock-gen.js: one container. */
+function clockList() {
+  if (state.clocks) return state.clocks;
+  const { sch, pos } = state;
+  const c = clockGen(sch);
+  const out = [{ id: 'gen', nodes: [...c.nodes].filter((n) => pos.has(n)).sort((a, b) => a - b), outs: [...c.outs],
+                 transistors: c.transistors, drivers: c.drivers, logic: c.logic, feedback: c.feedback, pad: c.pad }];
+  state.clocks = out;
+  state.clockStats = { nodes: c.nodes.size, transistors: c.transistors, logic: c.logic, drivers: c.drivers, feedback: c.feedback.length,
+                       share: (c.transistors / sch.counts.transistors * 100).toFixed(1) };
+  return out;
+}
+
+function clockRegionData() {
+  if (state.clockRegionData) return state.clockRegionData;
+  const list = clockList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: CLOCK_R, cell: 25 });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.clockRegionData = out;
+  return out;
+}
+
+function drawClockRegions(g) {
+  const data = clockRegionData();
+  for (const c of clockList()) {
+    const r = data.get(c.id);
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-qg' + (state.clock === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-clock': c.id, style: `--bc: ${CLOCK_COLOR}` }, g);
+    path.setAttribute('aria-label', `clock generator, ${c.nodes.length} nodes`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y - CLOCK_R - 30, class: 'tc-qg-lb' + (state.clock === c.id ? ' sel' : ''), 'data-clock': c.id, style: `--bc: ${CLOCK_COLOR}` }, g);
+      t.textContent = 'clock generator';
+    }
+  }
+  g.classList.toggle('off', !state.clockRegions);
+}
+
+function clockAt(pt) {
+  const data = clockRegionData();
+  for (const c of clockList()) if (inRegion(pt, data.get(c.id).loops)) return c.id;
+  return null;
+}
+
 /** The timing chain's cells, from chain-cells.js, plus the shared logic as a group. */
 function chainList() {
   if (state.chains) return state.chains;
@@ -851,7 +910,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -860,7 +919,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -869,7 +928,7 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -878,7 +937,16 @@ function selectCluster(id, { fly = false } = {}) {
 function selectStage(id, { fly = false } = {}) {
   const c = id === null ? null : stageList().find((x) => x.id === id);
   state.stage = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select the clock generator. */
+function selectClock(id, { fly = false } = {}) {
+  const c = id === null ? null : clockList().find((x) => x.id === id);
+  state.clock = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -887,7 +955,7 @@ function selectStage(id, { fly = false } = {}) {
 function selectChain(id, { fly = false } = {}) {
   const c = id === null ? null : chainList().find((x) => x.id === id);
   state.chain = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -896,7 +964,7 @@ function selectChain(id, { fly = false } = {}) {
 function selectControl(id, { fly = false } = {}) {
   const c = id === null ? null : controlList().find((x) => x.id === id);
   state.control = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -905,7 +973,7 @@ function selectControl(id, { fly = false } = {}) {
 function selectPins(id, { fly = false } = {}) {
   const c = id === null ? null : pinList().find((x) => x.id === id);
   state.pin = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -930,6 +998,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-stage-regions .tc-tg, #tc-stage-regions .tc-tg-lb')) {
     p.classList.toggle('sel', state.stage !== null && p.dataset.stage === state.stage);
+  }
+  for (const p of document.querySelectorAll('#tc-clock-regions .tc-qg, #tc-clock-regions .tc-qg-lb')) {
+    p.classList.toggle('sel', state.clock !== null && p.dataset.clock === state.clock);
   }
   for (const p of document.querySelectorAll('#tc-chain-regions .tc-hg, #tc-chain-regions .tc-hg-lb')) {
     p.classList.toggle('sel', state.chain !== null && p.dataset.chain === state.chain);
@@ -981,8 +1052,9 @@ function paintBlock() {
   if (b === null && state.control !== null) { paintControlCard(box); return; }
   if (b === null && state.pin !== null) { paintPinCard(box); return; }
   if (b === null && state.chain !== null) { paintChainCard(box); return; }
+  if (b === null && state.clock !== null) { paintClockCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -1050,6 +1122,30 @@ function paintStageCard(box) {
   const html = `<span class="tc-bk-name">decode terms, ${c.id === 'any' ? 'any stage' : c.id}</span> · ${c.nodes.length} terms`
     + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high, ' tc-hi') : ''}`
     + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}` + collapseButton();
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/**
+ * The card for the clock generator: what it costs, the four clocks it makes
+ * with their levels now, the interlock, and what moved.
+ */
+function paintClockCard(box) {
+  const c = clockList().find((x) => x.id === state.clock);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  const high = [], moved = [];
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) high.push(n);
+    if (L && P && P[n] !== L[n]) moved.push(n);
+  }
+  const nameOf = (n) => sch.names[n] || `#${n}`;
+  const pill = (n, cls) => `<button type="button" class="tc-node ${L && L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${nameOf(n)}<i>${L && L[n] ? 1 : 0}</i></button>`;
+  const st = state.clockStats;
+  const html = `<span class="tc-bk-name">clock generator</span> · ${c.nodes.length} nodes`
+    + ` · ${st.transistors} transistors (${st.logic} that decide, ${st.drivers} in the four output stages), ${st.share}% of the die`
+    + ` · walked forward from <span class="mono">clk0</span> to the clocks it makes: ${c.outs.map((n) => pill(n, ' tc-hi')).join(' ')}`
+    + ` · ${st.feedback} transistor${st.feedback === 1 ? '' : 's'} gated by a generated clock land back inside it, the non-overlap interlock`
+    + ` · <span class="tc-bk-moved">${moved.length}</span> moved at this half-cycle${moved.length ? ': ' + moved.map((n) => pill(n, '')).join(' ') : ''} · ${high.length} high` + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -1148,6 +1244,7 @@ function draw() {
   drawClusterRegions(el('g', { class: 'tc-cluster-regions', id: 'tc-cluster-regions' }, cam));
   drawStageRegions(el('g', { class: 'tc-stage-regions', id: 'tc-stage-regions' }, cam));
   drawChainRegions(el('g', { class: 'tc-chain-regions', id: 'tc-chain-regions' }, cam));
+  drawClockRegions(el('g', { class: 'tc-clock-regions', id: 'tc-clock-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
   drawControlRegions(el('g', { class: 'tc-control-regions', id: 'tc-control-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
@@ -1190,6 +1287,7 @@ function draw() {
   else if (state.control !== null) selectControl(state.control);
   else if (state.pin !== null) selectPins(state.pin);
   else if (state.chain !== null) selectChain(state.chain);
+  else if (state.clock !== null) selectClock(state.clock);
   applyCollapse();
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
@@ -1270,7 +1368,17 @@ function chainCaption() {
   return `The long-dashed beads are the timing chain as ${st.cells} cells, one per T-state the readout reads, `
     + `derived by walking back from each output inside the timing chain, the control pipeline and the static logic `
     + `and giving each node to the stage that reaches it soonest (${list.filter((c) => c.id !== 'shared').map((c) => `${c.id} ${c.nodes.length}`).join(', ')}), `
-    + `plus the ${st.shared} nodes of reset and ready they all consult, grey. ${st.reached} nodes reached in all.`;
+    + `plus the ${st.shared} nodes of reset and ready they all consult, grey. ${st.reached} nodes reached in all. `
+    + clockCaption();
+}
+
+function clockCaption() {
+  const st = state.clockStats;
+  if (!st) return '';
+  return `The bright outline is the clock generator as the designer page derives it, walked forward from the clk0 pad `
+    + `to the four clocks it makes and never past them: ${st.nodes} nodes, ${st.transistors} transistors `
+    + `(${st.logic} that decide, ${st.drivers} in the output stages), ${st.share}% of the die, and ${st.feedback} `
+    + `transistors carrying a generated clock back inside it, which is the non-overlap.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -1515,7 +1623,7 @@ function paint() {
 // share of its members that are high, ringed if any changed, and a bundle
 // flashes if any edge in it fired or toggled.
 
-const KINDS = ['control', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
+const KINDS = ['control', 'clock', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
 
 /** What a container key stands for: its members, a label and a colour. */
 function container(key) {
@@ -1553,12 +1661,17 @@ function container(key) {
     const c = chainList().find((x) => x.id === id);
     return c ? { kind, id, nodes: c.nodes, label: id === 'shared' ? 'chain: shared' : `chain ${id}`, css: chainCss(id) } : null;
   }
+  if (kind === 'clock') {
+    const c = clockList().find((x) => x.id === id);
+    return c ? { kind, id, nodes: c.nodes, label: 'clock generator', css: CLOCK_COLOR } : null;
+  }
   return null;
 }
 
 /** The key of whatever is selected, or null. */
 function selectedKey() {
   if (state.control !== null) return `control:${state.control}`;
+  if (state.clock !== null) return `clock:${state.clock}`;
   if (state.chain !== null) return `chain:${state.chain}`;
   if (state.pin !== null) return `pins:${state.pin}`;
   if (state.stem !== null) return `stem:${state.stem}`;
@@ -1578,6 +1691,7 @@ function selectKey(key) {
   else if (c.kind === 'control') selectControl(c.id);
   else if (c.kind === 'pins') selectPins(c.id);
   else if (c.kind === 'chain') selectChain(c.id);
+  else if (c.kind === 'clock') selectClock(c.id);
 }
 
 function setCollapsed(key, on) {
@@ -1975,6 +2089,12 @@ function setControlRegions(on) {
   $('tc-control-regions')?.classList.toggle('off', !on);
 }
 
+function setClockRegions(on) {
+  state.clockRegions = on;
+  $('tc-clock-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-clock-regions')?.classList.toggle('off', !on);
+}
+
 function setChainRegions(on) {
   state.chainRegions = on;
   $('tc-chain-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2160,6 +2280,8 @@ async function boot() {
     if (q.get('pins') === '0') setPinRegions(false);
     $('tc-chain-btn').addEventListener('click', () => setChainRegions(!state.chainRegions));
     if (q.get('cells') === '0') setChainRegions(false);
+    $('tc-clock-btn').addEventListener('click', () => setClockRegions(!state.clockRegions));
+    if (q.get('clockgen') === '0') setClockRegions(false);
     $('tc-collapse-blocks').addEventListener('click', () => {
       const all = [...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`));
       collapseAllBlocks(!all);
@@ -2245,6 +2367,8 @@ async function boot() {
       const pt = atClient(e);
       const kc = state.controlRegions ? controlAt(pt) : null;
       if (kc !== null) { selectControl(kc === state.control ? null : kc); return; }
+      const qc = state.clockRegions ? clockAt(pt) : null;
+      if (qc !== null) { selectClock(qc === state.clock ? null : qc); return; }
       const hc = state.chainRegions ? chainAt(pt) : null;
       if (hc !== null) { selectChain(hc === state.chain ? null : hc); return; }
       const stem = state.stemRegions ? stemAt(pt) : null;
@@ -2309,6 +2433,8 @@ async function boot() {
     if (q.has('stage')) selectStage(q.get('stage'), { fly: true });
     // ?chain=T3 (or shared) selects that cell of the timing chain and frames it.
     if (q.has('chain')) selectChain(q.get('chain'), { fly: true });
+    // ?clock=1 selects the clock generator and frames it.
+    if (q.get('clock') === '1') selectClock('gen', { fly: true });
     // ?cluster=N selects the cluster holding node N and frames it.
     if (q.has('cluster')) {
       const n = Number(q.get('cluster'));
@@ -2327,5 +2453,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

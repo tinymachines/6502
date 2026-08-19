@@ -1,0 +1,124 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  graph.json: the chip as one node-and-edge file, checked against the files it
+  was written from rather than trusted. Every node's name, block and role
+  against schematic.json; every centroid against what die-centroids.js reads
+  out of layout.bin, because a second implementation of "mean of a node's own
+  vertices, Y flipped" in Rust is exactly the sort of thing that drifts by one
+  sign; the block of every node and transistor and the drives attribution
+  against blocks.json; the gate edges exactly the set of (input, output) pairs
+  in schematic.json's gates and the switch edges exactly its switches, with
+  each switch's transistor being the one it says; the transistor kinds
+  recounted from the terminals; and the rails never an endpoint of a gate edge.
+
+    http://localhost:8777/_graph-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body><pre id="out"></pre>
+<script type="module">
+import { centroids } from './die-centroids.js';
+const results = [];
+const ok = (n, c, d) => { results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`); document.title = `running ${results.length}`; };
+
+const [g, sch, blocks, buf] = await Promise.all([
+  fetch('graph.json').then((r) => r.json()),
+  fetch('schematic.json').then((r) => r.json()),
+  fetch('blocks.json').then((r) => r.json()),
+  fetch('layout.bin').then((r) => r.arrayBuffer()),
+]);
+const N = g.nodes.length;
+ok('1725 node slots, 3510 transistors, and the counts header agrees with the arrays',
+   N === 1725 && g.transistors.length === 3510 && g.counts.nodes === N && g.counts.transistors === 3510
+   && g.counts.edges === g.edges.length && g.counts.gateEdges + g.counts.switchEdges === g.edges.length,
+   JSON.stringify(g.counts));
+ok('the rails are the die\'s', g.rails.vss === sch.vss && g.rails.vcc === sch.vcc && sch.names[g.rails.vss] === 'vss' && sch.names[g.rails.vcc] === 'vcc');
+{
+  const used = new Set();
+  for (const t of g.transistors) { used.add(t.gate); used.add(t.c1); used.add(t.c2); }
+  const nulls = g.nodes.map((n, i) => [n, i]).filter(([n]) => n === null).map(([, i]) => i);
+  ok('node ids are their index, and a null is a number the die leaves unused: no name, no transistor, no polygon',
+     g.nodes.every((n, i) => n === null || n.id === i) && nulls.every((i) => !sch.names[i] && !used.has(i)) && nulls.length === 1725 - [...used].length,
+     `${nulls.length} nulls, ${used.size} nodes touched by a transistor`);
+}
+
+// Names, blocks, roles against schematic.json; block and drives against blocks.json.
+let nameBad = 0, blockBad = 0, roleBad = 0, seedBad = 0, drivesBad = 0;
+for (let i = 0; i < N; i++) {
+  const n = g.nodes[i];
+  if (!n) continue;
+  if ((n.name ?? null) !== (sch.names[i] ?? null)) nameBad++;
+  if (n.block !== (sch.nodeBlock[i] & 0x7f) || n.block !== (blocks.nodeBlock[i] & 0x7f)) blockBad++;
+  if (n.role !== sch.nodeRole[i]) roleBad++;
+  if (n.seeded !== !!(blocks.nodeBlock[i] & 0x80)) seedBad++;
+  if ((n.drives ?? 0) !== (blocks.nodeDrives[i] || 0)) drivesBad++;
+}
+ok('every name is schematic.json\'s', nameBad === 0, `${nameBad} differ`);
+ok('every block is schematic.json\'s and blocks.json\'s, and seeded is blocks.json\'s bit 7', blockBad === 0 && seedBad === 0, `${blockBad} blocks, ${seedBad} seeded differ`);
+ok('every role is schematic.json\'s', roleBad === 0, `${roleBad} differ`);
+ok('every drives attribution is blocks.json\'s', drivesBad === 0, `${drivesBad} differ`);
+ok('block names are the blocks the die was divided into', g.blockNames.join() === sch.blockNames.join(), g.blockNames.join(' | '));
+const named = g.nodes.filter((n) => n && n.name).length;
+ok('the named count is the number of nodes with a name', g.counts.named === named, `${g.counts.named} vs ${named}`);
+
+// Centroids against die-centroids.js.
+const { pos, bounds } = centroids(buf);
+let posBad = 0, posMissing = 0, posExtra = 0, worst = 0;
+for (let i = 0; i < N; i++) {
+  const n = g.nodes[i];
+  if (!n) continue;
+  const p = pos.get(i);
+  if (p && n.x === null) posMissing++;
+  else if (!p && n.x !== null) posExtra++;
+  else if (p) { const d = Math.hypot(p.x - n.x, p.y - n.y); worst = Math.max(worst, d); if (d > 0.011) posBad++; }
+}
+ok('every centroid is die-centroids.js\'s, to the hundredth it is written with', posBad === 0 && posMissing === 0 && posExtra === 0, `${posBad} off (worst ${worst.toFixed(4)}), ${posMissing} missing, ${posExtra} extra`);
+ok('and the bounds are layout.bin\'s', g.bounds.xmin === bounds.xmin && g.bounds.ymin === bounds.ymin && g.bounds.xmax === bounds.xmax && g.bounds.ymax === bounds.ymax);
+
+// Edges against schematic.json.
+const wantGate = new Set();
+for (const [out, , , legs] of sch.gates) for (const leg of legs) for (const i of leg) wantGate.add(`${i}:${out}`);
+const gotGate = new Set(g.edges.filter((e) => e.kind === 0).map((e) => `${e.a}:${e.b}`));
+ok('the gate edges are exactly schematic.json\'s (input, output) pairs', wantGate.size === gotGate.size && [...wantGate].every((k) => gotGate.has(k)), `${gotGate.size} vs ${wantGate.size}`);
+// One edge per switch TRANSISTOR, so a multiset: 70 of the 873 are parallel
+// pairs on the same ends under the same control, and a set comparison
+// reported 803 and failed on correct behaviour.
+const wantSw = sch.switches.map(([c, a, b]) => `${c}:${a}:${b}`).sort();
+const gotSw = g.edges.filter((e) => e.kind === 1);
+ok('the switch edges are exactly schematic.json\'s switches, one per transistor', gotSw.map((e) => `${e.control}:${e.a}:${e.b}`).sort().join() === wantSw.join(), `${gotSw.length} vs ${wantSw.length}; ${wantSw.length - new Set(wantSw).size} parallel pairs`);
+ok('each switch names its transistor, and that transistor has its control on the gate and its ends as terminals',
+   gotSw.every((e) => { const t = g.transistors[e.t]; return t && t.gate === e.control && ((t.c1 === e.a && t.c2 === e.b) || (t.c1 === e.b && t.c2 === e.a)); }));
+const rails = new Set([g.rails.vss, g.rails.vcc]);
+// A rail is never a gate edge's output. It is an input on the gates with a
+// leg gated by vss, which are the permanently-off transistors the pinout
+// page's direction rule depends on; pin those to the vss-gated transistors.
+const vssGated = new Set(g.transistors.filter((t) => t.gate === g.rails.vss).map((t) => t.c1));
+const railIn = g.edges.filter((e) => e.kind === 0 && rails.has(e.a));
+ok('a rail is never a gate edge\'s output', g.edges.filter((e) => e.kind === 0).every((e) => !rails.has(e.b)));
+ok('vss is a gate input only on gates with a vss-gated (permanently off) pulldown, and vcc never', railIn.every((e) => e.a === g.rails.vss && vssGated.has(e.b)) && railIn.length > 0 && railIn.length <= 17, `${railIn.length} such edges, ${vssGated.size} vss-gated`);
+ok('every edge endpoint is a node the die defines', g.edges.every((e) => g.nodes[e.a] && g.nodes[e.b]));
+ok('every gate-edge input gates at least one transistor', (() => { const gates = new Set(g.transistors.map((t) => t.gate)); return g.edges.filter((e) => e.kind === 0).every((e) => gates.has(e.a)); })());
+
+// Transistors: ids, kinds recounted, blocks against blocks.json.
+ok('transistor ids are their index', g.transistors.every((t, i) => t.id === i));
+const kinds = [0, 0, 0, 0];
+let kindBad = 0, tBlockBad = 0;
+for (const t of g.transistors) {
+  const k = rails.has(t.c1) ? 3 : t.c2 === g.rails.vss ? 1 : t.c2 === g.rails.vcc ? 2 : 0;
+  if (k !== t.kind) kindBad++;
+  kinds[t.kind]++;
+  if (t.block !== (blocks.transistorBlock[t.id] & 0x7f)) tBlockBad++;
+}
+ok('every transistor kind follows from its terminals, a rail always in c2', kindBad === 0, `${kindBad} wrong`);
+ok('2493 pulldowns, 783 pass transistors, 234 pull-ups, none on both rails: the measurement the blueprint states', kinds.join() === '783,2493,234,0', kinds.join());
+ok('every transistor\'s block is blocks.json\'s', tBlockBad === 0, `${tBlockBad} differ`);
+ok('the switch edges are exactly the pass transistors the schematic did not absorb into a gate', g.counts.switchEdges === sch.counts.switches && sch.counts.absorbed + sch.counts.switches === 3510, `${g.counts.switchEdges} switches, ${sch.counts.absorbed} absorbed`);
+ok('every named node with a centroid has the pullup flag of a real node (vss and vcc do not)', g.nodes[g.rails.vss].pullup === false && g.nodes[g.rails.vcc].pullup === false && g.nodes.filter((n) => n && n.pullup).length > 500, `${g.nodes.filter((n) => n && n.pullup).length} pullups`);
+
+const fails = results.filter((r) => r.startsWith('FAIL')).length;
+document.getElementById('out').textContent = results.join('\n');
+document.title = fails ? `${fails} FAIL` : 'ALL PASS';
+</script></body></html>

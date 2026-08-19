@@ -145,6 +145,11 @@ cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
 cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 cargo run -p v6502-netlist --bin export-blocks -- web/blocks.json
 cargo run -p v6502-netlist --bin export-schematic -- web/schematic.json
+cargo run -p v6502-netlist --bin export-graph -- web/graph.json
+# (graph.json is the chip as ONE node-and-edge file: every node with its name,
+#  block, role, pullup and centroid; all 3510 transistors as {gate, c1, c2};
+#  and the interpreted gate and switch edges the pages draw. Hand it to anyone
+#  who wants the network without learning the gate/switch encoding.)
 cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
 # (primer.html and programs.html need no export of their own: the primer reads
@@ -198,7 +203,7 @@ python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
 `web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/blocks.json`,
-`web/schematic.json`, `web/decode.json`, `web/timing.json`,
+`web/schematic.json`, `web/graph.json`, `web/decode.json`, `web/timing.json`,
 `web/build-info.json`, `dist/`, the golden trace
 and everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
@@ -429,7 +434,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Thirty-one harnesses plus two probes, all prefixed `_` and **never shipped** —
+Thirty-two harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -495,6 +500,9 @@ _ports-test.html       # the block bench's Ports drawer: the filter filters, a
 _csp-test.html         # every page, with its deep links, booted under the LIVE
                        # Content Security Policy: zero violations reported, and
                        # the policy proven to reach a framed page first
+_graph-test.html       # graph.json against the files it was written from: names,
+                       # blocks, roles, centroids (via die-centroids.js), gate and
+                       # switch edges vs schematic.json, transistor kinds recounted
 ```
 
 **A harness that samples state still in flight tests nothing.** `_handler-test`
@@ -1121,6 +1129,53 @@ this is that graph with a clock.
     compares node for node, then pins the structure by name (five-node cells
     holding their own `pipeTnout`, each reading the previous one, `notRdy0`
     shared), clicks a bead, collapses T3, and deep-links T4.
+- **The clock generator is a container, from the same walk the designer page
+  runs.** `clockGen()` moved out of `designer.js` into `clock-gen.js` (a leaf)
+  the moment the tracer wanted it, for the reason `pins.js` exists: two pages
+  deriving "the clock generator" from two copies would eventually disagree
+  about which 44 transistors it is. `_designer-test.html` passed unchanged
+  before and after. One container, `clock:gen`, a bright outline at `CLOCK_R`
+  (150) around the 16 nodes; `cp1` and `cclk` sit mid-die in it because those
+  nets span the chip and a centroid is a centroid. The card reads the four
+  clocks' levels off the chip, states the 44 / 21 / 23 / 1.3% and the two
+  interlock transistors, and counts what moved: **all 16 nodes move at every
+  half-cycle**, which is what a clock generator is and the harness pins.
+  `?clock=1`, `?clockgen=0`; priority control, clock, chain, capsule, stage,
+  cluster, pins, block.
+
+### `graph.json`: the chip as one node-and-edge file
+
+Asked "do we have a single node-edge data structure of the chip network",
+the honest answer was: at three levels, and not as one file. The raw netlist
+(`transdefs.js`, 3510 rows of `gate, c1, c2`: the chip as a hypergraph, every
+edge a transistor labelled by a third node; `netlist.bin` is that in CSR, Rust
+only), the interpreted circuit (`schematic.json`'s `gates` and `switches`,
+which every page flattens its own way), and the live graph
+(`Machine.nodeGroup`). `export-graph` now writes the first two as one file:
+
+- `nodes[i]`: `{id, name, block, seeded, role, pullup, x, y, drives}` by the
+  die's own numbering, `null` at the 21 numbers the die leaves unused.
+- `transistors[t]`: `{id, gate, c1, c2, kind, block}` by the die's own
+  transistor number, terminals after the reference's normalisation (a rail is
+  always `c2`); `kind` is the naive per-transistor reading, and it recounts
+  to exactly the **2493 pulldowns / 783 pass / 234 pull-ups** the blueprint
+  section states.
+- `edges`: `{kind: 0, a, b}` for every distinct gate (input → output) pair
+  (2435) and `{kind: 1, a, b, control, t}` per switch transistor (873, of
+  which **70 are parallel pairs** on the same ends under the same control;
+  `t` tells them apart, and a harness comparing as a set reported 803 and
+  failed on correct behaviour).
+- **`vss` is a gate-edge input on eleven gates.** Those are legs gated by a
+  permanently-off vss-gated transistor, the ones the pinout page's direction
+  rule turns on (RDY, S.O.); a rail is never a gate edge's *output*. The
+  first comment said "never an endpoint" and the harness caught it.
+- **Centroids are computed in Rust the way `die-centroids.js` computes them**
+  (mean of the node's vertices, Y flipped) and `_graph-test.html` compares the
+  two to the hundredth the file is written with: a second implementation of a
+  one-sign flip is exactly what drifts. `deploy.sh` refuses to publish if the
+  gate edges are not exactly `schematic.json`'s pairs, the switch count or
+  gate count differs, an edge names an undefined node, or a name disagrees.
+
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same

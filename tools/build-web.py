@@ -208,6 +208,8 @@ def main() -> None:
     # The timing chain's cells, derived by rule from schematic.json and
     # timing.json's stages; a leaf the tracer draws and the harness re-derives.
     b.copy_hashed("chain-cells.js")
+    # The clock generator's walk, shared by designer.js and tracer.js.
+    b.copy_hashed("clock-gen.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -215,6 +217,10 @@ def main() -> None:
     b.copy_hashed("chip-controls.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
+    # The chip as one node-and-edge graph (export-graph): the tracer reads it
+    # for the clock generator, and it is the file to hand anyone who wants the
+    # network without learning the gate and switch encoding.
+    b.copy_hashed("graph.json")
     b.copy_hashed("blueprint.json")
     b.copy_hashed("decode.json")
     b.copy_hashed("timing.json")
@@ -490,6 +496,10 @@ def main() -> None:
         dz = replace_once(dz, f"'{original}'", f"'{b.ref(original)}'", where="designer.js")
     dz = replace_once(dz, "'./claim-table.js'", f"'./{b.ref('claim-table.js')}'",
                       where="designer.js")
+    # The clock generator's walk is clock-gen.js, shared with the tracer, for
+    # the reason claim-table.js is shared with the talk page.
+    dz = replace_once(dz, "'./clock-gen.js'", f"'./{b.ref('clock-gen.js')}'",
+                      where="designer.js")
     b.emit("designer.js", dz.encode())
 
     # 3m. blockdiagram.js: the published figure as a dataset, resolved against
@@ -578,6 +588,7 @@ def main() -> None:
         ("./block-notes.js", "./" + b.ref("block-notes.js")),
         ("./pins.js", "./" + b.ref("pins.js")),
         ("./chain-cells.js", "./" + b.ref("chain-cells.js")),
+        ("./clock-gen.js", "./" + b.ref("clock-gen.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

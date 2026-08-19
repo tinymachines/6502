@@ -18,6 +18,7 @@
 // one chip we have, and rows are worded as that.
 
 import { renderClaims } from './claim-table.js';
+import { clockGen as clockGenOf } from './clock-gen.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -28,11 +29,11 @@ const hex = (n) => '$' + n.toString(16).toUpperCase().padStart(2, '0');
 
 /* -- the clock generator ---------------------------------------------------
  *
- * Derived by a rule, never by a list of node numbers. The rule is: start at the
- * `clk0` pad and walk forward through gate inputs, including the four clocks it
- * ends at but never expanding them. That last clause is what bounds the walk:
- * `cclk` alone gates 273 transistors, so expanding it reaches the decode
- * pipeline and from there most of the chip.
+ * Derived by a rule, never by a list of node numbers, in clock-gen.js, which
+ * the tracer shares: start at the `clk0` pad and walk forward through gate
+ * inputs, including the four clocks it ends at but never expanding them. That
+ * last clause is what bounds the walk: `cclk` alone gates 273 transistors, so
+ * expanding it reaches the decode pipeline and from there most of the chip.
  *
  * Two things make this trustworthy rather than merely plausible. The walk finds
  * a circuit that is closed and symmetric, which a wrong boundary would not. And
@@ -40,49 +41,8 @@ const hex = (n) => '$' + n.toString(16).toUpperCase().padStart(2, '0');
  * real transistor IDs out of the die data, which `_designer-test.html` does
  * independently.
  */
-const CLOCKS = ['cclk', 'cp1', 'clk1out', 'clk2out'];
-
 function clockGen(d) {
-  const { idx, feeds, gates, vss, vcc } = d.net;
-  const outs = new Set(CLOCKS.map((n) => idx.get(n)));
-  const pad = idx.get('clk0');
-  const seen = new Set([pad]);
-  const queue = [pad];
-  while (queue.length) {
-    const n = queue.shift();
-    if (outs.has(n)) continue;            // an output is included, not expanded
-    for (const t of feeds.get(n) || []) {
-      if (seen.has(t) || t === vss || t === vcc) continue;
-      seen.add(t);
-      queue.push(t);
-    }
-  }
-  // `clk0` is the pin the generator starts from, not part of the circuit. Its
-  // own two transistors are gated by vss and can never switch.
-  seen.delete(pad);
-
-  const cost = (n) => {
-    const g = gates.get(n);
-    if (!g) return 0;
-    // A depletion pullup is a segdef flag on this die rather than an entry in
-    // the transistor table, so only the pulldowns and a clocked precharge count.
-    return g[3].reduce((a, leg) => a + leg.length, 0) + (g[2] >= 0 ? 1 : 0);
-  };
-  const transistors = [...seen].reduce((a, n) => a + cost(n), 0);
-  const drivers = [...outs].reduce((a, n) => a + cost(n), 0);
-
-  // The interlock: a transistor gated by one of the generated clocks whose
-  // channel lands back inside the generator. This is what makes the two phases
-  // non-overlapping, and it is the whole reason the circuit is on the die.
-  const feedback = [];
-  for (const [node, , pre, legs] of d.sch.gates) {
-    if (!seen.has(node)) continue;
-    for (const leg of legs) {
-      for (const inp of leg) if (outs.has(inp)) feedback.push([inp, node]);
-    }
-    if (pre >= 0 && outs.has(pre)) feedback.push([pre, node]);
-  }
-  return { nodes: seen, transistors, drivers, logic: transistors - drivers, feedback };
+  return clockGenOf(d.sch);
 }
 
 /* -- the decimal correction ------------------------------------------------

@@ -791,6 +791,81 @@ f.addEventListener('load', async () => {
         f4.remove();
       }
 
+      // --- the clock generator --------------------------------------------------------
+      // The designer page's walk, re-done here from schematic.json: forward from
+      // clk0 through gate inputs (a precharge clock counts), including the four
+      // clocks and never expanding them. Then what the page drew and says.
+      {
+        const feedsH = new Map(); const addF = (k, v) => { if (!feedsH.has(k)) feedsH.set(k, new Set()); feedsH.get(k).add(v); };
+        for (const [node, , pre, legs] of sch.gates) { for (const leg of legs) for (const i of leg) addF(i, node); if (pre >= 0) addF(pre, node); }
+        const outsH = new Set(['cclk', 'cp1', 'clk1out', 'clk2out'].map((x) => byName.get(x)));
+        const padH = byName.get('clk0');
+        const seenH = new Set([padH]); const qH = [padH];
+        while (qH.length) { const n = qH.shift(); if (outsH.has(n)) continue; for (const t of feedsH.get(n) || []) { if (seenH.has(t) || rails.has(t)) continue; seenH.add(t); qH.push(t); } }
+        seenH.delete(padH);
+        const wantClock = [...seenH].filter((n) => mine.has(n)).sort((a, b) => a - b);
+        const gotClock = T.clockList();
+        ok('the clock generator is the harness\'s own walk, node for node: sixteen nodes, the four clocks among them',
+           gotClock.length === 1 && gotClock[0].nodes.join() === wantClock.join() && wantClock.length === 16 && [...outsH].every((n) => wantClock.includes(n)),
+           `page ${gotClock[0].nodes.length}, harness ${wantClock.length}`);
+        const costH = (n) => { const g = sch.gates.find((x) => x[0] === n); return g ? g[3].reduce((a, leg) => a + leg.length, 0) + (g[2] >= 0 ? 1 : 0) : 0; };
+        const transH = wantClock.reduce((a, n) => a + costH(n), 0);
+        ok('and costs 44 transistors by the legs of its gates, as the designer page measures', transH === 44 && st.clockStats.transistors === 44 && st.clockStats.feedback === 2, `${transH} / ${st.clockStats.transistors}, feedback ${st.clockStats.feedback}`);
+        const qpath = d.querySelector('#tc-clock-regions .tc-qg[data-clock="gen"]');
+        let outQ = 0; for (const n of wantClock) { const p = mine.get(n); if (!hit2(qpath, p.x, p.y)) outQ++; }
+        ok('every node of the generator lies inside its outline', outQ === 0, `${outQ} outside`);
+        T.selectClock('gen');
+        const cardQ = $('tc-block');
+        const clockPills = [...cardQ.querySelectorAll('.tc-node.tc-hi')].map((b) => [b.textContent.replace(/[01]$/, ''), b.querySelector('i').textContent]);
+        const wantQ = [...outsH].map((n) => [sch.names[n], L41[n] > 0 ? '1' : '0']);
+        ok('the card reads the four clocks with the levels the harness chip has', clockPills.length === 4 && wantQ.every(([nm, v]) => clockPills.some(([pn, pv]) => pn === nm && pv === v)), clockPills.map((x) => x.join(':')).join(' '));
+        const movedQ = wantClock.filter((n) => L40[n] !== L41[n]);
+        ok(`the card counts what moved in it, against the harness chip (${movedQ.length} of 16 at this half-cycle)`, cardQ.textContent.includes(`${movedQ.length} moved`) && movedQ.length > 0, cardQ.textContent.slice(0, 120));
+        const clkSet = new Set(wantClock);
+        let dimQ = 0; for (const c of circles()) if (c.classList.contains('sel-out') === clkSet.has(Number(c.dataset.node))) dimQ++;
+        ok('every node but the generator\'s steps back', dimQ === 0, `${dimQ} wrong`);
+        // A click inside the outline, clear of nodes, control outlines and chain beads.
+        let qspot = null;
+        for (const n of wantClock) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(qpath, x, y)) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
+            qspot = { x, y, n }; break;
+          }
+          if (qspot) break;
+        }
+        ok('a point inside the outline, clear of nodes, exists', !!qspot);
+        T.selectClock(null);
+        T.frameNodes([qspot.n]);
+        f.style.height = '2600px'; await sleep(100);
+        const tgQ = click2(qspot.x, qspot.y);
+        ok('the click lands on the outline', tgQ.classList.contains('tc-qg'), tgQ.tagName + '.' + tgQ.className.baseVal);
+        ok('and selects the generator, clearing every other kind', st.clock === 'gen' && st.block === null && st.stem === null && st.pin === null && st.chain === null, `${st.clock}`);
+        click2(qspot.x, qspot.y);
+        ok('clicking the selected outline again clears it', st.clock === null);
+        T.selectClock('gen'); T.selectChain('T3');
+        ok('a chain cell clears the generator, and the generator a chain cell', st.clock === null && st.chain === 'T3' && (T.selectClock('gen'), st.chain === null && st.clock === 'gen'));
+        T.setCollapsed('clock:gen', true);
+        const snQ = d.querySelector('#tc-supers .tc-sn[data-key="clock:gen"]');
+        let qx = 0, qy = 0; for (const n of wantClock) { const p = mine.get(n); qx += p.x; qy += p.y; }
+        ok('the generator collapses into one node at its mean, sixteen members', !!snQ && Math.abs(Number(snQ.getAttribute('cx')) - qx / 16) < 0.6 && Math.abs(Number(snQ.getAttribute('cy')) - qy / 16) < 0.6 && d.querySelector('.tc-sn-lb[data-key="clock:gen"]').textContent === 'clock generator · 16');
+        T.setCollapsed('clock:gen', false);
+        T.selectClock(null);
+        T.setClockRegions(false);
+        ok('the clock toggle hides the outline', w.getComputedStyle($('tc-clock-regions')).display === 'none' && $('tc-clock-btn').getAttribute('aria-pressed') === 'false');
+        T.setClockRegions(true);
+        const f5 = d.createElement('iframe');
+        f5.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f5);
+        await new Promise((res) => { f5.addEventListener('load', res, { once: true }); f5.src = 'tracer.html?program=1&step=41&clock=1'; });
+        for (let i = 0; i < 200 && !(f5.contentWindow.__tracer && !f5.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?clock=1 selects the generator on a fresh page', f5.contentWindow.__tracer.state.clock === 'gen' && f5.contentDocument.getElementById('tc-block').textContent.includes('clock generator'));
+        f5.remove();
+      }
+
       // --- collapsing a container into one node ------------------------------------
       {
         const aluB = sch.blockNames.indexOf('ALU');
