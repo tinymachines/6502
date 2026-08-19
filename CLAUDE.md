@@ -1011,6 +1011,26 @@ this is that graph with a clock.
     half-cycle 41, so an empty list matched an empty list. It now also checks
     the stage with the most terms high and requires the list non-empty. A
     check that can pass on nothing has to be made to see something.
+- **The control lines cluster by what they operate**: the block holding most
+  of the transistors each line gates (`blocks.json`'s `transistorGate` and
+  `transistorBlock`, ties to the lower id). Measured: program counter 9, ALU
+  14, registers 9, address latches 8, data bus 3, and 3 (`#IPC`, `#DSA`,
+  `PCLC`) whose transistors are mostly static gates and file with the static
+  logic. Their centroids sit mid-datapath beside what they drive, so each
+  group runs together at `CONTROL_R` (150) as a dotted outline in the unit's
+  hue; the card lists the lines high now (as pills) and counts the switches
+  they hold open, checked against the harness chip. A control cluster wins
+  over the capsule it sits in, being smaller; `?control=<slug>` deep-links.
+  Click priority overall: control, capsule, stage bead, gate cluster, block.
+  - **A first estimate of the grouping, made by reading switch endpoints in a
+    throwaway script, got the numbers wrong** (registers 8, ALU 12, PC 10):
+    the page files by `transistorBlock`, which also counts a line's pulldown
+    transistors in gates. The harness agreed with the page line for line and
+    the comment was corrected to the measurement; the assertion that named
+    "twelve" was replaced by "the ALU has the most", which is the claim.
+  - **High-list pills carry `tc-hi`** so a harness can tell them from the
+    moved-list pills, which also carry `up`; selecting `.tc-node.up` found
+    each high-and-moved line twice.
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same

@@ -86,6 +86,7 @@
               <button class="btn" type="button" id="tc-stems-btn" aria-pressed="true">bus capsules</button>
               <button class="btn" type="button" id="tc-clusters-btn" aria-pressed="true">gate clusters</button>
               <button class="btn" type="button" id="tc-stages-btn" aria-pressed="true">decode stages</button>
+              <button class="btn" type="button" id="tc-controls-btn" aria-pressed="true">control lines</button>
             </div>
           </div>
           <div class="field tc-watch-field" id="tc-watch-field">
@@ -107,7 +108,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a dotted outline for the control lines of a unit; click it again to clear.</span>
           </div>
         </div>
 
@@ -259,7 +260,16 @@
         of terms, so its beads are scattered and coloured by stage, warm early
         to cool late. Click one to select the stage: the card says how many of
         its terms are high at this half-cycle and names them, which is the
-        decoder's answer to what the chip is doing right now. A convex hull per block was measured first and rejected, because
+        decoder's answer to what the chip is doing right now.
+        The dotted outlines in the datapath are the decode control lines,
+        clustered by what they operate: each line gates a row of transistors,
+        and the block most of those are filed in is the unit it drives. The
+        lines for the registers, the ALU, the address latches, the data bus
+        and the program counter each sit together beside their unit, and a
+        few gate static logic rather than switches and are filed with it. Click
+        one to select the set: the card names the lines that are high at this
+        half-cycle and counts the switches they are holding open. A control
+        cluster wins over a capsule, being smaller. A convex hull per block was measured first and rejected, because
         the datapath blocks are interleaved bit-slices: the address latches'
         hull contained every node of the ALU and the program counter, which is
         the opposite of a container. The unclassified residue and the static

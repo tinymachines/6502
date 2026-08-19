@@ -95,6 +95,17 @@ export const CLUSTER_R = 120;
 // together where same-stage terms are neighbours and overlap other stages'
 // beads where they are not, as the blocks' regions do.
 export const TERM_R = 70;
+// The control lines, clustered by what they operate. The 46 decode control
+// lines (`nodeRole` 2) each gate a row of transistors, and blocks.json files
+// every transistor in a block by its channel; the block holding most of a
+// line's transistors is the machinery that line operates (a tie goes to the
+// lower block id, so it is stable). Measured: the registers 9, the ALU 14,
+// the address latches 8, the data bus 3, the program counter 9, and 3 lines
+// (#IPC, #DSA, PCLC) whose transistors are mostly static gates rather than
+// switches, filed with the static logic. Their centroids sit mid-datapath
+// beside what they drive, so a group runs together at CONTROL_R and the
+// clusters read as the control for each unit.
+export const CONTROL_R = 150;
 export const STAGES = ['T0', 'T2', 'T3', 'T4', 'T5', 'T+', 'any'];
 // Presentation: one hue per stage, warm early to cool late, grey for any.
 const STAGE_COLOR = {
@@ -129,6 +140,10 @@ const state = {
   stageRegionData: null,
   stage: null,       // the selected stage id, or null
   stageRegions: true,
+  controls: null,    // [{id, nodes, block}] control lines by the block they operate
+  controlRegionData: null,
+  control: null,     // the selected control cluster id (a block id), or null
+  controlRegions: true,
   watch: DEFAULT_WATCH.slice(),
   program: 0,
   // The drawing.
@@ -506,6 +521,80 @@ function stageAt(pt) {
   return best;
 }
 
+/** The control lines grouped by the block holding most of what they gate. */
+function controlList() {
+  if (state.controls) return state.controls;
+  const { sch, pos, blocks } = state;
+  const byGate = new Map();
+  blocks.transistorGate.forEach((g, t) => { if (!byGate.has(g)) byGate.set(g, []); byGate.get(g).push(t); });
+  const groups = new Map();
+  let lines = 0;
+  sch.nodeRole.forEach((role, n) => {
+    if (role !== 2 || !pos.has(n)) return;
+    lines++;
+    const count = new Map();
+    for (const t of byGate.get(n) || []) { const b = blocks.transistorBlock[t] & 0x7f; count.set(b, (count.get(b) || 0) + 1); }
+    let best = 0, bc = -1;
+    for (const [b, c] of count) if (c > bc || (c === bc && b < best)) { best = b; bc = c; }
+    if (!groups.has(best)) groups.set(best, []);
+    groups.get(best).push(n);
+  });
+  const out = [];
+  let singles = 0;
+  for (const [b, nodes] of groups) {
+    if (nodes.length < 2) { singles++; continue; }
+    out.push({ id: b, block: b, nodes: nodes.sort((x, y) => x - y) });
+  }
+  out.sort((a, b) => a.id - b.id);
+  state.controls = out;
+  state.controlStats = { clusters: out.length, lines, singles };
+  return out;
+}
+
+function controlRegionData() {
+  if (state.controlRegionData) return state.controlRegionData;
+  const list = controlList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: CONTROL_R, cell: REGION_CELL });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.controlRegionData = out;
+  return out;
+}
+
+function drawControlRegions(g) {
+  const data = controlRegionData();
+  const { sch } = state;
+  for (const c of controlList()) {
+    const r = data.get(c.id);
+    const css = blockCss(c.block);
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-kg' + (state.control === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-control': c.id, style: `--bc: ${css}` }, g);
+    path.setAttribute('aria-label', `${c.nodes.length} control lines operating the ${sch.blockNames[c.block]}`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y, class: 'tc-kg-lb' + (state.control === c.id ? ' sel' : ''), 'data-control': c.id, style: `--bc: ${css}` }, g);
+      t.textContent = `ctl → ${sch.blockNames[c.block]}`;
+    }
+  }
+  g.classList.toggle('off', !state.controlRegions);
+}
+
+function controlAt(pt) {
+  const data = controlRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const c of controlList()) {
+    if (!inRegion(pt, data.get(c.id).loops)) continue;
+    for (const n of c.nodes) {
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = c.id; }
+    }
+  }
+  return best;
+}
+
 function drawStemRegions(g) {
   const data = stemRegionData();
   for (const [stem, r] of data) {
@@ -591,7 +680,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -600,7 +689,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; state.stage = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -609,7 +698,7 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.stage = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -618,7 +707,16 @@ function selectCluster(id, { fly = false } = {}) {
 function selectStage(id, { fly = false } = {}) {
   const c = id === null ? null : stageList().find((x) => x.id === id);
   state.stage = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select the control lines operating one block, as a set. */
+function selectControl(id, { fly = false } = {}) {
+  const c = id === null ? null : controlList().find((x) => x.id === id);
+  state.control = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -643,6 +741,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-stage-regions .tc-tg, #tc-stage-regions .tc-tg-lb')) {
     p.classList.toggle('sel', state.stage !== null && p.dataset.stage === state.stage);
+  }
+  for (const p of document.querySelectorAll('#tc-control-regions .tc-kg, #tc-control-regions .tc-kg-lb')) {
+    p.classList.toggle('sel', state.control !== null && Number(p.dataset.control) === state.control);
   }
   for (const [n, c] of state.nodeEl) {
     const out = on && !isMember(n);
@@ -673,8 +774,9 @@ function paintBlock() {
   if (b === null && state.stem !== null) { paintStemCard(box); return; }
   if (b === null && state.cluster !== null) { paintClusterCard(box); return; }
   if (b === null && state.stage !== null) { paintStageCard(box); return; }
+  if (b === null && state.control !== null) { paintControlCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a dotted outline for the control lines of a unit; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -693,6 +795,25 @@ function paintBlock() {
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
+/** The card for a unit's control lines: which are high now, and what they open. */
+function paintControlCard(box) {
+  const c = controlList().find((x) => x.id === state.control);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  const high = [], moved = [];
+  let opens = 0;
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) { high.push(n); opens += (state.edgesByControl.get(n) || []).length; }
+    if (L && P && P[n] !== L[n]) moved.push(n);
+  }
+  const pills = (ns, cls) => ns.map((n) => `<button type="button" class="tc-node ${L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${sch.names[n]}</button>`).join(' ');
+  const html = `<span class="tc-bk-name">control lines operating the ${sch.blockNames[c.block]}</span> · ${c.nodes.length} lines`
+    + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high, ' tc-hi') : ''}`
+    + ` · ${opens} switch${opens === 1 ? '' : 'es'} held open`
+    + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}`;
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
 /** The card for a stage's decode terms: how many are high now, and which. */
 function paintStageCard(box) {
   const c = stageList().find((x) => x.id === state.stage);
@@ -703,10 +824,10 @@ function paintStageCard(box) {
     if (L && L[n] > 0) high.push(n);
     if (L && P && P[n] !== L[n]) moved.push(n);
   }
-  const pills = (ns) => ns.map((n) => `<button type="button" class="tc-node ${L[n] ? 'up' : 'down'}" data-node="${n}">${sch.names[n]}</button>`).join(' ');
+  const pills = (ns, cls) => ns.map((n) => `<button type="button" class="tc-node ${L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${sch.names[n]}</button>`).join(' ');
   const html = `<span class="tc-bk-name">decode terms, ${c.id === 'any' ? 'any stage' : c.id}</span> · ${c.nodes.length} terms`
-    + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high) : ''}`
-    + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved) : ''}`;
+    + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high, ' tc-hi') : ''}`
+    + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}`;
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -777,6 +898,7 @@ function draw() {
   drawClusterRegions(el('g', { class: 'tc-cluster-regions', id: 'tc-cluster-regions' }, cam));
   drawStageRegions(el('g', { class: 'tc-stage-regions', id: 'tc-stage-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
+  drawControlRegions(el('g', { class: 'tc-control-regions', id: 'tc-control-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
   g.edges.forEach((e, i) => {
     const p = pos.get(e.a), q = pos.get(e.b);
@@ -812,6 +934,7 @@ function draw() {
   else if (state.stem !== null) selectStem(state.stem);
   else if (state.cluster !== null) selectCluster(state.cluster);
   else if (state.stage !== null) selectStage(state.stage);
+  else if (state.control !== null) selectControl(state.control);
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
   $('tc-caption').textContent =
@@ -862,7 +985,17 @@ function stageCaption() {
   const list = stageList();
   return `The beads along the decode PLA are its ${st.terms} product terms in ${list.length} clusters by the `
     + `stage their names serve (${list.map((c) => `${c.id} ${c.nodes.length}`).join(', ')}), a set rather than `
-    + `a place, because the stages are interleaved along the row; the ${st.unnamed} unnamed term is left out.`;
+    + `a place, because the stages are interleaved along the row; the ${st.unnamed} unnamed term is left out. `
+    + controlCaption();
+}
+
+function controlCaption() {
+  const st = state.controlStats;
+  if (!st) return '';
+  const { sch } = state;
+  return `The dotted outlines are the ${st.lines} decode control lines in ${st.clusters} clusters by the block `
+    + `holding most of the transistors each one gates (${controlList().map((c) => `${sch.blockNames[c.block]} ${c.nodes.length}`).join(', ')})`
+    + (st.singles ? `, ${st.singles} on its own and left out` : '') + '.';
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -1347,6 +1480,12 @@ function setMode(m) {
   paint();
 }
 
+function setControlRegions(on) {
+  state.controlRegions = on;
+  $('tc-controls-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-control-regions')?.classList.toggle('off', !on);
+}
+
 function setStageRegions(on) {
   state.stageRegions = on;
   $('tc-stages-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1516,6 +1655,8 @@ async function boot() {
     if (q.get('clusters') === '0') setClusterRegions(false);
     $('tc-stages-btn').addEventListener('click', () => setStageRegions(!state.stageRegions));
     if (q.get('terms') === '0') setStageRegions(false);
+    $('tc-controls-btn').addEventListener('click', () => setControlRegions(!state.controlRegions));
+    if (q.get('controls') === '0') setControlRegions(false);
     $('tc-block').addEventListener('click', (e) => {
       const pill = e.target.closest('.tc-node[data-node]');
       if (pill) { pick(Number(pill.dataset.node), true); return; }
@@ -1585,6 +1726,8 @@ async function boot() {
       // that point (they overlap); on the selected block it clears; off every
       // region it clears too.
       const pt = atClient(e);
+      const kc = state.controlRegions ? controlAt(pt) : null;
+      if (kc !== null) { selectControl(kc === state.control ? null : kc); return; }
       const stem = state.stemRegions ? stemAt(pt) : null;
       if (stem !== null) { selectStem(stem === state.stem ? null : stem); return; }
       const sg = state.stageRegions ? stageAt(pt) : null;
@@ -1622,6 +1765,12 @@ async function boot() {
     if (q.has('block')) selectBlockBySlug(q.get('block'));
     // ?bus=STEM selects a bus or latch and frames it.
     if (q.has('bus')) selectStem(q.get('bus').toLowerCase(), { fly: true });
+    // ?control=SLUG selects the control lines operating that block and frames them.
+    if (q.has('control')) {
+      const slug = q.get('control');
+      const c = controlList().find((x) => SLUGS[sch.blockNames[x.block]] === slug);
+      if (c) selectControl(c.id, { fly: true });
+    }
     // ?stage=T0 selects that stage's decode terms and frames them.
     if (q.has('stage')) selectStage(q.get('stage'), { fly: true });
     // ?cluster=N selects the cluster holding node N and frames it.
@@ -1642,5 +1791,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, blockAt, stemAt, clusterAt, stageAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

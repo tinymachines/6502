@@ -512,13 +512,13 @@ f.addEventListener('load', async () => {
       ok('every node but the T0 terms steps back', dimT === 0, `${dimT} wrong`);
       const highT0 = t0.filter((n) => L41[n] > 0).map((n) => sch.names[n]).sort();
       const cardT = $('tc-block');
-      const pillsT = [...cardT.querySelectorAll('.tc-node.up')].map((b) => b.textContent).sort();
+      const pillsT = [...cardT.querySelectorAll('.tc-node.tc-hi')].map((b) => b.textContent).sort();
       ok('the card lists exactly the T0 terms the harness chip has high', cardT.textContent.includes(`${highT0.length} high`) && pillsT.join() === highT0.join(), `page ${pillsT.join(' ')} | harness ${highT0.join(' ')}`);
       // That can pass on an empty list, so also the stage with the most terms
       // high right now, which must list some.
       const busiest = [...wantStages].map(([id, ns]) => [id, ns.filter((n) => L41[n] > 0).map((n) => sch.names[n]).sort()]).sort((a, b) => b[1].length - a[1].length)[0];
       T.selectStage(busiest[0]);
-      const pillsB = [...cardT.querySelectorAll('.tc-node.up')].map((b) => b.textContent).sort();
+      const pillsB = [...cardT.querySelectorAll('.tc-node.tc-hi')].map((b) => b.textContent).sort();
       ok(`and for the busiest stage (${busiest[0]}) the list is non-empty and exact`, busiest[1].length > 0 && pillsB.join() === busiest[1].join(), `page ${pillsB.join(' ')} | harness ${busiest[1].join(' ')}`);
       T.selectStage('T0');
       click2(tspot.x, tspot.y);
@@ -529,6 +529,81 @@ f.addEventListener('load', async () => {
       T.setStageRegions(false);
       ok('the stage toggle hides the beads', w.getComputedStyle($('tc-stage-regions')).display === 'none' && $('tc-stages-btn').getAttribute('aria-pressed') === 'false');
       T.setStageRegions(true);
+
+      // --- the control lines by what they operate ---------------------------------
+      const byGateH = new Map();
+      blocksJson.transistorGate.forEach((g, t) => { if (!byGateH.has(g)) byGateH.set(g, []); byGateH.get(g).push(t); });
+      const wantCtl = new Map();
+      let ctlLines = 0;
+      sch.nodeRole.forEach((role, n) => {
+        if (role !== 2 || !mine.has(n)) return;
+        ctlLines++;
+        const cnt = new Map();
+        for (const t of byGateH.get(n) || []) { const bb = blocksJson.transistorBlock[t] & 0x7f; cnt.set(bb, (cnt.get(bb) || 0) + 1); }
+        let bestB = 0, bc = -1;
+        for (const [bb, c] of cnt) if (c > bc || (c === bc && bb < bestB)) { bestB = bb; bc = c; }
+        if (!wantCtl.has(bestB)) wantCtl.set(bestB, []);
+        wantCtl.get(bestB).push(n);
+      });
+      const gotCtl = T.controlList();
+      ok('the control clusters are the harness\'s own, line for line: by the block holding most of what each gates',
+         gotCtl.length === [...wantCtl].filter(([, v]) => v.length >= 2).length
+         && gotCtl.every((c) => (wantCtl.get(c.id) || []).sort((a, b) => a - b).join() === c.nodes.join()),
+         `page ${gotCtl.map((c) => `${sch.blockNames[c.block]}:${c.nodes.length}`).join(', ')}; ${ctlLines} lines`);
+      const aluCtl = gotCtl.find((c) => c.block === sch.blockNames.indexOf('ALU'));
+      ok('46 lines, and the ALU has the most of them', ctlLines === 46 && !!aluCtl && gotCtl.every((c) => c.nodes.length <= aluCtl.nodes.length), `ALU ${aluCtl && aluCtl.nodes.length}`);
+      const kpath = (id) => d.querySelector(`#tc-control-regions .tc-kg[data-control="${id}"]`);
+      let outK = 0;
+      for (const c of gotCtl) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(kpath(c.id), p.x, p.y)) outK++; }
+      ok('every control line lies inside its cluster\'s outline', outK === 0, `${outK} outside`);
+      // A click beside a line whose bead lies inside a bus capsule: the control wins.
+      let kspot = null;
+      for (const c of gotCtl) {
+        for (const n of c.nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
+            kspot = { x, y, id: c.id, n }; break;
+          }
+          if (kspot) break;
+        }
+        if (kspot) break;
+      }
+      ok('a point inside a control bead that also lies in a bus capsule exists', !!kspot, kspot && sch.names[kspot.n]);
+      T.frameNodes([kspot.n]);
+      f.style.height = '2600px'; await sleep(100);
+      const tg5 = click2(kspot.x, kspot.y);
+      ok('the click lands on the control outline, above the capsule', tg5.classList.contains('tc-kg'), tg5.tagName + '.' + tg5.className.baseVal);
+      ok('and selects the control cluster, not the bus', st.control === kspot.id && st.stem === null && st.block === null, `${st.control} / ${st.stem}`);
+      const kc = gotCtl.find((c) => c.id === kspot.id);
+      const kSet = new Set(kc.nodes);
+      let dimK = 0; for (const c of circles()) if (c.classList.contains('sel-out') === kSet.has(Number(c.dataset.node))) dimK++;
+      ok('every node but the cluster\'s lines steps back', dimK === 0, `${dimK} wrong`);
+      // The card against the harness: which lines are high, and how many drawn
+      // switches they hold open.
+      const highK = kc.nodes.filter((n) => L41[n] > 0);
+      const keepN = (n) => mine.has(n) && !rails.has(n);
+      let opensK = 0; const seenSw = new Set();
+      for (const [ctl, a, b] of sch.switches) { if (!highK.includes(ctl) || a === b || !keepN(a) || !keepN(b)) continue; const key = a < b ? `${a}:${b}` : `${b}:${a}`; if (seenSw.has(key)) continue; seenSw.add(key); opensK++; }
+      const cardK = $('tc-block');
+      const pillsK = [...cardK.querySelectorAll('.tc-node.tc-hi')].map((b) => b.textContent).sort();
+      ok('the card lists the lines the harness chip has high and counts the switches they hold open',
+         pillsK.join() === highK.map((n) => sch.names[n]).sort().join() && cardK.textContent.includes(`${opensK} switch`), `${cardK.textContent} | harness ${highK.map((n) => sch.names[n]).join(' ')} opens ${opensK}`);
+      const busiestK = gotCtl.map((c) => [c, c.nodes.filter((n) => L41[n] > 0)]).sort((a, b) => b[1].length - a[1].length)[0];
+      T.selectControl(busiestK[0].id);
+      const pillsKB = [...cardK.querySelectorAll('.tc-node.tc-hi')].map((b) => b.textContent).sort();
+      ok(`and for the busiest cluster (${sch.blockNames[busiestK[0].block]}) the list is non-empty and exact`, busiestK[1].length > 0 && pillsKB.join() === busiestK[1].map((n) => sch.names[n]).sort().join(), pillsKB.join(' '));
+      T.selectControl(kspot.id);
+      click2(kspot.x, kspot.y);
+      ok('clicking the selected control cluster again clears it', st.control === null && !circles().some((c) => c.classList.contains('sel-out')));
+      T.selectControl(kspot.id); T.selectStage('T0');
+      ok('a stage clears a control cluster, and a control cluster a stage', st.control === null && st.stage === 'T0' && (T.selectControl(kspot.id), st.stage === null && st.control === kspot.id));
+      T.selectControl(null);
+      T.setControlRegions(false);
+      ok('the control toggle hides them', w.getComputedStyle($('tc-control-regions')).display === 'none' && $('tc-controls-btn').getAttribute('aria-pressed') === 'false');
+      T.setControlRegions(true);
       f.style.height = '1000px';
       T.frameNodes([byName.get('abl0')]);  // the view the checks below were written against
     }

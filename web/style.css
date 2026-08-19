@@ -2901,6 +2901,18 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.has-sel .tc-tg-lb:not(.sel) { opacity: .3; }
 #tc-block .tc-node { font-size: .72rem; }
 
+/* The control lines by the unit they operate: dotted, in the unit's hue. */
+.tc-control-regions.off { display: none; }
+.tc-kg { fill: color-mix(in srgb, var(--bc) 14%, transparent); stroke: color-mix(in srgb, var(--bc) 80%, transparent);
+         stroke-width: 7; stroke-dasharray: 4 12; stroke-linecap: round; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-kg:hover { fill: color-mix(in srgb, var(--bc) 24%, transparent); }
+.tc-kg.sel { fill: color-mix(in srgb, var(--bc) 30%, transparent); stroke: var(--bc); stroke-width: 12; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-kg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 20%, transparent); fill: none; }
+.tc-kg-lb { display: none; font: 700 60px var(--font-mono); fill: var(--bc); text-anchor: middle; dominant-baseline: middle;
+            pointer-events: none; paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 9px; }
+.tc-cam.z-labels .tc-kg-lb, .tc-kg-lb.sel { display: block; }
+.tc-cam.has-sel .tc-kg-lb:not(.sel) { opacity: .3; }
+
 /* The bus and latch capsules: thinner, in the watch colour, named above. */
 .tc-stem-regions.off { display: none; }
 .tc-sg { fill: color-mix(in srgb, var(--gold) 6%, transparent); stroke: color-mix(in srgb, var(--gold) 65%, transparent);
