@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -838,7 +838,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(qpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
             qspot = { x, y, n }; break;
           }
@@ -927,7 +927,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(ipath('nmi'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ispot = { x, y, n }; break;
           }
@@ -1019,7 +1019,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0], [0, 60], [0, -60]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(bpath('taken'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             bcands.push({ x, y, n });
           }
@@ -1099,7 +1099,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1297,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1574,7 +1574,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(upath('bit5'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ucands.push({ x, y, n });
           }
@@ -1892,6 +1892,121 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f16.contentWindow.__tracer && !f16.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?sb=SBADH selects the line on a fresh page', f16.contentWindow.__tracer.state.sbus === 'SBADH' && f16.contentDocument.getElementById('tc-block').textContent.includes('SBADH'));
         f16.remove();
+      }
+
+      // --- the store-data pipeline ----------------------------------------------------
+      // The rule re-done here: bounded backward cones from 440 (SD1), 1258
+      // (SD2) and 191 (the detect) inside the control pipeline and the static
+      // logic, one owner per node in that order, reads and feeds on the final
+      // sets. Then the structure by name, the levels against the harness
+      // chip's OWN timing readout, and the cards. SD1 and SD2 are the nodes
+      // crates/v6502-sim/src/timing.rs names, so the readout is the oracle.
+      {
+        const homeW = new Set(['Control pipeline', 'Static logic'].map((x) => sch.blockNames.indexOf(x)));
+        const blkW = (n) => sch.nodeBlock[n] & 0x7f;
+        const backW = new Map(), fwdW = new Map(); const addW = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addW(backW, out, i); addW(fwdW, i, out); } if (pre >= 0) { addW(backW, out, pre); addW(fwdW, pre, out); } }
+        const ctlCountW = new Map();
+        for (const [c, a, b] of sch.switches) { addW(backW, a, b); addW(backW, b, a); addW(fwdW, a, b); addW(fwdW, b, a); ctlCountW.set(c, (ctlCountW.get(c) || 0) + 1); }
+        const nbW = (m, n) => m.get(n) || new Set();
+        const clocksW = new Set([...ctlCountW].filter(([, c]) => c >= 40).map(([n]) => n));
+        const homeOkW = (n) => homeW.has(blkW(n)) && !clocksW.has(n);
+        const nmW = (n) => sch.names[n] || `#${n}`;
+        const coneW = (root) => { const dd = new Map([[root, 0]]); const q = [root]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const bnd = [...nbW(backW, n)].some((x) => !rails.has(x) && !homeOkW(x)); if (n !== root && bnd) continue; for (const x of nbW(backW, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeOkW(x)) q.push(x); } } return [...dd.keys()].filter((n) => n === root || homeOkW(n)).sort((a, b) => a - b); };
+        const claimedW = new Set();
+        const wantW = {};
+        for (const [id, root] of [['sd1', 440], ['sd2', 1258], ['detect', 191]]) { const ns = coneW(root).filter((n) => !claimedW.has(n)); ns.forEach((n) => claimedW.add(n)); wantW[id] = ns.filter((n) => mine.has(n)); }
+        const gotW = T.sdpList();
+        const gW = (id) => gotW.find((c) => c.id === id);
+        ok('the three groups are the harness\'s own cones, one owner per node: sd1 4, sd2 7, detect 4',
+           ['sd1', 'sd2', 'detect'].every((id) => gW(id).nodes.join() === wantW[id].join()) && wantW.sd1.length === 4 && wantW.sd2.length === 7 && wantW.detect.length === 4,
+           gotW.map((c) => `${c.id}:${c.nodes.length}`).join(' '));
+        ok('the detect reads the five data-cycle terms and the RMW classes, and feeds op-rmw and SD1\'s AOI',
+           ['op-T2-mem-zp', 'op-T3-mem-abs', 'op-T3-mem-zp-idx', 'op-T4-mem-abs-idx', 'op-T5-mem-ind-idx', 'op-asl/rol', 'op-lsr/ror/dec/inc'].every((x) => gW('detect').reads.map(nmW).includes(x)) && ['op-rmw', '#1039'].every((x) => gW('detect').feeds.map(nmW).includes(x)),
+           gW('detect').reads.map(nmW).join(' '));
+        ok('SD1 feeds the write control, the ADL/ABL hold and the RMW shift gating; SD2 feeds the write control and the C flag\'s shift path',
+           ['#WR', '#104', '#905', '#366'].every((x) => gW('sd1').feeds.map(nmW).includes(x)) && ['#WR', '#op-set-C'].every((x) => gW('sd2').feeds.map(nmW).includes(x)),
+           `sd1 feeds ${gW('sd1').feeds.map(nmW).join(' ')} | sd2 feeds ${gW('sd2').feeds.map(nmW).join(' ')}`);
+        // The levels against the chip's own readout: run to a half-cycle in a
+        // store's data cycle (program 1 has STA) and compare the fixed-width
+        // trace's bracket with the two nodes.
+        {
+          // A read-modify-write loop: the detect reads the RMW data-cycle
+          // terms, and a plain store never sets SD (Fibonacci ran 600
+          // half-cycles with the field at "..." throughout, which is itself
+          // the measurement: SD marks the modify cycles, not every store).
+          const m2 = new Machine();
+          m2.load(LOAD_ADDR, new Uint8Array([0xe6, 0xf0, 0x4c, 0x00, 0x02]));  // INC $F0; JMP $0200
+          m2.setResetVector(LOAD_ADDR);
+          m2.powerCycle();
+          // The fixed-width trace is "T0 T+ T2 T3 T4 T5 [hidden] SD": the
+          // bracket is the hidden T-state; store data is the TRAILING field
+          // (the first draft read the bracket and disagreed 105 times in 300).
+          let sawSd = 0, agree = 0;
+          for (let i = 0; i < 600; i++) {
+            m2.halfStep();
+            const parts = m2.timingFixedWidth().split(' ');
+            const want = parts[parts.length - 1].trim();
+            const l = m2.nodeLevels();
+            const got = l[440] ? 'SD1' : l[1258] ? 'SD2' : '...';
+            if (want !== '...') sawSd++;
+            if (want === got) agree++;
+          }
+          ok('the two latches ARE the readout\'s SD1 and SD2: over 600 half-cycles the trailing field and the node levels agree, and a store\'s data cycles are seen', agree === 600 && sawSd > 0, `${agree} of 600 agree, ${sawSd} in store data`);
+        }
+        const wpath = (id) => d.querySelector(`#tc-sdp-regions .tc-wg[data-sdp="${id}"]`);
+        let outW = 0; for (const c of gotW) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(wpath(c.id), p.x, p.y)) outW++; }
+        ok('every node lies inside its group\'s beads', outW === 0, `${outW} outside`);
+        let lvlOk = 0;
+        for (const id of ['sd1', 'sd2']) { T.selectSdp(id); if ($('tc-block').textContent.includes(`${id.toUpperCase()} reads ${L41[gW(id).node] > 0 ? 1 : 0} now`)) lvlOk++; }
+        ok('each latch card reads its level as the harness chip has it', lvlOk === 2, `${lvlOk} of 2`);
+        T.selectSdp('sd2');
+        const sd2Set = new Set(gW('sd2').nodes);
+        let dimW = 0; for (const c of circles()) if (c.classList.contains('sel-out') === sd2Set.has(Number(c.dataset.node))) dimW++;
+        ok('every node but SD2\'s steps back', dimW === 0, `${dimW} wrong`);
+        // The click goes to the DETECT: measured with a probe, every point
+        // over SD1 and SD2 is covered by the address latches' ADL/ABL cone
+        // beads, which outrank them and correctly so (that cone reads these
+        // latches); the detect has clear ground.
+        const wcands = [];
+        for (const n of gW('detect').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(wpath('detect'), x, y)) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            wcands.push({ x, y, n });
+          }
+        }
+        ok('a point inside the detect\'s beads, clear of nodes, exists', wcands.length > 0);
+        T.selectSdp(null);
+        f.style.height = '2600px';
+        let wspot = null;
+        for (const c of wcands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains('tc-wg')) { wspot = c; break; } }
+        ok('one of them has the bead itself under the pointer once framed', !!wspot, `${wcands.length} candidates`);
+        const tgW = click2(wspot.x, wspot.y);
+        ok('the click lands on a store-pipeline bead', tgW.classList.contains('tc-wg'), tgW.tagName + '.' + tgW.className.baseVal);
+        ok('and selects the detect, clearing every other kind', st.sdp === 'detect' && st.stem === null && st.block === null && st.sbus === null, `${st.sdp}`);
+        click2(wspot.x, wspot.y);
+        ok('clicking the selected bead again clears it', st.sdp === null);
+        T.selectSdp('sd1'); T.selectSbus('sb');
+        ok('a special-bus group clears a store-pipeline group, and back', st.sdp === null && st.sbus === 'sb' && (T.selectSdp('sd1'), st.sbus === null && st.sdp === 'sd1'));
+        T.setCollapsed('sdp:sd2', true);
+        const snW = d.querySelector('#tc-supers .tc-sn[data-key="sdp:sd2"]');
+        let wx2 = 0, wy2 = 0; for (const n of gW('sd2').nodes) { const p = mine.get(n); wx2 += p.x; wy2 += p.y; }
+        ok('SD2 collapses into one node at its mean, seven members', !!snW && Math.abs(Number(snW.getAttribute('cx')) - wx2 / 7) < 0.6 && Math.abs(Number(snW.getAttribute('cy')) - wy2 / 7) < 0.6 && d.querySelector('.tc-sn-lb[data-key="sdp:sd2"]').textContent === 'SD2 · 7');
+        T.setCollapsed('sdp:sd2', false);
+        T.selectSdp(null);
+        T.setSdpRegions(false);
+        ok('the store-pipeline toggle hides the beads', w.getComputedStyle($('tc-sdp-regions')).display === 'none' && $('tc-sdp-btn').getAttribute('aria-pressed') === 'false');
+        T.setSdpRegions(true);
+        const f17 = d.createElement('iframe');
+        f17.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f17);
+        await new Promise((res) => { f17.addEventListener('load', res, { once: true }); f17.src = 'tracer.html?program=1&step=41&sd=detect'; });
+        for (let i = 0; i < 2000 && !(f17.contentWindow.__tracer && !f17.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?sd=detect selects the detect on a fresh page', f17.contentWindow.__tracer.state.sdp === 'detect' && f17.contentDocument.getElementById('tc-block').textContent.includes('the store detect'));
+        f17.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

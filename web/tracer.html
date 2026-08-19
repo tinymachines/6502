@@ -101,6 +101,7 @@
               <button class="btn" type="button" id="tc-dbus-btn" aria-pressed="true">data bus</button>
               <button class="btn" type="button" id="tc-irp-btn" aria-pressed="true">instruction register</button>
               <button class="btn" type="button" id="tc-sbus-btn" aria-pressed="true">special bus</button>
+              <button class="btn" type="button" id="tc-sdp-btn" aria-pressed="true">store pipeline</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -124,7 +125,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit's hue for a slice of the adder, a teal or orange bead for the data latch or the data out register, a gold bead for the instruction register or its predecode, a gold bead on the bus bits for the special bus and its lines, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit's hue for a slice of the adder, a teal or orange bead for the data latch or the data out register, a gold bead for the instruction register or its predecode, a gold bead on the bus bits for the special bus and its lines, an amber bead for the store-data pipeline, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -519,6 +520,20 @@
         line nobody else cones, the bus onto the high address byte, is drawn
         with its cone, which reads the branch decoder. The bus card reads the
         byte on the bus and every line's direction and level.
+        The amber beads are the store-data pipeline, the machinery whose
+        latches kept turning up at the edge of everything else: the address
+        latches' load line reads them, the write control reads them, the
+        carry-in choice reads them. The die does not name it; the simulator's
+        own timing readout does, as the bracket in its trace. A detect gate
+        NORs the five data-cycle terms, one per addressing mode, with the
+        read-modify-write classes; it latches under the clock into
+        <span class="mono">SD1</span>, which holds itself when the chip is
+        not ready, and SD1 delayed one cycle is <span class="mono">SD2</span>.
+        What they feed is why every store works: the write control, the
+        address latch's hold (the address stands still through the data
+        cycles), the shift gating of a read-modify-write, and the carry
+        flag's shift path. The cards read each latch's level off the chip
+        and name what it feeds.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

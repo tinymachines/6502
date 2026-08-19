@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, and the special bus with its lines by measured direction. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, the special bus with its lines by measured direction, and the store-data pipeline as the detect and the two latches the timing readout names. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1473,6 +1473,37 @@ this is that graph with a clock.
     default watch, and the watch's rings and polyline are deliberately drawn
     above every region, so no point over those beads ever has the bead as
     its topmost element. The adjusted beads are the click.
+
+- **The store-data pipeline is a container per stage: the detect, SD1, SD2.**
+  `store-pipeline.js` (a leaf). The die does not name these; the simulator's
+  own timing readout does (SD1 is node 440, SD2 node 1258, active high, the
+  trailing field of the fixed-width trace), and their cones had turned up at
+  the boundary of half the other containers. Bounded backward cones in the
+  control pipeline and the static logic, one owner per node in the order
+  sd1, sd2, detect, reads/feeds recomputed on the final sets (sd2's cone
+  crosses into sd1 through `#504` reading `#440`). Measured: **detect 4**
+  (`#191`, a NOR of `#347`, the five data-cycle terms one per addressing
+  mode, `notRdy0` and `#790`, the RMW classes; it also makes `op-rmw`),
+  **sd1 4** (the detect under `cclk`, an AOI that holds when not ready,
+  `#24` under `cp1`, `#440`), **sd2 7** (SD1 delayed one cycle when ready).
+  What they feed is why a store works: `#WR` (both), the `ADL/ABL` hold
+  `#104` (the address stands still through the data cycles), the RMW shift
+  gating (`#905`, `#366` into `op-SRS`), the carry-in choice (`#1107`), the
+  C flag's shift path (`#op-set-C` reads SD2).
+  - **The harness's oracle is the chip's own readout**: over 600 half-cycles
+    of an `INC $F0; JMP` loop the trace's trailing field and the two node
+    levels agree 600 of 600, with 152 half-cycles in store data. Two
+    findings on the way: the first draft read the *bracket*, which is the
+    hidden T-state, not SD; and **Fibonacci ran 600 half-cycles with the
+    field at "..." throughout: a plain store never sets SD**. The detect
+    reads the `mem` data-cycle terms and the RMW classes, so SD marks the
+    modify cycles, not every store.
+  - Kind `sdp`, ids `sd1 sd2 detect`; `?sd=detect`, `?storepipe=0`; priority
+    after the special bus. **The click test uses the detect**: a probe
+    measured every point over SD1 and SD2 covered by the address latches'
+    ADL/ABL cone beads, which outrank them and correctly so (that cone reads
+    these latches). The cards read each latch's level off the chip and name
+    what it feeds.
 
 ### `graph.json`: the chip as one node-and-edge file
 
