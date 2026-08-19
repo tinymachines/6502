@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Nine kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, and the interrupt logic as what each pin reaches. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Ten kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, and the branch logic split where the wiring splits it. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1175,6 +1175,40 @@ this is that graph with a clock.
     collapses and deep-links. **Adding a kind that outranks an older one
     moves the older kind's click spot**: the chain's T4 click landed on an
     NMI bead until its spot search excluded every outranking outline.
+
+- **The branch logic is a container split where the wiring splits it.**
+  `branch-logic.js` (a leaf) takes the bounded backward cones of every node
+  the die gave a branch word (`branch`, `BRtaken`, `T2BR`) inside the
+  interrupts block and the static logic (boundary: a node reading anything
+  from outside, which is the instruction register, the flags, the data bus
+  and the adder), and the union falls into connected components: **three**,
+  and that is the measurement. `taken` 9 (`#BRtaken`, an AOI that is `ir5`
+  XNOR `#620`, a NOR of four gates each pairing one flag `p0 p1 p6 p7` with
+  the decode of opcode bits 6/7: the flag multiplexer written in switches),
+  `direction` 8 (`nnT2BR`, `branch-back` reading the offset's sign `DBNeg`
+  at T2 of a branch, the `.phi1` latches), `cross` 2
+  (`short-circuit-branch-add` and its cp1 latch). The labels are a reading;
+  the split is not. Converges by depth 4.
+  - **`cross` is its own piece for a structural reason, not an accident:**
+    it hangs off the direction latches only through the *controls* of its
+    own switches (`=#alucout when #1446`, `=##alucout when
+    branch-back.phi1`), and controls ride on edges and are never expanded.
+    It reads the adder's carry or its complement when the branch is
+    backward, and feeds `dpc36_#IPC` and `#959`, the timing chain's reset: a
+    branch that crosses no page ends early, and that is the wire it ends on.
+  - **`reads` and `feeds` are measured per piece** (nodes outside it that
+    members read, and that members drive) and are on the card: taken reads
+    `notir5`, the `#op-branch-bit6/7` decodes and the flags' pipeline copies
+    and feeds `#586` (behind `pipeIPCrelated`); direction reads `DBNeg`,
+    `op-T2-branch`, `pipeUNK01` and also feeds `#586`. The harness pins all
+    of it, checks the card's pills (nodes, reads, feeds) against its chip's
+    levels, clicks, collapses and deep-links.
+  - Dash-dot beads at `BRANCH_R` (90); `branch:taken` keys, `?branch=cross`,
+    `?branches=0`; priority control, clock, intr, branch, chain, capsule,
+    stage, cluster, pins, block. **The tracer's stray-digit scan fired on
+    "bit 5 ... bits 6 and 7"** in the new prose: bit indices, not counts,
+    but the scan cannot tell and the exemption is `.mono`, so the prose says
+    "the polarity bit (`ir5`) against the flag its top two bits select".
 
 ### `graph.json`: the chip as one node-and-edge file
 

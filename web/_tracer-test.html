@@ -757,7 +757,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -955,6 +955,95 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 200 && !(f6.contentWindow.__tracer && !f6.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?intr=vector selects the vector group on a fresh page', f6.contentWindow.__tracer.state.intr === 'vector' && f6.contentDocument.getElementById('tc-block').textContent.includes('vector selection'));
         f6.remove();
+      }
+
+      // --- the branch logic -----------------------------------------------------------
+      // The rule re-done here: the backward cones of every branch-named node in
+      // the interrupts block and the static logic (boundary: a node reading
+      // anything from outside), the union split into connected components.
+      // Then the structure pinned by name, and the cards against the harness chip.
+      {
+        const homeB = new Set(['Interrupts & vectors', 'Static logic'].map((x) => sch.blockNames.indexOf(x)));
+        const blkB = (n) => sch.nodeBlock[n] & 0x7f;
+        const backB = new Map(); const addB = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , , legs] of sch.gates) for (const i of new Set(legs.flat())) addB(backB, out, i);
+        for (const [, a, b] of sch.switches) { addB(backB, a, b); addB(backB, b, a); }
+        const nbB = (n) => backB.get(n) || new Set();
+        const seedsB = []; sch.names.forEach((x, n) => { if (x && /branch|BRtaken|T2BR/i.test(x) && homeB.has(blkB(n))) seedsB.push(n); });
+        const reachedB = new Set();
+        for (const o of seedsB) { const dd = new Map([[o, 0]]); const q = [o]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; if (n !== o && [...nbB(n)].some((x) => !rails.has(x) && !homeB.has(blkB(x)))) continue; for (const x of nbB(n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeB.has(blkB(x))) q.push(x); } } for (const n of dd.keys()) if (homeB.has(blkB(n))) reachedB.add(n); }
+        const undB = new Map(); for (const n of reachedB) for (const m of nbB(n)) if (reachedB.has(m)) { addB(undB, n, m); addB(undB, m, n); }
+        const compsB = []; const seenB = new Set();
+        for (const sd of seedsB) { if (seenB.has(sd)) continue; const c = new Set([sd]); const q = [sd]; while (q.length) { const n = q.shift(); for (const m of undB.get(n) || []) if (!c.has(m)) { c.add(m); q.push(m); } } c.forEach((n) => seenB.add(n)); compsB.push([...c].filter((n) => mine.has(n)).sort((a, b) => a - b)); }
+        const gotB = T.branchList();
+        const gB = (id) => gotB.find((c) => c.id === id);
+        const nmB = (n) => sch.names[n] || `#${n}`;
+        ok('the branch pieces are the harness\'s own: the cones of the six branch-named nodes fall into three components, node for node',
+           seedsB.length === 6 && compsB.length === 3 && gotB.length === 3 && compsB.every((c) => gotB.some((g) => g.nodes.join() === c.join())),
+           `${seedsB.length} seeds, ${compsB.length} components; page ${gotB.map((g) => `${g.id}:${g.nodes.length}`).join(' ')}`);
+        ok('taken holds #BRtaken and the four flag gates, direction holds branch-back and nnT2BR, cross is short-circuit-branch-add and its latch',
+           gB('taken').nodes.map(nmB).includes('#BRtaken') && gB('taken').nodes.length === 9
+           && ['branch-back', 'nnT2BR', 'branch-forward.phi1', 'branch-back.phi1'].every((x) => gB('direction').nodes.map(nmB).includes(x))
+           && gB('cross').nodes.map(nmB).includes('short-circuit-branch-add') && gB('cross').nodes.length === 2,
+           gotB.map((g) => `${g.id}: ${g.nodes.map(nmB).join(' ')}`).join(' | '));
+        ok('taken reads notir5 and the bit-6/7 decodes, direction reads DBNeg and op-T2-branch, cross reads the adder\'s carry and feeds dpc36_#IPC',
+           ['notir5', '#op-branch-bit6', '#op-branch-bit7'].every((x) => gB('taken').reads.map(nmB).includes(x))
+           && ['DBNeg', 'op-T2-branch'].every((x) => gB('direction').reads.map(nmB).includes(x))
+           && gB('cross').reads.map(nmB).includes('#alucout') && gB('cross').feeds.map(nmB).includes('dpc36_#IPC'),
+           `taken reads ${gB('taken').reads.map(nmB).join(' ')} | cross feeds ${gB('cross').feeds.map(nmB).join(' ')}`);
+        ok('the taken and direction pieces both feed #586, the gate behind pipeIPCrelated, which is how the decision reaches the program counter',
+           gB('taken').feeds.map(nmB).includes('#586') && gB('direction').feeds.map(nmB).includes('#586'));
+        const bpath = (id) => d.querySelector(`#tc-branch-regions .tc-bg[data-branch="${id}"]`);
+        let outB = 0; for (const c of gotB) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(bpath(c.id), p.x, p.y)) outB++; }
+        ok('every node lies inside its piece\'s beads', outB === 0, `${outB} outside`);
+        T.selectBranch('taken');
+        const cardB = $('tc-block');
+        const pillsB = [...cardB.querySelectorAll('.tc-node')].map((b) => [b.textContent.replace(/[01]$/, ''), b.querySelector('i').textContent]);
+        const wantB = [...gB('taken').nodes, ...gB('taken').reads, ...gB('taken').feeds].map((n) => [nmB(n), L41[n] > 0 ? '1' : '0']);
+        ok('the taken card lists its nodes, what it reads and what it feeds, each with the level the harness chip has',
+           pillsB.length === wantB.length && wantB.every(([nm, v]) => pillsB.some(([pn, pv]) => pn === nm && pv === v)), `${pillsB.length} pills vs ${wantB.length}`);
+        const takenSet = new Set(gB('taken').nodes);
+        let dimB = 0; for (const c of circles()) if (c.classList.contains('sel-out') === takenSet.has(Number(c.dataset.node))) dimB++;
+        ok('every node but the taken piece\'s steps back', dimB === 0, `${dimB} wrong`);
+        let bspot = null;
+        for (const n of gB('taken').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(bpath('taken'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            bspot = { x, y, n }; break;
+          }
+          if (bspot) break;
+        }
+        ok('a point inside the taken beads, clear of nodes and outranking outlines, exists', !!bspot);
+        T.selectBranch(null);
+        T.frameNodes([bspot.n]);
+        f.style.height = '2600px'; await sleep(100);
+        const tgB = click2(bspot.x, bspot.y);
+        ok('the click lands on a branch bead', tgB.classList.contains('tc-bg'), tgB.tagName + '.' + tgB.className.baseVal);
+        ok('and selects the taken piece, clearing every other kind', st.branch === 'taken' && st.block === null && st.intr === null && st.chain === null, `${st.branch}`);
+        click2(bspot.x, bspot.y);
+        ok('clicking the selected bead again clears it', st.branch === null);
+        T.selectBranch('cross'); T.selectIntr('irq');
+        ok('an interrupt group clears a branch piece, and a branch piece an interrupt group', st.branch === null && st.intr === 'irq' && (T.selectBranch('cross'), st.intr === null && st.branch === 'cross'));
+        T.setCollapsed('branch:taken', true);
+        const snB = d.querySelector('#tc-supers .tc-sn[data-key="branch:taken"]');
+        let bx = 0, by = 0; for (const n of gB('taken').nodes) { const p = mine.get(n); bx += p.x; by += p.y; }
+        ok('the taken piece collapses into one node at its mean, nine members', !!snB && Math.abs(Number(snB.getAttribute('cx')) - bx / 9) < 0.6 && Math.abs(Number(snB.getAttribute('cy')) - by / 9) < 0.6 && d.querySelector('.tc-sn-lb[data-key="branch:taken"]').textContent === 'branch taken · 9');
+        T.setCollapsed('branch:taken', false);
+        T.selectBranch(null);
+        T.setBranchRegions(false);
+        ok('the branch toggle hides the beads', w.getComputedStyle($('tc-branch-regions')).display === 'none' && $('tc-branch-btn').getAttribute('aria-pressed') === 'false');
+        T.setBranchRegions(true);
+        const f7 = d.createElement('iframe');
+        f7.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f7);
+        await new Promise((res) => { f7.addEventListener('load', res, { once: true }); f7.src = 'tracer.html?program=1&step=41&branch=cross'; });
+        for (let i = 0; i < 200 && !(f7.contentWindow.__tracer && !f7.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?branch=cross selects the piece on a fresh page', f7.contentWindow.__tracer.state.branch === 'cross' && f7.contentDocument.getElementById('tc-block').textContent.includes('branch logic, cross'));
+        f7.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

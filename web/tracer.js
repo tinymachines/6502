@@ -36,6 +36,7 @@ import { PACKAGE, direction, pinFacts } from './pins.js';
 import { chainCells } from './chain-cells.js';
 import { clockGen } from './clock-gen.js';
 import { interruptPaths } from './interrupt-paths.js';
+import { branchLogic } from './branch-logic.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -144,6 +145,14 @@ const CLOCK_COLOR = 'rgb(120 225 255)';
 // selection by the die's names. Sets, so beads like the stages, each path in
 // its own hue; the block's branch logic and brk-done are in none and counted.
 export const INTR_R = 90;
+// The branch logic (branch-logic.js): the bounded backward cones of the
+// branch-named nodes, split where the wiring splits them into three: taken
+// (the flag multiplexer against ir5), direction (the offset's sign latched at
+// T2 of a branch) and cross (the adder's carry read through the direction).
+// Beads like the others, dash-dot, each in its own hue; the card lists what
+// each reads at its boundary and what it feeds, both measured.
+export const BRANCH_R = 90;
+const BRANCH_COLOR = { taken: 'rgb(190 240 110)', direction: 'rgb(255 150 210)', cross: 'rgb(140 255 225)' };
 const INTR_COLOR = { irq: 'rgb(255 190 80)', nmi: 'rgb(255 115 115)', res: 'rgb(170 185 215)', go: 'rgb(245 245 255)', vector: 'rgb(200 150 255)' };
 const INTR_LABEL = { irq: 'irq', nmi: 'nmi', res: 'res', go: 'interrupt go', vector: 'vector' };
 const PIN_COLOR = { input: 'rgb(125 211 252)', output: 'rgb(255 180 110)', bidirectional: 'rgb(150 235 160)', neither: 'rgb(170 175 190)' };
@@ -202,6 +211,10 @@ const state = {
   intrRegionData: null,
   intr: null,        // the selected interrupt group id, or null
   intrRegions: true,
+  branches: null,    // [{id, nodes, reads, feeds}] the branch logic's three pieces
+  branchRegionData: null,
+  branch: null,      // the selected branch group id, or null
+  branchRegions: true,
   pinRegions: true,
   collapsed: new Set(), // container keys ('block:8', 'stem:sb', 'cluster:12', 'stage:T0', 'control:8') drawn as one node
   supers: [],           // the collapsed containers' single nodes, from applyCollapse()
@@ -586,6 +599,60 @@ function stageAt(pt) {
 }
 
 /** The control lines grouped by the block holding most of what they gate. */
+/** The branch logic, from branch-logic.js: taken, direction, cross. */
+function branchList() {
+  if (state.branches) return state.branches;
+  const { pos, sch } = state;
+  const r = branchLogic(sch);
+  const out = r.groups.map((g) => ({ id: g.id, nodes: g.nodes.filter((n) => pos.has(n)), reads: g.reads, feeds: g.feeds, seeds: g.seeds }));
+  state.branches = out;
+  state.branchStats = { groups: out.map((g) => [g.id, g.nodes.length]), seeds: r.seeds.length, reached: r.reached };
+  return out;
+}
+
+function branchRegionData() {
+  if (state.branchRegionData) return state.branchRegionData;
+  const list = branchList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: BRANCH_R, cell: 25 });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.branchRegionData = out;
+  return out;
+}
+
+function drawBranchRegions(g) {
+  const data = branchRegionData();
+  for (const c of branchList()) {
+    const r = data.get(c.id);
+    const css = BRANCH_COLOR[c.id] || STAGE_COLOR.any;
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-bg' + (state.branch === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-branch': c.id, style: `--bc: ${css}` }, g);
+    path.setAttribute('aria-label', `branch logic, ${c.id}, ${c.nodes.length} nodes`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y - BRANCH_R - 24, class: 'tc-bg-lb' + (state.branch === c.id ? ' sel' : ''), 'data-branch': c.id, style: `--bc: ${css}` }, g);
+      t.textContent = `branch ${c.id}`;
+    }
+  }
+  g.classList.toggle('off', !state.branchRegions);
+}
+
+function branchAt(pt) {
+  const data = branchRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const c of branchList()) {
+    if (!inRegion(pt, data.get(c.id).loops)) continue;
+    for (const n of c.nodes) {
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = c.id; }
+    }
+  }
+  return best;
+}
+
 /** The interrupt logic, from interrupt-paths.js: three pin paths, the shared go, the vector. */
 function intrList() {
   if (state.intrs) return state.intrs;
@@ -982,7 +1049,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -991,7 +1058,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1000,7 +1067,7 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1009,7 +1076,16 @@ function selectCluster(id, { fly = false } = {}) {
 function selectStage(id, { fly = false } = {}) {
   const c = id === null ? null : stageList().find((x) => x.id === id);
   state.stage = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select one piece of the branch logic, as a set. */
+function selectBranch(id, { fly = false } = {}) {
+  const c = id === null ? null : branchList().find((x) => x.id === id);
+  state.branch = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1018,7 +1094,7 @@ function selectStage(id, { fly = false } = {}) {
 function selectIntr(id, { fly = false } = {}) {
   const c = id === null ? null : intrList().find((x) => x.id === id);
   state.intr = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.branch = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1027,7 +1103,7 @@ function selectIntr(id, { fly = false } = {}) {
 function selectClock(id, { fly = false } = {}) {
   const c = id === null ? null : clockList().find((x) => x.id === id);
   state.clock = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.intr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.intr = null; state.branch = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1036,7 +1112,7 @@ function selectClock(id, { fly = false } = {}) {
 function selectChain(id, { fly = false } = {}) {
   const c = id === null ? null : chainList().find((x) => x.id === id);
   state.chain = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; state.intr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; state.intr = null; state.branch = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1045,7 +1121,7 @@ function selectChain(id, { fly = false } = {}) {
 function selectControl(id, { fly = false } = {}) {
   const c = id === null ? null : controlList().find((x) => x.id === id);
   state.control = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1054,7 +1130,7 @@ function selectControl(id, { fly = false } = {}) {
 function selectPins(id, { fly = false } = {}) {
   const c = id === null ? null : pinList().find((x) => x.id === id);
   state.pin = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; state.intr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1079,6 +1155,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-stage-regions .tc-tg, #tc-stage-regions .tc-tg-lb')) {
     p.classList.toggle('sel', state.stage !== null && p.dataset.stage === state.stage);
+  }
+  for (const p of document.querySelectorAll('#tc-branch-regions .tc-bg, #tc-branch-regions .tc-bg-lb')) {
+    p.classList.toggle('sel', state.branch !== null && p.dataset.branch === state.branch);
   }
   for (const p of document.querySelectorAll('#tc-intr-regions .tc-ig, #tc-intr-regions .tc-ig-lb')) {
     p.classList.toggle('sel', state.intr !== null && p.dataset.intr === state.intr);
@@ -1138,8 +1217,9 @@ function paintBlock() {
   if (b === null && state.chain !== null) { paintChainCard(box); return; }
   if (b === null && state.clock !== null) { paintClockCard(box); return; }
   if (b === null && state.intr !== null) { paintIntrCard(box); return; }
+  if (b === null && state.branch !== null) { paintBranchCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -1207,6 +1287,34 @@ function paintStageCard(box) {
   const html = `<span class="tc-bk-name">decode terms, ${c.id === 'any' ? 'any stage' : c.id}</span> · ${c.nodes.length} terms`
     + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high, ' tc-hi') : ''}`
     + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}` + collapseButton();
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/**
+ * The card for a piece of the branch logic: its nodes, what it reads at its
+ * boundary and what it feeds, all as pills with levels, and what moved.
+ */
+function paintBranchCard(box) {
+  const c = branchList().find((x) => x.id === state.branch);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  const high = [], moved = [];
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) high.push(n);
+    if (L && P && P[n] !== L[n]) moved.push(n);
+  }
+  const nameOf = (n) => sch.names[n] || `#${n}`;
+  const pill = (n, cls) => `<button type="button" class="tc-node ${L && L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${nameOf(n)}<i>${L && L[n] ? 1 : 0}</i></button>`;
+  const WHAT = {
+    taken: 'is the branch taken: ir5 against the flag the opcode\'s bits 6 and 7 select',
+    direction: 'which way: the offset\'s sign, latched at T2 of a branch',
+    cross: 'does it cross a page: the adder\'s carry, or its complement when the branch is backward',
+  };
+  const html = `<span class="tc-bk-name">branch logic, ${c.id}</span> · ${WHAT[c.id] || 'a piece the wiring separates'}`
+    + ` · ${c.nodes.length} node${c.nodes.length === 1 ? '' : 's'}: ${c.nodes.map((n) => pill(n, '')).join(' ')}`
+    + ` · reads ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`
+    + ` · feeds ${c.feeds.map((n) => pill(n, ' tc-hi')).join(' ')}`
+    + ` · <span class="tc-bk-moved">${moved.length}</span> moved at this half-cycle · ${high.length} high` + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -1369,6 +1477,7 @@ function draw() {
   drawChainRegions(el('g', { class: 'tc-chain-regions', id: 'tc-chain-regions' }, cam));
   drawClockRegions(el('g', { class: 'tc-clock-regions', id: 'tc-clock-regions' }, cam));
   drawIntrRegions(el('g', { class: 'tc-intr-regions', id: 'tc-intr-regions' }, cam));
+  drawBranchRegions(el('g', { class: 'tc-branch-regions', id: 'tc-branch-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
   drawControlRegions(el('g', { class: 'tc-control-regions', id: 'tc-control-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
@@ -1413,6 +1522,7 @@ function draw() {
   else if (state.chain !== null) selectChain(state.chain);
   else if (state.clock !== null) selectClock(state.clock);
   else if (state.intr !== null) selectIntr(state.intr);
+  else if (state.branch !== null) selectBranch(state.branch);
   applyCollapse();
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
@@ -1512,7 +1622,15 @@ function intrCaption() {
   if (!st) return '';
   return `The double-ringed beads are the interrupt logic as what each pin reaches: irq ${st.irq} nodes, nmi ${st.nmi}, res ${st.res}, `
     + `${st.shared} where irq and nmi meet at INTG, and ${st.vector} of vector selection grouped by name; `
-    + `${st.residue} of the interrupts block\'s ${st.block} members are in none, brk-done and the branch logic among them.`;
+    + `${st.residue} of the interrupts block\'s ${st.block} members are in none, brk-done and the branch logic among them. `
+    + branchCaption();
+}
+
+function branchCaption() {
+  const st = state.branchStats;
+  if (!st) return '';
+  return `The dash-dot beads are the branch logic, the backward cones of the ${st.seeds} branch-named nodes split where the wiring `
+    + `splits them (${st.groups.map(([id, n]) => `${id} ${n}`).join(', ')}): is it taken, which way, and does it cross a page.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -1757,7 +1875,7 @@ function paint() {
 // share of its members that are high, ringed if any changed, and a bundle
 // flashes if any edge in it fired or toggled.
 
-const KINDS = ['control', 'clock', 'intr', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
+const KINDS = ['control', 'clock', 'intr', 'branch', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
 
 /** What a container key stands for: its members, a label and a colour. */
 function container(key) {
@@ -1803,6 +1921,10 @@ function container(key) {
     const c = intrList().find((x) => x.id === id);
     return c ? { kind, id, nodes: c.nodes, label: `intr: ${INTR_LABEL[id]}`, css: INTR_COLOR[id] } : null;
   }
+  if (kind === 'branch') {
+    const c = branchList().find((x) => x.id === id);
+    return c ? { kind, id, nodes: c.nodes, label: `branch ${id}`, css: BRANCH_COLOR[id] || STAGE_COLOR.any } : null;
+  }
   return null;
 }
 
@@ -1811,6 +1933,7 @@ function selectedKey() {
   if (state.control !== null) return `control:${state.control}`;
   if (state.clock !== null) return `clock:${state.clock}`;
   if (state.intr !== null) return `intr:${state.intr}`;
+  if (state.branch !== null) return `branch:${state.branch}`;
   if (state.chain !== null) return `chain:${state.chain}`;
   if (state.pin !== null) return `pins:${state.pin}`;
   if (state.stem !== null) return `stem:${state.stem}`;
@@ -1832,6 +1955,7 @@ function selectKey(key) {
   else if (c.kind === 'chain') selectChain(c.id);
   else if (c.kind === 'clock') selectClock(c.id);
   else if (c.kind === 'intr') selectIntr(c.id);
+  else if (c.kind === 'branch') selectBranch(c.id);
 }
 
 function setCollapsed(key, on) {
@@ -2229,6 +2353,12 @@ function setControlRegions(on) {
   $('tc-control-regions')?.classList.toggle('off', !on);
 }
 
+function setBranchRegions(on) {
+  state.branchRegions = on;
+  $('tc-branch-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-branch-regions')?.classList.toggle('off', !on);
+}
+
 function setIntrRegions(on) {
   state.intrRegions = on;
   $('tc-intr-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2430,6 +2560,8 @@ async function boot() {
     if (q.get('clockgen') === '0') setClockRegions(false);
     $('tc-intr-btn').addEventListener('click', () => setIntrRegions(!state.intrRegions));
     if (q.get('interrupts') === '0') setIntrRegions(false);
+    $('tc-branch-btn').addEventListener('click', () => setBranchRegions(!state.branchRegions));
+    if (q.get('branches') === '0') setBranchRegions(false);
     $('tc-collapse-blocks').addEventListener('click', () => {
       const all = [...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`));
       collapseAllBlocks(!all);
@@ -2519,6 +2651,8 @@ async function boot() {
       if (qc !== null) { selectClock(qc === state.clock ? null : qc); return; }
       const ic = state.intrRegions ? intrAt(pt) : null;
       if (ic !== null) { selectIntr(ic === state.intr ? null : ic); return; }
+      const bc = state.branchRegions ? branchAt(pt) : null;
+      if (bc !== null) { selectBranch(bc === state.branch ? null : bc); return; }
       const hc = state.chainRegions ? chainAt(pt) : null;
       if (hc !== null) { selectChain(hc === state.chain ? null : hc); return; }
       const stem = state.stemRegions ? stemAt(pt) : null;
@@ -2587,6 +2721,8 @@ async function boot() {
     if (q.get('clock') === '1') selectClock('gen', { fly: true });
     // ?intr=nmi (irq, res, go, vector) selects that group of the interrupt logic.
     if (q.has('intr')) selectIntr(q.get('intr'), { fly: true });
+    // ?branch=taken (direction, cross) selects that piece of the branch logic.
+    if (q.has('branch')) selectBranch(q.get('branch'), { fly: true });
     // ?cluster=N selects the cluster holding node N and frames it.
     if (q.has('cluster')) {
       const n = Number(q.get('cluster'));
@@ -2605,5 +2741,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, selectIntr, intrList, intrRegionData, setIntrRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, intrAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, INTR_R, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, selectIntr, intrList, intrRegionData, setIntrRegions, selectBranch, branchList, branchRegionData, setBranchRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, intrAt, branchAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, INTR_R, BRANCH_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

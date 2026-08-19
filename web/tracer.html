@@ -91,6 +91,7 @@
               <button class="btn" type="button" id="tc-chain-btn" aria-pressed="true">timing chain</button>
               <button class="btn" type="button" id="tc-clock-btn" aria-pressed="true">clock generator</button>
               <button class="btn" type="button" id="tc-intr-btn" aria-pressed="true">interrupt logic</button>
+              <button class="btn" type="button" id="tc-branch-btn" aria-pressed="true">branch logic</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -114,7 +115,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -333,6 +334,24 @@
         counts. Click a bead and the card reads the pin's level (the level,
         not a meaning: they are active low), names the nodes, and says what
         moved.
+        The dash-dot beads are the branch logic, and the wiring splits it
+        into three on its own. From every node the die gave a branch word
+        the rule walks back through gate inputs and switch channels inside
+        the interrupts block and the static logic, stopping where a node
+        reads anything from outside: the instruction register, the flags,
+        the data bus, the adder. What those cones reach falls into three
+        connected pieces. One is <span class="mono">#BRtaken</span>, an AOI
+        that is the opcode's polarity bit (<span class="mono">ir5</span>)
+        against the flag its top two bits select, the flag multiplexer
+        written in switches: is the branch taken. One is <span class="mono">branch-back</span> and its latches,
+        reading the offset's sign at T2 of a branch: which way. And
+        <span class="mono">short-circuit-branch-add</span> stands apart,
+        joined to the direction only through the controls of its own
+        switches, reading the adder's carry or its complement when the
+        branch is backward: does it cross a page, and if not the instruction
+        ends early, on the wire this piece feeds into the timing chain's
+        reset. The card for each lists the nodes, what the piece reads at
+        its edge and what it feeds, all measured, with the levels now.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

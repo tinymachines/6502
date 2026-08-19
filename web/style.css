@@ -2966,6 +2966,18 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.z-labels .tc-ig-lb { font-size: 46px; stroke-width: 8px; }
 .tc-cam.has-sel .tc-ig-lb:not(.sel) { opacity: .3; }
 
+/* The branch logic: dash-dot beads, taken / direction / cross each in its own hue. */
+.tc-branch-regions.off { display: none; }
+.tc-bg { fill: color-mix(in srgb, var(--bc) 16%, transparent); stroke: color-mix(in srgb, var(--bc) 75%, transparent);
+         stroke-width: 5; stroke-dasharray: 16 7 3 7; stroke-linecap: round; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-bg:hover { fill: color-mix(in srgb, var(--bc) 28%, transparent); }
+.tc-bg.sel { fill: color-mix(in srgb, var(--bc) 40%, transparent); stroke: var(--bc); stroke-width: 11; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-bg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 20%, transparent); fill: color-mix(in srgb, var(--bc) 5%, transparent); }
+.tc-bg-lb { font: 800 80px var(--font-mono); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 14px; }
+.tc-cam.z-labels .tc-bg-lb { font-size: 46px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-bg-lb:not(.sel) { opacity: .3; }
+
 /* The pins by measured direction: a halo on each pad, in the direction's hue. */
 .tc-pin-regions.off { display: none; }
 .tc-pg { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);
