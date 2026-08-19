@@ -2954,6 +2954,18 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.z-labels .tc-qg-lb { font-size: 50px; stroke-width: 8px; }
 .tc-cam.has-sel .tc-qg-lb:not(.sel) { opacity: .3; }
 
+/* The interrupt logic: double-ringed beads, one hue per pin path, the go and the vector. */
+.tc-intr-regions.off { display: none; }
+.tc-ig { fill: color-mix(in srgb, var(--bc) 16%, transparent); stroke: color-mix(in srgb, var(--bc) 75%, transparent);
+         stroke-width: 5; stroke-dasharray: 3 6; stroke-linecap: round; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-ig:hover { fill: color-mix(in srgb, var(--bc) 28%, transparent); }
+.tc-ig.sel { fill: color-mix(in srgb, var(--bc) 40%, transparent); stroke: var(--bc); stroke-width: 11; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-ig:not(.sel) { stroke: color-mix(in srgb, var(--bc) 20%, transparent); fill: color-mix(in srgb, var(--bc) 5%, transparent); }
+.tc-ig-lb { font: 800 80px var(--font-mono); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 14px; }
+.tc-cam.z-labels .tc-ig-lb { font-size: 46px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-ig-lb:not(.sel) { opacity: .3; }
+
 /* The pins by measured direction: a halo on each pad, in the direction's hue. */
 .tc-pin-regions.off { display: none; }
 .tc-pg { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);

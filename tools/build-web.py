@@ -210,6 +210,8 @@ def main() -> None:
     b.copy_hashed("chain-cells.js")
     # The clock generator's walk, shared by designer.js and tracer.js.
     b.copy_hashed("clock-gen.js")
+    # The interrupt logic as paths from the pins, a leaf the tracer draws.
+    b.copy_hashed("interrupt-paths.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -589,6 +591,7 @@ def main() -> None:
         ("./pins.js", "./" + b.ref("pins.js")),
         ("./chain-cells.js", "./" + b.ref("chain-cells.js")),
         ("./clock-gen.js", "./" + b.ref("clock-gen.js")),
+        ("./interrupt-paths.js", "./" + b.ref("interrupt-paths.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

@@ -90,6 +90,7 @@
               <button class="btn" type="button" id="tc-pins-btn" aria-pressed="true">pins</button>
               <button class="btn" type="button" id="tc-chain-btn" aria-pressed="true">timing chain</button>
               <button class="btn" type="button" id="tc-clock-btn" aria-pressed="true">clock generator</button>
+              <button class="btn" type="button" id="tc-intr-btn" aria-pressed="true">interrupt logic</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -113,7 +114,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -315,6 +316,23 @@
         non-overlap the whole circuit is on the die for. Click it and the
         card reads the four clocks' levels off the chip and names what moved
         at this half-cycle, which at any clock is the generator itself.
+        The double-ringed beads are the interrupt logic, and the pins give it
+        its structure: from each of irq, nmi and res the rule walks forward
+        through gate inputs and switch channels, inside the interrupts block
+        and the static logic it is built from, stopping where a node feeds
+        anything outside, which is where an interrupt stops being detected
+        and starts being acted on. What one pin alone reaches is that pin's
+        path; what two reach is shared, and that is four nodes ending at
+        <span class="mono">INTG</span>, the interrupt-go. The vector
+        selection is not reached from any pin, because the BRK sequence
+        drives it, so it is grouped by the die's own names; and the NMI path
+        reaches <span class="mono">pipeVectorA2</span> on its own, which is
+        the one address bit by which the NMI vector differs from the IRQ
+        vector. The block the names seeded as interrupts and vectors also
+        holds the branch logic, which none of this reaches and the card
+        counts. Click a bead and the card reads the pin's level (the level,
+        not a meaning: they are active low), names the nodes, and says what
+        moved.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

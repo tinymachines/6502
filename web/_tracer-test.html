@@ -755,13 +755,15 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[40, 0], [-40, 0], [0, 40], [0, -40], [30, 30], [-30, -30]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(hpath('T4'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg')].some((k) => hit2(k, x, y))) continue;
+            // Control outlines, the clock generator and the interrupt beads all
+            // outrank a chain cell, and the nmi path runs down the same edge.
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
           if (hspot) break;
         }
-        ok('a point inside T4\'s bead, clear of nodes and control outlines, exists', !!hspot);
+        ok('a point inside T4\'s bead, clear of nodes and of every outranking outline, exists', !!hspot);
         T.frameNodes([hspot.n]);
         f.style.height = '2600px'; await sleep(100);
         const tgH = click2(hspot.x, hspot.y);
@@ -864,6 +866,95 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 200 && !(f5.contentWindow.__tracer && !f5.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?clock=1 selects the generator on a fresh page', f5.contentWindow.__tracer.state.clock === 'gen' && f5.contentDocument.getElementById('tc-block').textContent.includes('clock generator'));
         f5.remove();
+      }
+
+      // --- the interrupt logic --------------------------------------------------------
+      // The rule re-done here from schematic.json: forward from irq, nmi and res
+      // through gate inputs (a precharge counts) and switch channels, inside the
+      // interrupts block and the static logic, stopping at a node that feeds
+      // anything outside; one pin's reach is its path, two pins' is shared; the
+      // vector by the die's names, minus what a path took. Then the structure
+      // pinned by name, and the cards against the harness chip.
+      {
+        const homeI = new Set(['Interrupts & vectors', 'Static logic'].map((x) => sch.blockNames.indexOf(x)));
+        const blkI = (n) => sch.nodeBlock[n] & 0x7f;
+        const fwdI = new Map(); const addI = (a, b) => { if (!fwdI.has(a)) fwdI.set(a, new Set()); fwdI.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) addI(i, out); if (pre >= 0) addI(pre, out); }
+        for (const [, a, b] of sch.switches) { addI(a, b); addI(b, a); }
+        const nbI = (n) => fwdI.get(n) || new Set();
+        const pinsI = ['irq', 'nmi', 'res'].map((x) => byName.get(x));
+        const reachI = pinsI.map((o) => { const dd = new Map([[o, 0]]); const q = [o]; while (q.length) { const n = q.shift(); const dn = dd.get(n); if (dn >= 40) continue; if (n !== o && [...nbI(n)].some((x) => !rails.has(x) && !homeI.has(blkI(x)))) continue; for (const x of nbI(n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dn + 1); if (homeI.has(blkI(x))) q.push(x); } } return dd; });
+        const cnt = new Map(); for (const r of reachI) for (const n of r.keys()) cnt.set(n, (cnt.get(n) || 0) + 1);
+        const takenI = new Set();
+        const wantPaths = pinsI.map((pin, i) => { const ns = [...reachI[i].keys()].filter((n) => n !== pin && cnt.get(n) === 1 && homeI.has(blkI(n)) && mine.has(n)).sort((a, b) => a - b); ns.forEach((n) => takenI.add(n)); return ns; });
+        const wantShared = [...cnt].filter(([n, c]) => c > 1 && !pinsI.includes(n) && homeI.has(blkI(n))).map(([n]) => n).filter((n) => mine.has(n)).sort((a, b) => a - b);
+        wantShared.forEach((n) => takenI.add(n));
+        const wantVec = []; sch.names.forEach((x, n) => { if (x && /vec/i.test(x) && !takenI.has(n) && mine.has(n)) wantVec.push(n); }); wantVec.sort((a, b) => a - b);
+        const gotI = T.intrList();
+        const gI = (id) => gotI.find((c) => c.id === id);
+        ok('the interrupt groups are the harness\'s own, node for node: three pin paths, the shared go, the vector',
+           gotI.length === 5 && ['irq', 'nmi', 'res'].every((id, i) => gI(id).nodes.join() === wantPaths[i].join()) && gI('go').nodes.join() === wantShared.join() && gI('vector').nodes.join() === wantVec.join(),
+           gotI.map((c) => `${c.id}:${c.nodes.length}`).join(' '));
+        const nmI = (n) => sch.names[n] || `#${n}`;
+        ok('irq reaches its latch IRQP, res reaches Reset0, nmi reaches NMIP, NMIL, #NMIG and the vector\'s bit 2, and the two that meet end at INTG',
+           gI('irq').nodes.map(nmI).includes('IRQP') && gI('res').nodes.map(nmI).includes('Reset0')
+           && ['NMIP', 'NMIL', '#NMIG', 'pipeVectorA2'].every((x) => gI('nmi').nodes.map(nmI).includes(x))
+           && gI('go').nodes.length === 4 && gI('go').nodes.map(nmI).includes('INTG') && !gI('irq').nodes.map(nmI).includes('INTG'),
+           `irq ${gI('irq').nodes.map(nmI).join(' ')} | go ${gI('go').nodes.map(nmI).join(' ')}`);
+        ok('the vector group is the VEC names less the bit the nmi path took: VEC0 VEC1 #VEC pipe#VEC A0 A1', gI('vector').nodes.map(nmI).sort().join() === ['#VEC', 'VEC0', 'VEC1', 'pipe#VEC', 'pipeVectorA0', 'pipeVectorA1'].sort().join(), gI('vector').nodes.map(nmI).join(' '));
+        ok('and the block\'s branch logic is in none of the groups, counted', st.intrStats.residue > 15 && st.intrStats.residue < st.intrStats.block && !gotI.some((c) => c.nodes.map(nmI).some((x) => /branch|BR/.test(x))), `${st.intrStats.residue} of ${st.intrStats.block}`);
+        const ipath = (id) => d.querySelector(`#tc-intr-regions .tc-ig[data-intr="${id}"]`);
+        let outI = 0; for (const c of gotI) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(ipath(c.id), p.x, p.y)) outI++; }
+        ok('every node lies inside its group\'s beads', outI === 0, `${outI} outside`);
+        let pinOk = 0;
+        for (const id of ['irq', 'nmi', 'res']) { T.selectIntr(id); const txt = $('tc-block').textContent; if (txt.includes(`pin ${id} reads ${L41[byName.get(id)] > 0 ? 1 : 0}`)) pinOk++; }
+        ok('each pin card reads the pin\'s level as the harness chip has it', pinOk === 3, `${pinOk} of 3`);
+        T.selectIntr('vector');
+        const vpills = [...$('tc-block').querySelectorAll('.tc-node.tc-hi')].map((b) => [b.textContent.replace(/[01]$/, ''), b.querySelector('i').textContent]);
+        ok('the vector card reads the three vector address bits with the levels the harness chip has', vpills.length === 3 && ['pipeVectorA0', 'pipeVectorA1', 'pipeVectorA2'].every((x) => vpills.some(([pn, pv]) => pn === x && pv === (L41[byName.get(x)] > 0 ? '1' : '0'))), vpills.map((x) => x.join(':')).join(' '));
+        T.selectIntr('nmi');
+        const nmiSet = new Set(gI('nmi').nodes);
+        let dimI = 0; for (const c of circles()) if (c.classList.contains('sel-out') === nmiSet.has(Number(c.dataset.node))) dimI++;
+        ok('every node but the nmi path\'s steps back', dimI === 0, `${dimI} wrong`);
+        let ispot = null;
+        for (const n of gI('nmi').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(ipath('nmi'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            ispot = { x, y, n }; break;
+          }
+          if (ispot) break;
+        }
+        ok('a point inside the nmi beads, clear of nodes, exists', !!ispot);
+        T.selectIntr(null);
+        T.frameNodes([ispot.n]);
+        f.style.height = '2600px'; await sleep(100);
+        const tgI = click2(ispot.x, ispot.y);
+        ok('the click lands on an interrupt bead', tgI.classList.contains('tc-ig'), tgI.tagName + '.' + tgI.className.baseVal);
+        ok('and selects the nmi path, clearing every other kind', st.intr === 'nmi' && st.block === null && st.pin === null && st.chain === null && st.clock === null, `${st.intr}`);
+        click2(ispot.x, ispot.y);
+        ok('clicking the selected bead again clears it', st.intr === null);
+        T.selectIntr('irq'); T.selectChain('T3');
+        ok('a chain cell clears an interrupt group, and an interrupt group a chain cell', st.intr === null && st.chain === 'T3' && (T.selectIntr('irq'), st.chain === null && st.intr === 'irq'));
+        T.setCollapsed('intr:nmi', true);
+        const snI = d.querySelector('#tc-supers .tc-sn[data-key="intr:nmi"]');
+        let ix = 0, iy = 0; for (const n of gI('nmi').nodes) { const p = mine.get(n); ix += p.x; iy += p.y; }
+        ok('the nmi path collapses into one node at its mean, twenty members', !!snI && Math.abs(Number(snI.getAttribute('cx')) - ix / gI('nmi').nodes.length) < 0.6 && Math.abs(Number(snI.getAttribute('cy')) - iy / gI('nmi').nodes.length) < 0.6 && d.querySelector('.tc-sn-lb[data-key="intr:nmi"]').textContent === `intr: nmi · ${gI('nmi').nodes.length}`);
+        T.setCollapsed('intr:nmi', false);
+        T.selectIntr(null);
+        T.setIntrRegions(false);
+        ok('the interrupt toggle hides the beads', w.getComputedStyle($('tc-intr-regions')).display === 'none' && $('tc-intr-btn').getAttribute('aria-pressed') === 'false');
+        T.setIntrRegions(true);
+        const f6 = d.createElement('iframe');
+        f6.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f6);
+        await new Promise((res) => { f6.addEventListener('load', res, { once: true }); f6.src = 'tracer.html?program=1&step=41&intr=vector'; });
+        for (let i = 0; i < 200 && !(f6.contentWindow.__tracer && !f6.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?intr=vector selects the vector group on a fresh page', f6.contentWindow.__tracer.state.intr === 'vector' && f6.contentDocument.getElementById('tc-block').textContent.includes('vector selection'));
+        f6.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

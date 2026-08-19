@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Seven kinds of container over it, the timing chain derived as the cells that compute each T-state. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Nine kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, and the interrupt logic as what each pin reaches. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1142,6 +1142,39 @@ this is that graph with a clock.
   half-cycle**, which is what a clock generator is and the harness pins.
   `?clock=1`, `?clockgen=0`; priority control, clock, chain, capsule, stage,
   cluster, pins, block.
+
+- **The interrupt logic is a container as what each pin reaches, and the
+  pins give it its structure.** `interrupt-paths.js` (a leaf) walks forward
+  from `irq`, `nmi` and `res` through gate inputs and switch channels inside
+  the interrupts block and the static logic, stopping where a node feeds
+  anything outside (where detection ends and action begins: `INTG` feeds the
+  timing chain, `Reset0` the control pipeline). One pin's reach is its path;
+  two pins' is shared. Measured: **irq 6** (receiver to `IRQP`), **nmi 20**
+  (receiver, `NMIP`, the edge detect and `NMIL`, `#NMIG`, and
+  `pipeVectorA2`), **res 6** (to `Reset0`), **shared 4** (`#480 #629 #760
+  INTG`), converging by depth 12. The vector selection is not reached from
+  any pin (the BRK sequence drives it) and is grouped by the die's names
+  (`VEC0 VEC1 #VEC pipe#VEC pipeVectorA0 pipeVectorA1`), said to be a reading
+  of names; **22 of the block's 40 members are in none**, `brk-done` and the
+  branch logic the seed table filed as interrupts among them, and the card
+  counts them.
+  - **`pipeVectorA2` on the NMI path is a finding, not a leak**: bit 2 is
+    the one address bit by which `$FFFA` differs from `$FFFE`, and the rule
+    found it without being told. Reset's bit (1) is not reached because
+    Reset's effect runs through the control pipeline, outside the home.
+  - **Min-depth ownership was wrong here and right for the chain.** With
+    three sources, the common path (`#480..INTG`) went to `irq` because it
+    reached it first; "reached from more than one pin is shared" is the rule.
+    A chain of stages needs the depth rule because every later stage reaches
+    every earlier one.
+  - Double-ringed beads at `INTR_R` (90), one hue per group; `intr:nmi`
+    keys, `?intr=vector`, `?interrupts=0`; priority control, clock, intr,
+    chain, capsule, stage, cluster, pins, block. The harness re-derives the
+    five groups and pins the names above, checks each pin card against the
+    harness chip's level and the vector card's three address bits, clicks,
+    collapses and deep-links. **Adding a kind that outranks an older one
+    moves the older kind's click spot**: the chain's T4 click landed on an
+    NMI bead until its spot search excluded every outranking outline.
 
 ### `graph.json`: the chip as one node-and-edge file
 
