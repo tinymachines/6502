@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, and the status register as a container per flag with its logic. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, and the address latches as a chain of seven a bit with their load lines and the constant generators. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1328,6 +1328,34 @@ this is that graph with a clock.
     **Adding a kind moved the branch click spot under an edge line**, so
     that spot search now frames each candidate and checks the element under
     the pointer is the bead before clicking.
+
+- **The address latches are a container per half, per load line, and per
+  constant generator.** `address-latches.js` (a leaf). **The register recipe
+  misreads this block and the misreading is the structure**: the latch nodes
+  are themselves switch controls (`abl_n` gates the pull-up of its own pad
+  driver), so every node came out as a "line" and the closure ran into the
+  drivers. Read on its own terms, one bit is a chain of seven: the bus bit's
+  inverter, a node under `cp1`, the latch input `#ABL_n` under `ADL/ABL`, its
+  inverse `abl_n`, an output latch under `cclk`, and the two static nodes of
+  the pad's push-pull driver. Each half is the closure of its bits over
+  unnamed and own-named nodes both ways: **56 each**, reading exactly
+  `adl0..7`/`adh0..7` and feeding exactly `ab0..7`/`ab8..15`. The load lines
+  are the controls of the half's switches less the clocks: `ADL/ABL` (cone
+  18, reaching the store-data pipeline latches `#440` and `#1258`: the low
+  latch does not reload during a store's data cycles) and `ADH/ABH` (cone 5).
+  The constants are the die's `0/ADL0..2` (inverters of `pipeVectorA0..2`:
+  how `$FFFA..$FFFF` gets on the bus; cone 4) and `dpc28_0ADH0`,
+  `dpc29_0ADH17` (the high byte forced to `$00`/`$01`; cone 8, reading
+  exactly `op-T2-stack-access`, `op-T2-zp/zp-idx`, `op-T2-ind`). Converges by
+  depth 12.
+  - Kind `alat`, ids `abl`, `abh`, `ADL/ABL`, `ADH/ABH`, `low`, `high`;
+    `?alat=ADH/ABH`, `?addrlatch=0`; priority regs, flags, alat, control, ....
+    A half's card reads the byte it holds off the pins (AB); a line's says
+    whether its eight switches are open and what it is made from. The
+    harness re-derives halves, lines, cones and constants, pins reads and
+    feeds by name, checks the cards against its chip, clicks (framing
+    candidates and checking the element under the pointer, as the branch
+    click does), collapses, deep-links.
 
 ### `graph.json`: the chip as one node-and-edge file
 

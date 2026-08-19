@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -838,7 +838,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(qpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
             qspot = { x, y, n }; break;
           }
@@ -927,7 +927,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(ipath('nmi'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ispot = { x, y, n }; break;
           }
@@ -1019,7 +1019,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0], [0, 60], [0, -60]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(bpath('taken'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             bcands.push({ x, y, n });
           }
@@ -1099,7 +1099,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1297,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1417,6 +1417,103 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f11.contentWindow.__tracer && !f11.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?flag=B selects the group on a fresh page', f11.contentWindow.__tracer.state.flag === 'B' && f11.contentDocument.getElementById('tc-block').textContent.includes('flag B'));
         f11.remove();
+      }
+
+      // --- the address latches --------------------------------------------------------
+      // The rule re-done here: each half as the closure of its bits over unnamed
+      // and own-named nodes, both ways; the load lines as the controls of its
+      // switches less the clocks, each with its bounded cone; the constants by
+      // the die's names with their cones. Then reads and feeds pinned by name,
+      // and the cards against the harness chip.
+      {
+        const homeA = new Set(['Control pipeline', 'Static logic'].map((x) => sch.blockNames.indexOf(x)));
+        const blkA = (n) => sch.nodeBlock[n] & 0x7f;
+        const backA = new Map(), fwdA = new Map(), undA = new Map(); const addA = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addA(backA, out, i); addA(fwdA, i, out); addA(undA, out, i); addA(undA, i, out); } if (pre >= 0) { addA(backA, out, pre); addA(fwdA, pre, out); addA(undA, out, pre); addA(undA, pre, out); } }
+        const ctlOfA = new Map(), ctlCountA = new Map();
+        for (const [c, a, b] of sch.switches) { addA(backA, a, b); addA(backA, b, a); addA(fwdA, a, b); addA(fwdA, b, a); addA(undA, a, b); addA(undA, b, a); addA(ctlOfA, a, c); addA(ctlOfA, b, c); ctlCountA.set(c, (ctlCountA.get(c) || 0) + 1); }
+        const nbA = (m, n) => m.get(n) || new Set();
+        const clocksA = new Set([...ctlCountA].filter(([, c]) => c >= 40).map(([n]) => n));
+        const coneA = (root) => { const dd = new Map([[root, 0]]); const q = [root]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const bnd = [...nbA(backA, n)].some((x) => !rails.has(x) && !homeA.has(blkA(x))); if (n !== root && (bnd || clocksA.has(n))) continue; for (const x of nbA(backA, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeA.has(blkA(x)) && !clocksA.has(x)) q.push(x); } } return [...dd.keys()].filter((n) => n === root || (homeA.has(blkA(n)) && !clocksA.has(n))).filter((n) => mine.has(n)).sort((a, b) => a - b); };
+        const nmA = (n) => sch.names[n] || `#${n}`;
+        const gotA = T.alatList();
+        const gA = (id) => gotA.find((c) => c.id === id);
+        const wantH = {};
+        for (const stem of ['abl', 'abh']) {
+          const own = new RegExp(`^#?${stem.toUpperCase()}\\d$|^${stem}\\d$`, 'i');
+          const bits = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => byName.get(`${stem}${i}`));
+          const set = new Set(bits); { const q = [...bits]; while (q.length) { const n = q.shift(); for (const m of nbA(undA, n)) if (!set.has(m) && !rails.has(m) && (!sch.names[m] || own.test(sch.names[m]))) { set.add(m); q.push(m); } } }
+          const reads = new Set(), feeds = new Set(); for (const n of set) { for (const m of nbA(backA, n)) if (!set.has(m) && !rails.has(m)) reads.add(m); for (const m of nbA(fwdA, n)) if (!set.has(m) && !rails.has(m)) feeds.add(m); }
+          const lines = new Set(); for (const n of set) for (const c of nbA(ctlOfA, n)) if (!clocksA.has(c) && !set.has(c)) lines.add(c);
+          wantH[stem] = { nodes: [...set].filter((n) => mine.has(n)).sort((a, b) => a - b), reads: [...reads].map(nmA).sort(), feeds: [...feeds].map(nmA).sort(), lines: [...lines].map(nmA) };
+        }
+        ok('each half is the harness\'s own closure: 56 nodes, seven a bit', ['abl', 'abh'].every((h) => gA(h).nodes.join() === wantH[h].nodes.join()) && wantH.abl.nodes.length === 56 && wantH.abh.nodes.length === 56, `${gA('abl').nodes.length}/${wantH.abl.nodes.length} ${gA('abh').nodes.length}/${wantH.abh.nodes.length}`);
+        ok('ABL reads exactly adl0..7 and feeds exactly ab0..7; ABH adh0..7 and ab8..15',
+           wantH.abl.reads.join() === [...Array(8).keys()].map((i) => `adl${i}`).sort().join() && wantH.abl.feeds.join() === [...Array(8).keys()].map((i) => `ab${i}`).sort().join()
+           && wantH.abh.reads.join() === [...Array(8).keys()].map((i) => `adh${i}`).sort().join() && wantH.abh.feeds.join() === [...Array(8).keys()].map((i) => `ab${i + 8}`).sort().join()
+           && ['abl', 'abh'].every((h) => gA(h).reads.map(nmA).sort().join() === wantH[h].reads.join() && gA(h).feeds.map(nmA).sort().join() === wantH[h].feeds.join()),
+           `abl reads ${wantH.abl.reads.join(' ')} feeds ${wantH.abl.feeds.join(' ')}`);
+        ok('the load lines are ADL/ABL and ADH/ABH, one each, the clocks left out, eight switches each', wantH.abl.lines.join() === 'ADL/ABL' && wantH.abh.lines.join() === 'ADH/ABH' && gA('ADL/ABL') && gA('ADH/ABH') && gA('ADL/ABL').onHalf === 8 && gA('ADH/ABH').onHalf === 8, `${wantH.abl.lines} ${wantH.abh.lines}`);
+        ok('each line\'s group is its cone, and the low one reaches the store-data pipeline', gA('ADL/ABL').nodes.join() === coneA(byName.get('ADL/ABL')).join() && gA('ADH/ABH').nodes.join() === coneA(byName.get('ADH/ABH')).join() && gA('ADL/ABL').nodes.map(nmA).includes('#440'), `${gA('ADL/ABL').nodes.length} / ${gA('ADH/ABH').nodes.length}`);
+        const wantLow = [...new Set(['0/ADL0', '0/ADL1', '0/ADL2'].flatMap((x) => coneA(byName.get(x))))].sort((a, b) => a - b);
+        const wantHigh = [...new Set(['dpc28_0ADH0', 'dpc29_0ADH17'].flatMap((x) => coneA(byName.get(x))))].sort((a, b) => a - b);
+        ok('the constants are the die\'s 0/ADL and 0ADH names with their cones: low reads the vector bits, high the zero-page and stack terms',
+           gA('low').nodes.join() === wantLow.join() && gA('high').nodes.join() === wantHigh.join() && ['pipeVectorA0', 'pipeVectorA1', 'pipeVectorA2'].every((x) => gA('low').reads.map(nmA).includes(x)) && ['op-T2-stack-access', 'op-T2-zp/zp-idx'].every((x) => gA('high').reads.map(nmA).includes(x)),
+           `low ${gA('low').reads.map(nmA).join(' ')} | high ${gA('high').reads.map(nmA).join(' ')}`);
+        const apath = (id) => d.querySelector(`#tc-alat-regions .tc-ag[data-alat="${id}"]`);
+        let outA = 0; for (const c of gotA) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(apath(c.id), p.x, p.y)) outA++; }
+        ok('every node lies inside its group\'s beads', outA === 0, `${outA} outside`);
+        T.selectAlat('abl');
+        ok('the ABL card reads the low byte of the address on the pins as the harness chip has it', $('tc-block').textContent.includes(`holds $${hex2(m.addressBus() & 0xff)}`), $('tc-block').textContent.slice(0, 90));
+        T.selectAlat('abh');
+        ok('and the ABH card the high byte', $('tc-block').textContent.includes(`holds $${hex2(m.addressBus() >> 8)}`));
+        let lineOkA = 0;
+        for (const id of ['ADL/ABL', 'ADH/ABH']) { T.selectAlat(id); const txt = $('tc-block').textContent; const open = L41[gA(id).node] > 0; if (txt.includes(`the line reads ${open ? 1 : 0}`) && txt.includes(open ? 'are open now' : 'are shut now')) lineOkA++; }
+        ok('each load-line card says open or shut by the level the harness chip has', lineOkA === 2, `${lineOkA} of 2`);
+        T.selectAlat('abl');
+        const ablSet = new Set(gA('abl').nodes);
+        let dimA = 0; for (const c of circles()) if (c.classList.contains('sel-out') === ablSet.has(Number(c.dataset.node))) dimA++;
+        ok('every node but ABL\'s steps back', dimA === 0, `${dimA} wrong`);
+        const acands = [];
+        for (const n of gA('abl').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(apath('abl'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            acands.push({ x, y, n });
+          }
+        }
+        ok('a point inside ABL\'s beads, clear of nodes and outranking beads, exists', acands.length > 0);
+        T.selectAlat(null);
+        f.style.height = '2600px';
+        let aspot = null;
+        for (const c of acands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains('tc-ag')) { aspot = c; break; } }
+        ok('one of them has the bead itself under the pointer once framed', !!aspot, `${acands.length} candidates`);
+        const tgA = click2(aspot.x, aspot.y);
+        ok('the click lands on an address-latch bead', tgA.classList.contains('tc-ag'), tgA.tagName + '.' + tgA.className.baseVal);
+        ok('and selects ABL, over the abl capsule and the block region under it', st.alat === 'abl' && st.stem === null && st.block === null && st.control === null, `${st.alat} / ${st.stem}`);
+        click2(aspot.x, aspot.y);
+        ok('clicking the selected bead again clears it', st.alat === null);
+        T.selectAlat('high'); T.selectFlag('C');
+        ok('a flag clears an address-latch group, and an address-latch group a flag', st.alat === null && st.flag === 'C' && (T.selectAlat('high'), st.flag === null && st.alat === 'high'));
+        T.setCollapsed('alat:abh', true);
+        const snA = d.querySelector('#tc-supers .tc-sn[data-key="alat:abh"]');
+        let ax2 = 0, ay2 = 0; for (const n of gA('abh').nodes) { const p = mine.get(n); ax2 += p.x; ay2 += p.y; }
+        ok('ABH collapses into one node at its mean, fifty-six members', !!snA && Math.abs(Number(snA.getAttribute('cx')) - ax2 / 56) < 0.6 && Math.abs(Number(snA.getAttribute('cy')) - ay2 / 56) < 0.6 && d.querySelector('.tc-sn-lb[data-key="alat:abh"]').textContent === 'latch ABH · 56');
+        T.setCollapsed('alat:abh', false);
+        T.selectAlat(null);
+        T.setAlatRegions(false);
+        ok('the address-latch toggle hides the beads', w.getComputedStyle($('tc-alat-regions')).display === 'none' && $('tc-alat-btn').getAttribute('aria-pressed') === 'false');
+        T.setAlatRegions(true);
+        const f12 = d.createElement('iframe');
+        f12.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f12);
+        await new Promise((res) => { f12.addEventListener('load', res, { once: true }); f12.src = 'tracer.html?program=1&step=41&alat=ADH/ABH'; });
+        for (let i = 0; i < 2000 && !(f12.contentWindow.__tracer && !f12.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?alat=ADH/ABH selects the line on a fresh page', f12.contentWindow.__tracer.state.alat === 'ADH/ABH' && f12.contentDocument.getElementById('tc-block').textContent.includes('address latch load, ADH/ABH'));
+        f12.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

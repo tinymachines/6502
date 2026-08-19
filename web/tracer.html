@@ -96,6 +96,7 @@
               <button class="btn" type="button" id="tc-regs-btn" aria-pressed="true">registers</button>
               <button class="btn" type="button" id="tc-incr-btn" aria-pressed="true">PC incrementer</button>
               <button class="btn" type="button" id="tc-flags-btn" aria-pressed="true">flags</button>
+              <button class="btn" type="button" id="tc-alat-btn" aria-pressed="true">address latches</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -119,7 +120,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -429,6 +430,25 @@
         when the register cannot. The Pout bits, each the inverse of a
         flag's pipeline copy opened onto the data bus for PHP, are a bead of
         their own. A flag's card reads its bit off P and names what it reads.
+        The blue beads are the address latches, the two latches that hold the
+        address on the pins. The register recipe misreads them, and the way
+        it misreads is the structure: the latch nodes are themselves switch
+        controls, gating the pull-ups of their own pad drivers. Read on its
+        own terms each bit is a chain of seven nodes, the bus bit's inverter,
+        a node under cp1, the latch input under the load line, its inverse,
+        an output latch under cclk, and the two static nodes of the pad's
+        push-pull driver; the closure of the eight bits over unnamed and
+        own-named nodes reads exactly the address bus and feeds exactly the
+        pads. The load lines, <span class="mono">ADL/ABL</span> and
+        <span class="mono">ADH/ABH</span>, come with the cones that make
+        them, and the low one reaches the store-data pipeline, which is the
+        latch not reloading during a store's data cycles. Two more beads are
+        the constant generators the die names: the three low address bits
+        forced for the vectors, inverters of the vector bits, and the high
+        byte forced to zero for the zero page and one for the stack, made
+        from exactly those addressing-mode terms. A latch's card reads the
+        byte it holds off the pins; a line's says whether its eight switches
+        are open and what it is made from.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

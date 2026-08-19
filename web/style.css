@@ -3026,6 +3026,18 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.z-labels .tc-fg-lb { font-size: 46px; stroke-width: 8px; }
 .tc-cam.has-sel .tc-fg-lb:not(.sel) { opacity: .3; }
 
+/* The address latches: blue beads for the halves and their load lines, violet for the constants. */
+.tc-alat-regions.off { display: none; }
+.tc-ag { fill: color-mix(in srgb, var(--bc) 14%, transparent); stroke: color-mix(in srgb, var(--bc) 75%, transparent);
+         stroke-width: 5; stroke-dasharray: 10 4 2 4; stroke-linecap: round; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-ag:hover { fill: color-mix(in srgb, var(--bc) 26%, transparent); }
+.tc-ag.sel { fill: color-mix(in srgb, var(--bc) 38%, transparent); stroke: var(--bc); stroke-width: 11; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-ag:not(.sel) { stroke: color-mix(in srgb, var(--bc) 20%, transparent); fill: color-mix(in srgb, var(--bc) 5%, transparent); }
+.tc-ag-lb { font: 800 80px var(--font-mono); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 14px; }
+.tc-cam.z-labels .tc-ag-lb { font-size: 46px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-ag-lb:not(.sel) { opacity: .3; }
+
 /* The pins by measured direction: a halo on each pad, in the direction's hue. */
 .tc-pin-regions.off { display: none; }
 .tc-pg { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);
