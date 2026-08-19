@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -838,7 +838,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(qpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
             qspot = { x, y, n }; break;
           }
@@ -927,7 +927,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(ipath('nmi'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ispot = { x, y, n }; break;
           }
@@ -1019,7 +1019,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0], [0, 60], [0, -60]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(bpath('taken'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             bcands.push({ x, y, n });
           }
@@ -1099,7 +1099,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1297,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1574,7 +1574,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(upath('bit5'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ucands.push({ x, y, n });
           }
@@ -1708,6 +1708,99 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f14.contentWindow.__tracer && !f14.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?dbus=SBDB selects the line on a fresh page', f14.contentWindow.__tracer.state.dbus === 'SBDB' && f14.contentDocument.getElementById('tc-block').textContent.includes('data bus line SBDB'));
         f14.remove();
+      }
+
+      // --- the instruction register and predecode --------------------------------------
+      // The rule re-done here: two closures over the block's unnamed nodes and
+      // own names, what only one reaches and what both reach; the predecoder's
+      // cones; irline3, clearIR and fetch. Then the structure by name, the
+      // terms counted, and the cards against the harness chip.
+      {
+        const IRB2 = sch.blockNames.indexOf('Instruction register'), STB2 = sch.blockNames.indexOf('Static logic');
+        const blkP = (n) => sch.nodeBlock[n] & 0x7f;
+        const backP = new Map(), fwdP = new Map(), undP = new Map(); const addP = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addP(backP, out, i); addP(fwdP, i, out); addP(undP, out, i); addP(undP, i, out); } if (pre >= 0) { addP(backP, out, pre); addP(fwdP, pre, out); addP(undP, out, pre); addP(undP, pre, out); } }
+        const ctlCountP = new Map();
+        for (const [c, a, b] of sch.switches) { addP(backP, a, b); addP(backP, b, a); addP(fwdP, a, b); addP(fwdP, b, a); addP(undP, a, b); addP(undP, b, a); ctlCountP.set(c, (ctlCountP.get(c) || 0) + 1); }
+        const nbP = (m, n) => m.get(n) || new Set();
+        const clocksP = new Set([...ctlCountP].filter(([, c]) => c >= 40).map(([n]) => n));
+        const nmP = (n) => sch.names[n] || `#${n}`;
+        const closureP = (stem, own) => { const bits = [...Array(8).keys()].map((i) => byName.get(`${stem}${i}`)); const set = new Set(bits); const q = [...bits]; while (q.length) { const n = q.shift(); for (const m of nbP(undP, n)) if (!set.has(m) && !rails.has(m) && ((!sch.names[m] && blkP(m) === IRB2) || (sch.names[m] && own.test(sch.names[m])))) { set.add(m); q.push(m); } } return set; };
+        const pdA = closureP('pd', /^pd\d(\.clearIR)?$/), irA = closureP('ir', /^(not)?ir\d$/);
+        const wantPd = [...pdA].filter((n) => !irA.has(n) && mine.has(n)).sort((a, b) => a - b), wantIr = [...irA].filter((n) => !pdA.has(n) && mine.has(n)).sort((a, b) => a - b), wantLoad = [...pdA].filter((n) => irA.has(n) && mine.has(n)).sort((a, b) => a - b);
+        const gotP = T.irpList();
+        const gP = (id) => gotP.find((c) => c.id === id);
+        ok('the predecode latch, the load path and the register are the harness\'s own: what one closure reaches, what both reach, what the other reaches; 24, 24, 16',
+           gP('pd').nodes.join() === wantPd.join() && gP('load').nodes.join() === wantLoad.join() && gP('ir').nodes.join() === wantIr.join() && wantPd.length === 24 && wantLoad.length === 24 && wantIr.length === 16,
+           `${gP('pd').nodes.length}/${wantPd.length} ${gP('load').nodes.length}/${wantLoad.length} ${gP('ir').nodes.length}/${wantIr.length}`);
+        ok('the predecode latch reads exactly the eight db pads and clearIR; the register is ir and notir, nothing else',
+           gP('pd').reads.map(nmP).sort().join() === ['clearIR', ...[...Array(8).keys()].map((i) => `db${i}`)].sort().join() && gP('ir').nodes.map(nmP).every((x) => /^(not)?ir\d$/.test(x)),
+           gP('pd').reads.map(nmP).join(' '));
+        const termsP = gP('ir').feeds.filter((n) => sch.nodeRole[n] === 1).length, line3P = gP('irline3').feeds.filter((n) => sch.nodeRole[n] === 1).length;
+        ok('the register feeds all 122 product terms directly, and irline3 feeds 63 of them again', termsP === 122 && line3P === 63 && gP('irline3').nodes.map(nmP).includes('irline3') && gP('irline3').reads.map(nmP).sort().join() === 'ir0,ir1', `${termsP} / ${line3P}`);
+        ok('the predecoder holds the five PD terms and ONEBYTE, reads the predecode byte and feeds #TWOCYCLE and the PC increment enable #1275',
+           gP('pre').roots.length === 6 && gP('pre').roots.map(nmP).includes('ONEBYTE') && gP('pre').roots.map(nmP).filter((x) => /^PD-/.test(x)).length === 5 && gP('pre').reads.map(nmP).filter((x) => /^pd\d\.clearIR$/.test(x)).length >= 5 && ['#TWOCYCLE', '#1275'].every((x) => gP('pre').feeds.map(nmP).includes(x)),
+           `roots ${gP('pre').roots.map(nmP).join(' ')}; feeds ${gP('pre').feeds.map(nmP).join(' ')}`);
+        ok('clearIR is a NAND of fetch and D1x1 and feeds all eight pd.clearIR; fetch reads notRdy0', gP('clear').reads.map(nmP).sort().join() === 'D1x1,fetch' && gP('clear').feeds.map(nmP).filter((x) => /^pd\d\.clearIR$/.test(x)).length === 8 && gP('fetch').reads.map(nmP).includes('notRdy0'), `${gP('clear').reads.map(nmP).join(' ')} | ${gP('fetch').reads.map(nmP).join(' ')}`);
+        const ownersP = new Map(); for (const g of gotP) for (const n of g.nodes) { if (!ownersP.has(n)) ownersP.set(n, []); ownersP.get(n).push(g.id); }
+        ok('one owner per node across the seven groups', gotP.length === 7 && [...ownersP].every(([, ids]) => ids.length === 1));
+        const ppath = (id) => d.querySelector(`#tc-irp-regions .tc-ig2[data-irp="${id}"]`);
+        let outP = 0; for (const c of gotP) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(ppath(c.id), p.x, p.y)) outP++; }
+        ok('every node lies inside its group\'s beads', outP === 0, `${outP} outside`);
+        const byteP = (stem) => { let v = 0; for (let i = 0; i < 8; i++) if (L41[byName.get(`${stem}${i}`)] > 0) v |= 1 << i; return v; };
+        T.selectIrp('pd');
+        ok('the predecode card reads pd off the chip as the harness chip has it', $('tc-block').textContent.includes(`pd holds $${hex2(byteP('pd'))}`), $('tc-block').textContent.slice(0, 70));
+        T.selectIrp('ir');
+        ok('the register card reads IR off the chip as the harness chip has it, and the bits agree with it', $('tc-block').textContent.includes(`IR reads $${hex2(m.ir())} off the chip (the bits $${hex2(byteP('ir'))})`) && byteP('ir') === m.ir(), $('tc-block').textContent.slice(0, 90));
+        T.selectIrp('load');
+        ok('the load card reads fetch as the harness chip has it', $('tc-block').textContent.includes(`which reads ${L41[byName.get('fetch')] > 0 ? 1 : 0} now`));
+        T.selectIrp('pre');
+        const preHi = gP('pre').roots.filter((n) => L41[n] > 0).length;
+        ok('the predecoder card counts its high terms as the harness chip has them', $('tc-block').textContent.includes(`${preHi} high now`));
+        T.selectIrp('pd');
+        const pdSet = new Set(gP('pd').nodes);
+        let dimP = 0; for (const c of circles()) if (c.classList.contains('sel-out') === pdSet.has(Number(c.dataset.node))) dimP++;
+        ok('every node but the predecode latch\'s steps back', dimP === 0, `${dimP} wrong`);
+        const pcands = [];
+        for (const n of gP('pd').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(ppath('pd'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            pcands.push({ x, y, n });
+          }
+        }
+        ok('a point inside the predecode beads, clear of nodes and outranking beads, exists', pcands.length > 0);
+        T.selectIrp(null);
+        f.style.height = '2600px';
+        let pspot2 = null;
+        for (const c of pcands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains('tc-ig2')) { pspot2 = c; break; } }
+        ok('one of them has the bead itself under the pointer once framed', !!pspot2, `${pcands.length} candidates`);
+        const tgP = click2(pspot2.x, pspot2.y);
+        ok('the click lands on an instruction-register bead', tgP.classList.contains('tc-ig2'), tgP.tagName + '.' + tgP.className.baseVal);
+        ok('and selects the predecode latch, over the pd capsule and the block under it', st.irp === 'pd' && st.stem === null && st.block === null, `${st.irp} / ${st.stem}`);
+        click2(pspot2.x, pspot2.y);
+        ok('clicking the selected bead again clears it', st.irp === null);
+        T.selectIrp('ir'); T.selectDbus('idl');
+        ok('a data-bus group clears an IR group, and an IR group a data-bus group', st.irp === null && st.dbus === 'idl' && (T.selectIrp('ir'), st.dbus === null && st.irp === 'ir'));
+        T.setCollapsed('irp:ir', true);
+        const snP = d.querySelector('#tc-supers .tc-sn[data-key="irp:ir"]');
+        let px2 = 0, py2 = 0; for (const n of gP('ir').nodes) { const p = mine.get(n); px2 += p.x; py2 += p.y; }
+        ok('the register collapses into one node at its mean, sixteen members', !!snP && Math.abs(Number(snP.getAttribute('cx')) - px2 / 16) < 0.6 && Math.abs(Number(snP.getAttribute('cy')) - py2 / 16) < 0.6 && d.querySelector('.tc-sn-lb[data-key="irp:ir"]').textContent === 'IR · 16');
+        T.setCollapsed('irp:ir', false);
+        T.selectIrp(null);
+        T.setIrpRegions(false);
+        ok('the instruction-register toggle hides the beads', w.getComputedStyle($('tc-irp-regions')).display === 'none' && $('tc-irp-btn').getAttribute('aria-pressed') === 'false');
+        T.setIrpRegions(true);
+        const f15 = d.createElement('iframe');
+        f15.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f15);
+        await new Promise((res) => { f15.addEventListener('load', res, { once: true }); f15.src = 'tracer.html?program=1&step=41&ir=pre'; });
+        for (let i = 0; i < 2000 && !(f15.contentWindow.__tracer && !f15.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?ir=pre selects the predecoder on a fresh page', f15.contentWindow.__tracer.state.irp === 'pre' && f15.contentDocument.getElementById('tc-block').textContent.includes('the predecoder'));
+        f15.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, and the data latch, the output register, the bus and the read/write control. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, and the instruction register with its predecode, load path and predecoder. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1417,6 +1417,34 @@ this is that graph with a clock.
     caught it**: with eighteen toggles the console's drag up by 200px came
     back 165, clamped against a drawer taller than the room. The drawer now
     carries the Ports drawer's cap (`--sp-strip-h`) and scrolls.
+
+- **The instruction register and predecode are a container per stage of an
+  opcode's arrival.** `ir-predecode.js` (a leaf): two closures over the
+  Instruction register block's unnamed nodes and own names, from `pd0..7`
+  (own `pd_n`, `pd_n.clearIR`) and from `ir0..7` (own `ir_n`, `notir_n`).
+  What only the first reaches is the **predecode latch, 24, three a bit**
+  (the pad's inverter, `pd`, `pd.clearIR`), reading exactly the `db` pads and
+  `clearIR`; what only the second reaches is the **register, 16**; what both
+  reach is the **load path, 24, three a bit** (the inverter of `pd.clearIR`,
+  the node under `fetch`, the register bit's input that `notir` recirculates
+  into under `cclk`). The closures are kept to the block: over the static
+  logic the register's leaks through `#1133` into the flag logic (348). The
+  **predecoder** is the cones of the five `PD-*` terms and `ONEBYTE` (7
+  nodes once the load path has its inverters), reading the predecode byte
+  and feeding `#TWOCYCLE` (the T0 cell) and `#1275` (the PC increment
+  enable): where a one-byte instruction stops the counter and a two-cycle
+  one shortens the chain. `irline3` (with `#1133`, reading `ir0` and `ir1`),
+  `clearIR` (a NAND of `fetch` and `D1x1`, feeding all eight `pd.clearIR`:
+  an interrupt is BRK) and `fetch` (reading `notRdy0`) each a group. **The
+  register feeds all 122 product terms directly and `irline3` 63 of them
+  again**, measured by role on the page and pinned by the harness.
+  - Kind `irp`, ids `pd load ir pre irline3 clear fetch`; `?ir=pre`,
+    `?instreg=0`; priority after the data bus, before the control clusters.
+    Cards read the predecode and the register off the chip (and the register
+    card checks the bits against the chip's IR readout), say whether `fetch`
+    is open, count the predecoder's high terms. The harness re-derives the
+    closures and cones, pins the names, the 122 and the 63, checks the cards
+    against its chip, clicks, collapses, deep-links.
 
 ### `graph.json`: the chip as one node-and-edge file
 
