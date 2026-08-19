@@ -3014,6 +3014,18 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.z-labels .tc-ng-lb { font-size: 50px; stroke-width: 8px; }
 .tc-cam.has-sel .tc-ng-lb:not(.sel) { opacity: .3; }
 
+/* The flags: ringed beads (a double stroke), one hue per flag, white for the shared enables, cyan for P out. */
+.tc-flag-regions.off { display: none; }
+.tc-fg { fill: color-mix(in srgb, var(--bc) 16%, transparent); stroke: color-mix(in srgb, var(--bc) 75%, transparent);
+         stroke-width: 5; stroke-dasharray: 1 5; stroke-linecap: round; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-fg:hover { fill: color-mix(in srgb, var(--bc) 28%, transparent); }
+.tc-fg.sel { fill: color-mix(in srgb, var(--bc) 40%, transparent); stroke: var(--bc); stroke-width: 11; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-fg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 20%, transparent); fill: color-mix(in srgb, var(--bc) 5%, transparent); }
+.tc-fg-lb { font: 800 80px var(--font-mono); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 14px; }
+.tc-cam.z-labels .tc-fg-lb { font-size: 46px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-fg-lb:not(.sel) { opacity: .3; }
+
 /* The pins by measured direction: a halo on each pad, in the direction's hue. */
 .tc-pin-regions.off { display: none; }
 .tc-pg { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);

@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -838,7 +838,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(qpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
             qspot = { x, y, n }; break;
           }
@@ -927,7 +927,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(ipath('nmi'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ispot = { x, y, n }; break;
           }
@@ -1010,22 +1010,26 @@ f.addEventListener('load', async () => {
         const takenSet = new Set(gB('taken').nodes);
         let dimB = 0; for (const c of circles()) if (c.classList.contains('sel-out') === takenSet.has(Number(c.dataset.node))) dimB++;
         ok('every node but the taken piece\'s steps back', dimB === 0, `${dimB} wrong`);
-        let bspot = null;
+        // Candidates inside the taken beads, clear of nodes and outranking
+        // outlines; the one clicked is the first whose topmost element, once
+        // framed, is the bead itself rather than an edge drawn over it.
+        const bcands = [];
         for (const n of gB('taken').nodes) {
           const p = mine.get(n);
-          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0], [0, 60], [0, -60]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(bpath('taken'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
-            bspot = { x, y, n }; break;
+            bcands.push({ x, y, n });
           }
-          if (bspot) break;
         }
-        ok('a point inside the taken beads, clear of nodes and outranking outlines, exists', !!bspot);
+        ok('a point inside the taken beads, clear of nodes and outranking outlines, exists', bcands.length > 0);
         T.selectBranch(null);
-        T.frameNodes([bspot.n]);
-        f.style.height = '2600px'; await sleep(100);
+        f.style.height = '2600px';
+        let bspot = null;
+        for (const c of bcands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains('tc-bg')) { bspot = c; break; } }
+        ok('one of them has the bead itself under the pointer once framed', !!bspot, `${bcands.length} candidates`);
         const tgB = click2(bspot.x, bspot.y);
         ok('the click lands on a branch bead', tgB.classList.contains('tc-bg'), tgB.tagName + '.' + tgB.className.baseVal);
         ok('and selects the taken piece, clearing every other kind', st.branch === 'taken' && st.block === null && st.intr === null && st.chain === null, `${st.branch}`);
@@ -1095,7 +1099,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1293,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1326,6 +1330,93 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f10.contentWindow.__tracer && !f10.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?incr=1 selects the incrementer on a fresh page', f10.contentWindow.__tracer.state.incr === 'pc' && f10.contentDocument.getElementById('tc-block').textContent.includes('program counter incrementer'));
         f10.remove();
+      }
+
+      // --- the status register and flag logic ----------------------------------------
+      // The rule re-done here: backward cones from p0..p7 inside the status
+      // block, the static logic and the control pipeline, clocks and the
+      // p/Pout bits never entered, the bit's own gate always expanded and the
+      // boundary rule beyond; one flag's reach is its logic, two flags' is
+      // shared; Pout by name. Then what each reads, by name, and the cards.
+      {
+        const homeF = new Set(['Status register', 'Static logic', 'Control pipeline'].map((x) => sch.blockNames.indexOf(x)));
+        const blkF = (n) => sch.nodeBlock[n] & 0x7f;
+        const backF = new Map(); const addF2 = (a, b) => { if (!backF.has(a)) backF.set(a, new Set()); backF.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) addF2(out, i); if (pre >= 0) addF2(out, pre); }
+        const ctlCountF = new Map();
+        for (const [c, a, b] of sch.switches) { addF2(a, b); addF2(b, a); ctlCountF.set(c, (ctlCountF.get(c) || 0) + 1); }
+        const nbF = (n) => backF.get(n) || new Set();
+        const clocksF = new Set([...ctlCountF].filter(([, c]) => c >= 40).map(([n]) => n));
+        const isBitF = (n) => /^(p|Pout)\d$/.test(sch.names[n] || '');
+        const homeOkF = (n) => homeF.has(blkF(n)) && !clocksF.has(n) && !isBitF(n);
+        const FL = [['C', 0], ['Z', 1], ['I', 2], ['D', 3], ['B', 4], ['V', 6], ['N', 7]].map(([id, bit]) => ({ id, bit, node: byName.get(`p${bit}`) }));
+        const conesF = FL.map((f) => { const dd = new Map([[f.node, 0]]); const q = [f.node]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const gate = dd.get(n) === 1; const bnd = [...nbF(n)].some((x) => !rails.has(x) && !homeOkF(x) && x !== f.node); if (n !== f.node && !gate && bnd) continue; for (const x of nbF(n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeOkF(x)) q.push(x); } } return dd; });
+        const cntF = new Map(); conesF.forEach((dd) => { for (const n of dd.keys()) if (homeOkF(n)) cntF.set(n, (cntF.get(n) || 0) + 1); });
+        const wantF = new Map(FL.map((f, i) => [f.id, [f.node, ...[...conesF[i].keys()].filter((n) => homeOkF(n) && cntF.get(n) === 1)].filter((n) => mine.has(n)).sort((a, b) => a - b)]));
+        const wantSharedF = [...cntF].filter(([, c]) => c > 1).map(([n]) => n).filter((n) => mine.has(n)).sort((a, b) => a - b);
+        const wantOut = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => byName.get(`Pout${i}`)).filter((n) => n !== undefined && mine.has(n)).sort((a, b) => a - b);
+        const gotF = T.flagsList();
+        const gF = (id) => gotF.find((c) => c.id === id);
+        const nmF = (n) => sch.names[n] || `#${n}`;
+        ok('the flag groups are the harness\'s own, node for node: seven flags, the shared enables, P out',
+           gotF.length === 9 && FL.every((f) => gF(f.id) && gF(f.id).nodes.join() === wantF.get(f.id).join()) && gF('shared').nodes.join() === wantSharedF.join() && gF('out').nodes.join() === wantOut.join(),
+           gotF.map((c) => `${c.id}:${c.nodes.length}`).join(' '));
+        ok('C reads the ALU\'s carry and the set-C decode, Z reads all eight data-bus bits through DBZ, N reads DBNeg, V the overflow and the S.O. pin, I brk-done',
+           ['#alucout', '#op-set-C', 'op-T0-clc/sec'].every((x) => gF('C').reads.map(nmF).includes(x)) && [...Array(8).keys()].every((i) => gF('Z').reads.map(nmF).includes(`idb${i}`)) && gF('Z').nodes.map(nmF).includes('DBZ')
+           && gF('N').nodes.map(nmF).includes('DBNeg') && ['aluvout', 'so', 'op-clv'].every((x) => gF('V').reads.map(nmF).includes(x)) && gF('I').reads.map(nmF).includes('brk-done'),
+           `C reads ${gF('C').reads.map(nmF).join(' ')} | V reads ${gF('V').reads.map(nmF).join(' ')}`);
+        ok('B is not a stored bit: p4 and one inverter, reading D1x1 from the timing chain', gF('B').nodes.length === 2 && gF('B').reads.map(nmF).includes('D1x1'), `${gF('B').nodes.map(nmF).join(' ')} reads ${gF('B').reads.map(nmF).join(' ')}`);
+        ok('the shared nodes are the ir5 polarity and the PLP/RTI load, shared by the set/clear flags', gF('shared').nodes.length === 3 && gF('shared').reads.map(nmF).includes('notir5') && ['C', 'I', 'D'].every((x) => gF('shared').of.includes(x)), `${gF('shared').nodes.map(nmF).join(' ')} of ${gF('shared').of.join(',')}`);
+        ok('P out is the six Pout bits, each reading a pipeline copy and an idb bit', gF('out').nodes.length === 6 && [0, 1, 2, 3, 6, 7].every((i) => gF('out').reads.map(nmF).includes(`idb${i}`)), gF('out').reads.map(nmF).join(' '));
+        const fpath = (id) => d.querySelector(`#tc-flag-regions .tc-fg[data-flag="${id}"]`);
+        let outF = 0; for (const c of gotF) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(fpath(c.id), p.x, p.y)) outF++; }
+        ok('every node lies inside its group\'s beads', outF === 0, `${outF} outside`);
+        let bitOk = 0;
+        for (const f of FL) { T.selectFlag(f.id); const txt = $('tc-block').textContent; if (txt.includes(`p${f.bit} reads ${(m.p() >> f.bit) & 1} in P ($${hex2(m.p())}`)) bitOk++; }
+        ok('each flag card reads its bit off P as the harness chip has it', bitOk === 7, `${bitOk} of 7`);
+        T.selectFlag('V');
+        const vSet = new Set(gF('V').nodes);
+        let dimF = 0; for (const c of circles()) if (c.classList.contains('sel-out') === vSet.has(Number(c.dataset.node))) dimF++;
+        ok('every node but V\'s steps back', dimF === 0, `${dimF} wrong`);
+        let fspot = null;
+        for (const n of gF('V').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(fpath('V'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            fspot = { x, y, n }; break;
+          }
+          if (fspot) break;
+        }
+        ok('a point inside V\'s beads, clear of nodes and register beads, exists', !!fspot);
+        T.selectFlag(null);
+        T.frameNodes([fspot.n]);
+        f.style.height = '2600px'; await sleep(100);
+        const tgF = click2(fspot.x, fspot.y);
+        ok('the click lands on a flag bead', tgF.classList.contains('tc-fg'), tgF.tagName + '.' + tgF.className.baseVal);
+        ok('and selects V, clearing every other kind', st.flag === 'V' && st.block === null && st.control === null && st.reg === null, `${st.flag}`);
+        click2(fspot.x, fspot.y);
+        ok('clicking the selected bead again clears it', st.flag === null);
+        T.selectFlag('C'); T.selectRegs('a');
+        ok('a register clears a flag group, and a flag group a register', st.flag === null && st.reg === 'a' && (T.selectFlag('C'), st.reg === null && st.flag === 'C'));
+        T.setCollapsed('flags:V', true);
+        const snF = d.querySelector('#tc-supers .tc-sn[data-key="flags:V"]');
+        let fx2 = 0, fy2 = 0; for (const n of gF('V').nodes) { const p = mine.get(n); fx2 += p.x; fy2 += p.y; }
+        ok('V collapses into one node at its mean', !!snF && Math.abs(Number(snF.getAttribute('cx')) - fx2 / gF('V').nodes.length) < 0.6 && Math.abs(Number(snF.getAttribute('cy')) - fy2 / gF('V').nodes.length) < 0.6 && d.querySelector('.tc-sn-lb[data-key="flags:V"]').textContent === `flag V · ${gF('V').nodes.length}`);
+        T.setCollapsed('flags:V', false);
+        T.selectFlag(null);
+        T.setFlagRegions(false);
+        ok('the flags toggle hides the beads', w.getComputedStyle($('tc-flag-regions')).display === 'none' && $('tc-flags-btn').getAttribute('aria-pressed') === 'false');
+        T.setFlagRegions(true);
+        const f11 = d.createElement('iframe');
+        f11.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f11);
+        await new Promise((res) => { f11.addEventListener('load', res, { once: true }); f11.src = 'tracer.html?program=1&step=41&flag=B'; });
+        for (let i = 0; i < 2000 && !(f11.contentWindow.__tracer && !f11.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?flag=B selects the group on a fresh page', f11.contentWindow.__tracer.state.flag === 'B' && f11.contentDocument.getElementById('tc-block').textContent.includes('flag B'));
+        f11.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

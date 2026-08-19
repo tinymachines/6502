@@ -95,6 +95,7 @@
               <button class="btn" type="button" id="tc-decimal-btn" aria-pressed="true">decimal correction</button>
               <button class="btn" type="button" id="tc-regs-btn" aria-pressed="true">registers</button>
               <button class="btn" type="button" id="tc-incr-btn" aria-pressed="true">PC incrementer</button>
+              <button class="btn" type="button" id="tc-flags-btn" aria-pressed="true">flags</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -118,7 +119,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -409,6 +410,25 @@
         latches, the carry rippling nine deep through bit seven. The card
         sorts it into enable, low byte and high byte, and reads PC off the
         chip.
+        The ringed beads are the status register and its flag logic. Each
+        flag bit is a dynamic node loaded from one AOI whose legs are a
+        source and its enable, the data bus and the PLP/RTI load, a set or
+        clear and its enable, and the bit's own pipeline copy for the hold;
+        the rule walks back from each bit inside the status block, the
+        static logic and the control pipeline, always through that AOI (it
+        is exactly where the outside arrives: the carry, the bus, the
+        instruction register) and then stopping wherever a node reads from
+        outside. What one flag alone reaches is its logic; what two reach is
+        shared, and that is the polarity of the set/clear pairs read off
+        <span class="mono">ir5</span> and the PLP/RTI load. C reads the
+        ALU's carry, Z a NOR over all eight data-bus bits, N the bus's bit
+        seven, V the ALU's overflow and the S.O. pin, I the BRK sequence;
+        and B is not a stored bit at all but an inverter of the timing
+        chain's <span class="mono">D1x1</span>, read fresh each time P is
+        pushed, which is why a pushed P can tell a BRK from an interrupt
+        when the register cannot. The Pout bits, each the inverse of a
+        flag's pipeline copy opened onto the data bus for PHP, are a bead of
+        their own. A flag's card reads its bit off P and names what it reads.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Thirteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, and the program counter's incrementer as what lies between the counter and its next value. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, and the status register as a container per flag with its logic. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1294,6 +1294,40 @@ this is that graph with a clock.
   the chip, every pill's level) against its chip, clicks, collapses,
   deep-links. **The deep-link frames' boot wait had to grow too** (20 s to
   100 s of virtual time): thirteen kinds derived at boot.
+
+- **The status register and the flag logic are a container per flag, with
+  the shared enables and the Pout bits as their own.** `flag-logic.js` (a
+  leaf): roots are `p0..p7` (no bit 5), home the Status register block, the
+  static logic and the control pipeline, clocks and the `p`/`Pout` bits never
+  entered; backward cones with the boundary rule applied to every node
+  **except the bit's own gate** (the node its `cp1` switch joins it to: an
+  AOI whose legs are source AND enable | `idb_n` AND load | set-or-clear AND
+  enable | own copy AND hold), which is always expanded. One flag's reach is
+  its logic, two flags' is shared. Measured: **C 14, Z 11, I 9, D 9, B 2, V
+  24, N 7, shared 3** (`#270 #503`, the `ir5` polarity of the set/clear
+  pairs; `#781`, the PLP/RTI load), **out 6** (`Pout` by name, each the
+  inverse of a flag's pipeline copy onto `idb` under `H1x1`), converging by
+  depth 8. What each reads is the mechanism: C `#alucout`, `idb0`,
+  `#op-set-C`, `op-SRS`, `op-T0-clc/sec`; Z all eight `idb` bits through
+  `DBZ`; N `idb7` through `DBNeg`; V `aluvout`, the `so` pin, `op-clv`, BIT;
+  I `brk-done` and `op-T0-cli/sei`. **B is not a stored bit**: `p4` is an
+  inverter of `D1x1`, the timing chain's BRK-against-interrupt distinction,
+  read fresh each time P is pushed.
+  - **Two wrong cuts, both measured before the right one.** The plain
+    boundary rule (a node reading anything outside is kept, not expanded)
+    gave C as *one* node: the flag AOIs are exactly where the outside
+    arrives (the carry, the bus, `ir5`). No cut at all ran eighteen deep into
+    the control pipeline's own sequencing (`#440`, the store-data latch) and
+    the shared set grew with the cap (11, 18, 25, 34). "Always expand the
+    bit's own gate, then the usual rule" converges at 8.
+  - Ringed beads at `FLAGS_R` (90), one hue per flag; `flags:V`, `?flag=B`,
+    `?flags=0`; priority regs, flags, control, .... A flag card reads its bit
+    off P (`$35`, `nv-BdIzC`) and names what it reads; the harness
+    re-derives the nine groups, pins the reads by name and B's inverter,
+    checks every card's bit against its chip, clicks, collapses, deep-links.
+    **Adding a kind moved the branch click spot under an edge line**, so
+    that spot search now frames each candidate and checks the element under
+    the pointer is the bead before clicking.
 
 ### `graph.json`: the chip as one node-and-edge file
 

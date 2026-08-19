@@ -220,6 +220,8 @@ def main() -> None:
     # program counter's incrementer; leaves the tracer draws.
     b.copy_hashed("register-logic.js")
     b.copy_hashed("pc-increment.js")
+    # The status register and the flag logic, a leaf the tracer draws.
+    b.copy_hashed("flag-logic.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -604,6 +606,7 @@ def main() -> None:
         ("./decimal-correction.js", "./" + b.ref("decimal-correction.js")),
         ("./register-logic.js", "./" + b.ref("register-logic.js")),
         ("./pc-increment.js", "./" + b.ref("pc-increment.js")),
+        ("./flag-logic.js", "./" + b.ref("flag-logic.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

@@ -40,6 +40,7 @@ import { branchLogic } from './branch-logic.js';
 import { decimalCorrection } from './decimal-correction.js';
 import { registerLogic } from './register-logic.js';
 import { pcIncrement } from './pc-increment.js';
+import { flagLogic } from './flag-logic.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -181,6 +182,13 @@ const REGS_WHAT = {
 // outputs and the enable and carry lines, 86 nodes in one piece; one orange
 // outline, the card sorting it into enable, low and high.
 export const INCR_R = 110;
+// The status register and the flag logic (flag-logic.js): each flag bit with
+// the cone that sets, clears, loads and holds it, the enables the flags share,
+// and the Pout bits that push P onto the data bus. Beads, one hue per flag;
+// a flag's card reads the bit off the chip's P and names what it reads.
+export const FLAGS_R = 90;
+const FLAGS_COLOR = { C: 'rgb(255 200 90)', Z: 'rgb(170 230 170)', I: 'rgb(255 130 120)', D: 'rgb(255 160 80)', B: 'rgb(180 185 200)', V: 'rgb(200 150 255)', N: 'rgb(130 190 255)', shared: 'rgb(240 240 255)', out: 'rgb(120 225 255)' };
+const FLAGS_WHAT = { C: 'carry: from the ALU\'s carry out, SEC and CLC, the shifts, or the data bus on PLP and RTI', Z: 'zero: DBZ, a NOR over all eight data-bus bits, or the data bus on PLP and RTI', I: 'interrupt disable: SEI, CLI, the BRK sequence, or the data bus', D: 'decimal: SED, CLD, or the data bus', B: 'break: not a stored bit at all, an inverter of D1x1, the timing chain\'s BRK-against-interrupt distinction', V: 'overflow: the ALU\'s overflow, the S.O. pin, CLV, BIT, or the data bus', N: 'negative: DBNeg, the data bus\'s bit 7' };
 const INCR_COLOR = 'rgb(255 120 140)';
 const DECIMAL_COLOR = 'rgb(255 150 70)';
 const BRANCH_COLOR = { taken: 'rgb(190 240 110)', direction: 'rgb(255 150 210)', cross: 'rgb(140 255 225)' };
@@ -258,6 +266,10 @@ const state = {
   incrRegionData: null,
   incr: null,        // 'pc' when the incrementer is selected, or null
   incrRegions: true,
+  flagGroups: null,  // [{id, nodes, ...}] each flag's logic, the shared enables, Pout
+  flagRegionData: null,
+  flag: null,        // the selected flag group id, or null
+  flagRegions: true,
   pinRegions: true,
   collapsed: new Set(), // container keys ('block:8', 'stem:sb', 'cluster:12', 'stage:T0', 'control:8') drawn as one node
   supers: [],           // the collapsed containers' single nodes, from applyCollapse()
@@ -715,6 +727,61 @@ function regsAt(pt) {
   const { pos } = state;
   let best = null, bd = Infinity;
   for (const c of regsList()) {
+    if (!inRegion(pt, data.get(c.id).loops)) continue;
+    for (const n of c.nodes) {
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = c.id; }
+    }
+  }
+  return best;
+}
+
+/** The status register and flag logic, from flag-logic.js. */
+function flagsList() {
+  if (state.flagGroups) return state.flagGroups;
+  const { pos, sch } = state;
+  const r = flagLogic(sch);
+  const keep = (ns) => ns.filter((n) => pos.has(n));
+  const out = r.groups.map((g) => ({ ...g, nodes: keep(g.nodes) }));
+  state.flagGroups = out;
+  state.flagStats = { groups: out.map((g) => [g.id, g.nodes.length]), depth: r.depth, clocks: r.clocks.map((n) => sch.names[n] || `#${n}`) };
+  return out;
+}
+
+function flagsRegionData() {
+  if (state.flagRegionData) return state.flagRegionData;
+  const list = flagsList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: FLAGS_R, cell: 25 });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.flagRegionData = out;
+  return out;
+}
+
+function drawFlagsRegions(g) {
+  const data = flagsRegionData();
+  for (const c of flagsList()) {
+    const r = data.get(c.id);
+    const css = FLAGS_COLOR[c.id] || STAGE_COLOR.any;
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-fg' + (state.flag === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-flag': c.id, style: `--bc: ${css}` }, g);
+    path.setAttribute('aria-label', `flag logic, ${c.id}, ${c.nodes.length} nodes`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y - FLAGS_R - 24, class: 'tc-fg-lb' + (state.flag === c.id ? ' sel' : ''), 'data-flag': c.id, style: `--bc: ${css}` }, g);
+      t.textContent = c.kind === 'flag' ? `flag ${c.id}` : c.id === 'out' ? 'P out' : 'flags shared';
+    }
+  }
+  g.classList.toggle('off', !state.flagRegions);
+}
+
+function flagsAt(pt) {
+  const data = flagsRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const c of flagsList()) {
     if (!inRegion(pt, data.get(c.id).loops)) continue;
     for (const n of c.nodes) {
       const p = pos.get(n);
@@ -1267,7 +1334,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -1276,7 +1343,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1285,7 +1352,7 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1294,7 +1361,7 @@ function selectCluster(id, { fly = false } = {}) {
 function selectStage(id, { fly = false } = {}) {
   const c = id === null ? null : stageList().find((x) => x.id === id);
   state.stage = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1303,7 +1370,16 @@ function selectStage(id, { fly = false } = {}) {
 function selectRegs(id, { fly = false } = {}) {
   const c = id === null ? null : regsList().find((x) => x.id === id);
   state.reg = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.incr = null; state.flag = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select one group of the flag logic, as a set. */
+function selectFlag(id, { fly = false } = {}) {
+  const c = id === null ? null : flagsList().find((x) => x.id === id);
+  state.flag = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1312,7 +1388,7 @@ function selectRegs(id, { fly = false } = {}) {
 function selectIncr(id, { fly = false } = {}) {
   const c = id === null ? null : incrList().find((x) => x.id === id);
   state.incr = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1321,7 +1397,7 @@ function selectIncr(id, { fly = false } = {}) {
 function selectDecimal(id, { fly = false } = {}) {
   const c = id === null ? null : decimalList().find((x) => x.id === id);
   state.decimal = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1330,7 +1406,7 @@ function selectDecimal(id, { fly = false } = {}) {
 function selectBranch(id, { fly = false } = {}) {
   const c = id === null ? null : branchList().find((x) => x.id === id);
   state.branch = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1339,7 +1415,7 @@ function selectBranch(id, { fly = false } = {}) {
 function selectIntr(id, { fly = false } = {}) {
   const c = id === null ? null : intrList().find((x) => x.id === id);
   state.intr = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1348,7 +1424,7 @@ function selectIntr(id, { fly = false } = {}) {
 function selectClock(id, { fly = false } = {}) {
   const c = id === null ? null : clockList().find((x) => x.id === id);
   state.clock = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1357,7 +1433,7 @@ function selectClock(id, { fly = false } = {}) {
 function selectChain(id, { fly = false } = {}) {
   const c = id === null ? null : chainList().find((x) => x.id === id);
   state.chain = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1366,7 +1442,7 @@ function selectChain(id, { fly = false } = {}) {
 function selectControl(id, { fly = false } = {}) {
   const c = id === null ? null : controlList().find((x) => x.id === id);
   state.control = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1375,7 +1451,7 @@ function selectControl(id, { fly = false } = {}) {
 function selectPins(id, { fly = false } = {}) {
   const c = id === null ? null : pinList().find((x) => x.id === id);
   state.pin = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1403,6 +1479,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-reg-regions .tc-xg, #tc-reg-regions .tc-xg-lb')) {
     p.classList.toggle('sel', state.reg !== null && p.dataset.reg === state.reg);
+  }
+  for (const p of document.querySelectorAll('#tc-flag-regions .tc-fg, #tc-flag-regions .tc-fg-lb')) {
+    p.classList.toggle('sel', state.flag !== null && p.dataset.flag === state.flag);
   }
   for (const p of document.querySelectorAll('#tc-incr-regions .tc-ng, #tc-incr-regions .tc-ng-lb')) {
     p.classList.toggle('sel', state.incr !== null && p.dataset.incr === state.incr);
@@ -1475,8 +1554,9 @@ function paintBlock() {
   if (b === null && state.decimal !== null) { paintDecimalCard(box); return; }
   if (b === null && state.reg !== null) { paintRegsCard(box); return; }
   if (b === null && state.incr !== null) { paintIncrCard(box); return; }
+  if (b === null && state.flag !== null) { paintFlagCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter\'s incrementer, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter\'s incrementer, a ringed bead for a flag and its logic, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -1578,6 +1658,40 @@ function paintRegsCard(box) {
       + ` · made from ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`;
   } else {
     head = `<span class="tc-bk-name">registers, shared by ${c.of.join(', ')}</span> · in the cone of each of those: one decode latched once and read by all of them`;
+  }
+  const html = head
+    + ` · ${c.nodes.length} node${c.nodes.length === 1 ? '' : 's'}: ${c.nodes.map((n) => pill(n, '')).join(' ')}`
+    + ` · <span class="tc-bk-moved">${moved.length}</span> moved at this half-cycle · ${high.length} high` + collapseButton();
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/**
+ * The card for a flag group: the flag with its bit read off P, what sets,
+ * clears, loads and holds it as pills with levels; the shared enables; Pout.
+ */
+function paintFlagCard(box) {
+  const c = flagsList().find((x) => x.id === state.flag);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  const high = [], moved = [];
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) high.push(n);
+    if (L && P && P[n] !== L[n]) moved.push(n);
+  }
+  const nameOf = (n) => sch.names[n] || `#${n}`;
+  const pill = (n, cls) => `<button type="button" class="tc-node ${L && L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${nameOf(n)}<i>${L && L[n] ? 1 : 0}</i></button>`;
+  let head;
+  if (c.kind === 'flag') {
+    const bitv = state.regs ? (state.regs.p >> c.bit) & 1 : undefined;
+    head = `<span class="tc-bk-name">flag ${c.id}</span> · <span class="mono">p${c.bit}</span> reads ${bitv === undefined ? '?' : bitv} in P (<span class="mono">$${state.regs ? hex2(state.regs.p) : '??'}</span>, <span class="mono">${state.regs ? state.regs.flags : ''}</span>) off the chip`
+      + ` · ${FLAGS_WHAT[c.id] || 'a flag'}`
+      + ` · reads ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`;
+  } else if (c.kind === 'shared') {
+    head = `<span class="tc-bk-name">flag logic shared by ${c.of.join(', ')}</span> · in the cone of more than one flag: the polarity of the set/clear pairs read off ir5, and the PLP/RTI load`
+      + ` · reads ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`;
+  } else {
+    head = `<span class="tc-bk-name">P onto the data bus</span> · the Pout bits, each the inverse of a flag\'s pipeline copy, opened onto idb under H1x1 for PHP and the interrupt push`
+      + ` · reads ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`;
   }
   const html = head
     + ` · ${c.nodes.length} node${c.nodes.length === 1 ? '' : 's'}: ${c.nodes.map((n) => pill(n, '')).join(' ')}`
@@ -1836,6 +1950,7 @@ function draw() {
   // has to agree with click priority or the element under the pointer is not
   // the one a click selects. The incrementer sits under them.
   drawIncrRegions(el('g', { class: 'tc-incr-regions', id: 'tc-incr-regions' }, cam));
+  drawFlagsRegions(el('g', { class: 'tc-flag-regions', id: 'tc-flag-regions' }, cam));
   drawRegsRegions(el('g', { class: 'tc-reg-regions', id: 'tc-reg-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
   g.edges.forEach((e, i) => {
@@ -1883,6 +1998,7 @@ function draw() {
   else if (state.decimal !== null) selectDecimal(state.decimal);
   else if (state.reg !== null) selectRegs(state.reg);
   else if (state.incr !== null) selectIncr(state.incr);
+  else if (state.flag !== null) selectFlag(state.flag);
   applyCollapse();
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
@@ -2017,7 +2133,16 @@ function incrCaption() {
   const st = state.incrStats;
   if (!st) return '';
   return `The red outline is the program counter\'s incrementer, what lies between the counter and its next value: ${st.nodes} nodes in `
-    + `${st.components === 1 ? 'one piece' : `${st.components} pieces`}, ${st.enable} of enable, ${st.low} for the low byte, ${st.high} for the high, the carry rippling ${st.depth} deep.`;
+    + `${st.components === 1 ? 'one piece' : `${st.components} pieces`}, ${st.enable} of enable, ${st.low} for the low byte, ${st.high} for the high, the carry rippling ${st.depth} deep. `
+    + flagsCaption();
+}
+
+function flagsCaption() {
+  const st = state.flagStats;
+  if (!st) return '';
+  return `The ringed beads are the status register and its flag logic, each bit with the cone that sets, clears, loads and holds it `
+    + `(${st.groups.filter(([id]) => !['shared', 'out'].includes(id)).map(([id, n]) => `${id} ${n}`).join(', ')}), `
+    + `${st.groups.find(([id]) => id === 'shared')[1]} nodes shared by more than one flag, and the ${st.groups.find(([id]) => id === 'out')[1]} Pout bits that push P onto the data bus; B is an inverter of the timing chain\'s D1x1, not a stored bit.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -2262,7 +2387,7 @@ function paint() {
 // share of its members that are high, ringed if any changed, and a bundle
 // flashes if any edge in it fired or toggled.
 
-const KINDS = ['regs', 'control', 'clock', 'intr', 'branch', 'decimal', 'incr', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
+const KINDS = ['regs', 'flags', 'control', 'clock', 'intr', 'branch', 'decimal', 'incr', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
 
 /** What a container key stands for: its members, a label and a colour. */
 function container(key) {
@@ -2324,6 +2449,10 @@ function container(key) {
     const c = incrList().find((x) => x.id === id);
     return c ? { kind, id, nodes: c.nodes, label: 'PC incrementer', css: INCR_COLOR } : null;
   }
+  if (kind === 'flags') {
+    const c = flagsList().find((x) => x.id === id);
+    return c ? { kind, id, nodes: c.nodes, label: c.kind === 'flag' ? `flag ${id}` : id === 'out' ? 'P out' : 'flags shared', css: FLAGS_COLOR[id] || STAGE_COLOR.any } : null;
+  }
   return null;
 }
 
@@ -2336,6 +2465,7 @@ function selectedKey() {
   if (state.decimal !== null) return `decimal:${state.decimal}`;
   if (state.reg !== null) return `regs:${state.reg}`;
   if (state.incr !== null) return `incr:${state.incr}`;
+  if (state.flag !== null) return `flags:${state.flag}`;
   if (state.chain !== null) return `chain:${state.chain}`;
   if (state.pin !== null) return `pins:${state.pin}`;
   if (state.stem !== null) return `stem:${state.stem}`;
@@ -2361,6 +2491,7 @@ function selectKey(key) {
   else if (c.kind === 'decimal') selectDecimal(c.id);
   else if (c.kind === 'regs') selectRegs(c.id);
   else if (c.kind === 'incr') selectIncr(c.id);
+  else if (c.kind === 'flags') selectFlag(c.id);
 }
 
 function setCollapsed(key, on) {
@@ -2764,6 +2895,12 @@ function setRegsRegions(on) {
   $('tc-reg-regions')?.classList.toggle('off', !on);
 }
 
+function setFlagRegions(on) {
+  state.flagRegions = on;
+  $('tc-flags-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-flag-regions')?.classList.toggle('off', !on);
+}
+
 function setIncrRegions(on) {
   state.incrRegions = on;
   $('tc-incr-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2991,6 +3128,8 @@ async function boot() {
     if (q.get('registers') === '0') setRegsRegions(false);
     $('tc-incr-btn').addEventListener('click', () => setIncrRegions(!state.incrRegions));
     if (q.get('incrementer') === '0') setIncrRegions(false);
+    $('tc-flags-btn').addEventListener('click', () => setFlagRegions(!state.flagRegions));
+    if (q.get('flags') === '0') setFlagRegions(false);
     $('tc-collapse-blocks').addEventListener('click', () => {
       const all = [...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`));
       collapseAllBlocks(!all);
@@ -3076,6 +3215,8 @@ async function boot() {
       const pt = atClient(e);
       const rk = state.regRegions ? regsAt(pt) : null;
       if (rk !== null) { selectRegs(rk === state.reg ? null : rk); return; }
+      const fk = state.flagRegions ? flagsAt(pt) : null;
+      if (fk !== null) { selectFlag(fk === state.flag ? null : fk); return; }
       const kc = state.controlRegions ? controlAt(pt) : null;
       if (kc !== null) { selectControl(kc === state.control ? null : kc); return; }
       const qc = state.clockRegions ? clockAt(pt) : null;
@@ -3165,6 +3306,8 @@ async function boot() {
     else if (q.has('stack')) selectRegs(q.get('stack') === 'reg' ? 's' : `s.${q.get('stack')}`, { fly: true });
     // ?incr=1 selects the program counter's incrementer.
     if (q.get('incr') === '1') selectIncr('pc', { fly: true });
+    // ?flag=C (Z, I, D, B, V, N, shared, out) selects that group of the flag logic.
+    if (q.has('flag')) selectFlag(q.get('flag'), { fly: true });
     // ?cluster=N selects the cluster holding node N and frames it.
     if (q.has('cluster')) {
       const n = Number(q.get('cluster'));
@@ -3183,5 +3326,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, selectIntr, intrList, intrRegionData, setIntrRegions, selectBranch, branchList, branchRegionData, setBranchRegions, selectDecimal, decimalList, decimalRegionData, setDecimalRegions, selectRegs, regsList, regsRegionData, setRegsRegions, selectIncr, incrList, incrRegionData, setIncrRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, intrAt, branchAt, decimalAt, regsAt, incrAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, INTR_R, BRANCH_R, DECIMAL_R, REGS_R, INCR_R, REG_STEMS, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, selectIntr, intrList, intrRegionData, setIntrRegions, selectBranch, branchList, branchRegionData, setBranchRegions, selectDecimal, decimalList, decimalRegionData, setDecimalRegions, selectRegs, regsList, regsRegionData, setRegsRegions, selectIncr, incrList, incrRegionData, setIncrRegions, selectFlag, flagsList, flagsRegionData, setFlagRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, intrAt, branchAt, decimalAt, regsAt, incrAt, flagsAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, INTR_R, BRANCH_R, DECIMAL_R, REGS_R, INCR_R, FLAGS_R, REG_STEMS, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();
