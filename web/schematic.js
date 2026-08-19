@@ -17,6 +17,7 @@ import { createDraw, el, SVGNS, NODE_H } from './sch-draw.js';
 import { createBlockView } from './block-cone.js';
 import { SLUGS } from './block-notes.js';
 import { setupFullscreen } from './fullscreen.js';
+import { createPalette } from './solo-palette.js';
 import { setupChipNav } from './chip-nav.js';
 import {
   CLOCKS, clockHz, isRunning, setClock, toggleRunning,
@@ -74,12 +75,8 @@ const state = {
   trail: [],
   nodeBox: new Map(),   // where each signal ended up, for flying to one
   world: null,          // the whole drawing, which is what "fit" fits
-  // The study view's console: which tab is showing, the object that paints it,
-  // and where the reader dragged the panel to.
-  tab: 'signal',
-  drawer: true,
-  panel: null,
-  palPos: null,
+  // The study view's console (tab, drawer, position) is `pal`, built by
+  // `setupPalette()` from solo-palette.js.
   // Whether the camera has been aimed at this bench yet. Raised on the first
   // draw after entering the study view and lowered on leaving, so a re-render
   // caused by walking somewhere leaves the view exactly as the reader left it.
@@ -1137,9 +1134,7 @@ function saveConfig() {
   if (state.quiet || state.root == null) return;
   try {
     localStorage.setItem(CFG_KEY, JSON.stringify({
-      pos: state.palPos,
-      drawer: state.drawer,
-      tab: state.tab,
+      ...(pal ? pal.config() : {}),
       // The walk is stored with the direction it was drawn in, because the
       // layout mirrors: restoring a backward ribbon into a forward view would
       // put every thread on the wrong side.
@@ -1373,7 +1368,7 @@ const PANELS = {
         // an iframe, so the wire appeared on the bench while the switch that
         // put it there still looked off. It is a real responsiveness bug
         // wherever frames are scarce, not only in a harness.
-        if (state.panel) state.panel();
+        if (pal) pal.refresh();
         saveConfig();
       });
     }
@@ -1437,7 +1432,7 @@ const PANELS = {
       // On the action rather than on the next frame, for the same reason a
       // single pill repaints there: frames are scarce in an iframe and this
       // changes dozens of controls at once.
-      if (state.panel) state.panel();
+      if (pal) pal.refresh();
       saveConfig();
     });
 
@@ -1631,175 +1626,40 @@ const TAB_NAMES = {
   stack: 'Stack',
 };
 
-/**
- * Which drawer is open. Rebuilt on switch, painted every frame.
- *
- * The strip is the console; the drawer is one thing at a time pulled out of it.
- * Pressing the icon that is already open shuts it, which is the only way to get
- * back to a bench with nothing but a strip of icons on it.
- */
-function setTab(name) {
-  state.tab = PANELS[name] ? name : 'signal';
-  const pal = $('solo-palette');
-  pal.dataset.open = state.tab;
-  for (const b of $('sp-strip').querySelectorAll('.sp-icon[data-tab]')) {
-    const on = b.dataset.tab === state.tab && state.drawer;
-    b.classList.toggle('on', on);
-    b.setAttribute('aria-expanded', on ? 'true' : 'false');
-  }
-  $('sp-drawer-title').textContent = TAB_NAMES[state.tab];
-  const host = $('sp-panel');
-  host.replaceChildren();
-  state.panel = PANELS[state.tab](host);
-  state.panel();
-  saveConfig();
-}
+// The console's mechanics (drag, clamp, drawer, tab) live in `solo-palette.js`,
+// shared with the tracer; what is particular to this page is the set of panels
+// above and the configuration saved beside them. `pal` is built in
+// `setupPalette()` and is the only holder of where the console is, whether the
+// drawer is open and which tab it shows.
+let pal = null;
 
-/** Open or shut the drawer, leaving the strip. */
-/**
- * Publish the strip's height so the toggles drawer can be capped to it.
- *
- * Measured rather than declared, for the same reason `site-nav.js` measures the
- * header: CSS has no way to say "no taller than my sibling", and the strip is
- * not a fixed height -- the Ports icon appears only once a block is on the
- * bench, which makes it taller *after* boot. Observing the box is the only way
- * to be right whenever that changes.
- */
-function measureStrip() {
-  const strip = $('sp-strip');
-  const h = strip.getBoundingClientRect().height;
-  if (h > 0) $('solo-palette').style.setProperty('--sp-strip-h', `${Math.round(h)}px`);
-}
-
-function setDrawer(on) {
-  state.drawer = !!on;
-  $('solo-palette').dataset.drawer = state.drawer ? 'open' : 'shut';
-  $('sp-collapse').setAttribute('aria-expanded', state.drawer ? 'true' : 'false');
-  setTab(state.tab);
-  saveConfig();
-  measureStrip();
-  // Opening changes the panel's width and height, so where it is allowed to be
-  // changes with it. Without this, opening a drawer near an edge puts half of
-  // it outside the stage.
-  if (state.palPos) placePalette(state.palPos.x, state.palPos.y);
-}
-
-const stageRect = () => document.querySelector('.sch-stage').getBoundingClientRect();
-
-/**
- * Put the console somewhere, and refuse to put it out of reach.
- *
- * The clamp is against the stage rather than the viewport, and it runs again on
- * resize and on collapse -- a panel dragged to the bottom of a tall window and
- * then reopened on a phone would otherwise be gone, with no way to get it back
- * short of clearing storage.
- */
-function placePalette(x, y) {
-  const pal = $('solo-palette');
-  const sr = stageRect();
-  const pr = pal.getBoundingClientRect();
-  if (!pr.width || !pr.height) return;
-  const nx = Math.min(Math.max(0, sr.width - pr.width), Math.max(0, x));
-  const ny = Math.min(Math.max(0, sr.height - pr.height), Math.max(0, y));
-  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
-  pal.style.left = `${nx}px`;
-  pal.style.top = `${ny}px`;
-  state.palPos = { x: nx, y: ny };
-  saveConfig();
-}
-
-/** Entering the study view: open the console where it was left. */
-function openPalette(cfg) {
-  if (cfg && cfg.pos && Number.isFinite(cfg.pos.x) && Number.isFinite(cfg.pos.y)) {
-    state.palPos = cfg.pos;
-  }
-  setDrawer(state.drawer);
-  const pos = state.palPos || (() => {
-    const sr = stageRect();
-    const pr = $('solo-palette').getBoundingClientRect();
-    return { x: 14, y: Math.max(0, sr.height - pr.height - 14) };
-  })();
-  placePalette(pos.x, pos.y);
-}
+function setTab(name) { pal.setTab(name); }
+function setDrawer(on) { pal.setDrawer(on); }
 
 function setupPalette() {
-  const pal = $('solo-palette');
-  const grip = $('sp-strip');
+  pal = createPalette({
+    palette: $('solo-palette'),
+    strip: $('sp-strip'),
+    host: $('sp-panel'),
+    title: $('sp-drawer-title'),
+    collapse: $('sp-collapse'),
+    stage: () => document.querySelector('.sch-stage'),
+    panels: PANELS,
+    names: TAB_NAMES,
+    tab: 'signal',
+    active: () => state.solo,
+    onChange: saveConfig,
+  });
+  // Position is taken from the saved configuration up front, so the first
+  // opening lands where the console was left rather than at the default.
   const cfg = loadConfig();
-  state.palPos = cfg && cfg.pos
-    && Number.isFinite(cfg.pos.x) && Number.isFinite(cfg.pos.y) ? cfg.pos : null;
-
-  // The strip is the handle, buttons included.
-  //
-  // It used to refuse a press that landed on a button, which made a 2.5rem-wide
-  // panel hard to grab and had a worse consequence: the press still reached the
-  // button, so a drag that started on the exit icon *left the study view on
-  // release*. That is one of the two ways a reader loses their walk to a stray
-  // gesture. Now anything on the strip drags, and a press that turned into a
-  // drag has its click swallowed on the way back up.
-  //
-  // Move and release are watched on the window for the same reason the camera
-  // does it: `setPointerCapture` retargets the click, and half these buttons are
-  // the ones the reader means to press.
-  let drag = null;
-  let dragged = false;
-  grip.addEventListener('pointerdown', (e) => {
-    const r = pal.getBoundingClientRect();
-    drag = {
-      dx: e.clientX - r.left, dy: e.clientY - r.top,
-      x: e.clientX, y: e.clientY,
-      // A finger always moves a little, so the slop that separates a press from
-      // a drag is larger for touch -- the same figures the camera uses.
-      slop: e.pointerType === 'mouse' ? 4 : 12,
-    };
-    dragged = false;
-    // Only claim the gesture when it did not start on a control: preventing the
-    // default on a button would cost it focus and the press that goes with it.
-    if (!e.target.closest('button')) e.preventDefault();
-  });
-  const move = (e) => {
-    if (!drag) return;
-    if (!dragged && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= drag.slop) return;
-    if (!dragged) { dragged = true; pal.classList.add('dragging'); }
-    const sr = stageRect();
-    placePalette(e.clientX - sr.left - drag.dx, e.clientY - sr.top - drag.dy);
-  };
-  const up = () => {
-    if (!drag) return;
-    drag = null;
-    pal.classList.remove('dragging');
-    // Let the click that follows this release be swallowed, then forget. A drag
-    // that ends off a button produces no click at all, and a flag left latched
-    // would eat the next real press instead of the one it was raised for.
-    if (dragged) setTimeout(() => { dragged = false; }, 0);
-  };
-  // Capture, so it runs before the button's own handler rather than after it.
-  grip.addEventListener('click', (e) => {
-    if (!dragged) return;
-    dragged = false;
-    e.stopPropagation();
-    e.preventDefault();
-  }, true);
-  window.addEventListener('pointermove', move);
-  window.addEventListener('pointerup', up);
-  window.addEventListener('pointercancel', up);
-  window.addEventListener('resize', () => {
-    if (state.solo && state.palPos) placePalette(state.palPos.x, state.palPos.y);
-  });
-
-  $('sp-collapse').addEventListener('click', () => setDrawer(false));
-  for (const b of $('sp-strip').querySelectorAll('.sp-icon[data-tab]')) {
-    b.addEventListener('click', () => {
-      if (state.drawer && state.tab === b.dataset.tab) setDrawer(false);
-      else { state.tab = b.dataset.tab; setDrawer(true); }
-    });
-  }
+  if (cfg && cfg.pos) pal.restore({ pos: cfg.pos });
 }
 
 /** Paint the live half of whichever panel is open. */
 function refreshPalette() {
-  if (!state.solo || !state.panel || !state.drawer) return;
-  state.panel();
+  if (!state.solo || !pal) return;
+  pal.refresh();
 }
 
 // ---------------------------------------------------------------------------
@@ -2314,7 +2174,7 @@ async function boot() {
       else if (ev.key === 'ArrowRight') { step(+1); ev.preventDefault(); }
       else if (ev.key === 'ArrowLeft') { step(-1); ev.preventDefault(); }
       else if (ev.key === 'p' || ev.key === 'P') {
-        setDrawer(!state.drawer);
+        setDrawer(!pal.drawer);
         ev.preventDefault();
       } else if (ev.key === 'd' || ev.key === 'D') {
         setDir(state.dir === 'back' ? 'fwd' : 'back');
@@ -2370,14 +2230,6 @@ async function boot() {
     // screen, with everything else out of the way. Clicking a signal re-roots
     // and stays there, which is how a reader walks the islands.
     const console_ = document.querySelector('.console');
-    // The strip grows after boot: the Ports icon is revealed only once a block
-    // has loaded. Measuring on open alone would cache the height it had before
-    // that, which is the same trap the nav's disclosure panel hit.
-    if (typeof ResizeObserver === 'function') {
-      new ResizeObserver(measureStrip).observe($('sp-strip'));
-    }
-    window.addEventListener('resize', measureStrip);
-
     setupFullscreen(console_, $('sch-fullscreen'), () => {
       const on = console_.classList.contains('immersive');
       // Read the saved configuration *once*, up front, and write nothing until
@@ -2409,8 +2261,7 @@ async function boot() {
         resetTrail();
         if (cfg) {
           restoreTrail(cfg);                  // the same walk, if it is the same bench
-          if (PANELS[cfg.tab]) state.tab = cfg.tab;
-          state.drawer = cfg.drawer !== false;
+          pal.restore(cfg);
         }
         if (state.root != null) render();
       } finally {
@@ -2420,7 +2271,7 @@ async function boot() {
       // populate it rather than waiting for the next animation frame. Opening it
       // is also the first write after the switch, which puts the restored walk
       // back on disk under its own name.
-      if (on) openPalette(cfg);
+      if (on) pal.open(cfg);
       refresh();
     });
 

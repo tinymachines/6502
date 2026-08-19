@@ -61,15 +61,16 @@
             <select id="tc-program"></select>
           </label>
           <div class="bar-spacer"></div>
-          <span class="mono muted" id="tc-zoom">1.0×</span>
-          <button class="btn" type="button" id="tc-out" title="Zoom out">−</button>
-          <button class="btn" type="button" id="tc-in" title="Zoom in">+</button>
-          <button class="btn" type="button" id="tc-home">Fit</button>
+          <span class="tc-zoomctl" id="tc-zoomctl">
+            <span class="mono muted" id="tc-zoom">1.0×</span>
+            <button class="btn" type="button" id="tc-out" title="Zoom out">−</button>
+            <button class="btn" type="button" id="tc-in" title="Zoom in">+</button>
+            <button class="btn" type="button" id="tc-home">Fit</button>
+          </span>
           <label class="field">
             <span>Clock</span>
             <select id="tc-speed"></select>
           </label>
-          <button class="btn" type="button" id="tc-panel" aria-pressed="true" title="Hide the side panel">panel</button>
           <button id="tc-fullscreen" class="btn btn-icon" type="button"
                   aria-label="Fullscreen" title="Fullscreen">⛶</button>
         </div>
@@ -77,13 +78,13 @@
         <div class="sch-controls tc-controls">
           <div class="field">
             <span>What to draw</span>
-            <div class="bk-dirs" role="group" aria-label="Which graph">
+            <div class="bk-dirs" role="group" aria-label="Which graph" id="tc-modes">
               <button class="btn on" type="button" data-mode="full">every node</button>
               <button class="btn" type="button" data-mode="named">named signals</button>
               <button class="btn" type="button" id="tc-only" aria-pressed="false">show only what moved</button>
             </div>
           </div>
-          <div class="field tc-watch-field">
+          <div class="field tc-watch-field" id="tc-watch-field">
             <span>Watch (stems, as the die names them)</span>
             <div class="tc-watch-row">
               <input id="tc-watch-input" type="text" class="mono" spellcheck="false" autocomplete="off"
@@ -96,7 +97,7 @@
               </div>
             </div>
           </div>
-          <div class="field">
+          <div class="field" id="tc-picked-field">
             <span>Node</span>
             <span class="mono muted" id="tc-picked">Click a node in the drawing, or a name in the list.</span>
           </div>
@@ -106,6 +107,68 @@
           <div class="dg-stage tc-stage">
             <svg id="tc-svg" role="img"
                  aria-label="Every node of the 6502 at its position on the die, lit by its level"></svg>
+
+            <!-- The study view's console: the workbench's strip and drawer
+                 (solo-palette.js), shown only in fullscreen. Each drawer
+                 BORROWS the side column's own elements rather than drawing a
+                 copy, so the painters below have one target and two copies
+                 cannot disagree about a register. -->
+            <div class="solo-palette" id="tc-palette" data-open="regs">
+              <div class="sp-strip" id="tc-strip">
+                <div class="sp-grip" title="Drag to move the console" aria-hidden="true">⠿</div>
+
+                <button class="sp-icon" type="button" data-tab="regs"
+                        aria-label="Registers" title="Registers: the state, and the edge">▣</button>
+                <button class="sp-icon" type="button" data-tab="watch"
+                        aria-label="Watch" title="Watch: the latches and buses, bit by bit">◫</button>
+                <button class="sp-icon" type="button" data-tab="code"
+                        aria-label="Code" title="Code: the program, and where the chip is in it">≡</button>
+                <button class="sp-icon" type="button" data-tab="moved"
+                        aria-label="Moved" title="Moved: everything that changed at this half-cycle">◉</button>
+                <button class="sp-icon" type="button" data-tab="view"
+                        aria-label="View" title="View: what to draw, and the zoom">⊕</button>
+
+                <span class="sp-strip-sep" aria-hidden="true"></span>
+
+                <button id="tc-solo-back" class="sp-icon" type="button"
+                        aria-label="Back one half-cycle" title="Back (←)">◀</button>
+                <button id="tc-solo-run" class="sp-icon solo-run" type="button"
+                        aria-label="Run" title="Run (space)">▶</button>
+                <button id="tc-solo-step" class="sp-icon" type="button"
+                        aria-label="Forward one half-cycle" title="Step (→)">▶❙</button>
+                <button id="tc-solo-cycle" class="sp-icon" type="button"
+                        aria-label="Forward one cycle" title="Cycle: two half-cycles">▶▶</button>
+                <button id="tc-solo-reset" class="sp-icon" type="button"
+                        aria-label="Reset" title="Reset: power-cycle the chip">⟲</button>
+
+                <span class="sp-strip-sep" aria-hidden="true"></span>
+
+                <button id="tc-solo-exit" class="sp-icon sp-exit" type="button"
+                        aria-label="Leave fullscreen" title="Leave (esc)">✕</button>
+              </div>
+
+              <div class="sp-drawer" id="tc-drawer">
+                <div class="sp-drawer-head">
+                  <span class="sp-title" id="tc-drawer-title">Registers</span>
+                  <span class="solo-clock mono" id="tc-solo-clock"></span>
+                  <!-- The header is gone in this mode, so the rate has to be
+                       reachable here. Same store, so the two cannot disagree. -->
+                  <select id="tc-solo-speed" class="solo-clock-select"
+                          aria-label="Simulated clock rate"></select>
+                  <button id="tc-solo-fit" class="solo-btn" type="button"
+                          aria-label="Fit the whole chip" title="Fit the chip (0)">⌾</button>
+                  <button id="tc-collapse" class="solo-btn" type="button"
+                          aria-label="Close the drawer" title="Close (p)">✕</button>
+                </div>
+
+                <div class="sp-panel" id="tc-sp-panel" role="tabpanel"></div>
+
+                <p class="sp-hint">
+                  click a node to name it · space run · ← → step · pinch or scroll
+                  to zoom · drag to pan · <b>0</b> fits the chip · <b>p</b> shuts this
+                </p>
+              </div>
+            </div>
           </div>
 
           <div class="tc-side">
@@ -159,6 +222,15 @@
         changed level, grouped by block, with the way it went. Click a name and
         the drawing flies to it. Turn on <em>show only what moved</em> and the
         rest of the chip steps aside.
+      </p>
+      <p>
+        Fullscreen is the <a href="schematic">workbench</a>'s study view: the
+        drawing takes the whole screen and everything else rides on one floating
+        console, a strip of icons with a drawer beside it. The drawers are the
+        registers, the watch, the code, the moved list and the view controls,
+        one at a time; the transport is on the strip; the strip is the handle,
+        so the console goes wherever it is least in the way, and it remembers
+        where that was.
       </p>
 
       <div class="sec-head">

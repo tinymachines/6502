@@ -2880,31 +2880,49 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.only .tc-e:not(.fired):not(.tog) { display: none; }
 .tc-cam.only .tc-lb:not(.chg):not(.wt) { display: none; }
 
-/* Fullscreen: the console covers the viewport (the shared .immersive/.faux
-   rules), the grid takes the height, the drawing takes the grid's height, and
-   the side column scrolls inside its own. `panel` puts the side away so the
-   graph has the whole screen. #bench needs lifting like #view does: every
-   .wrap is its own stacking context. */
+/* Fullscreen is the study view, as the workbench has it: the console covers
+   the viewport (the shared .immersive/.faux rules), the stage takes all of it,
+   and the controls ride on the floating strip-and-drawer console (the shared
+   .solo-palette rules, built by solo-palette.js). `.console.solo` is the same
+   class the schematic uses for the mode, so the bar and the control fields
+   hide under the rules already written for it. #bench needs lifting like #view
+   does: every .wrap is its own stacking context. */
 body.no-scroll #bench { z-index: 70; }
-#tc-panel { display: none; }
-.console.immersive #tc-panel { display: inline-block; }
-.console.immersive #tc-panel[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-.console.immersive .tc-grid { flex: 1; min-height: 0; padding: .5rem .7rem .7rem; grid-template-rows: minmax(0, 1fr); }
-.console.immersive .tc-stage { height: 100%; min-height: 0; }
-.console.immersive #tc-svg { height: 100%; }
-.console.immersive .tc-side { height: 100%; min-height: 0; overflow-y: auto; }
-.console.immersive .tc-watch-field { grid-column: auto; }
-@media (min-width: 72rem) {
-  .console.immersive .tc-controls { grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr) minmax(14rem, 1fr); }
+.console.solo .tc-grid { display: flex; flex: 1; min-height: 0; padding: 0; gap: 0; }
+.console.solo .tc-stage {
+  flex: 1; min-height: 0; position: relative;
+  border: 0; border-radius: 0; background: #05070d;
 }
-.console.immersive #tc-caption { display: none; }
-.console.immersive.tc-nopanel .tc-grid { grid-template-columns: minmax(0, 1fr); }
-.console.immersive.tc-nopanel .tc-side { display: none; }
-@media (max-width: 71.99rem) {
-  .console.immersive .tc-grid { grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
-  .console.immersive.tc-nopanel .tc-grid { grid-template-rows: minmax(0, 1fr); }
-  .console.immersive .tc-controls { display: none; }
+.console.solo #tc-svg { height: 100%; }
+.console.solo .tc-side, .console.solo #tc-caption { display: none; }
+
+/* The drawers show the side column's own elements, borrowed, so the rules
+   below are the few places their sizes differ in a drawer from in a column:
+   the listing and the moved list can be tall, because the panel scrolls as a
+   whole and the drawer is capped to the stage; the controls are toolbar-sized
+   rather than hero-sized. */
+.sp-panel .tc-head { margin-bottom: .5rem; }
+.sp-panel .tc-code { height: auto; max-height: min(60vh, 30rem); margin-top: 0; }
+.sp-panel .tc-moved { max-height: min(55vh, 28rem); margin-top: .3rem; }
+/* Out of .sch-controls a .field is a flex row; in a drawer the label belongs
+   above its control, as it does on the page. */
+.sp-panel .field { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; align-items: start; }
+.sp-panel .tc-watch-field { margin-bottom: .5rem; }
+.sp-panel .tc-watch-field > span,
+.sp-panel #tc-picked-field > span {
+  display: block; font: 700 .58rem/1.6 var(--font-mono); letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
 }
+/* The listing needs its columns: a 20rem drawer cuts the source off. */
+.solo-palette[data-open="code"] .sp-drawer { width: min(27rem, 70vw); }
+.sp-panel .tc-watch-row input { font-size: 16px; }
+.sp-panel .bk-dirs { flex-wrap: wrap; }
+.sp-panel .btn { min-height: 0; padding: .3rem .5rem; font-size: .7rem; }
+.sp-panel #tc-modes { margin-bottom: .6rem; }
+.sp-panel .tc-zoomctl { display: flex; align-items: center; gap: .35rem; margin-bottom: .6rem; }
+.sp-panel #tc-zoom { min-width: 2.6rem; font-size: .7rem; }
+.sp-panel #tc-picked { display: block; font-size: .72rem; }
+.tc-zoomctl { display: inline-flex; align-items: center; gap: .35rem; }
 
 /* The side column. */
 .tc-head {

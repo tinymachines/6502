@@ -32,6 +32,7 @@ import { el } from './sch-draw.js';
 import { centroids } from './die-centroids.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
+import { createPalette } from './solo-palette.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -94,6 +95,7 @@ const state = {
   rows: new Map(),        // addr -> listing row
   picked: null,
   raf: 0,
+  solo: false,             // the study view (fullscreen) is on
 };
 
 // ---------------------------------------------------------------------------
@@ -420,6 +422,14 @@ function paintHead() {
     + `<span class="tc-sep">·</span> SYNC <b>${r.sync}</b> `
     + `<span class="tc-sep">·</span> AB <b class="mono">$${hex4(r.ab)}</b> `
     + `DB <b class="mono">$${hex2(r.db)}</b> <b>${r.rw === 'R' ? 'read' : 'write'}</b>${span}`;
+  // The console's own readout, in the drawer head, as the workbench has it.
+  const out = $('tc-solo-clock');
+  if (out) {
+    const parts = [`½cyc ${r.h}`, `φ${r.ph}`, r.t || 'none'];
+    if (r.sync) parts.push('sync');
+    const text = parts.join(' · ');
+    if (out.textContent !== text) out.textContent = text;
+  }
 }
 
 const REGS = [['pc', 'PC', 4], ['a', 'A', 2], ['x', 'X', 2], ['y', 'Y', 2], ['s', 'S', 2], ['p', 'P', 2], ['ir', 'IR', 2]];
@@ -565,6 +575,85 @@ function pick(n, fly = false) {
 }
 
 // ---------------------------------------------------------------------------
+// The study view's console
+// ---------------------------------------------------------------------------
+//
+// Fullscreen here is the workbench's: the drawing takes the whole viewport and
+// the controls ride on one floating strip-and-drawer console (solo-palette.js,
+// shared with the schematic). What is particular to this page is what the
+// drawers show, and they show the side column's OWN elements, borrowed: a
+// drawer moves the registers, the watch, the listing or the moved list out of
+// the side column into itself and puts them back when another opens or the
+// mode ends. The painters above then have one target each, and the console
+// cannot disagree with the page about a register because there is only one
+// copy of it to paint. (The first sketch rendered copies; the bug it would
+// have had is the one every second copy on this site has had.)
+
+const CFG_KEY = 'v6502.tracer.console';
+let pal = null;
+
+function saveConfig() {
+  if (!pal) return;
+  try { localStorage.setItem(CFG_KEY, JSON.stringify(pal.config())); } catch { /* private mode: the page works, it just forgets */ }
+}
+function loadConfig() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CFG_KEY));
+    return raw && typeof raw === 'object' ? raw : null;
+  } catch { return null; }
+}
+
+// Where each borrowed element lives, so it can go home. Returned in reverse
+// order of borrowing: two neighbours borrowed together (the moved list's
+// summary and the list) are put back later-first, so the earlier one finds its
+// next sibling already in place.
+const HOMES = [];
+function borrow(host, ...ids) {
+  for (const id of ids) {
+    const el = $(id);
+    if (!el) continue;
+    HOMES.push({ el, parent: el.parentNode, next: el.nextSibling });
+    host.append(el);
+  }
+}
+function returnAll() {
+  while (HOMES.length) {
+    const { el, parent, next } = HOMES.pop();
+    parent.insertBefore(el, next && next.parentNode === parent ? next : null);
+  }
+}
+
+// Each drawer: put back whatever the last one borrowed, take its own. The
+// painter is a no-op because every element here is painted by name on every
+// paint() whether it is in the drawer or the side column.
+const noop = () => {};
+const PANELS = {
+  regs: (host) => { returnAll(); borrow(host, 'tc-head', 'tc-regs'); return noop; },
+  watch: (host) => { returnAll(); borrow(host, 'tc-watch-field', 'tc-watch'); return noop; },
+  code: (host) => { returnAll(); borrow(host, 'tc-code'); return noop; },
+  moved: (host) => { returnAll(); borrow(host, 'tc-moved-sum', 'tc-moved'); return noop; },
+  view: (host) => { returnAll(); borrow(host, 'tc-modes', 'tc-zoomctl', 'tc-picked-field'); return noop; },
+};
+const TAB_NAMES = { regs: 'Registers', watch: 'Watch', code: 'Code', moved: 'Moved', view: 'View' };
+
+function setupPalette() {
+  pal = createPalette({
+    palette: $('tc-palette'),
+    strip: $('tc-strip'),
+    host: $('tc-sp-panel'),
+    title: $('tc-drawer-title'),
+    collapse: $('tc-collapse'),
+    stage: () => document.querySelector('.tc-stage'),
+    panels: PANELS,
+    names: TAB_NAMES,
+    tab: 'regs',
+    active: () => state.solo,
+    onChange: saveConfig,
+  });
+  pal.restore(loadConfig());
+}
+
+// ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------
 
@@ -672,13 +761,28 @@ async function boot() {
     const speed = $('tc-speed');
     for (const ck of CLOCKS) speed.add(new Option(ck.label, String(ck.hz)));
     speed.onchange = () => setClock(Number(speed.value));
+    const soloSpeed = $('tc-solo-speed');
+    for (const ck of CLOCKS) soloSpeed.add(new Option(ck.label, String(ck.hz)));
+    soloSpeed.onchange = () => setClock(Number(soloSpeed.value));
     subscribe(() => {
       const on = isRunning();
       $('tc-run').textContent = on ? 'Pause' : 'Run';
       $('tc-run').classList.toggle('btn-primary', !on);
+      const b = $('tc-solo-run');
+      b.textContent = on ? '❙❙' : '▶';
+      b.setAttribute('aria-label', on ? 'Pause' : 'Run');
+      b.classList.toggle('on', on);
       const hz = String(clockHz());
       if (speed.value !== hz) speed.value = hz;
+      if (soloSpeed.value !== hz) soloSpeed.value = hz;
     });
+    $('tc-solo-run').onclick = () => toggleRunning();
+    $('tc-solo-step').onclick = () => stepChip();
+    $('tc-solo-back').onclick = () => { setRunning(false); stepBack(); };
+    $('tc-solo-cycle').onclick = () => { setRunning(false); advance(2); paint(); };
+    $('tc-solo-reset').onclick = () => resetChip();
+    $('tc-solo-fit').onclick = () => { setView(state.home.slice()); };
+    $('tc-solo-exit').onclick = () => $('tc-fullscreen').click();
 
     // The drawing.
     $('tc-boot').hidden = true;
@@ -692,22 +796,27 @@ async function boot() {
     if (q.get('only') === '1') setOnly(true);
     $('tc-home').addEventListener('click', () => { setView(state.home.slice()); });
 
-    // Fullscreen, as the workbench has it: the console covers the viewport and
-    // the drawing takes the height, with the side panel beside it unless it is
-    // put away. The same helper as the schematic, so a phone gets the same
-    // fallback and Escape leaves the same way. The viewBox does the rest: the
-    // drawing scales into whatever box it is given.
+    // Fullscreen, as the workbench has it: the drawing covers the viewport and
+    // the controls ride on the floating console. The same helper as the
+    // schematic, so a phone gets the same fallback and Escape leaves the same
+    // way. The viewBox does the rest: the drawing scales into whatever box it
+    // is given.
     const console_ = document.querySelector('#bench .console');
+    setupPalette();
     setupFullscreen(console_, $('tc-fullscreen'), () => {
-      state.full = console_.classList.contains('immersive');
+      const on = console_.classList.contains('immersive');
+      state.solo = on;
+      console_.classList.toggle('solo', on);
+      if (on) {
+        // The console only exists in this mode, so entering opens and
+        // populates it rather than waiting for a frame. The saved tab, drawer
+        // and position were restored at setup, before anything could be written.
+        pal.open(loadConfig());
+      } else {
+        // Everything the drawers borrowed goes back to the side column.
+        returnAll();
+      }
     });
-    const paintPanel = () => {
-      const on = !console_.classList.contains('tc-nopanel');
-      $('tc-panel').setAttribute('aria-pressed', on ? 'true' : 'false');
-      $('tc-panel').title = on ? 'Hide the side panel' : 'Show the side panel';
-    };
-    $('tc-panel').addEventListener('click', () => { console_.classList.toggle('tc-nopanel'); paintPanel(); });
-    paintPanel();
     // ?full=1 goes through the button rather than the API: a page load carries
     // no user activation, so a real request would be refused, and the button's
     // own fallback covers the viewport anyway.
@@ -759,6 +868,9 @@ async function boot() {
       if (e.key === 'ArrowRight') { e.preventDefault(); stepChip(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); setRunning(false); stepBack(); }
       else if (e.key === ' ') { e.preventDefault(); toggleRunning(); }
+      else if (!state.solo) return;
+      else if (e.key === '0') { e.preventDefault(); setView(state.home.slice()); }
+      else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); pal.setDrawer(!pal.drawer); }
     });
 
     // Deep links: ?step=N runs to half-cycle N; ?run=1 starts the clock.
@@ -784,5 +896,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setWatch, frameNodes, pick, loadProgram };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setWatch, frameNodes, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

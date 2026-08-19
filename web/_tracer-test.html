@@ -250,36 +250,117 @@ f.addEventListener('load', async () => {
     await sleep(50);
     ok('choosing a program reloads and the header agrees', $('tc-code').textContent.includes(PROGRAMS[0].name) && d.querySelector('.nav-prog select').value === '0');
 
-    // --- fullscreen ----------------------------------------------------------------
+    // --- fullscreen: the study view --------------------------------------------------
     // The native API needs a user activation a harness cannot give, so the
     // fallback is forced (the spy goes on the element: an own property shadows
-    // the prototype) and the mode is driven through the real button.
+    // the prototype) and the mode is driven through the real button. The saved
+    // console configuration is a hidden input to everything below, so it is
+    // cleared and the palette put back to its defaults first.
     const con = d.querySelector('#bench .console');
     con.requestFullscreen = undefined;
     con.webkitRequestFullscreen = undefined;
+    localStorage.removeItem(T.CFG_KEY);
+    const pal = T.palette();
+    pal.restore({ tab: 'regs', drawer: true });
+    const vis = (el) => !!el && w.getComputedStyle(el).display !== 'none';
     const stageH0 = $('tc-svg').getBoundingClientRect().height;
     $('tc-fullscreen').click();
     await sleep(400);
     const r = con.getBoundingClientRect();
     ok('the fullscreen button covers the viewport with the console (fallback path)',
-       con.classList.contains('immersive') && con.classList.contains('faux') && d.body.classList.contains('no-scroll')
+       con.classList.contains('immersive') && con.classList.contains('faux') && con.classList.contains('solo') && d.body.classList.contains('no-scroll')
        && Math.abs(r.width - w.innerWidth) < 2 && Math.abs(r.height - w.innerHeight) < 2, `${r.width}x${r.height} of ${w.innerWidth}x${w.innerHeight}`);
-    const stageH1 = $('tc-svg').getBoundingClientRect().height;
-    ok('and the drawing takes the height', stageH1 > stageH0 * 0.7 && stageH1 > w.innerHeight * 0.6, `${stageH0.toFixed(0)} -> ${stageH1.toFixed(0)} of ${w.innerHeight}`);
-    ok('the panel button appears only in fullscreen', w.getComputedStyle($('tc-panel')).display !== 'none');
-    const stageW0 = $('tc-svg').getBoundingClientRect().width;
-    $('tc-panel').click();
-    await sleep(100);
-    ok('putting the panel away gives the graph the whole width',
-       w.getComputedStyle(d.querySelector('.tc-side')).display === 'none' && $('tc-svg').getBoundingClientRect().width > stageW0 * 1.2
-       && $('tc-panel').getAttribute('aria-pressed') === 'false', `${stageW0.toFixed(0)} -> ${$('tc-svg').getBoundingClientRect().width.toFixed(0)}`);
-    $('tc-panel').click();
-    await sleep(100);
-    ok('and back', w.getComputedStyle(d.querySelector('.tc-side')).display !== 'none');
+    const sr = $('tc-svg').getBoundingClientRect();
+    ok('and the drawing takes the whole of it', sr.height > stageH0 && sr.height > w.innerHeight * 0.9 && sr.width > w.innerWidth * 0.95,
+       `${stageH0.toFixed(0)} -> ${sr.width.toFixed(0)}x${sr.height.toFixed(0)} of ${w.innerWidth}x${w.innerHeight}`);
+    const palEl = $('tc-palette');
+    ok('the side column is gone and the floating console is on the stage',
+       !vis(d.querySelector('.tc-side')) && vis(palEl) && vis($('tc-strip')) && palEl.dataset.drawer === 'open' && palEl.dataset.open === 'regs',
+       `${palEl.dataset.drawer}/${palEl.dataset.open}`);
+    const pr0 = palEl.getBoundingClientRect();
+    ok('and it sits inside the stage', pr0.left >= sr.left - 1 && pr0.top >= sr.top - 1 && pr0.right <= sr.right + 1 && pr0.bottom <= sr.bottom + 1,
+       `${pr0.left.toFixed(0)},${pr0.top.toFixed(0)} ${pr0.width.toFixed(0)}x${pr0.height.toFixed(0)}`);
+    ok('the Registers drawer holds the side column\'s own register cards, borrowed',
+       $('tc-regs').closest('#tc-sp-panel') === $('tc-sp-panel') && $('tc-head').closest('#tc-sp-panel') === $('tc-sp-panel') && d.querySelectorAll('.tc-reg').length === 8);
+    // A step from the strip moves the chip, and the borrowed cards still paint.
+    const hBefore = st.m.halfCycle();
+    const pcBefore = $('tc-regs').querySelector('[data-reg="pc"] .tc-reg-v').textContent;
+    $('tc-solo-cycle').click();
+    await sleep(50);
+    ok('the strip\'s transport drives the chip and the drawer head reads it',
+       st.m.halfCycle() === hBefore + 2 && $('tc-solo-clock').textContent.startsWith(`½cyc ${hBefore + 2}`), $('tc-solo-clock').textContent);
+    for (let i = 0; i < 8 && $('tc-regs').querySelector('[data-reg="pc"] .tc-reg-v').textContent === pcBefore; i++) { $('tc-solo-step').click(); }
+    ok('and the borrowed register card repainted in place',
+       $('tc-regs').querySelector('[data-reg="pc"] .tc-reg-v').textContent !== pcBefore, `${pcBefore} -> ${$('tc-regs').querySelector('[data-reg="pc"] .tc-reg-v').textContent}`);
+    // Switch drawers: the registers go home and the listing comes in.
+    d.querySelector('#tc-strip [data-tab="code"]').click();
+    await sleep(50);
+    ok('opening Code returns the registers to the side column and borrows the listing',
+       palEl.dataset.open === 'code' && $('tc-code').parentNode === $('tc-sp-panel') && $('tc-regs').parentNode === d.querySelector('.tc-side')
+       && $('tc-regs').previousElementSibling === d.querySelector('.tc-transport'), '');
+    ok('the current line is still marked in the borrowed listing', !!$('tc-code').querySelector('.tc-row.cur'));
+    d.querySelector('#tc-strip [data-tab="moved"]').click();
+    await sleep(50);
+    ok('Moved borrows the summary and the list, in that order',
+       $('tc-moved-sum').parentNode === $('tc-sp-panel') && $('tc-moved-sum').nextElementSibling === $('tc-moved')
+       && $('tc-code').parentNode === d.querySelector('.tc-side') && $('tc-code').nextElementSibling === d.querySelector('.tc-moved-wrap'), '');
+    d.querySelector('#tc-strip [data-tab="view"]').click();
+    await sleep(50);
+    ok('View borrows the mode group, the zoom and the picked node',
+       $('tc-modes').parentNode === $('tc-sp-panel') && $('tc-zoomctl').parentNode === $('tc-sp-panel') && $('tc-picked').closest('#tc-sp-panel') === $('tc-sp-panel'));
+    $('tc-in').click();
+    ok('and the zoom buttons still work from there', st.home[2] / vb()[2] > 1.5, `${(st.home[2] / vb()[2]).toFixed(1)}x`);
+    $('tc-solo-fit').click();
+    ok('the drawer head\'s fit goes home', vb().join() === st.home.join());
+    // Pressing the open icon shuts the drawer; p opens it again.
+    d.querySelector('#tc-strip [data-tab="view"]').click();
+    await sleep(50);
+    ok('pressing the open drawer\'s icon shuts it, leaving the strip',
+       palEl.dataset.drawer === 'shut' && !vis($('tc-drawer')) && vis($('tc-strip')));
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'p', bubbles: true }));
+    await sleep(50);
+    ok('p opens it again, on the same tab', palEl.dataset.drawer === 'open' && palEl.dataset.open === 'view' && vis($('tc-drawer')));
+    // Drag the console by its strip. Move and release are watched on the
+    // window, and a press that became a drag must not fire the button under it.
+    const stripR = $('tc-strip').getBoundingClientRect();
+    const exitBtn = $('tc-solo-exit');
+    const er = exitBtn.getBoundingClientRect();
+    const p0 = palEl.getBoundingClientRect();
+    const pe = (type, x, y, target) => target.dispatchEvent(new w.PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1, pointerType: 'mouse' }));
+    pe('pointerdown', er.left + er.width / 2, er.top + er.height / 2, exitBtn);
+    // Up and to the right, where there is room: the default position is the
+    // bottom-left corner, and a drag into the clamp would measure the clamp.
+    pe('pointermove', er.left + er.width / 2 + 60, er.top + er.height / 2 - 100, w);
+    pe('pointermove', er.left + er.width / 2 + 120, er.top + er.height / 2 - 200, w);
+    pe('pointerup', er.left + er.width / 2 + 120, er.top + er.height / 2 - 200, w);
+    exitBtn.dispatchEvent(new w.MouseEvent('click', { bubbles: true, clientX: er.left + 120, clientY: er.top - 200 }));
+    await sleep(50);
+    const p1 = palEl.getBoundingClientRect();
+    ok('dragging the strip moves the console, and a drag that started on the exit icon does not leave',
+       Math.abs((p1.left - p0.left) - 120) < 2 && Math.abs((p1.top - p0.top) + 200) < 2 && con.classList.contains('immersive'),
+       `moved ${(p1.left - p0.left).toFixed(0)},${(p1.top - p0.top).toFixed(0)}`);
+    pal.place(99999, 99999);
+    const p2 = palEl.getBoundingClientRect();
+    ok('and it is clamped inside the stage', p2.right <= sr.right + 1 && p2.bottom <= sr.bottom + 1 && p2.left > sr.left + 10,
+       `${p2.left.toFixed(0)},${p2.top.toFixed(0)} in ${sr.width.toFixed(0)}x${sr.height.toFixed(0)}`);
+    const savedCfg = JSON.parse(localStorage.getItem(T.CFG_KEY) || 'null');
+    ok('the console configuration is written down: position, drawer and tab',
+       !!savedCfg && savedCfg.tab === 'view' && savedCfg.drawer === true && savedCfg.pos && Math.abs(savedCfg.pos.x - (p2.left - sr.left)) < 2,
+       JSON.stringify(savedCfg));
     d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await sleep(100);
-    ok('Escape leaves fullscreen', !con.classList.contains('immersive') && !d.body.classList.contains('no-scroll')
-       && w.getComputedStyle($('tc-panel')).display === 'none');
+    ok('Escape leaves fullscreen, the console goes, and everything borrowed is back where it was',
+       !con.classList.contains('immersive') && !con.classList.contains('solo') && !d.body.classList.contains('no-scroll') && !vis(palEl)
+       && $('tc-modes').parentNode === d.querySelector('.tc-controls .field') && $('tc-zoomctl').parentNode === d.querySelector('.console-bar')
+       && $('tc-picked').closest('.tc-controls') !== null && vis(d.querySelector('.tc-side')), '');
+    // Coming back finds the same tab open: the saved configuration wins.
+    $('tc-fullscreen').click();
+    await sleep(300);
+    ok('entering again opens the same drawer the reader left', palEl.dataset.open === 'view' && palEl.dataset.drawer === 'open' && $('tc-modes').parentNode === $('tc-sp-panel'));
+    $('tc-solo-exit').click();
+    await sleep(100);
+    ok('the strip\'s exit leaves', !con.classList.contains('immersive') && $('tc-modes').parentNode !== $('tc-sp-panel'));
+    localStorage.removeItem(T.CFG_KEY);
 
     // --- prose and shell -----------------------------------------------------------
     const stray = [];

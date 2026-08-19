@@ -204,6 +204,10 @@ def main() -> None:
     # Node centroids from layout.bin, shared by diegraph.js and tracer.js so
     # the two cannot put a node in two places. A leaf.
     b.copy_hashed("die-centroids.js")
+    # The study view's floating console (strip, drawer, drag, clamp), shared by
+    # schematic.js and tracer.js so the two cannot drag two different ways. A
+    # leaf: imports nothing.
+    b.copy_hashed("solo-palette.js")
     b.copy_hashed("chip-controls.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
@@ -374,6 +378,8 @@ def main() -> None:
     ]:
         sch = replace_once(sch, f"'{original}'", f"'{resolved}'", where="schematic.js")
     sch = replace_once(sch, "'./fullscreen.js'", f"'./{b.ref('fullscreen.js')}'",
+                       where="schematic.js")
+    sch = replace_once(sch, "'./solo-palette.js'", f"'./{b.ref('solo-palette.js')}'",
                        where="schematic.js")
     for original in ["schematic.json", "blocks.json"]:
         sch = replace_once(sch, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
@@ -562,6 +568,7 @@ def main() -> None:
         ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
+        ("./solo-palette.js", "./" + b.ref("solo-palette.js")),
     ]:
         tc = replace_once(tc, f"'{original}'", f"'{resolved}'", where="tracer.js")
     for original in ["schematic.json", "layout.bin"]:

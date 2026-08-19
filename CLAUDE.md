@@ -942,15 +942,37 @@ this is that graph with a clock.
   a scroll container's automatic minimum is zero, so with a definite height
   the grid gave them nothing. It is a flex column the stage's height now, the
   code box fixed and the moved list taking what remains.
-- **Fullscreen is the workbench's, through `fullscreen.js`**: the console
-  covers the viewport (the shared `.immersive`/`.faux` rules; `#bench` lifted
-  like `#view`), the grid takes the height, the drawing takes the grid's
-  height through the viewBox, and the side column scrolls inside its own. A
-  `panel` button, shown only in the mode, puts the side away so the graph has
-  the whole screen. `?full=1` clicks the button rather than calling the API,
-  as `?solo=1` does, for the same reason. `_tracer-test.html` forces the
-  fallback by stubbing `requestFullscreen` on the element and measures the
-  console against the viewport.
+- **Fullscreen is the workbench's study view, floating console included.**
+  The console covers the viewport (the shared `.immersive`/`.faux` rules;
+  `#bench` lifted like `#view`; `.solo` added as the schematic does), the
+  drawing takes all of it through the viewBox, the side column and the control
+  fields go, and the strip-and-drawer console from `solo-palette.js` floats
+  over the stage: five drawers (**Registers**, **Watch**, **Code**, **Moved**,
+  **View**), the transport (back, run, step, cycle, reset) on the strip, the
+  exit at the bottom, and the half-cycle readout, the clock select and Fit in
+  the drawer head. Position, drawer and tab persist under
+  `v6502.tracer.console`. `?full=1` clicks the button rather than calling the
+  API, as `?solo=1` does, for the same reason. The first version kept the side
+  column beside the drawing with a `panel` button to hide it; it was replaced
+  rather than kept as a second mode.
+  - **The drawers BORROW the side column's own elements** rather than drawing
+    copies: opening Registers moves `#tc-head` and `#tc-regs` into the drawer,
+    and the next drawer (or leaving the mode) puts them back where they were,
+    `HOMES` recording parent and next sibling and returning later-first so
+    neighbours find their place. Every painter keeps its one target by id, so
+    the console cannot disagree with the page about a register because there
+    is only one copy of it to paint. Two consequences: `getElementById` must
+    never be called between `host.replaceChildren()` and the builder's
+    `borrow()` (the element is detached for that instant), and the
+    panel painters are no-ops because `paint()` already paints by name.
+  - **`_tracer-test.html` drives it**: covers the viewport, the console sits
+    inside the stage, each drawer holds the borrowed elements and the side
+    column has them back afterwards in order, the strip's transport moves the
+    chip and the borrowed cards repaint in place, a drag on the exit icon moves
+    the console without leaving, the clamp holds, the configuration is
+    written, and re-entering opens the same drawer. The drag assertion had to
+    pull *upward*: the default position is the bottom-left corner, and a drag
+    down measured the clamp and failed on correct behaviour.
 - **Header picker and transport drive it**, as on the blueprint; the console's
   own Run, Back, ½ cycle, Cycle and Reset are a second view of the store, and
   Back is `stepBack()` (rewind, so bounded by the keyframes). Arrow keys and
@@ -1309,6 +1331,16 @@ The study view's controls are **one draggable panel**, not three clusters nailed
 to three corners. On a screen whose entire content is one drawing the controls
 are the only thing that can be in the way, and *where* they are in the way
 depends on the drawing — which changes with every signal followed.
+
+**The mechanics live in `solo-palette.js`, shared with the tracer** since the
+tracer wanted the same console: `createPalette()` owns the drag, the clamp,
+the drawer and the tab, and reports every change through `onChange` so each
+page saves its own configuration under its own key (the schematic's carries the
+walk beside it). The page keeps only its panels and `pal`, the one holder of
+where the console is. The extraction was verified by `_solo-test.html`,
+`_persist-test.html` and `_ports-test.html` passing unchanged, which is the
+only thing that makes a refactor of a live page defensible. Everything below
+about how the console behaves still holds; it is just written once now.
 
 It is a **vertical strip of icons** with a **drawer** beside it. The strip is
 what remains when the drawer is shut, so what lives on it is what has to survive
