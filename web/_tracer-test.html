@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -1297,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1514,6 +1514,100 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f12.contentWindow.__tracer && !f12.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?alat=ADH/ABH selects the line on a fresh page', f12.contentWindow.__tracer.state.alat === 'ADH/ABH' && f12.contentDocument.getElementById('tc-block').textContent.includes('address latch load, ADH/ABH'));
         f12.remove();
+      }
+
+      // --- the ALU and its adder ------------------------------------------------------
+      // The rule re-done here: slices by min-depth from alu0..7 inside the ALU
+      // and the static logic with the inputs, the decimal nodes and the carry
+      // ends as stops (ties shared); inputs as closures; ends and line groups
+      // by name with their cones; one owner per node. Then the structure by
+      // name, and the cards against the harness chip.
+      {
+        const ALUB = sch.blockNames.indexOf('ALU'), STB = sch.blockNames.indexOf('Static logic'), CPB = sch.blockNames.indexOf('Control pipeline');
+        const blkU = (n) => sch.nodeBlock[n] & 0x7f;
+        const backU = new Map(), undU = new Map(); const addU = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addU(backU, out, i); addU(undU, out, i); addU(undU, i, out); } if (pre >= 0) { addU(backU, out, pre); addU(undU, out, pre); addU(undU, pre, out); } }
+        const ctlCountU = new Map();
+        for (const [c, a, b] of sch.switches) { addU(backU, a, b); addU(backU, b, a); addU(undU, a, b); addU(undU, b, a); ctlCountU.set(c, (ctlCountU.get(c) || 0) + 1); }
+        const nbU = (m, n) => m.get(n) || new Set();
+        const clocksU = new Set([...ctlCountU].filter(([, c]) => c >= 40).map(([n]) => n));
+        const nmU = (n) => sch.names[n] || `#${n}`;
+        const stopU = (n) => /^alua\d$|^alub\d$|^#?DA-|^DC\d|alucin|alucout|aluvout/.test(sch.names[n] || '');
+        const homeU = (n) => (blkU(n) === ALUB || blkU(n) === STB) && !clocksU.has(n) && !stopU(n);
+        const bitsU = [...Array(8).keys()].map((i) => byName.get(`alu${i}`));
+        const reachU = bitsU.map((o) => { const dd = new Map([[o, 0]]); const q = [o]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const bnd = [...nbU(backU, n)].some((x) => !rails.has(x) && !homeU(x)); if (n !== o && bnd) continue; for (const x of nbU(backU, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeU(x)) q.push(x); } } return dd; });
+        const allU = new Set(); reachU.forEach((r, i) => { for (const n of r.keys()) if (homeU(n) || n === bitsU[i]) allU.add(n); });
+        const ownerU = new Map(); for (const n of allU) { const hits = reachU.map((r, i) => [i, r.get(n)]).filter(([, v]) => v !== undefined); const md = Math.min(...hits.map((h) => h[1])); const best = hits.filter((h) => h[1] === md); ownerU.set(n, best.length > 1 ? -1 : best[0][0]); }
+        const gotU = T.aluList();
+        const gU = (id) => gotU.find((c) => c.id === id);
+        const wantBits = [...Array(8).keys()].map((i) => [...allU].filter((n) => ownerU.get(n) === i && mine.has(n)).sort((a, b) => a - b));
+        const wantSharedU = [...allU].filter((n) => ownerU.get(n) === -1 && mine.has(n)).sort((a, b) => a - b);
+        ok('the eight slices are the harness\'s own, node for node, ten or eleven each, and the shared nodes are the seven generate terms #A.B1..7',
+           wantBits.every((ns, i) => gU(`bit${i}`).nodes.join() === ns.join() && ns.length >= 10 && ns.length <= 11) && gU('shared').nodes.join() === wantSharedU.join() && wantSharedU.map(nmU).sort().join() === [1, 2, 3, 4, 5, 6, 7].map((i) => `#A.B${i}`).join(),
+           `${wantBits.map((ns) => ns.length).join('/')} shared ${wantSharedU.map(nmU).join(' ')}`);
+        ok('bit 3 holds its hold bit, inverse, result select, sum, XOR and the carry into it, by the die\'s names', ['alu3', 'notalu3', '#aluresult3', '#(AxBxC)3', 'AxB3', '#(AxB)3', '#(A+B)3', 'C23', '#C23', '#(AxB3).C23'].every((x) => gU('bit3').nodes.map(nmU).includes(x)), gU('bit3').nodes.map(nmU).join(' '));
+        ok('the inputs are A as its eight bits and B as sixteen, with SBADD/0ADD and DBADD/nDBADD/ADLADD', gU('a').nodes.length === 8 && gU('b').nodes.length === 16 && gU('a').lines.map(nmU).sort().join() === 'dpc11_SBADD,dpc12_0ADD' && gU('b').lines.map(nmU).sort().join() === 'dpc10_ADLADD,dpc8_nDBADD,dpc9_DBADD', `${gU('a').lines.map(nmU).join(' ')} | ${gU('b').lines.map(nmU).join(' ')}`);
+        ok('the ends carry their names: cin holds alucin and notalucin, cout alucout and C78, vout aluvout; and the carry out feeds the C flag\'s gate',
+           ['alucin', 'notalucin'].every((x) => gU('cin').nodes.map(nmU).includes(x)) && ['alucout', 'notalucout', 'C78'].every((x) => gU('cout').nodes.map(nmU).includes(x)) && gU('vout').nodes.map(nmU).includes('aluvout') && gU('cout').feeds.map(nmU).includes('#1082'),
+           `cout feeds ${gU('cout').feeds.map(nmU).join(' ')}`);
+        ok('the line groups hold the five ways in, the five functions and the three ways out', gU('in').lines.length === 5 && gU('fn').lines.length === 5 && gU('out').lines.length === 3 && gU('out').lines.map(nmU).sort().join() === 'dpc19_ADDSB7,dpc20_ADDSB06,dpc21_ADDADL');
+        const ownersU = new Map(); for (const g of gotU) for (const n of g.nodes) { if (!ownersU.has(n)) ownersU.set(n, []); ownersU.get(n).push(g.id); }
+        ok('one owner per node across the seventeen groups', [...ownersU].every(([, ids]) => ids.length === 1), `${[...ownersU].filter(([, ids]) => ids.length > 1).length} shared`);
+        const upath = (id) => d.querySelector(`#tc-alu-regions .tc-ug[data-alu="${id}"]`);
+        let outU = 0; for (const c of gotU) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(upath(c.id), p.x, p.y)) outU++; }
+        ok('every node lies inside its group\'s beads', outU === 0, `${outU} outside`);
+        const aluByte = (stem) => { let v = 0; for (let i = 0; i < 8; i++) if (L41[byName.get(`${stem}${i}`)] > 0) v |= 1 << i; return v; };
+        T.selectAlu('bit3');
+        ok('the slice card reads the bit and the ALU byte off the chip as the harness chip has them', $('tc-block').textContent.includes(`alu3 reads ${L41[byName.get('alu3')] > 0 ? 1 : 0} (ALU holds $${hex2(aluByte('alu'))})`), $('tc-block').textContent.slice(0, 80));
+        T.selectAlu('b');
+        ok('the B input card reads its byte off the chip', $('tc-block').textContent.includes(`alub holds $${hex2(aluByte('alub'))}`));
+        T.selectAlu('fn');
+        const fnHigh = gU('fn').lines.filter((n) => L41[n] > 0).map(nmU);
+        ok('the functions card says which lines are high by the harness chip', $('tc-block').textContent.includes(`${fnHigh.length} high at this half-cycle`) && fnHigh.every((x) => $('tc-block').textContent.includes(x)), `${fnHigh.join(' ')}`);
+        T.selectAlu('bit5');
+        const b5Set = new Set(gU('bit5').nodes);
+        let dimU = 0; for (const c of circles()) if (c.classList.contains('sel-out') === b5Set.has(Number(c.dataset.node))) dimU++;
+        ok('every node but bit 5\'s steps back', dimU === 0, `${dimU} wrong`);
+        const ucands = [];
+        for (const n of gU('bit5').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(upath('bit5'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            ucands.push({ x, y, n });
+          }
+        }
+        ok('a point inside bit 5\'s beads, clear of nodes and outranking outlines, exists', ucands.length > 0);
+        T.selectAlu(null);
+        f.style.height = '2600px';
+        let uspot = null;
+        for (const c of ucands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains('tc-ug')) { uspot = c; break; } }
+        ok('one of them has the bead itself under the pointer once framed', !!uspot, `${ucands.length} candidates`);
+        const tgU = click2(uspot.x, uspot.y);
+        ok('the click lands on an ALU bead', tgU.classList.contains('tc-ug'), tgU.tagName + '.' + tgU.className.baseVal);
+        ok('and selects bit 5, over the alu capsule and the ALU region under it', st.alu === 'bit5' && st.stem === null && st.block === null, `${st.alu} / ${st.stem}`);
+        click2(uspot.x, uspot.y);
+        ok('clicking the selected bead again clears it', st.alu === null);
+        T.selectAlu('cin'); T.selectDecimal('bcd');
+        ok('the decimal correction clears an ALU group, and an ALU group the decimal correction', st.alu === null && st.decimal === 'bcd' && (T.selectAlu('cin'), st.decimal === null && st.alu === 'cin'));
+        T.setCollapsed('alu:bit7', true);
+        const snU = d.querySelector('#tc-supers .tc-sn[data-key="alu:bit7"]');
+        let ux2 = 0, uy2 = 0; for (const n of gU('bit7').nodes) { const p = mine.get(n); ux2 += p.x; uy2 += p.y; }
+        ok('bit 7 collapses into one node at its mean', !!snU && Math.abs(Number(snU.getAttribute('cx')) - ux2 / gU('bit7').nodes.length) < 0.6 && Math.abs(Number(snU.getAttribute('cy')) - uy2 / gU('bit7').nodes.length) < 0.6 && d.querySelector('.tc-sn-lb[data-key="alu:bit7"]').textContent === `alu 7 · ${gU('bit7').nodes.length}`);
+        T.setCollapsed('alu:bit7', false);
+        T.selectAlu(null);
+        T.setAluRegions(false);
+        ok('the ALU toggle hides the beads', w.getComputedStyle($('tc-alu-regions')).display === 'none' && $('tc-alu-btn').getAttribute('aria-pressed') === 'false');
+        T.setAluRegions(true);
+        const f13 = d.createElement('iframe');
+        f13.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f13);
+        await new Promise((res) => { f13.addEventListener('load', res, { once: true }); f13.src = 'tracer.html?program=1&step=41&alu=cout'; });
+        for (let i = 0; i < 2000 && !(f13.contentWindow.__tracer && !f13.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?alu=cout selects the group on a fresh page', f13.contentWindow.__tracer.state.alu === 'cout' && f13.contentDocument.getElementById('tc-block').textContent.includes('ALU carry out'));
+        f13.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

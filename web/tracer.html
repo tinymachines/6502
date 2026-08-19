@@ -97,6 +97,7 @@
               <button class="btn" type="button" id="tc-incr-btn" aria-pressed="true">PC incrementer</button>
               <button class="btn" type="button" id="tc-flags-btn" aria-pressed="true">flags</button>
               <button class="btn" type="button" id="tc-alat-btn" aria-pressed="true">address latches</button>
+              <button class="btn" type="button" id="tc-alu-btn" aria-pressed="true">ALU</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -120,7 +121,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit's hue for a slice of the adder, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -449,6 +450,24 @@
         from exactly those addressing-mode terms. A latch's card reads the
         byte it holds off the pins; a line's says whether its eight switches
         are open and what it is made from.
+        The beads in a hue per bit, warm low to cool high, are the ALU and
+        its adder, and they are derivable because the die names the adder
+        bit by bit: the AND and OR terms, the XOR, the sum, the carries
+        alternating in polarity, the result select, the hold register. From
+        each hold bit the rule walks back inside the ALU and the static
+        logic, stopping at the inputs, the decimal nodes (which have their
+        own bead) and the carry ends, and a node belongs to the bit that
+        reaches it soonest: ten or eleven nodes a slice, the carry into a
+        bit filing with that bit because that is what its sum reads, and the
+        seven generate terms shared between neighbours because two bits
+        reach each at the same depth. The inputs are two more beads, A its
+        eight bits and B sixteen, an inverter a bit for the inverted data
+        bus that makes SBC; the carry in, carry out and overflow three more,
+        by name with what makes them; and the thirteen control lines sit in
+        three beads by what they do, the five ways in, the five functions,
+        the three ways out, each with its cone. A slice's card reads its bit
+        and the whole ALU byte off the chip; an input's its byte; a line
+        group's which lines are high now.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

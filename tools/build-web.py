@@ -224,6 +224,8 @@ def main() -> None:
     b.copy_hashed("flag-logic.js")
     # The address latches, their load lines and the constant generators, a leaf the tracer draws.
     b.copy_hashed("address-latches.js")
+    # The ALU and its adder, read bit by bit; a leaf the tracer draws.
+    b.copy_hashed("alu-slices.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -610,6 +612,7 @@ def main() -> None:
         ("./pc-increment.js", "./" + b.ref("pc-increment.js")),
         ("./flag-logic.js", "./" + b.ref("flag-logic.js")),
         ("./address-latches.js", "./" + b.ref("address-latches.js")),
+        ("./alu-slices.js", "./" + b.ref("alu-slices.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

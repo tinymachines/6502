@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, and the address latches as a chain of seven a bit with their load lines and the constant generators. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, and the ALU read bit by bit with its inputs, ends and line groups. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1356,6 +1356,37 @@ this is that graph with a clock.
     feeds by name, checks the cards against its chip, clicks (framing
     candidates and checking the element under the pointer, as the branch
     click does), collapses, deep-links.
+
+- **The ALU and its adder are a container per bit slice, plus inputs, ends
+  and line groups.** `alu-slices.js` (a leaf). The die names the adder bit by
+  bit (`#A.B_n`, `A+B_n`, `#(AxB)_n`/`AxB_n`, the sum `#(AxBxC)_n`, carries
+  alternating in polarity, `#aluresult_n`, `alu_n`/`notalu_n`), which is what
+  makes slices derivable: from each `alu_n` backward inside the ALU and the
+  static logic, stops at `alua`/`alub`, the decimal nodes (their own
+  container) and the carry ends, boundary rule beyond, min-depth ownership,
+  ties shared. **10 or 11 nodes a slice**, the carry *into* a bit filing
+  with that bit (it is what its sum reads), and the seven generate terms
+  `#A.B1..7` shared (each read by its bit's XOR and the next bit's carry at
+  the same depth). Inputs by the register closure: **A 8, B 16** (an
+  inverter a bit for `nDBADD`, the inverted data bus that makes SBC), with
+  `SBADD`/`0ADD` and `DBADD`/`nDBADD`/`ADLADD`. Ends by name with cones:
+  `cin` 18, `cout` 7 (feeds the C flag's gate `#1082`), `vout` 4. The
+  thirteen lines as `in` 26 / `fn` 25 / `out` 58 with their cones: the block
+  page's five-five-three, here with what makes each. One owner per node,
+  later groups yielding to earlier (`#604` cin over in; `#748` bit 7 over
+  cout). Converges by depth 12.
+  - **`/$^/` matches the empty string.** The line cones first came out as
+    the lines alone because that "never" regex made every unnamed node a
+    stop. `/(?!)/` is never.
+  - Kind `alu`, ids `bit0..bit7`, `shared`, `a`, `b`, `cin`, `cout`, `vout`,
+    `in`, `fn`, `out`; `?alu=bit3`, `?adder=0`; priority after decimal (which
+    overlaps it heavily and is **drawn above it**, z-order agreeing with
+    click priority), before the incrementer. A slice card reads its bit and
+    the whole ALU byte off the chip; an input's card its byte; a line group's
+    which lines are high. The harness re-derives slices, shared, inputs,
+    ends and line groups, pins bit 3's names and the `#A.B` set, checks the
+    cards against its chip, clicks (framed candidates), collapses,
+    deep-links.
 
 ### `graph.json`: the chip as one node-and-edge file
 
