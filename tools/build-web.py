@@ -230,6 +230,8 @@ def main() -> None:
     b.copy_hashed("data-bus.js")
     # The instruction register and predecode; a leaf the tracer draws.
     b.copy_hashed("ir-predecode.js")
+    # The special bus and its lines by direction; a leaf the tracer draws.
+    b.copy_hashed("special-bus.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -619,6 +621,7 @@ def main() -> None:
         ("./alu-slices.js", "./" + b.ref("alu-slices.js")),
         ("./data-bus.js", "./" + b.ref("data-bus.js")),
         ("./ir-predecode.js", "./" + b.ref("ir-predecode.js")),
+        ("./special-bus.js", "./" + b.ref("special-bus.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

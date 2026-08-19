@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -838,7 +838,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(qpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
             qspot = { x, y, n }; break;
           }
@@ -927,7 +927,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(ipath('nmi'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ispot = { x, y, n }; break;
           }
@@ -1019,7 +1019,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0], [0, 60], [0, -60]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(bpath('taken'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             bcands.push({ x, y, n });
           }
@@ -1099,7 +1099,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1297,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1574,7 +1574,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(upath('bit5'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ucands.push({ x, y, n });
           }
@@ -1801,6 +1801,97 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f15.contentWindow.__tracer && !f15.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?ir=pre selects the predecoder on a fresh page', f15.contentWindow.__tracer.state.irp === 'pre' && f15.contentDocument.getElementById('tc-block').textContent.includes('the predecoder'));
         f15.remove();
+      }
+
+      // --- the special bus ----------------------------------------------------------
+      // The rule re-done here: the bits; the lines on them with the direction
+      // read off the far side of each line's switches; the adjusted copy as the
+      // dasb bits plus the sb inverters they read; SBADH's cone. Then the
+      // directions pinned by name and the cards against the harness chip.
+      {
+        const gatesY = new Map(sch.gates.map((g) => [g[0], g]));
+        const dynY = sch.kinds.indexOf('dynamic');
+        const sbY = new Set([...Array(8).keys()].map((i) => byName.get(`sb${i}`)));
+        const clocksY = new Set(); { const cc = new Map(); for (const [c] of sch.switches) cc.set(c, (cc.get(c) || 0) + 1); for (const [c, k] of cc) if (k >= 40) clocksY.add(c); }
+        const farY = new Map(); let preY = 0;
+        for (const [c, a, b] of sch.switches) for (const [x, y] of [[a, b], [b, a]]) { if (!sbY.has(x)) continue; if (clocksY.has(c)) { if (rails.has(y)) preY++; continue; } if (!farY.has(c)) farY.set(c, []); farY.get(c).push(y); }
+        const isBusY = (n) => /^[a-z]+\d$/.test(sch.names[n] || '') && !gatesY.has(n) && !/^(a|x|y|s|alua|alub)\d$/.test(sch.names[n]);
+        const dirY = new Map([...farY].map(([c, fs]) => [c, fs.every((f) => gatesY.has(f) && gatesY.get(f)[1] !== dynY) ? 'onto' : fs.every(isBusY) ? 'link' : 'off']));
+        const nmY = (n) => sch.names[n] || `#${n}`;
+        const shortY = (n) => nmY(n).replace(/^dpc\d+_/, '');
+        const gotY = T.sbusList();
+        const gY = (id) => gotY.find((c) => c.id === id);
+        ok('the bus is its eight bits, precharged by eight clock switches, with thirteen lines on it', gY('sb').nodes.join() === [...sbY].sort((a, b) => a - b).join() && gY('sb').lines.length === 13 && dirY.size === 13 && preY === 8 && st.sbusStats.precharge === 8, `${gY('sb').lines.length} lines, ${preY} precharge`);
+        ok('every line\'s direction is the harness\'s own, read off the far side of its switches', gY('sb').lines.every((l) => dirY.get(l.node) === l.dir), gY('sb').lines.map((l) => `${shortY(l.node)}:${l.dir}`).join(' '));
+        const byDir = (d) => [...dirY].filter(([, v]) => v === d).map(([c]) => shortY(c)).sort().join();
+        ok('and they come out as what a 6502 does: YSB XSB SSB ACSB ADDSB06 ADDSB7 onto the bus, SBY SBX SBS SBAC SBADD SBADH off it, SBDB the link',
+           byDir('onto') === 'ACSB,ADDSB06,ADDSB7,SSB,XSB,YSB' && byDir('off') === 'SBAC,SBADD,SBADH,SBS,SBX,SBY' && byDir('link') === 'SBDB', `${byDir('onto')} | ${byDir('off')} | ${byDir('link')}`);
+        const dasbY = []; sch.names.forEach((x, n) => { if (x && /^dasb\d$/.test(x)) dasbY.push(n); });
+        const backY = new Map(); for (const [out, , , legs] of sch.gates) for (const i of new Set(legs.flat())) { if (!backY.has(out)) backY.set(out, new Set()); backY.get(out).add(i); }
+        const wantD = new Set(dasbY);
+        for (const dn of dasbY) for (const x of backY.get(dn) || []) { if (sch.names[x] || rails.has(x)) continue; const ins = [...(backY.get(x) || [])].filter((i) => !rails.has(i)); if (ins.length && ins.every((i) => sbY.has(i))) wantD.add(x); }
+        ok('the adjusted copy is the six dasb bits and the six sb inverters they read, no bits 0 and 4', gY('dasb').nodes.join() === [...wantD].filter((n) => mine.has(n)).sort((a, b) => a - b).join() && wantD.size === 12 && !dasbY.map(nmY).includes('dasb0') && !dasbY.map(nmY).includes('dasb4'), `${gY('dasb').nodes.length}/${wantD.size}`);
+        ok('the line sets hold six onto, five off (SBADH drawn with its cone) and the link; SBADH\'s cone reads the branch decoder', gY('onto').nodes.length === 6 && gY('off').nodes.length === 5 && gY('link').nodes.length === 1 && gY('SBADH').nodes.map(nmY).includes('dpc27_SBADH') && ['#op-branch-done', '#op-T3-branch'].every((x) => gY('SBADH').reads.map(nmY).includes(x)), `SBADH ${gY('SBADH').nodes.length}, reads ${gY('SBADH').reads.map(nmY).join(' ')}`);
+        const ypath = (id) => d.querySelector(`#tc-sbus-regions .tc-yg[data-sbus="${id}"]`);
+        let outY = 0; for (const c of gotY) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(ypath(c.id), p.x, p.y)) outY++; }
+        ok('every node lies inside its group\'s beads', outY === 0, `${outY} outside`);
+        const byteY = (stem) => { let v = 0; for (let i = 0; i < 8; i++) { const n = byName.get(`${stem}${i}`); if (n !== undefined && L41[n] > 0) v |= 1 << i; } return v; };
+        T.selectSbus('sb');
+        ok('the bus card reads sb off the chip as the harness chip has it, and every line\'s level', $('tc-block').textContent.includes(`sb carries $${hex2(byteY('sb'))}`) && [...$('tc-block').querySelectorAll('.tc-node.tc-hi')].every((b) => b.querySelector('i').textContent === (L41[Number(b.dataset.node)] > 0 ? '1' : '0')), $('tc-block').textContent.slice(0, 60));
+        T.selectSbus('dasb');
+        let adjY = byteY('sb'); for (const i of [1, 2, 3, 5, 6, 7]) { const n = byName.get(`dasb${i}`); adjY = L41[n] ? adjY | (1 << i) : adjY & ~(1 << i); }
+        ok('the adjusted card computes the byte A would load from sb0, sb4 and the dasb bits', $('tc-block').textContent.includes(`A would load $${hex2(adjY)}`));
+        T.selectSbus('onto');
+        const ontoHi = gY('onto').lines.filter((l) => L41[l.node] > 0).length;
+        ok('the onto card counts the lines open as the harness chip has them', $('tc-block').textContent.includes(`${ontoHi} open at this half-cycle`));
+        T.selectSbus('sb');
+        const sbSet2 = new Set(gY('sb').nodes);
+        let dimY = 0; for (const c of circles()) if (c.classList.contains('sel-out') === sbSet2.has(Number(c.dataset.node))) dimY++;
+        ok('every node but the bus\'s steps back', dimY === 0, `${dimY} wrong`);
+        // The click goes to the ADJUSTED beads, not the bus's own: sb is in the
+        // default watch, and the watch's rings and polyline are deliberately
+        // drawn above every region, so no point over the sb beads ever has the
+        // bead as its topmost element. dasb is not watched.
+        const ycands = [];
+        for (const n of gY('dasb').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(ypath('dasb'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            ycands.push({ x, y, n });
+          }
+        }
+        ok('a point inside the adjusted beads, clear of nodes and outranking beads, exists', ycands.length > 0);
+        T.selectSbus(null);
+        f.style.height = '2600px';
+        let yspot = null;
+        for (const c of ycands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains('tc-yg')) { yspot = c; break; } }
+        ok('one of them has the bead itself under the pointer once framed', !!yspot, `${ycands.length} candidates`);
+        const tgY = click2(yspot.x, yspot.y);
+        ok('the click lands on a special-bus bead', tgY.classList.contains('tc-yg'), tgY.tagName + '.' + tgY.className.baseVal);
+        ok('and selects the adjusted copy, over the dasb capsule and the block under it', st.sbus === 'dasb' && st.stem === null && st.block === null, `${st.sbus} / ${st.stem}`);
+        click2(yspot.x, yspot.y);
+        ok('clicking the selected bead again clears it', st.sbus === null);
+        T.selectSbus('dasb'); T.selectIrp('ir');
+        ok('an IR group clears a special-bus group, and a special-bus group an IR group', st.sbus === null && st.irp === 'ir' && (T.selectSbus('dasb'), st.irp === null && st.sbus === 'dasb'));
+        T.setCollapsed('sbus:sb', true);
+        const snY = d.querySelector('#tc-supers .tc-sn[data-key="sbus:sb"]');
+        let yx2 = 0, yy2 = 0; for (const n of gY('sb').nodes) { const p = mine.get(n); yx2 += p.x; yy2 += p.y; }
+        ok('the bus collapses into one node at its mean, eight members', !!snY && Math.abs(Number(snY.getAttribute('cx')) - yx2 / 8) < 0.6 && Math.abs(Number(snY.getAttribute('cy')) - yy2 / 8) < 0.6 && d.querySelector('.tc-sn-lb[data-key="sbus:sb"]').textContent === 'SB · 8');
+        T.setCollapsed('sbus:sb', false);
+        T.selectSbus(null);
+        T.setSbusRegions(false);
+        ok('the special-bus toggle hides the beads', w.getComputedStyle($('tc-sbus-regions')).display === 'none' && $('tc-sbus-btn').getAttribute('aria-pressed') === 'false');
+        T.setSbusRegions(true);
+        const f16 = d.createElement('iframe');
+        f16.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f16);
+        await new Promise((res) => { f16.addEventListener('load', res, { once: true }); f16.src = 'tracer.html?program=1&step=41&sb=SBADH'; });
+        for (let i = 0; i < 2000 && !(f16.contentWindow.__tracer && !f16.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?sb=SBADH selects the line on a fresh page', f16.contentWindow.__tracer.state.sbus === 'SBADH' && f16.contentDocument.getElementById('tc-block').textContent.includes('SBADH'));
+        f16.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

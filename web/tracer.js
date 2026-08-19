@@ -45,6 +45,7 @@ import { addressLatches } from './address-latches.js';
 import { aluSlices } from './alu-slices.js';
 import { dataBus } from './data-bus.js';
 import { irPredecode } from './ir-predecode.js';
+import { specialBus } from './special-bus.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -209,6 +210,12 @@ export const DBUS_R = 90;
 // latch, the load path under fetch, the register, the predecoder, irline3,
 // clearIR and fetch. Beads in the instruction register's own hues.
 export const IRP_R = 90;
+// The special bus (special-bus.js): the eight bits, the decimal-adjusted
+// copies, and the thirteen lines by the direction read off the far side of
+// their switches: onto the bus, off it, or joining it to the data bus.
+export const SBUS_R = 90;
+const SBUS_COLOR = { sb: 'rgb(255 210 120)', dasb: 'rgb(255 160 80)', onto: 'rgb(150 235 140)', off: 'rgb(130 190 255)', link: 'rgb(240 240 255)', SBADH: 'rgb(200 150 255)' };
+const SBUS_LABEL = { sb: 'SB', dasb: 'adjusted SB', onto: 'onto SB', off: 'off SB', link: 'SB-DB link', SBADH: 'SBADH' };
 const IRP_COLOR = { pd: 'rgb(120 225 200)', load: 'rgb(240 240 255)', ir: 'rgb(255 200 110)', pre: 'rgb(200 150 255)', irline3: 'rgb(130 190 255)', clear: 'rgb(255 130 120)', fetch: 'rgb(255 180 90)' };
 const IRP_LABEL = { pd: 'predecode', load: 'IR load', ir: 'IR', pre: 'predecoder', irline3: 'irline3', clear: 'clearIR', fetch: 'fetch' };
 const DBUS_COLOR = { idl: 'rgb(120 225 200)', dor: 'rgb(255 170 100)', idb: 'rgb(170 215 255)', rw: 'rgb(255 130 200)', line: 'rgb(190 210 180)' };
@@ -316,6 +323,10 @@ const state = {
   irpRegionData: null,
   irp: null,         // the selected IR group id, or null
   irpRegions: true,
+  sbuses: null,      // [{id, kind, nodes, ...}] the special bus, the adjusted copies, the lines by direction
+  sbusRegionData: null,
+  sbus: null,        // the selected special-bus group id, or null
+  sbusRegions: true,
   pinRegions: true,
   collapsed: new Set(), // container keys ('block:8', 'stem:sb', 'cluster:12', 'stage:T0', 'control:8') drawn as one node
   supers: [],           // the collapsed containers' single nodes, from applyCollapse()
@@ -773,6 +784,61 @@ function regsAt(pt) {
   const { pos } = state;
   let best = null, bd = Infinity;
   for (const c of regsList()) {
+    if (!inRegion(pt, data.get(c.id).loops)) continue;
+    for (const n of c.nodes) {
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = c.id; }
+    }
+  }
+  return best;
+}
+
+/** The special bus, from special-bus.js. */
+function sbusList() {
+  if (state.sbuses) return state.sbuses;
+  const { pos, sch } = state;
+  const r = specialBus(sch);
+  const keep = (ns) => ns.filter((n) => pos.has(n));
+  const out = r.groups.map((g) => ({ ...g, nodes: keep(g.nodes), label: SBUS_LABEL[g.id] || g.id }));
+  state.sbuses = out;
+  state.sbusStats = { groups: out.map((g) => [g.id, g.nodes.length]), precharge: r.precharge, lines: (out.find((g) => g.id === 'sb') || { lines: [] }).lines.length };
+  return out;
+}
+
+function sbusRegionData() {
+  if (state.sbusRegionData) return state.sbusRegionData;
+  const list = sbusList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: SBUS_R, cell: 25 });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.sbusRegionData = out;
+  return out;
+}
+
+function drawSbusRegions(g) {
+  const data = sbusRegionData();
+  for (const c of sbusList()) {
+    const r = data.get(c.id);
+    const css = SBUS_COLOR[c.id] || STAGE_COLOR.any;
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-yg' + (state.sbus === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-sbus': c.id, style: `--bc: ${css}` }, g);
+    path.setAttribute('aria-label', `special bus, ${c.label}, ${c.nodes.length} nodes`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y - SBUS_R - 24, class: 'tc-yg-lb' + (state.sbus === c.id ? ' sel' : ''), 'data-sbus': c.id, style: `--bc: ${css}` }, g);
+      t.textContent = c.label;
+    }
+  }
+  g.classList.toggle('off', !state.sbusRegions);
+}
+
+function sbusAt(pt) {
+  const data = sbusRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const c of sbusList()) {
     if (!inRegion(pt, data.get(c.id).loops)) continue;
     for (const n of c.nodes) {
       const p = pos.get(n);
@@ -1606,7 +1672,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -1615,7 +1681,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1624,7 +1690,7 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1633,7 +1699,7 @@ function selectCluster(id, { fly = false } = {}) {
 function selectStage(id, { fly = false } = {}) {
   const c = id === null ? null : stageList().find((x) => x.id === id);
   state.stage = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1642,7 +1708,16 @@ function selectStage(id, { fly = false } = {}) {
 function selectRegs(id, { fly = false } = {}) {
   const c = id === null ? null : regsList().find((x) => x.id === id);
   state.reg = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select one group of the special bus, as a set. */
+function selectSbus(id, { fly = false } = {}) {
+  const c = id === null ? null : sbusList().find((x) => x.id === id);
+  state.sbus = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1651,7 +1726,7 @@ function selectRegs(id, { fly = false } = {}) {
 function selectIrp(id, { fly = false } = {}) {
   const c = id === null ? null : irpList().find((x) => x.id === id);
   state.irp = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1660,7 +1735,7 @@ function selectIrp(id, { fly = false } = {}) {
 function selectDbus(id, { fly = false } = {}) {
   const c = id === null ? null : dbusList().find((x) => x.id === id);
   state.dbus = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1669,7 +1744,7 @@ function selectDbus(id, { fly = false } = {}) {
 function selectAlu(id, { fly = false } = {}) {
   const c = id === null ? null : aluList().find((x) => x.id === id);
   state.alu = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1678,7 +1753,7 @@ function selectAlu(id, { fly = false } = {}) {
 function selectAlat(id, { fly = false } = {}) {
   const c = id === null ? null : alatList().find((x) => x.id === id);
   state.alat = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1687,7 +1762,7 @@ function selectAlat(id, { fly = false } = {}) {
 function selectFlag(id, { fly = false } = {}) {
   const c = id === null ? null : flagsList().find((x) => x.id === id);
   state.flag = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1696,7 +1771,7 @@ function selectFlag(id, { fly = false } = {}) {
 function selectIncr(id, { fly = false } = {}) {
   const c = id === null ? null : incrList().find((x) => x.id === id);
   state.incr = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1705,7 +1780,7 @@ function selectIncr(id, { fly = false } = {}) {
 function selectDecimal(id, { fly = false } = {}) {
   const c = id === null ? null : decimalList().find((x) => x.id === id);
   state.decimal = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1714,7 +1789,7 @@ function selectDecimal(id, { fly = false } = {}) {
 function selectBranch(id, { fly = false } = {}) {
   const c = id === null ? null : branchList().find((x) => x.id === id);
   state.branch = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1723,7 +1798,7 @@ function selectBranch(id, { fly = false } = {}) {
 function selectIntr(id, { fly = false } = {}) {
   const c = id === null ? null : intrList().find((x) => x.id === id);
   state.intr = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.clock = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1732,7 +1807,7 @@ function selectIntr(id, { fly = false } = {}) {
 function selectClock(id, { fly = false } = {}) {
   const c = id === null ? null : clockList().find((x) => x.id === id);
   state.clock = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1741,7 +1816,7 @@ function selectClock(id, { fly = false } = {}) {
 function selectChain(id, { fly = false } = {}) {
   const c = id === null ? null : chainList().find((x) => x.id === id);
   state.chain = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1750,7 +1825,7 @@ function selectChain(id, { fly = false } = {}) {
 function selectControl(id, { fly = false } = {}) {
   const c = id === null ? null : controlList().find((x) => x.id === id);
   state.control = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1759,7 +1834,7 @@ function selectControl(id, { fly = false } = {}) {
 function selectPins(id, { fly = false } = {}) {
   const c = id === null ? null : pinList().find((x) => x.id === id);
   state.pin = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; state.clock = null; state.intr = null; state.branch = null; state.decimal = null; state.reg = null; state.incr = null; state.flag = null; state.alat = null; state.alu = null; state.dbus = null; state.irp = null; state.sbus = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -1787,6 +1862,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-reg-regions .tc-xg, #tc-reg-regions .tc-xg-lb')) {
     p.classList.toggle('sel', state.reg !== null && p.dataset.reg === state.reg);
+  }
+  for (const p of document.querySelectorAll('#tc-sbus-regions .tc-yg, #tc-sbus-regions .tc-yg-lb')) {
+    p.classList.toggle('sel', state.sbus !== null && p.dataset.sbus === state.sbus);
   }
   for (const p of document.querySelectorAll('#tc-irp-regions .tc-ig2, #tc-irp-regions .tc-ig2-lb')) {
     p.classList.toggle('sel', state.irp !== null && p.dataset.irp === state.irp);
@@ -1879,8 +1957,9 @@ function paintBlock() {
   if (b === null && state.alu !== null) { paintAluCard(box); return; }
   if (b === null && state.dbus !== null) { paintDbusCard(box); return; }
   if (b === null && state.irp !== null) { paintIrpCard(box); return; }
+  if (b === null && state.sbus !== null) { paintSbusCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter\'s incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit\'s hue for a slice of the adder, a teal or orange bead for the data latch or the data out register, a gold bead for the instruction register or its predecode, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter\'s incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit\'s hue for a slice of the adder, a teal or orange bead for the data latch or the data out register, a gold bead for the instruction register or its predecode, a gold capsule-sized bead for the special bus and its lines, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -1982,6 +2061,49 @@ function paintRegsCard(box) {
       + ` · made from ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`;
   } else {
     head = `<span class="tc-bk-name">registers, shared by ${c.of.join(', ')}</span> · in the cone of each of those: one decode latched once and read by all of them`;
+  }
+  const html = head
+    + ` · ${c.nodes.length} node${c.nodes.length === 1 ? '' : 's'}: ${c.nodes.map((n) => pill(n, '')).join(' ')}`
+    + ` · <span class="tc-bk-moved">${moved.length}</span> moved at this half-cycle · ${high.length} high` + collapseButton();
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/**
+ * The card for a special-bus group: the bus with its byte and its thirteen
+ * lines by direction with their levels, the adjusted copies with the byte A
+ * would load, the line sets, and SBADH with what makes it.
+ */
+function paintSbusCard(box) {
+  const c = sbusList().find((x) => x.id === state.sbus);
+  const { sch, byName } = state;
+  const L = state.levels, P = state.prevLevels;
+  const high = [], moved = [];
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) high.push(n);
+    if (L && P && P[n] !== L[n]) moved.push(n);
+  }
+  const nameOf = (n) => sch.names[n] || `#${n}`;
+  const short = (n) => nameOf(n).replace(/^dpc\d+_/, '');
+  const pill = (n, cls, text) => `<button type="button" class="tc-node ${L && L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${text || nameOf(n)}<i>${L && L[n] ? 1 : 0}</i></button>`;
+  const byteOf = (stem) => { let v = 0; for (let i = 0; i < 8; i++) { const n = byName.get(`${stem}${i}`); if (n !== undefined && L && L[n]) v |= 1 << i; } return v; };
+  const st = state.sbusStats;
+  const lineList = (ls) => ls.map((l) => pill(l.node, ' tc-hi', `${short(l.node)} ${l.dir === 'onto' ? '→SB' : l.dir === 'off' ? 'SB→' : '↔'}`)).join(' ');
+  let head;
+  if (c.id === 'sb') {
+    head = `<span class="tc-bk-name">the special bus</span> · <span class="mono">sb</span> carries <b class="mono">$${hex2(byteOf('sb'))}</b> now · eight pure bus bits, no gate drives them, precharged to vcc under cclk by ${st.precharge} switches`
+      + ` · ${c.lines.length} lines, each with its direction read off the far side of its switches: ${lineList(c.lines)}`;
+  } else if (c.id === 'dasb') {
+    let adj = byteOf('sb');
+    for (const i of [1, 2, 3, 5, 6, 7]) { const n = byName.get(`dasb${i}`); if (n !== undefined && L) adj = L[n] ? adj | (1 << i) : adj & ~(1 << i); }
+    head = `<span class="tc-bk-name">the adjusted special bus</span> · dasb1..3 and dasb5..7, each a gate combining its bit (through an inverter) with the decimal adjust; SBAC opens these onto A with sb0 and sb4 direct, so A would load <b class="mono">$${hex2(adj)}</b> now`
+      + ` · reads ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`;
+  } else if (c.kind === 'lines') {
+    const what = { onto: 'the lines whose far side is driven by a static gate: they bring a value onto the bus', off: 'the lines whose far side is a latch or a precharged bus: they take the value off', link: 'the line whose far side is another bus: it joins the special bus to the data bus' }[c.id];
+    const hi = c.lines.filter((l) => L && L[l.node] > 0);
+    head = `<span class="tc-bk-name">special bus, ${c.label}</span> · ${what}: ${lineList(c.lines)} · ${hi.length} open at this half-cycle${c.id === 'off' ? ' (SBADH is drawn with its own cone)' : ''}`;
+  } else {
+    const open = L && L[c.node] > 0;
+    head = `<span class="tc-bk-name">SBADH</span> · the special bus onto the high address byte, the page fix of a taken branch and the indexed modes · the line reads ${open ? 1 : 0}, so its ${c.switches} switches are ${open ? '<b class="tc-bk-active">open</b>' : 'shut'} now · made from ${c.reads.map((n) => pill(n, ' tc-hi')).join(' ')}`;
   }
   const html = head
     + ` · ${c.nodes.length} node${c.nodes.length === 1 ? '' : 's'}: ${c.nodes.map((n) => pill(n, '')).join(' ')}`
@@ -2448,6 +2570,7 @@ function draw() {
   drawDecimalRegions(el('g', { class: 'tc-decimal-regions', id: 'tc-decimal-regions' }, cam));
   drawDbusRegions(el('g', { class: 'tc-dbus-regions', id: 'tc-dbus-regions' }, cam));
   drawIrpRegions(el('g', { class: 'tc-irp-regions', id: 'tc-irp-regions' }, cam));
+  drawSbusRegions(el('g', { class: 'tc-sbus-regions', id: 'tc-sbus-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
   drawControlRegions(el('g', { class: 'tc-control-regions', id: 'tc-control-regions' }, cam));
   // Drawn last of the containers because they are clicked first: a register's
@@ -2509,6 +2632,7 @@ function draw() {
   else if (state.alu !== null) selectAlu(state.alu);
   else if (state.dbus !== null) selectDbus(state.dbus);
   else if (state.irp !== null) selectIrp(state.irp);
+  else if (state.sbus !== null) selectSbus(state.sbus);
   applyCollapse();
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
@@ -2691,7 +2815,16 @@ function irpCaption() {
   if (!st) return '';
   const g = (id) => (st.groups.find(([x]) => x === id) || [0, 0])[1];
   return `The gold beads are the instruction register and its predecode: the predecode latch (${g('pd')}, three a bit), the load path under fetch (${g('load')}), `
-    + `the register (${g('ir')}, feeding all ${st.terms} decode terms and ${st.line3} of them again through irline3), the predecoder (${g('pre')}), and irline3, clearIR and fetch on their own.`;
+    + `the register (${g('ir')}, feeding all ${st.terms} decode terms and ${st.line3} of them again through irline3), the predecoder (${g('pre')}), and irline3, clearIR and fetch on their own. `
+    + sbusCaption();
+}
+
+function sbusCaption() {
+  const st = state.sbusStats;
+  if (!st) return '';
+  const g = (id) => (st.groups.find(([x]) => x === id) || [0, 0])[1];
+  return `The special bus is its ${g('sb')} bits, precharged by ${st.precharge} switches, with ${st.lines} lines whose direction is read off the far side of their switches `
+    + `(${g('onto')} onto, ${g('off') + 1} off, ${g('link')} joining it to the data bus), the ${g('dasb')} nodes of the decimal-adjusted copy, and SBADH with its cone.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -2936,7 +3069,7 @@ function paint() {
 // share of its members that are high, ringed if any changed, and a bundle
 // flashes if any edge in it fired or toggled.
 
-const KINDS = ['regs', 'flags', 'alat', 'dbus', 'irp', 'control', 'clock', 'intr', 'branch', 'decimal', 'alu', 'incr', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
+const KINDS = ['regs', 'flags', 'alat', 'dbus', 'irp', 'sbus', 'control', 'clock', 'intr', 'branch', 'decimal', 'alu', 'incr', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
 
 /** What a container key stands for: its members, a label and a colour. */
 function container(key) {
@@ -3018,6 +3151,10 @@ function container(key) {
     const c = irpList().find((x) => x.id === id);
     return c ? { kind, id, nodes: c.nodes, label: c.label, css: IRP_COLOR[id] || STAGE_COLOR.any } : null;
   }
+  if (kind === 'sbus') {
+    const c = sbusList().find((x) => x.id === id);
+    return c ? { kind, id, nodes: c.nodes, label: c.label, css: SBUS_COLOR[id] || STAGE_COLOR.any } : null;
+  }
   return null;
 }
 
@@ -3035,6 +3172,7 @@ function selectedKey() {
   if (state.alu !== null) return `alu:${state.alu}`;
   if (state.dbus !== null) return `dbus:${state.dbus}`;
   if (state.irp !== null) return `irp:${state.irp}`;
+  if (state.sbus !== null) return `sbus:${state.sbus}`;
   if (state.chain !== null) return `chain:${state.chain}`;
   if (state.pin !== null) return `pins:${state.pin}`;
   if (state.stem !== null) return `stem:${state.stem}`;
@@ -3065,6 +3203,7 @@ function selectKey(key) {
   else if (c.kind === 'alu') selectAlu(c.id);
   else if (c.kind === 'dbus') selectDbus(c.id);
   else if (c.kind === 'irp') selectIrp(c.id);
+  else if (c.kind === 'sbus') selectSbus(c.id);
 }
 
 function setCollapsed(key, on) {
@@ -3468,6 +3607,12 @@ function setRegsRegions(on) {
   $('tc-reg-regions')?.classList.toggle('off', !on);
 }
 
+function setSbusRegions(on) {
+  state.sbusRegions = on;
+  $('tc-sbus-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-sbus-regions')?.classList.toggle('off', !on);
+}
+
 function setIrpRegions(on) {
   state.irpRegions = on;
   $('tc-irp-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -3735,6 +3880,8 @@ async function boot() {
     if (q.get('databus') === '0') setDbusRegions(false);
     $('tc-irp-btn').addEventListener('click', () => setIrpRegions(!state.irpRegions));
     if (q.get('instreg') === '0') setIrpRegions(false);
+    $('tc-sbus-btn').addEventListener('click', () => setSbusRegions(!state.sbusRegions));
+    if (q.get('specialbus') === '0') setSbusRegions(false);
     $('tc-collapse-blocks').addEventListener('click', () => {
       const all = [...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`));
       collapseAllBlocks(!all);
@@ -3828,6 +3975,8 @@ async function boot() {
       if (vk !== null) { selectDbus(vk === state.dbus ? null : vk); return; }
       const pk = state.irpRegions ? irpAt(pt) : null;
       if (pk !== null) { selectIrp(pk === state.irp ? null : pk); return; }
+      const yk = state.sbusRegions ? sbusAt(pt) : null;
+      if (yk !== null) { selectSbus(yk === state.sbus ? null : yk); return; }
       const kc = state.controlRegions ? controlAt(pt) : null;
       if (kc !== null) { selectControl(kc === state.control ? null : kc); return; }
       const qc = state.clockRegions ? clockAt(pt) : null;
@@ -3929,6 +4078,8 @@ async function boot() {
     if (q.has('dbus')) selectDbus(q.get('dbus'), { fly: true });
     // ?ir=pd (load, ir, pre, irline3, clear, fetch) selects that group of the instruction register.
     if (q.has('ir')) selectIrp(q.get('ir'), { fly: true });
+    // ?sb=sb (dasb, onto, off, link, SBADH) selects that group of the special bus.
+    if (q.has('sb')) selectSbus(q.get('sb'), { fly: true });
     // ?cluster=N selects the cluster holding node N and frames it.
     if (q.has('cluster')) {
       const n = Number(q.get('cluster'));
@@ -3947,5 +4098,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, selectIntr, intrList, intrRegionData, setIntrRegions, selectBranch, branchList, branchRegionData, setBranchRegions, selectDecimal, decimalList, decimalRegionData, setDecimalRegions, selectRegs, regsList, regsRegionData, setRegsRegions, selectIncr, incrList, incrRegionData, setIncrRegions, selectFlag, flagsList, flagsRegionData, setFlagRegions, selectAlat, alatList, alatRegionData, setAlatRegions, selectAlu, aluList, aluRegionData, setAluRegions, selectDbus, dbusList, dbusRegionData, setDbusRegions, selectIrp, irpList, irpRegionData, setIrpRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, intrAt, branchAt, decimalAt, regsAt, incrAt, flagsAt, alatAt, aluAt, dbusAt, irpAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, INTR_R, BRANCH_R, DECIMAL_R, REGS_R, INCR_R, FLAGS_R, ALAT_R, ALU_R, DBUS_R, IRP_R, REG_STEMS, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, selectClock, clockList, clockRegionData, setClockRegions, selectIntr, intrList, intrRegionData, setIntrRegions, selectBranch, branchList, branchRegionData, setBranchRegions, selectDecimal, decimalList, decimalRegionData, setDecimalRegions, selectRegs, regsList, regsRegionData, setRegsRegions, selectIncr, incrList, incrRegionData, setIncrRegions, selectFlag, flagsList, flagsRegionData, setFlagRegions, selectAlat, alatList, alatRegionData, setAlatRegions, selectAlu, aluList, aluRegionData, setAluRegions, selectDbus, dbusList, dbusRegionData, setDbusRegions, selectIrp, irpList, irpRegionData, setIrpRegions, selectSbus, sbusList, sbusRegionData, setSbusRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, clockAt, intrAt, branchAt, decimalAt, regsAt, incrAt, flagsAt, alatAt, aluAt, dbusAt, irpAt, sbusAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, CLOCK_R, INTR_R, BRANCH_R, DECIMAL_R, REGS_R, INCR_R, FLAGS_R, ALAT_R, ALU_R, DBUS_R, IRP_R, SBUS_R, REG_STEMS, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

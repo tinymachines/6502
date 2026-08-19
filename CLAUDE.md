@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, and the instruction register with its predecode, load path and predecoder. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, and the special bus with its lines by measured direction. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1445,6 +1445,34 @@ this is that graph with a clock.
     is open, count the predecoder's high terms. The harness re-derives the
     closures and cones, pins the names, the 122 and the 63, checks the cards
     against its chip, clicks, collapses, deep-links.
+
+- **The special bus is a container as its bits, its adjusted copy, and its
+  thirteen lines by measured direction.** `special-bus.js` (a leaf). `sb0..7`
+  are pure bus bits: no gate drives them, `cclk` precharges them to vcc
+  through eight switches, everything else arrives through a switch. Thirteen
+  lines hold a switch on every bit (`ADDSB7` on bit 7 alone: the shifter),
+  and **each line's direction is read off the far side of its switches**,
+  never off its name: a far node driven by a static gate is a source (the
+  line brings a value ONTO the bus: `YSB XSB SSB ACSB ADDSB06 ADDSB7`), a
+  far latch or precharged bus is a sink (OFF: `SBY SBX SBS SBAC SBADD
+  SBADH`), a far bus is the link (`SBDB`). That the derived directions spell
+  out exactly what a 6502's names claim is the evidence, and the harness
+  pins both the rule's output and the known answer. `dasb` is the six
+  adjusted bits plus the six inverters whose only input is an `sb` bit (12;
+  no bits 0 and 4 because +6 never changes them); `SBADH`, the one line
+  nobody else cones, comes with its cone (7, reading `#op-branch-done` and
+  `#op-T3-branch`: the page fix of a taken branch).
+  - Kind `sbus`, ids `sb dasb onto off link SBADH`; `?sb=dasb`,
+    `?specialbus=0`; priority after the IR. The bus card reads `$` off the
+    bits and shows every line with a direction arrow and its level; the
+    adjusted card computes the byte A would load (sb0, sb4 direct, dasb for
+    the rest). The harness re-derives the directions and the adjusted set,
+    pins them against the known 6502 answer, checks the cards, clicks,
+    collapses, deep-links.
+  - **The click test could not use the bus's own beads**: `sb` is in the
+    default watch, and the watch's rings and polyline are deliberately drawn
+    above every region, so no point over those beads ever has the bead as
+    its topmost element. The adjusted beads are the click.
 
 ### `graph.json`: the chip as one node-and-edge file
 
