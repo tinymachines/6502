@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Seven kinds of container over it, the timing chain derived as the cells that compute each T-state. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1079,6 +1079,48 @@ this is that graph with a clock.
   moved. `pins:input` etc. collapse like everything else (the mean of a set
   around the ring lands mid-die, which is the rule and is stated). Priority:
   control, capsule, stage, cluster, pins, block. `?pin=input` deep-links.
+- **The timing chain is a container as the cells that compute each T-state,
+  derived, and not the block of that name.** The `Timing chain` block is 25
+  names spread into a dozen region pieces, and the chain's own latches are
+  filed in the control pipeline; asked to cluster it, the honest answer was
+  to derive what the chain *is*. `chain-cells.js` (a leaf) takes
+  `schematic.json` and `timing.json`'s `stages` (the six outputs the T-state
+  readout reads, in order) and walks back from each through gate inputs and
+  switch channels (a dynamic latch's data is the far side of its clock switch;
+  cp1 and cclk ride on the edges and are never expanded) inside the timing
+  chain, the control pipeline and the static logic, stopping at a node that
+  reads anything from outside; each node goes to the stage that reaches it
+  soonest, a tie is shared, and so is anything three or more stages read.
+  Measured: **T0 21, T1 3, T2 8, T3 5, T4 5, T5 5, shared 4** (`notRdy0`,
+  `#16`, `#1357`, `#223`), 59 nodes reached, and the reach converges on its
+  own at any depth of 8 or more, so the cap is a runaway guard.
+  - **T2..T5 come out as the same five nodes each, which is the shift
+    register read off the wires**: the output inverter, the NOR behind it,
+    the cclk half-latch the die calls `pipeTnout`, a dynamic node loaded
+    through cp1, and an AOI reading `ready AND pipeT(n-1)out` OR `not-ready
+    AND pipeTnout`: shift if RDY, hold if not. The card reports "reads
+    pipeT2out of T2", so the order is shown rather than asserted. T0 is the
+    largest because it is the state the chain is reset *into*, so its cell is
+    the end-of-instruction logic up to the boundary; T2 takes the SYNC latch
+    it loads from; `#862`, the readout's hidden T1, lands in T2 and its data
+    in T0, which is the rule being a rule and is visible on the cards.
+  - **`schematic.json`'s switches are `[control, a, b]`.** The first
+    measurement read them as `[a, b, control]`, so cp1 appeared as a
+    *channel end* of a hundred latches and the chain walk went nowhere; the
+    tell was a dynamic node with "no switches" whose transistor was plainly
+    in `transdefs.js`. Check the shape against a row you can decode by hand.
+  - **Active low, and the card reads the chip's own readout.** A cell says
+    *active* when `timingStates()` names it; `_tracer-test.html` asserts on
+    its own chip that the readout names a state exactly when that cell's
+    output is low, and that the six cards agree, requiring at least one active
+    so the check cannot pass on all-idle. Beads at `CHAIN_R` (80), long-dashed,
+    in the stage's hue (T1 wears T+, shared grey), named by the output
+    (`clock1`, `t3`); `chain:T3` / `chain:shared` keys, `?chain=T4`,
+    `?cells=0`, priority control, chain, capsule, stage, cluster, pins, block.
+  - **The harness re-derives the rule itself** from the two files and
+    compares node for node, then pins the structure by name (five-node cells
+    holding their own `pipeTnout`, each reading the previous one, `notRdy0`
+    shared), clicks a bead, collapses T3, and deep-links T4.
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same

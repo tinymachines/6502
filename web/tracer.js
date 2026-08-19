@@ -33,6 +33,7 @@ import { centroids } from './die-centroids.js';
 import { blockRegions, loopsToPath, inRegion, gridCells } from './block-regions.js';
 import { SLUGS } from './block-notes.js';
 import { PACKAGE, direction, pinFacts } from './pins.js';
+import { chainCells } from './chain-cells.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -115,6 +116,18 @@ export const CONTROL_R = 150;
 // stage beads; PIN_R is larger than STEM_R so a data or address pad's bead
 // reaches past the capsule drawn over the same pads and can still be clicked.
 export const PIN_R = 300;
+// The timing chain, as the cells that compute each T-state (chain-cells.js):
+// six cells, one per output the simulator's readout reads, from timing.json's
+// `stages`, plus the reset and ready logic they all consult. A cell is the
+// output, the NOR behind it, the cclk half-latch that holds the state, the
+// dynamic node loaded through cp1, and the AOI that reads ready AND the
+// previous stage's latch OR not-ready AND its own: a shift register written
+// out in switches. The cells live in three blocks and are sets rather than
+// places, so they are drawn as beads like the stages, coloured by the stage
+// they are (the decode terms for T3 and the chain's T3 wear one hue), the
+// shared logic grey. Active low on the die: a cell is active when its output
+// is LOW, and the card reads that off the chip's own T-state readout.
+export const CHAIN_R = 80;
 const PIN_COLOR = { input: 'rgb(125 211 252)', output: 'rgb(255 180 110)', bidirectional: 'rgb(150 235 160)', neither: 'rgb(170 175 190)' };
 const PIN_LABEL = { input: 'inputs', output: 'outputs', bidirectional: 'bidirectional', neither: 'neither' };
 export const STAGES = ['T0', 'T2', 'T3', 'T4', 'T5', 'T+', 'any'];
@@ -158,6 +171,11 @@ const state = {
   pins: null,        // [{id: direction, nodes}] the pins by measured direction
   pinRegionData: null,
   pin: null,         // the selected pin group (a direction), or null
+  timing: null,      // timing.json, for the chain's stages
+  chains: null,      // [{id, nodes, ...}] the timing chain's cells and its shared logic
+  chainRegionData: null,
+  chain: null,       // the selected chain cell id (T0..T5, shared), or null
+  chainRegions: true,
   pinRegions: true,
   collapsed: new Set(), // container keys ('block:8', 'stem:sb', 'cluster:12', 'stage:T0', 'control:8') drawn as one node
   supers: [],           // the collapsed containers' single nodes, from applyCollapse()
@@ -542,6 +560,68 @@ function stageAt(pt) {
 }
 
 /** The control lines grouped by the block holding most of what they gate. */
+/** The timing chain's cells, from chain-cells.js, plus the shared logic as a group. */
+function chainList() {
+  if (state.chains) return state.chains;
+  const { sch, pos, timing } = state;
+  const r = chainCells(sch, timing.stages);
+  const out = r.cells.map((c) => ({ id: c.id, name: c.name, node: c.node, nodes: c.nodes.filter((n) => pos.has(n)), reads: c.reads }));
+  out.push({ id: 'shared', name: 'shared', node: null, nodes: r.shared.filter((n) => pos.has(n)), reads: [] });
+  state.chains = out;
+  state.chainStats = { cells: r.cells.length, nodes: r.cells.reduce((a, c) => a + c.nodes.length, 0), shared: r.shared.length, reached: r.reached };
+  return out;
+}
+
+function chainRegionData() {
+  if (state.chainRegionData) return state.chainRegionData;
+  const list = chainList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: CHAIN_R, cell: 25 });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.chainRegionData = out;
+  return out;
+}
+
+/** Presentation: a cell wears its stage's hue; T1 is the state the PLA calls T+. */
+function chainCss(id) {
+  if (id === 'shared') return STAGE_COLOR.any;
+  if (id === 'T1') return STAGE_COLOR['T+'];
+  return STAGE_COLOR[id] || STAGE_COLOR.any;
+}
+
+function drawChainRegions(g) {
+  const data = chainRegionData();
+  for (const c of chainList()) {
+    const r = data.get(c.id);
+    const css = chainCss(c.id);
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-hg' + (state.chain === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-chain': c.id, style: `--bc: ${css}` }, g);
+    path.setAttribute('aria-label', c.id === 'shared' ? `${c.nodes.length} nodes of shared timing chain logic` : `timing chain ${c.id}, ${c.nodes.length} nodes`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y - CHAIN_R - 24, class: 'tc-hg-lb' + (state.chain === c.id ? ' sel' : ''), 'data-chain': c.id, style: `--bc: ${css}` }, g);
+      t.textContent = c.name;
+    }
+  }
+  g.classList.toggle('off', !state.chainRegions);
+}
+
+function chainAt(pt) {
+  const data = chainRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const c of chainList()) {
+    if (!inRegion(pt, data.get(c.id).loops)) continue;
+    for (const n of c.nodes) {
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = c.id; }
+    }
+  }
+  return best;
+}
+
 function controlList() {
   if (state.controls) return state.controls;
   const { sch, pos, blocks } = state;
@@ -771,7 +851,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -780,7 +860,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -789,7 +869,7 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; state.chain = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -798,7 +878,16 @@ function selectCluster(id, { fly = false } = {}) {
 function selectStage(id, { fly = false } = {}) {
   const c = id === null ? null : stageList().find((x) => x.id === id);
   state.stage = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; state.chain = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select one cell of the timing chain, or its shared logic, as a set. */
+function selectChain(id, { fly = false } = {}) {
+  const c = id === null ? null : chainList().find((x) => x.id === id);
+  state.chain = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -807,7 +896,7 @@ function selectStage(id, { fly = false } = {}) {
 function selectControl(id, { fly = false } = {}) {
   const c = id === null ? null : controlList().find((x) => x.id === id);
   state.control = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; state.chain = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -816,7 +905,7 @@ function selectControl(id, { fly = false } = {}) {
 function selectPins(id, { fly = false } = {}) {
   const c = id === null ? null : pinList().find((x) => x.id === id);
   state.pin = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.chain = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -841,6 +930,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-stage-regions .tc-tg, #tc-stage-regions .tc-tg-lb')) {
     p.classList.toggle('sel', state.stage !== null && p.dataset.stage === state.stage);
+  }
+  for (const p of document.querySelectorAll('#tc-chain-regions .tc-hg, #tc-chain-regions .tc-hg-lb')) {
+    p.classList.toggle('sel', state.chain !== null && p.dataset.chain === state.chain);
   }
   for (const p of document.querySelectorAll('#tc-control-regions .tc-kg, #tc-control-regions .tc-kg-lb')) {
     p.classList.toggle('sel', state.control !== null && Number(p.dataset.control) === state.control);
@@ -888,8 +980,9 @@ function paintBlock() {
   if (b === null && state.stage !== null) { paintStageCard(box); return; }
   if (b === null && state.control !== null) { paintControlCard(box); return; }
   if (b === null && state.pin !== null) { paintPinCard(box); return; }
+  if (b === null && state.chain !== null) { paintChainCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -960,6 +1053,33 @@ function paintStageCard(box) {
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
+/**
+ * The card for a cell of the timing chain: whether the state is active now,
+ * read off the chip's own T-state readout (active low on the die), the nodes
+ * in the cell as pills, which other cell it reads, and what moved.
+ */
+function paintChainCard(box) {
+  const c = chainList().find((x) => x.id === state.chain);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  const high = [], moved = [];
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) high.push(n);
+    if (L && P && P[n] !== L[n]) moved.push(n);
+  }
+  const nameOf = (n) => sch.names[n] || `#${n}`;
+  const pills = (ns, cls) => ns.map((n) => `<button type="button" class="tc-node ${L && L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${nameOf(n)}</button>`).join(' ');
+  const shared = c.id === 'shared';
+  const active = !shared && state.regs && state.regs.t.split('+').includes(c.id);
+  const reads = c.reads.map((r) => `${nameOf(r.node)} reads ${nameOf(r.of)} of T${r.cell}`);
+  const html = `<span class="tc-bk-name">timing chain${shared ? ', shared logic' : ` ${c.id}`}</span>`
+    + (shared ? ` · the reset and ready every cell consults` : ` · <span class="mono">${c.name}</span> ${active ? '<b class="tc-bk-active">active</b> (low)' : 'idle (high)'} by the chip\'s readout <span class="mono">${state.regs ? state.regs.t : ''}</span>`)
+    + ` · ${c.nodes.length} node${c.nodes.length === 1 ? '' : 's'}: ${pills(c.nodes, '')}`
+    + (reads.length ? ` · ${reads.join('; ')}` : '')
+    + ` · <span class="tc-bk-moved">${moved.length}</span> moved at this half-cycle · ${high.length} high` + collapseButton();
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
 /** The card for a selected cluster of static gates. */
 function paintClusterCard(box) {
   const c = clusterList().find((x) => x.id === state.cluster);
@@ -1027,6 +1147,7 @@ function draw() {
   drawPinRegions(el('g', { class: 'tc-pin-regions', id: 'tc-pin-regions' }, cam));
   drawClusterRegions(el('g', { class: 'tc-cluster-regions', id: 'tc-cluster-regions' }, cam));
   drawStageRegions(el('g', { class: 'tc-stage-regions', id: 'tc-stage-regions' }, cam));
+  drawChainRegions(el('g', { class: 'tc-chain-regions', id: 'tc-chain-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
   drawControlRegions(el('g', { class: 'tc-control-regions', id: 'tc-control-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
@@ -1068,6 +1189,7 @@ function draw() {
   else if (state.stage !== null) selectStage(state.stage);
   else if (state.control !== null) selectControl(state.control);
   else if (state.pin !== null) selectPins(state.pin);
+  else if (state.chain !== null) selectChain(state.chain);
   applyCollapse();
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
@@ -1137,7 +1259,18 @@ function pinCaption() {
   if (!st) return '';
   return `The halos on the pads are the ${st.pins} pins the die names, grouped by the direction the pinout page `
     + `measures (${pinList().map((c) => `${c.nodes.length} ${PIN_LABEL[c.id]}`).join(', ')}): a pin is an output if a gate `
-    + 'that can pull down drives it, an input if it feeds gates, both if both.';
+    + 'that can pull down drives it, an input if it feeds gates, both if both. '
+    + chainCaption();
+}
+
+function chainCaption() {
+  const st = state.chainStats;
+  if (!st) return '';
+  const list = chainList();
+  return `The long-dashed beads are the timing chain as ${st.cells} cells, one per T-state the readout reads, `
+    + `derived by walking back from each output inside the timing chain, the control pipeline and the static logic `
+    + `and giving each node to the stage that reaches it soonest (${list.filter((c) => c.id !== 'shared').map((c) => `${c.id} ${c.nodes.length}`).join(', ')}), `
+    + `plus the ${st.shared} nodes of reset and ready they all consult, grey. ${st.reached} nodes reached in all.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -1382,7 +1515,7 @@ function paint() {
 // share of its members that are high, ringed if any changed, and a bundle
 // flashes if any edge in it fired or toggled.
 
-const KINDS = ['control', 'stem', 'stage', 'cluster', 'pins', 'block'];
+const KINDS = ['control', 'chain', 'stem', 'stage', 'cluster', 'pins', 'block'];
 
 /** What a container key stands for: its members, a label and a colour. */
 function container(key) {
@@ -1416,12 +1549,17 @@ function container(key) {
     const c = pinList().find((x) => x.id === id);
     return c ? { kind, id, nodes: c.nodes, label: `pins: ${PIN_LABEL[id]}`, css: PIN_COLOR[id] } : null;
   }
+  if (kind === 'chain') {
+    const c = chainList().find((x) => x.id === id);
+    return c ? { kind, id, nodes: c.nodes, label: id === 'shared' ? 'chain: shared' : `chain ${id}`, css: chainCss(id) } : null;
+  }
   return null;
 }
 
 /** The key of whatever is selected, or null. */
 function selectedKey() {
   if (state.control !== null) return `control:${state.control}`;
+  if (state.chain !== null) return `chain:${state.chain}`;
   if (state.pin !== null) return `pins:${state.pin}`;
   if (state.stem !== null) return `stem:${state.stem}`;
   if (state.stage !== null) return `stage:${state.stage}`;
@@ -1439,6 +1577,7 @@ function selectKey(key) {
   else if (c.kind === 'stage') selectStage(c.id);
   else if (c.kind === 'control') selectControl(c.id);
   else if (c.kind === 'pins') selectPins(c.id);
+  else if (c.kind === 'chain') selectChain(c.id);
 }
 
 function setCollapsed(key, on) {
@@ -1836,6 +1975,12 @@ function setControlRegions(on) {
   $('tc-control-regions')?.classList.toggle('off', !on);
 }
 
+function setChainRegions(on) {
+  state.chainRegions = on;
+  $('tc-chain-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-chain-regions')?.classList.toggle('off', !on);
+}
+
 function setStageRegions(on) {
   state.stageRegions = on;
   $('tc-stages-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1900,13 +2045,17 @@ function tick(now) {
 async function boot() {
   const status = $('tc-status');
   try {
-    const [, sch, buf, blocks] = await Promise.all([
+    const [, sch, buf, blocks, timing] = await Promise.all([
       init(),
       fetch('schematic.json').then((r) => { if (!r.ok) throw new Error(`schematic.json: HTTP ${r.status}`); return r.json(); }),
       fetch('layout.bin').then((r) => { if (!r.ok) throw new Error(`layout.bin: HTTP ${r.status}`); return r.arrayBuffer(); }),
       fetch('blocks.json').then((r) => { if (!r.ok) throw new Error(`blocks.json: HTTP ${r.status}`); return r.json(); }),
+      // timing.json for the chain's stages: the six outputs the T-state
+      // readout reads, in order, the same file the timing page reads.
+      fetch('timing.json').then((r) => { if (!r.ok) throw new Error(`timing.json: HTTP ${r.status}`); return r.json(); }),
     ]);
     state.sch = sch;
+    state.timing = timing;
     // Two node-indexed files, compared rather than trusted, as block.html does:
     // blocks.json carries was_seeded in bit 7 and schematic.json does not, so
     // the masked values are what must agree.
@@ -2009,6 +2158,8 @@ async function boot() {
     if (q.get('controls') === '0') setControlRegions(false);
     $('tc-pins-btn').addEventListener('click', () => setPinRegions(!state.pinRegions));
     if (q.get('pins') === '0') setPinRegions(false);
+    $('tc-chain-btn').addEventListener('click', () => setChainRegions(!state.chainRegions));
+    if (q.get('cells') === '0') setChainRegions(false);
     $('tc-collapse-blocks').addEventListener('click', () => {
       const all = [...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`));
       collapseAllBlocks(!all);
@@ -2094,6 +2245,8 @@ async function boot() {
       const pt = atClient(e);
       const kc = state.controlRegions ? controlAt(pt) : null;
       if (kc !== null) { selectControl(kc === state.control ? null : kc); return; }
+      const hc = state.chainRegions ? chainAt(pt) : null;
+      if (hc !== null) { selectChain(hc === state.chain ? null : hc); return; }
       const stem = state.stemRegions ? stemAt(pt) : null;
       if (stem !== null) { selectStem(stem === state.stem ? null : stem); return; }
       const sg = state.stageRegions ? stageAt(pt) : null;
@@ -2154,6 +2307,8 @@ async function boot() {
     }
     // ?stage=T0 selects that stage's decode terms and frames them.
     if (q.has('stage')) selectStage(q.get('stage'), { fly: true });
+    // ?chain=T3 (or shared) selects that cell of the timing chain and frames it.
+    if (q.has('chain')) selectChain(q.get('chain'), { fly: true });
     // ?cluster=N selects the cluster holding node N and frames it.
     if (q.has('cluster')) {
       const n = Number(q.get('cluster'));
@@ -2172,5 +2327,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, selectChain, chainList, chainRegionData, setChainRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, chainAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, CHAIN_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

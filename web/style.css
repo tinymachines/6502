@@ -2929,6 +2929,19 @@ body.no-scroll #view { z-index: 70; }
 .tc-bundle.fired { stroke: var(--hot); }
 .tc-bundle.sel-out { opacity: .12; }
 
+/* The timing chain as cells: long-dashed beads in the stage's hue, named by the output. */
+.tc-chain-regions.off { display: none; }
+.tc-hg { fill: color-mix(in srgb, var(--bc) 18%, transparent); stroke: color-mix(in srgb, var(--bc) 75%, transparent);
+         stroke-width: 6; stroke-dasharray: 28 10; stroke-linecap: round; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-hg:hover { fill: color-mix(in srgb, var(--bc) 30%, transparent); }
+.tc-hg.sel { fill: color-mix(in srgb, var(--bc) 42%, transparent); stroke: var(--bc); stroke-width: 11; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-hg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 20%, transparent); fill: color-mix(in srgb, var(--bc) 5%, transparent); }
+.tc-hg-lb { font: 800 80px var(--font-mono); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 14px; }
+.tc-cam.z-labels .tc-hg-lb { font-size: 46px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-hg-lb:not(.sel) { opacity: .3; }
+#tc-block .tc-bk-active { color: var(--hot); }
+
 /* The pins by measured direction: a halo on each pad, in the direction's hue. */
 .tc-pin-regions.off { display: none; }
 .tc-pg { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);

@@ -205,6 +205,9 @@ def main() -> None:
     # the two cannot put a node in two places. A leaf.
     b.copy_hashed("die-centroids.js")
     b.copy_hashed("block-regions.js")
+    # The timing chain's cells, derived by rule from schematic.json and
+    # timing.json's stages; a leaf the tracer draws and the harness re-derives.
+    b.copy_hashed("chain-cells.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -574,12 +577,13 @@ def main() -> None:
         ("./block-regions.js", "./" + b.ref("block-regions.js")),
         ("./block-notes.js", "./" + b.ref("block-notes.js")),
         ("./pins.js", "./" + b.ref("pins.js")),
+        ("./chain-cells.js", "./" + b.ref("chain-cells.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),
     ]:
         tc = replace_once(tc, f"'{original}'", f"'{resolved}'", where="tracer.js")
-    for original in ["schematic.json", "layout.bin", "blocks.json"]:
+    for original in ["schematic.json", "layout.bin", "blocks.json", "timing.json"]:
         tc = replace_once(tc, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
                           where="tracer.js")
     b.emit("tracer.js", tc.encode())

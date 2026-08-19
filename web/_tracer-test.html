@@ -669,6 +669,128 @@ f.addEventListener('load', async () => {
         T.setPinRegions(true);
       }
 
+      // --- the timing chain as cells ------------------------------------------------
+      // The rule re-derived here from schematic.json and timing.json's stages,
+      // independently of chain-cells.js: walk back from each output through
+      // gate inputs and switch channels inside the chain's three blocks,
+      // stopping at a node that reads anything from outside; owner by fewest
+      // steps, ties shared, plus anything three or more stages read; a cell is
+      // the connected own nodes. Then the structure the rule is supposed to
+      // find, pinned by name: the same five-node cell for T3..T5, the cclk
+      // half-latch in each, each reading the previous stage's latch, and the
+      // ready and reset in the shared set. And the claim the card makes, that a
+      // cell is active when its output is LOW, against the harness chip's own
+      // T-state readout.
+      {
+        const timing = await fetch('timing.json').then((r) => r.json());
+        const homeB = new Set(['Timing chain', 'Control pipeline', 'Static logic'].map((x) => sch.blockNames.indexOf(x)));
+        const blkOf = (n) => sch.nodeBlock[n] & 0x7f;
+        const backH = new Map(); const addH = (a, b) => { if (!backH.has(a)) backH.set(a, new Set()); backH.get(a).add(b); };
+        for (const g of sch.gates) for (const i of new Set(g[3].flat())) addH(g[0], i);
+        for (const [, a, b] of sch.switches) { addH(a, b); addH(b, a); }
+        const nbH = (n) => backH.get(n) || new Set();
+        const outsH = timing.stages.map((x) => x.node);
+        const reachH = outsH.map((o) => {
+          const dd = new Map([[o, 0]]); const q = [o];
+          while (q.length) {
+            const n = q.shift(); const dn = dd.get(n);
+            if (dn >= 40) continue;
+            if (n !== o && [...nbH(n)].some((x) => !rails.has(x) && !homeB.has(blkOf(x)))) continue;
+            for (const x of nbH(n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dn + 1); if (homeB.has(blkOf(x))) q.push(x); }
+          }
+          return dd;
+        });
+        const ownerH = new Map(); const allH = new Set(); reachH.forEach((r) => r.forEach((_, n) => allH.add(n)));
+        for (const n of allH) { const hits = reachH.map((r, i) => [i, r.get(n)]).filter(([, v]) => v !== undefined); const md = Math.min(...hits.map((h) => h[1])); const best = hits.filter((h) => h[1] === md); ownerH.set(n, best.length > 1 ? -1 : best[0][0]); }
+        const readByH = new Map();
+        for (const g of sch.gates) { const o = ownerH.get(g[0]); if (o === undefined || o < 0) continue; for (const i of new Set(g[3].flat())) { if (!readByH.has(i)) readByH.set(i, new Set()); readByH.get(i).add(o); } }
+        for (const [n, ss] of readByH) if (ss.size >= 3 && ownerH.has(n)) ownerH.set(n, -1);
+        const cellsH = outsH.map((o, i) => { const c = new Set([o]); const q = [o]; while (q.length) { const n = q.shift(); for (const x of nbH(n)) if (ownerH.get(x) === i && !c.has(x) && homeB.has(blkOf(x))) { c.add(x); q.push(x); } } return [...c].filter((n) => mine.has(n)).sort((a, b) => a - b); });
+        const sharedH = new Set(); for (const c of cellsH) for (const n of c) for (const x of nbH(n)) if (ownerH.get(x) === -1) sharedH.add(x);
+        const gotChain = T.chainList();
+        const cellById = (id) => gotChain.find((c) => c.id === id);
+        ok('the chain cells are the harness\'s own, node for node, six cells and the shared set',
+           gotChain.length === 7 && cellsH.every((c, i) => cellById(`T${i}`)?.nodes.join() === c.join())
+           && cellById('shared').nodes.join() === [...sharedH].filter((n) => mine.has(n)).sort((a, b) => a - b).join(),
+           gotChain.map((c) => `${c.id}:${c.nodes.length}`).join(' '));
+        const nmOf = (n) => sch.names[n] || `#${n}`;
+        const namesOf = (id) => cellById(id).nodes.map(nmOf);
+        ok('T3, T4 and T5 are the same five-node cell, each holding its own cclk half-latch',
+           ['T3', 'T4', 'T5'].every((id) => cellById(id).nodes.length === 5 && namesOf(id).includes(`pipe${id}out`) && namesOf(id).includes(id.toLowerCase())),
+           ['T3', 'T4', 'T5'].map((id) => `${id}: ${namesOf(id).join(' ')}`).join(' | '));
+        ok('and each reads the previous stage\'s latch, which is the shift register read off the wires',
+           [3, 4, 5].every((i) => cellById(`T${i}`).reads.some((r) => r.cell === i - 1 && sch.names[r.of] === `pipeT${i - 1}out`)),
+           [3, 4, 5].map((i) => cellById(`T${i}`).reads.map((r) => `${nmOf(r.node)}<-${nmOf(r.of)}[T${r.cell}]`).join(',')).join(' | '));
+        ok('the shared set is the ready and the reset', namesOf('shared').includes('notRdy0') && namesOf('shared').length === 4, namesOf('shared').join(' '));
+        ok('T2 holds the SYNC latch it loads from, and T0 is the largest cell', namesOf('T2').includes('pipeT-SYNC') && cellById('T0').nodes.length > cellById('T2').nodes.length, `T2 ${namesOf('T2').join(' ')}; T0 ${cellById('T0').nodes.length}`);
+        // Active low, against the harness chip at the same half-cycle: the
+        // readout names a state exactly when that cell's output is low.
+        runTo(41);
+        const activeH = m.timingStates().split('+');
+        const lowOk = timing.stages.every((x, i) => activeH.includes(`T${i}`) === !m.isNodeHigh(x.node));
+        ok(`the readout (${m.timingStates()}) names a state exactly when its output is low on the harness chip`, lowOk && activeH.length >= 1);
+        const hpath = (id) => d.querySelector(`#tc-chain-regions .tc-hg[data-chain="${id}"]`);
+        let outH = 0; for (const c of gotChain) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(hpath(c.id), p.x, p.y)) outH++; }
+        ok('every cell node lies inside its cell\'s beads', outH === 0, `${outH} outside`);
+        let activeSeen = 0, cardOk = 0;
+        for (const x of timing.stages.map((_, i) => `T${i}`)) {
+          T.selectChain(x);
+          const txt = $('tc-block').textContent;
+          const isActive = activeH.includes(x);
+          if (isActive) activeSeen++;
+          if ((/\bactive\b/.test(txt) && !/idle/.test(txt)) === isActive && txt.includes(`timing chain ${x}`)) cardOk++;
+        }
+        ok(`the card says active for exactly the cells the harness readout names (${activeSeen} active now), idle for the rest`, cardOk === 6 && activeSeen >= 1, `${cardOk} of 6 right`);
+        T.selectChain('T3');
+        const cardH = $('tc-block');
+        ok('the T3 card names its five nodes and what it reads', [...cardH.querySelectorAll('.tc-node')].map((b) => b.textContent).sort().join() === namesOf('T3').sort().join() && cardH.textContent.includes('reads pipeT2out of T2'), cardH.textContent.slice(0, 160));
+        const t3Set = new Set(cellById('T3').nodes);
+        let dimH = 0; for (const c of circles()) if (c.classList.contains('sel-out') === t3Set.has(Number(c.dataset.node))) dimH++;
+        ok('every node but T3\'s steps back', dimH === 0, `${dimH} wrong`);
+        // A click on a bead: a point inside T4's bead and no control outline,
+        // clear of nodes; the cell wins over the block region under it.
+        let hspot = null;
+        for (const n of cellById('T4').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[40, 0], [-40, 0], [0, 40], [0, -40], [30, 30], [-30, -30]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(hpath('T4'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            hspot = { x, y, n }; break;
+          }
+          if (hspot) break;
+        }
+        ok('a point inside T4\'s bead, clear of nodes and control outlines, exists', !!hspot);
+        T.frameNodes([hspot.n]);
+        f.style.height = '2600px'; await sleep(100);
+        const tgH = click2(hspot.x, hspot.y);
+        ok('the click lands on a chain bead', tgH.classList.contains('tc-hg'), tgH.tagName + '.' + tgH.className.baseVal);
+        ok('and selects T4, clearing every other kind', st.chain === 'T4' && st.block === null && st.stem === null && st.stage === null && st.cluster === null, `${st.chain}`);
+        click2(hspot.x, hspot.y);
+        ok('clicking the selected bead again clears it', st.chain === null);
+        T.selectChain('T2'); T.selectStage('T2');
+        ok('a stage clears a chain cell, and a chain cell a stage', st.chain === null && st.stage === 'T2' && (T.selectChain('T2'), st.stage === null && st.chain === 'T2'));
+        T.setCollapsed('chain:T3', true);
+        const snH = d.querySelector('#tc-supers .tc-sn[data-key="chain:T3"]');
+        const t3n = cellById('T3').nodes;
+        let hx = 0, hy = 0; for (const n of t3n) { const p = mine.get(n); hx += p.x; hy += p.y; }
+        ok('T3 collapses into one node at its mean, five members', !!snH && Math.abs(Number(snH.getAttribute('cx')) - hx / t3n.length) < 0.6 && Math.abs(Number(snH.getAttribute('cy')) - hy / t3n.length) < 0.6 && d.querySelector('.tc-sn-lb[data-key="chain:T3"]').textContent === 'chain T3 · 5');
+        T.setCollapsed('chain:T3', false);
+        T.selectChain(null);
+        T.setChainRegions(false);
+        ok('the chain toggle hides the beads', w.getComputedStyle($('tc-chain-regions')).display === 'none' && $('tc-chain-btn').getAttribute('aria-pressed') === 'false');
+        T.setChainRegions(true);
+        // The deep link, on a second page.
+        const f4 = d.createElement('iframe');
+        f4.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f4);
+        await new Promise((res) => { f4.addEventListener('load', res, { once: true }); f4.src = 'tracer.html?program=1&step=41&chain=T4'; });
+        for (let i = 0; i < 200 && !(f4.contentWindow.__tracer && !f4.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?chain=T4 selects the cell on a fresh page', f4.contentWindow.__tracer.state.chain === 'T4' && f4.contentDocument.getElementById('tc-block').textContent.includes('timing chain T4'));
+        f4.remove();
+      }
+
       // --- collapsing a container into one node ------------------------------------
       {
         const aluB = sch.blockNames.indexOf('ALU');

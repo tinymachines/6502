@@ -88,6 +88,7 @@
               <button class="btn" type="button" id="tc-stages-btn" aria-pressed="true">decode stages</button>
               <button class="btn" type="button" id="tc-controls-btn" aria-pressed="true">control lines</button>
               <button class="btn" type="button" id="tc-pins-btn" aria-pressed="true">pins</button>
+              <button class="btn" type="button" id="tc-chain-btn" aria-pressed="true">timing chain</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -111,7 +112,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -282,6 +283,27 @@
         pin of that direction, its level, and which moved. The address and
         data pads are also capsules, and a halo reaches past the capsule on
         purpose so it can still be clicked at the pad's edge.
+        The long-dashed beads are the timing chain as cells, one per T-state
+        the simulator's readout reads, and they were derived rather than
+        taken from the timing-chain block, which is a set of names spread
+        into a dozen pieces with the chain's own latches filed elsewhere. From
+        each of the six outputs the rule walks back through gate inputs and
+        switch channels, inside the timing chain, the control pipeline and the
+        static logic, stopping where a node reads anything from outside; each
+        node goes to the stage that reaches it soonest, a tie is shared, and
+        so is anything three or more stages read, which is the reset and the
+        ready. What comes out for T2 to T5 is the same five nodes each: the
+        output, the NOR behind it, the cclk half-latch the die calls
+        <span class="mono">pipeT3out</span>, a dynamic node loaded through
+        cp1, and the AOI that reads ready and the previous stage's latch, or
+        not-ready and its own: a shift register that holds when RDY is low,
+        written out in switches. T0 is larger because it is the state the
+        chain is reset into, so its cell is the end-of-instruction logic up
+        to the boundary. A cell wears the hue of its stage, so the decode
+        terms for T3 and the chain's T3 match; click one and the card says
+        whether the state is active now by the chip's own readout (the
+        outputs are active low), names the nodes, and says which other cell
+        it reads, which is the chain's order read off the wires.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty
