@@ -87,6 +87,8 @@
               <button class="btn" type="button" id="tc-clusters-btn" aria-pressed="true">gate clusters</button>
               <button class="btn" type="button" id="tc-stages-btn" aria-pressed="true">decode stages</button>
               <button class="btn" type="button" id="tc-controls-btn" aria-pressed="true">control lines</button>
+              <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
+              <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
           </div>
           <div class="field tc-watch-field" id="tc-watch-field">
@@ -269,7 +271,21 @@
         few gate static logic rather than switches and are filed with it. Click
         one to select the set: the card names the lines that are high at this
         half-cycle and counts the switches they are holding open. A control
-        cluster wins over a capsule, being smaller. A convex hull per block was measured first and rejected, because
+        cluster wins over a capsule, being smaller.
+        Any of these can be folded into one node: <em>collapse</em> on its
+        card, or <span class="mono">c</span> with it selected, and
+        <em>collapse the blocks</em> folds all twelve at once. The one liberty
+        taken with position is stated: the node sits at the mean of its
+        members' centroids, which is still a measurement. Its members and the
+        edges among them go; every edge that crossed its boundary is gathered
+        into one line per far end, as wide as the number it stands for. Per
+        half-cycle the node is lit by the share of its members that are high
+        and ringed if any changed, and a bundle flashes if any edge in it
+        fired or toggled. A node in more than one folded container goes to
+        the most specific, so a capsule folded inside a folded block keeps its
+        own node and the block's node stands for the rest. Click a folded node
+        to select what it stands for; <em>expand</em> on the card, or
+        <em>expand all</em>, unfolds. A convex hull per block was measured first and rejected, because
         the datapath blocks are interleaved bit-slices: the address latches'
         hull contained every node of the ALU and the program counter, which is
         the opposite of a container. The unclassified residue and the static

@@ -604,6 +604,94 @@ f.addEventListener('load', async () => {
       T.setControlRegions(false);
       ok('the control toggle hides them', w.getComputedStyle($('tc-control-regions')).display === 'none' && $('tc-controls-btn').getAttribute('aria-pressed') === 'false');
       T.setControlRegions(true);
+
+      // --- collapsing a container into one node ------------------------------------
+      {
+        const aluB = sch.blockNames.indexOf('ALU');
+        const aluDrawn = circles().filter((c) => (sch.nodeBlock[Number(c.dataset.node)] & 0x7f) === aluB).map((c) => Number(c.dataset.node));
+        T.selectBlock(aluB);
+        ok('the block card offers to collapse', $('tc-block').querySelector('.tc-bk-collapse')?.textContent === 'collapse');
+        $('tc-block').querySelector('.tc-bk-collapse').click();
+        ok('the card now offers to expand, and the state records the key', $('tc-block').querySelector('.tc-bk-collapse')?.textContent === 'expand' && st.collapsed.has(`block:${aluB}`));
+        const supers = () => [...d.querySelectorAll('#tc-supers .tc-sn')];
+        ok('one collapsed node appears', supers().length === 1 && supers()[0].dataset.key === `block:${aluB}`);
+        const sn = supers()[0];
+        let mx = 0, my = 0; for (const n of aluDrawn) { const p = mine.get(n); mx += p.x; my += p.y; }
+        mx /= aluDrawn.length; my /= aluDrawn.length;
+        ok('it sits at the mean of its members\' centroids, computed here from layout.bin', Math.abs(Number(sn.getAttribute('cx')) - mx) < 0.6 && Math.abs(Number(sn.getAttribute('cy')) - my) < 0.6, `${sn.getAttribute('cx')},${sn.getAttribute('cy')} vs ${mx.toFixed(1)},${my.toFixed(1)}`);
+        ok('its label carries the block\'s name and the count of drawn members', d.querySelector('#tc-supers .tc-sn-lb').textContent === `ALU · ${aluDrawn.length}`, d.querySelector('#tc-supers .tc-sn-lb').textContent);
+        // By class rather than computed display: this page runs in "only what
+        // moved" mode, which hides most nodes for its own reason.
+        const hiddenOK = circles().every((c) => c.classList.contains('hid') === ((sch.nodeBlock[Number(c.dataset.node)] & 0x7f) === aluB));
+        ok('every member is hidden and no other node is', hiddenOK && w.getComputedStyle(circles().find((c) => c.classList.contains('hid'))).display === 'none');
+        // Edges: internal hidden, crossing hidden and bundled by far end; the
+        // bundles and their counts re-derived here from the harness's edge set.
+        const inA = (n) => (sch.nodeBlock[n] & 0x7f) === aluB;
+        const keepN2 = (n) => mine.has(n) && !rails.has(n);
+        const seenE = new Set(); const hEdges = [];
+        const pushE = (a, b, k) => { if (a === b || !keepN2(a) || !keepN2(b)) return; const key = a < b ? `${a}:${b}:${k}` : `${b}:${a}:${k}`; if (seenE.has(key)) return; seenE.add(key); hEdges.push([a, b, k]); };
+        for (const [out, , , legs] of sch.gates) for (const i of new Set(legs.flat())) pushE(i, out, 'gate');
+        for (const [, a, b] of sch.switches) pushE(a, b, 'switch');
+        const wantBundles = new Map(); let internal = 0, crossing = 0;
+        for (const [a, b] of hEdges) {
+          if (inA(a) && inA(b)) { internal++; continue; }
+          if (!inA(a) && !inA(b)) continue;
+          crossing++;
+          const far = inA(a) ? b : a;
+          wantBundles.set(far, (wantBundles.get(far) || 0) + 1);
+        }
+        const bundles = [...d.querySelectorAll('#tc-bundles .tc-bundle')];
+        const gotCount = bundles.reduce((t, b) => t + Number(b.dataset.count), 0);
+        ok('the bundles are one per far end, and their counts sum to the crossing edges', bundles.length === wantBundles.size && gotCount === crossing, `page ${bundles.length} bundles / ${gotCount} edges, harness ${wantBundles.size} / ${crossing} (${internal} internal)`);
+        const edgeHid = st.edges.filter((e) => e.el.classList.contains('hid') !== (inA(e.a) || inA(e.b))).length;
+        ok('every edge touching the block is hidden and every other is shown', edgeHid === 0, `${edgeHid} wrong`);
+        const highA = aluDrawn.filter((n) => L41[n] > 0).length;
+        const wantOp = (0.25 + 0.75 * highA / aluDrawn.length).toFixed(2);
+        ok('the node is lit by the share of members high on the harness chip', Math.abs(Number(sn.style.fillOpacity) - Number(wantOp)) < 0.006, `${sn.style.fillOpacity} vs ${wantOp} (${highA} of ${aluDrawn.length})`);
+        const anyChg = aluDrawn.some((n) => chgSet.has(n));
+        ok('and ringed exactly when a member changed at this half-cycle', sn.classList.contains('chg') === anyChg, `${anyChg}`);
+        // A bundle flashes when an edge in it fired or toggled.
+        let bundleBad = 0;
+        for (const bd of st.bundles) { const want = bd.edges.some((i) => st.fired.has(i) || st.toggled.has(i)); if (bd.el.classList.contains('fired') !== want) bundleBad++; }
+        ok('a bundle is marked fired exactly when one of its edges did', bundleBad === 0, `${bundleBad} wrong of ${st.bundles.length}`);
+        // Clicking the collapsed node selects its container; clicking again clears.
+        T.selectBlock(null);
+        sn.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+        ok('clicking the collapsed node selects the block it stands for', st.block === aluB);
+        // A capsule collapsed inside the collapsed block keeps its own node.
+        T.setCollapsed('stem:alu', true);
+        const keys = supers().map((x) => x.dataset.key).sort();
+        const aluStemNodes = [...Array(8).keys()].map((b) => byName.get(`alu${b}`)).filter((n) => n !== undefined && aluDrawn.includes(n));
+        ok('a capsule collapsed inside a collapsed block gets its own node, and the block\'s count drops by its bits',
+           keys.join() === [`block:${aluB}`, 'stem:alu'].sort().join()
+           && d.querySelector(`#tc-supers .tc-sn-lb[data-key="block:${aluB}"]`).textContent === `ALU · ${aluDrawn.length - aluStemNodes.length}`
+           && d.querySelector('#tc-supers .tc-sn-lb[data-key="stem:alu"]').textContent === `alu · ${aluStemNodes.length}`,
+           supers().map((x) => d.querySelector(`.tc-sn-lb[data-key="${x.dataset.key}"]`).textContent).join(' | '));
+        T.setCollapsed('stem:alu', false);
+        T.setCollapsed(`block:${aluB}`, false);
+        ok('expanding restores every node and edge', !circles().some((c) => c.classList.contains('hid')) && !st.edges.some((e) => e.el.classList.contains('hid')) && supers().length === 0 && d.querySelectorAll('#tc-bundles .tc-bundle').length === 0);
+        T.collapseAllBlocks(true);
+        ok('collapse the blocks folds all twelve', supers().length === 12 && d.querySelectorAll('#tc-bundles .tc-bundle').length > 12, `${supers().length} nodes, ${d.querySelectorAll('#tc-bundles .tc-bundle').length} bundles`);
+        $('tc-expand-all').click();
+        ok('expand all clears them', supers().length === 0 && st.collapsed.size === 0);
+        T.selectBlock(null);
+        // The key c collapses the selection.
+        T.selectStem('sb');
+        d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+        ok('c collapses the selected capsule', st.collapsed.has('stem:sb') && supers().length === 1);
+        d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'c', bubbles: true }));
+        ok('and c again expands it', !st.collapsed.has('stem:sb') && supers().length === 0);
+        T.selectStem(null);
+        // The deep link.
+        const f3 = d.createElement('iframe');
+        f3.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f3);
+        await new Promise((res) => { f3.addEventListener('load', res, { once: true }); f3.src = 'tracer.html?collapse=blocks,stage:T0&step=4'; });
+        for (let i = 0; i < 200 && !(f3.contentWindow.__tracer && !f3.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        const T3 = f3.contentWindow.__tracer;
+        ok('?collapse=blocks,stage:T0 arrives with thirteen collapsed nodes', T3 && T3.state.supers.length === 13 && T3.state.collapsed.has('stage:T0'), `${T3 && T3.state.supers.length}`);
+        f3.remove();
+      }
       f.style.height = '1000px';
       T.frameNodes([byName.get('abl0')]);  // the view the checks below were written against
     }
@@ -907,6 +995,12 @@ f.addEventListener('load', async () => {
       T.stepOnce();
       const movedAfter = st.changed.filter((n) => (sch.nodeBlock[n] & 0x7f) === b).length;
       ok('a step keeps the block selection and the card\'s moved count follows the chip', st.block === b && $('tc-block').textContent.includes(`${movedAfter} moved`), $('tc-block').textContent);
+      T.setCollapsed(`block:${b}`, true);
+      const snB = d.querySelector(`#tc-supers .tc-sn[data-key="block:${b}"]`);
+      T.stepOnce();
+      const movedNow = st.changed.filter((n) => (sch.nodeBlock[n] & 0x7f) === b).length;
+      ok('a step repaints a collapsed node: its moved count is the chip\'s', Number(snB.dataset.moved) === movedNow && snB.classList.contains('chg') === (movedNow > 0), `${snB.dataset.moved} vs ${movedNow}`);
+      T.setCollapsed(`block:${b}`, false);
       T.selectBlock(null);
     }
   } catch (e) {

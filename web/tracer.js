@@ -144,6 +144,11 @@ const state = {
   controlRegionData: null,
   control: null,     // the selected control cluster id (a block id), or null
   controlRegions: true,
+  collapsed: new Set(), // container keys ('block:8', 'stem:sb', 'cluster:12', 'stage:T0', 'control:8') drawn as one node
+  supers: [],           // the collapsed containers' single nodes, from applyCollapse()
+  nodeOwner: new Map(), // node -> the key of the collapsed container that hides it
+  bundles: [],          // edges between collapsed containers, one line per pair
+  edgeBundle: new Map(),
   watch: DEFAULT_WATCH.slice(),
   program: 0,
   // The drawing.
@@ -751,6 +756,7 @@ function applySelection(isMember, fly) {
     state.labelEl.get(n)?.classList.toggle('sel-out', out);
   }
   for (const e of state.edges) e.el.classList.toggle('sel-out', on && !isMember(e.a) && !isMember(e.b));
+  paintSelectionOnSupers();
   paintBlock();
   paintMoved();
   if (fly && on) {
@@ -765,6 +771,14 @@ function selectBlockBySlug(slug) {
   for (let b = 0; b < sch.blockNames.length; b++) {
     if (SLUGS[sch.blockNames[b]] === slug && regionData().has(b)) return selectBlock(b, { fly: true });
   }
+}
+
+/** The collapse control on every card: one button, reading the current state. */
+function collapseButton() {
+  const key = selectedKey();
+  if (!key) return '';
+  const on = state.collapsed.has(key);
+  return ` · <button type="button" class="tc-bk-collapse" data-key="${key}">${on ? 'expand' : 'collapse'}</button>`;
 }
 
 /** The block card: what is selected, how much of it is drawn and moving. */
@@ -791,7 +805,7 @@ function paintBlock() {
   const html = `<span class="tc-bk-name">${sch.blockNames[b]}</span> · ${r.members} nodes, ${drawn} drawn · `
     + `<span class="tc-bk-moved">${moved}</span> moved at this half-cycle · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}, `
     + `${pct}% of the die`
-    + (slug ? ` · <a href="block?b=${slug}">its page</a>` : '');
+    + (slug ? ` · <a href="block?b=${slug}">its page</a>` : '') + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -810,7 +824,7 @@ function paintControlCard(box) {
   const html = `<span class="tc-bk-name">control lines operating the ${sch.blockNames[c.block]}</span> · ${c.nodes.length} lines`
     + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high, ' tc-hi') : ''}`
     + ` · ${opens} switch${opens === 1 ? '' : 'es'} held open`
-    + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}`;
+    + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}` + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -827,7 +841,7 @@ function paintStageCard(box) {
   const pills = (ns, cls) => ns.map((n) => `<button type="button" class="tc-node ${L[n] ? 'up' : 'down'}${cls}" data-node="${n}">${sch.names[n]}</button>`).join(' ');
   const html = `<span class="tc-bk-name">decode terms, ${c.id === 'any' ? 'any stage' : c.id}</span> · ${c.nodes.length} terms`
     + ` · <span class="tc-bk-moved">${high.length}</span> high at this half-cycle${high.length ? ': ' + pills(high, ' tc-hi') : ''}`
-    + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}`;
+    + ` · ${moved.length} moved${moved.length && moved.length <= 6 ? ': ' + pills(moved, '') : ''}` + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -847,7 +861,7 @@ function paintClusterCard(box) {
     + (named ? ` (${named} named)` : '')
     + ` · ${c.drives ? `drive the <span class="tc-bk-drive">${sch.blockNames[c.drives]}</span>` : 'drive no single block'}`
     + ` · ${high} high · <span class="tc-bk-moved">${moved}</span> moved at this half-cycle`
-    + ` · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}`;
+    + ` · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}` + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -872,7 +886,7 @@ function paintStemCard(box) {
     + ` · <span class="tc-bk-val">$${(L ? v : 0).toString(16).padStart(width, '0').toUpperCase()}</span>`
     + ` · <span class="tc-bk-moved">${moved}</span> bit${moved === 1 ? '' : 's'} moved at this half-cycle`
     + ` · ${r.pieces} piece${r.pieces === 1 ? '' : 's'} · filed under ${blocks.join(', ')}`
-    + ` · <button type="button" class="tc-bk-watch" data-stem="${s.stem}">${watched ? 'unwatch' : 'watch'}</button>`;
+    + ` · <button type="button" class="tc-bk-watch" data-stem="${s.stem}">${watched ? 'unwatch' : 'watch'}</button>` + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -912,9 +926,11 @@ function draw() {
       state.edgesByControl.get(e.control).push(i);
     }
   });
+  el('g', { class: 'tc-bundles', id: 'tc-bundles' }, cam);
   const buses = el('g', { class: 'tc-buses' }, cam);
   const dots = el('g', { class: 'tc-nodes' }, cam);
   const labels = el('g', { class: 'tc-labels' }, cam);
+  el('g', { class: 'tc-supers', id: 'tc-supers' }, cam);
   for (const nd of g.nodes) {
     const p = pos.get(nd);
     const c = el('circle', { cx: p.x, cy: p.y, r: sch.names[nd] ? 26 : 16,
@@ -935,6 +951,7 @@ function draw() {
   else if (state.cluster !== null) selectCluster(state.cluster);
   else if (state.stage !== null) selectStage(state.stage);
   else if (state.control !== null) selectControl(state.control);
+  applyCollapse();
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
   $('tc-caption').textContent =
@@ -1214,6 +1231,7 @@ function paint() {
   state.opened = opened;
   state.closed = closed;
 
+  paintCollapse();
   paintHead();
   paintRegs();
   paintWatch();
@@ -1221,6 +1239,201 @@ function paint() {
   paintMoved();
   paintPicked();
   paintBlock();
+}
+
+// ---------------------------------------------------------------------------
+// Collapsing a container into one node
+// ---------------------------------------------------------------------------
+//
+// Any of the five kinds of container can be folded into a single node, and
+// the one liberty taken with position is stated: the node sits at the mean of
+// its members' centroids, which is still a measurement, not a layout. Its
+// members and the edges among them go; every edge that crossed its boundary
+// is gathered into one line per far end, as wide as the count it stands for.
+// A node in more than one collapsed container goes to the most specific
+// (control, capsule, stage, gate cluster, block), the order a click resolves
+// in, so a capsule collapsed inside a collapsed block keeps its own node and
+// the block's node stands for the rest. Per half-cycle the node is lit by the
+// share of its members that are high, ringed if any changed, and a bundle
+// flashes if any edge in it fired or toggled.
+
+const KINDS = ['control', 'stem', 'stage', 'cluster', 'block'];
+
+/** What a container key stands for: its members, a label and a colour. */
+function container(key) {
+  const { sch } = state;
+  const i = key.indexOf(':');
+  const kind = key.slice(0, i), id = key.slice(i + 1);
+  if (kind === 'block') {
+    const b = Number(id);
+    if (!regionData().has(b)) return null;
+    const nodes = [];
+    for (const n of state.pos.keys()) if ((sch.nodeBlock[n] & 0x7f) === b) nodes.push(n);
+    return { kind, id: b, nodes, label: sch.blockNames[b], css: blockCss(b) };
+  }
+  if (kind === 'stem') {
+    const st = stemList().find((x) => x.stem === id);
+    return st ? { kind, id, nodes: st.nodes.filter((n) => n !== null), label: id, css: 'var(--gold)' } : null;
+  }
+  if (kind === 'cluster') {
+    const c = clusterList().find((x) => x.id === Number(id));
+    return c ? { kind, id: c.id, nodes: c.nodes, label: `${c.nodes.length} gates${c.drives ? ' → ' + sch.blockNames[c.drives] : ''}`, css: blockCss(c.drives || sch.blockNames.length - 1) } : null;
+  }
+  if (kind === 'stage') {
+    const c = stageList().find((x) => x.id === id);
+    return c ? { kind, id, nodes: c.nodes, label: `${id} terms`, css: STAGE_COLOR[id] || STAGE_COLOR.any } : null;
+  }
+  if (kind === 'control') {
+    const c = controlList().find((x) => x.id === Number(id));
+    return c ? { kind, id: c.id, nodes: c.nodes, label: `ctl → ${sch.blockNames[c.block]}`, css: blockCss(c.block) } : null;
+  }
+  return null;
+}
+
+/** The key of whatever is selected, or null. */
+function selectedKey() {
+  if (state.control !== null) return `control:${state.control}`;
+  if (state.stem !== null) return `stem:${state.stem}`;
+  if (state.stage !== null) return `stage:${state.stage}`;
+  if (state.cluster !== null) return `cluster:${state.cluster}`;
+  if (state.block !== null) return `block:${state.block}`;
+  return null;
+}
+
+function selectKey(key) {
+  const c = key && container(key);
+  if (!c) return;
+  if (c.kind === 'block') selectBlock(c.id);
+  else if (c.kind === 'stem') selectStem(c.id);
+  else if (c.kind === 'cluster') selectCluster(c.id);
+  else if (c.kind === 'stage') selectStage(c.id);
+  else if (c.kind === 'control') selectControl(c.id);
+}
+
+function setCollapsed(key, on) {
+  if (!container(key)) return;
+  if (on) state.collapsed.add(key); else state.collapsed.delete(key);
+  applyCollapse();
+  paintCollapse();
+  paintBlock();
+}
+
+/** Every functional block at once, or none. */
+function collapseAllBlocks(on) {
+  for (const b of regionData().keys()) {
+    if (on) state.collapsed.add(`block:${b}`); else state.collapsed.delete(`block:${b}`);
+  }
+  applyCollapse();
+  paintCollapse();
+  paintBlock();
+}
+
+/** Rebuild the collapsed view from `state.collapsed`: owners, supers, bundles. */
+function applyCollapse() {
+  const supersG = $('tc-supers'), bundlesG = $('tc-bundles');
+  if (!supersG) return;
+  for (const c of state.nodeEl.values()) c.classList.remove('hid');
+  for (const t of state.labelEl.values()) t.classList.remove('hid');
+  for (const e of state.edges) e.el.classList.remove('hid');
+  supersG.replaceChildren();
+  bundlesG.replaceChildren();
+  state.supers = [];
+  state.nodeOwner = new Map();
+  state.bundles = [];
+  state.edgeBundle = new Map();
+  if (!state.collapsed.size) return;
+
+  const keys = [...state.collapsed].filter((k) => container(k))
+    .sort((a, b) => KINDS.indexOf(a.split(':')[0]) - KINDS.indexOf(b.split(':')[0]));
+  const owner = state.nodeOwner;
+  for (const key of keys) {
+    const c = container(key);
+    const nodes = c.nodes.filter((n) => state.nodeEl.has(n) && !owner.has(n));
+    if (!nodes.length) continue;
+    let sx = 0, sy = 0;
+    for (const n of nodes) { owner.set(n, key); const p = state.pos.get(n); sx += p.x; sy += p.y; }
+    const sup = { key, kind: c.kind, nodes, x: sx / nodes.length, y: sy / nodes.length,
+                  r: 40 + 9 * Math.sqrt(nodes.length), label: c.label, css: c.css };
+    state.supers.push(sup);
+  }
+  for (const sup of state.supers) {
+    for (const n of sup.nodes) {
+      state.nodeEl.get(n).classList.add('hid');
+      state.labelEl.get(n)?.classList.add('hid');
+    }
+  }
+  const superOf = new Map(state.supers.map((s) => [s.key, s]));
+  const bundles = new Map();
+  const endOf = (n) => { const k = owner.get(n); return k ? `s:${k}` : `n:${n}`; };
+  const posOf = (end) => end.startsWith('s:') ? superOf.get(end.slice(2)) : state.pos.get(Number(end.slice(2)));
+  state.edges.forEach((e, i) => {
+    const oa = owner.get(e.a), ob = owner.get(e.b);
+    if (!oa && !ob) return;
+    e.el.classList.add('hid');
+    if (oa && oa === ob) return;
+    const A = endOf(e.a), B = endOf(e.b);
+    const key = A < B ? `${A}|${B}` : `${B}|${A}`;
+    if (!bundles.has(key)) bundles.set(key, { key, a: A < B ? A : B, b: A < B ? B : A, edges: [], switches: 0 });
+    const bd = bundles.get(key);
+    bd.edges.push(i);
+    if (e.kind === 'switch') bd.switches++;
+    state.edgeBundle.set(i, bd);
+  });
+  for (const bd of bundles.values()) {
+    const p = posOf(bd.a), q = posOf(bd.b);
+    bd.el = el('line', { x1: p.x, y1: p.y, x2: q.x, y2: q.y,
+                         class: 'tc-bundle' + (bd.switches * 2 > bd.edges.length ? ' sw' : ''),
+                         'stroke-width': (3 + 2.2 * Math.sqrt(bd.edges.length)).toFixed(1),
+                         'data-count': bd.edges.length }, bundlesG);
+    const t = el('title', {}, bd.el);
+    t.textContent = `${bd.edges.length} edge${bd.edges.length === 1 ? '' : 's'}, ${bd.switches} of them switches`;
+    state.bundles.push(bd);
+  }
+  for (const sup of state.supers) {
+    sup.el = el('circle', { cx: sup.x, cy: sup.y, r: sup.r, class: 'tc-sn', 'data-key': sup.key, style: `--bc: ${sup.css}` }, supersG);
+    sup.el.style.fill = sup.css;
+    sup.lbl = el('text', { x: sup.x, y: sup.y + sup.r + 56, class: 'tc-sn-lb', 'data-key': sup.key, style: `--bc: ${sup.css}` }, supersG);
+    sup.lbl.textContent = `${sup.label} · ${sup.nodes.length}`;
+  }
+  paintSelectionOnSupers();
+}
+
+/** Per half-cycle: lit by the share of members high, ringed if any changed. */
+function paintCollapse() {
+  if (!state.supers.length) return;
+  const L = state.levels;
+  if (!L) return;
+  const chg = new Set(state.changed);
+  for (const sup of state.supers) {
+    let high = 0, moved = 0;
+    for (const n of sup.nodes) { if (L[n] > 0) high++; if (chg.has(n)) moved++; }
+    sup.el.style.fillOpacity = (0.25 + 0.75 * high / sup.nodes.length).toFixed(2);
+    sup.el.classList.toggle('chg', moved > 0);
+    sup.el.dataset.moved = moved;
+    sup.el.dataset.high = high;
+  }
+  for (const bd of state.bundles) {
+    let fired = false;
+    for (const i of bd.edges) if (state.fired.has(i) || state.toggled.has(i)) { fired = true; break; }
+    bd.el.classList.toggle('fired', fired);
+  }
+}
+
+/** A collapsed node steps back with the rest when a selection excludes all its members. */
+function paintSelectionOnSupers() {
+  const key = selectedKey();
+  const sel = key ? container(key) : null;
+  const members = sel ? new Set(sel.nodes) : null;
+  for (const sup of state.supers) {
+    const out = !!members && !sup.nodes.some((n) => members.has(n));
+    sup.el.classList.toggle('sel-out', out);
+    sup.lbl.classList.toggle('sel-out', out);
+    sup.el.classList.toggle('sel', !!key && sup.key === key);
+  }
+  for (const bd of state.bundles) {
+    const out = !!members && !bd.edges.some((i) => members.has(state.edges[i].a) || members.has(state.edges[i].b));
+    bd.el.classList.toggle('sel-out', out);
+  }
 }
 
 function paintHead() {
@@ -1657,9 +1870,17 @@ async function boot() {
     if (q.get('terms') === '0') setStageRegions(false);
     $('tc-controls-btn').addEventListener('click', () => setControlRegions(!state.controlRegions));
     if (q.get('controls') === '0') setControlRegions(false);
+    $('tc-collapse-blocks').addEventListener('click', () => {
+      const all = [...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`));
+      collapseAllBlocks(!all);
+      $('tc-collapse-blocks').textContent = all ? 'collapse the blocks' : 'expand the blocks';
+    });
+    $('tc-expand-all').addEventListener('click', () => { state.collapsed.clear(); applyCollapse(); paintCollapse(); paintBlock(); $('tc-collapse-blocks').textContent = 'collapse the blocks'; });
     $('tc-block').addEventListener('click', (e) => {
       const pill = e.target.closest('.tc-node[data-node]');
       if (pill) { pick(Number(pill.dataset.node), true); return; }
+      const cb = e.target.closest('.tc-bk-collapse');
+      if (cb) { setCollapsed(cb.dataset.key, !state.collapsed.has(cb.dataset.key)); return; }
       const b = e.target.closest('.tc-bk-watch');
       if (!b) return;
       const stem = b.dataset.stem;
@@ -1721,6 +1942,12 @@ async function boot() {
       if (state.dragged) return;
       const t = e.target.closest('.tc-n');
       if (t) { pick(Number(t.dataset.node)); return; }
+      const sn = e.target.closest('.tc-sn');
+      if (sn) {
+        const key = sn.dataset.key;
+        if (selectedKey() === key) selectBlock(null); else selectKey(key);
+        return;
+      }
       pick(null);
       // A click on the regions selects the block with the nearest member at
       // that point (they overlap); on the selected block it clears; off every
@@ -1744,6 +1971,7 @@ async function boot() {
       if (e.key === 'ArrowRight') { e.preventDefault(); stepChip(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); setRunning(false); stepBack(); }
       else if (e.key === ' ') { e.preventDefault(); toggleRunning(); }
+      else if ((e.key === 'c' || e.key === 'C') && selectedKey()) { e.preventDefault(); const k = selectedKey(); setCollapsed(k, !state.collapsed.has(k)); }
       else if (!state.solo) return;
       else if (e.key === '0') { e.preventDefault(); setView(state.home.slice()); }
       else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); pal.setDrawer(!pal.drawer); }
@@ -1765,6 +1993,16 @@ async function boot() {
     if (q.has('block')) selectBlockBySlug(q.get('block'));
     // ?bus=STEM selects a bus or latch and frames it.
     if (q.has('bus')) selectStem(q.get('bus').toLowerCase(), { fly: true });
+    // ?collapse=KEY,KEY folds containers on arrival: block:8, stem:sb,
+    // cluster:12, stage:T0, control:8, or the word blocks for all twelve.
+    if (q.has('collapse')) {
+      for (const k of q.get('collapse').split(',')) {
+        if (k === 'blocks') for (const b of regionData().keys()) state.collapsed.add(`block:${b}`);
+        else if (container(k)) state.collapsed.add(k);
+      }
+      applyCollapse();
+      if ([...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`))) $('tc-collapse-blocks').textContent = 'expand the blocks';
+    }
     // ?control=SLUG selects the control lines operating that block and frames them.
     if (q.has('control')) {
       const slug = q.get('control');
@@ -1791,5 +2029,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

@@ -1031,6 +1031,27 @@ this is that graph with a clock.
   - **High-list pills carry `tc-hi`** so a harness can tell them from the
     moved-list pills, which also carry `up`; selecting `.tc-node.up` found
     each high-and-moved line twice.
+- **Any container collapses into one node, and the one liberty with position
+  is stated.** `state.collapsed` is a set of keys (`block:8`, `stem:sb`,
+  `cluster:12`, `stage:T0`, `control:8`); `applyCollapse()` hides the members
+  and the edges among them, puts one node at the **mean of the members'
+  centroids** (still a measurement, the only place this page averages
+  positions), and gathers every boundary-crossing edge into one `.tc-bundle`
+  per far end, as wide as its count. `paintCollapse()` lights the node by the
+  share of members high, rings it if any changed, and flashes a bundle whose
+  edge fired or toggled. A node in more than one collapsed container goes to
+  the most specific (`KINDS`, the click order), so a capsule folded inside a
+  folded block keeps its own node and the block's stands for the rest; the
+  harness pins `ALU · 128` + `alu · 8`. Every card carries `collapse`/`expand`
+  (`collapseButton()` reads `selectedKey()`), `c` toggles the selection,
+  "collapse the blocks" and "expand all" are in the view controls, clicking a
+  collapsed node selects what it stands for, and `?collapse=blocks,stage:T0`
+  deep-links. Elements are hidden by class (`hid`) and kept, so expanding is
+  a class removal and a rebuild of supers and bundles, not a redraw.
+  - **The harness checks by class, not computed display**, because its page
+    runs with `only=1`, which hides most nodes for its own reason; a first
+    version read `display: none` and reported 2174 edges wrong. And a
+    `fillOpacity` written as `0.60` reads back as `0.6`: compare numbers.
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same
