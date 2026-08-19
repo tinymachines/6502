@@ -2474,6 +2474,22 @@ union, and that is what the walk reads.
   than assuming one: the program counter has none, and a rule asserted where it
   cannot fire is a test that passes by not running.
 
+#### The block circuit is live, and the header transport drives it
+
+The block page runs the chosen program on its one machine and the circuit
+drawing is painted from it: a signal that is high right now is lit, a switch
+whose control line is high is drawn open, with the workbench's own classes and
+stylesheet because the drawing comes from the same `sch-draw.js`. Wired like
+every other chip page: `setupChipNav` with step/back/reset, `setupProgramNav`
+with an in-place reload, `halfCyclesFor` pacing the frame loop, and the reset
+vector set, because two pages of this site once ran a BRK loop against
+themselves for want of it. A discrete step repaints on the action, not the
+next frame (the fifth appearance of that bug class, avoided rather than hit).
+**The directory (`block` with no `?b=`) draws no circuit and keeps the
+transport slot empty**, the way the measurement pages do; `_chipnav-test.html`
+asserts both directions, and `_block-test.html` asserts the drawing arrives
+lit and that twelve half-cycles of header stepping change what is lit.
+
 #### `block-cone.js`: where a block stops, computed once
 
 The boundary and the block's own drawing moved out of `block.js` when the

@@ -330,6 +330,35 @@ async function ready(d, sel = '#bk-main') {
          !other.classList.contains('shown') && portsDrawn() === 0, other.className);
     }
 
+    // --- the running chip ----------------------------------------------------
+    //
+    // The block page runs the chosen program on a machine of its own, and the
+    // circuit is painted from it: hot signals lit, open switches drawn open.
+    // Asserted through DISCRETE steps on the header transport, because
+    // animation frames are throttled to nearly zero in an iframe and the
+    // repaint has to land on the action rather than on the next frame.
+    ok('a block page carries the header transport',
+       !!d.querySelector('.nav-transport'), 'no .nav-transport');
+    const hotSet = () => new Set([...d.querySelectorAll('.sch-node.hot')]
+      .map((g) => g.dataset.node));
+    ok('the drawing arrives lit from the powered chip', hotSet().size > 0,
+       `${hotSet().size} hot of ${d.querySelectorAll('.sch-node').length}`);
+    const stepBtn = [...d.querySelectorAll('.nav-tbtn')]
+      .find((b) => b.title === 'One half-cycle');
+    ok('the header has a step button', !!stepBtn, 'no step button');
+    {
+      const before = hotSet();
+      let moved = false;
+      // The program counter moves within a few half-cycles of anywhere.
+      for (let i = 0; i < 12 && !moved; i++) {
+        stepBtn.click();
+        const now = hotSet();
+        moved = now.size !== before.size || [...now].some((n) => !before.has(n));
+      }
+      ok('a discrete step repaints the drawing immediately', moved,
+         'twelve half-cycles changed nothing drawn');
+    }
+
     // --- the directory -------------------------------------------------------
     await load('block');
     d = f.contentDocument;

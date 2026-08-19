@@ -19,6 +19,9 @@ import { assemble } from './asm.js';
 import { createDraw, el } from './sch-draw.js';
 import { blockCss } from './block-palette.js';
 import { setupProgramNav } from './program-nav.js';
+import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
+import { setupChipNav } from './chip-nav.js';
+import { halfCyclesFor } from './chip-controls.js';
 import { SLUGS, NOTES, DOES } from './block-notes.js';
 import { createBlockView } from './block-cone.js';
 
@@ -350,6 +353,39 @@ function drawCircuit() {
   // The workbench link carries the switched-on ports, so it has to be rebuilt
   // whenever they change rather than only when the block does.
   paintRoot();
+  // A rebuilt drawing arrives already lit, not waiting for the next frame.
+  paint();
+}
+
+/**
+ * Colour the drawing from the running chip: a signal that is high right now is
+ * lit, a switch whose control is high is drawn open. The same rule, the same
+ * classes and the same stylesheet as the workbench, because the drawing comes
+ * from the same sch-draw.js and two pages lighting the same circuit two ways
+ * would leave a reader no way to tell which was lying.
+ *
+ * Called from the frame loop while running, and directly after any discrete
+ * step: a step that waits for the next animation frame is a real
+ * responsiveness bug, and it is invisible until the page is driven somewhere
+ * frames are throttled, which is what an iframe does.
+ */
+function paint() {
+  if (state.id == null || !state.machine) return;
+  const levels = state.machine.nodeLevels();
+  const svg = $('bk-svg');
+  for (const g of svg.querySelectorAll('.sch-node')) {
+    g.classList.toggle('hot', levels[Number(g.dataset.node)] > 0);
+  }
+  for (const g of svg.querySelectorAll('.sch-switch')) {
+    g.classList.toggle('open', levels[Number(g.dataset.control)] > 0);
+  }
+}
+
+function tick(now = 0) {
+  const n = halfCyclesFor(now);
+  for (let i = 0; i < n; i++) state.machine.halfStep();
+  if (n) paint();
+  requestAnimationFrame(tick);
 }
 
 function setRoot(node) {
@@ -816,6 +852,35 @@ async function boot() {
       });
     }
 
+    // A block page runs the chosen program on its one machine, so the circuit
+    // below is the chip working rather than a diagram of it. The reset vector
+    // is set because two pages of this site once ran a BRK loop against
+    // themselves for want of it. The directory draws no circuit, so it keeps
+    // the picker that only records the choice and leaves the transport slot
+    // empty, the way the measurement pages do.
+    if (state.id != null) {
+      const m = state.machine;
+      const loadProgram = (i) => {
+        state.program = i;
+        m.load(LOAD_ADDR, new Uint8Array(PROGRAMS[i].bytes));
+        m.setResetVector(LOAD_ADDR);
+        m.powerCycle();
+      };
+      loadProgram(selectedProgram(location.search));
+      setupProgramNav({
+        onChange: (i) => { setSelectedProgram(i); loadProgram(i); paint(); },
+      });
+      setupChipNav({
+        step: () => { m.halfStep(); paint(); },
+        back: () => { m.stepBack(); paint(); },
+        reset: () => { m.powerCycle(); paint(); },
+        halfCycle: () => m.halfCycle(),
+      });
+      requestAnimationFrame(tick);
+    } else {
+      setupProgramNav();
+    }
+
     setupControls();
     if (state.id == null) renderDirectory(); else renderBlock();
 
@@ -827,5 +892,4 @@ async function boot() {
   }
 }
 
-setupProgramNav();
 boot();

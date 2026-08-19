@@ -494,6 +494,9 @@ def main() -> None:
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./block-notes.js", "./" + b.ref("block-notes.js")),
         ("./block-cone.js", "./" + b.ref("block-cone.js")),
+        ("./programs.js", "./" + b.ref("programs.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
     ]:
         bk = replace_once(bk, f"'{original}'", f"'{resolved}'", where="block.js")
     for original in ["schematic.json", "blocks.json"]:
