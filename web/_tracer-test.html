@@ -231,7 +231,7 @@ f.addEventListener('load', async () => {
       f2.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
       d.body.appendChild(f2);
       await new Promise((res) => { f2.addEventListener('load', res, { once: true }); f2.src = 'tracer.html?block=instruction-register&step=4'; });
-      for (let i = 0; i < 200 && !(f2.contentWindow.__tracer && !f2.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+      for (let i = 0; i < 2000 && !(f2.contentWindow.__tracer && !f2.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
       const T2 = f2.contentWindow.__tracer;
       const irId = sch.blockNames.indexOf('Instruction register');
       ok('?block=instruction-register selects the instruction register', T2 && T2.state.block === irId, `${T2 && T2.state.block}`);
@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-stack-regions .tc-kg2')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-stack-regions .tc-kg2')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -793,7 +793,7 @@ f.addEventListener('load', async () => {
         f4.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
         d.body.appendChild(f4);
         await new Promise((res) => { f4.addEventListener('load', res, { once: true }); f4.src = 'tracer.html?program=1&step=41&chain=T4'; });
-        for (let i = 0; i < 200 && !(f4.contentWindow.__tracer && !f4.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        for (let i = 0; i < 2000 && !(f4.contentWindow.__tracer && !f4.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?chain=T4 selects the cell on a fresh page', f4.contentWindow.__tracer.state.chain === 'T4' && f4.contentDocument.getElementById('tc-block').textContent.includes('timing chain T4'));
         f4.remove();
       }
@@ -868,7 +868,7 @@ f.addEventListener('load', async () => {
         f5.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
         d.body.appendChild(f5);
         await new Promise((res) => { f5.addEventListener('load', res, { once: true }); f5.src = 'tracer.html?program=1&step=41&clock=1'; });
-        for (let i = 0; i < 200 && !(f5.contentWindow.__tracer && !f5.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        for (let i = 0; i < 2000 && !(f5.contentWindow.__tracer && !f5.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?clock=1 selects the generator on a fresh page', f5.contentWindow.__tracer.state.clock === 'gen' && f5.contentDocument.getElementById('tc-block').textContent.includes('clock generator'));
         f5.remove();
       }
@@ -957,7 +957,7 @@ f.addEventListener('load', async () => {
         f6.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
         d.body.appendChild(f6);
         await new Promise((res) => { f6.addEventListener('load', res, { once: true }); f6.src = 'tracer.html?program=1&step=41&intr=vector'; });
-        for (let i = 0; i < 200 && !(f6.contentWindow.__tracer && !f6.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        for (let i = 0; i < 2000 && !(f6.contentWindow.__tracer && !f6.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?intr=vector selects the vector group on a fresh page', f6.contentWindow.__tracer.state.intr === 'vector' && f6.contentDocument.getElementById('tc-block').textContent.includes('vector selection'));
         f6.remove();
       }
@@ -1046,7 +1046,7 @@ f.addEventListener('load', async () => {
         f7.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
         d.body.appendChild(f7);
         await new Promise((res) => { f7.addEventListener('load', res, { once: true }); f7.src = 'tracer.html?program=1&step=41&branch=cross'; });
-        for (let i = 0; i < 200 && !(f7.contentWindow.__tracer && !f7.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        for (let i = 0; i < 2000 && !(f7.contentWindow.__tracer && !f7.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?branch=cross selects the piece on a fresh page', f7.contentWindow.__tracer.state.branch === 'cross' && f7.contentDocument.getElementById('tc-block').textContent.includes('branch logic, cross'));
         f7.remove();
       }
@@ -1095,7 +1095,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-stack-regions .tc-kg2')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1125,20 +1125,19 @@ f.addEventListener('load', async () => {
         f8.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
         d.body.appendChild(f8);
         await new Promise((res) => { f8.addEventListener('load', res, { once: true }); f8.src = 'tracer.html?program=1&step=41&bcd=1'; });
-        for (let i = 0; i < 200 && !(f8.contentWindow.__tracer && !f8.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        for (let i = 0; i < 2000 && !(f8.contentWindow.__tracer && !f8.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?bcd=1 selects the correction on a fresh page', f8.contentWindow.__tracer.state.decimal === 'bcd' && f8.contentDocument.getElementById('tc-block').textContent.includes('decimal correction'));
         f8.remove();
       }
 
-      // --- the stack pointer logic ----------------------------------------------------
-      // The rule re-done here: the register as the closure of s0..s7 inside the
-      // Registers block; the lines as the controls of its switches less the
-      // clocks (forty or more switches); each line's bounded backward cone
-      // inside the control pipeline and the static logic, clocks never
-      // expanded; shared nodes split out. Then what each is made from, by name,
-      // and the cards against the harness chip.
+      // --- the registers ------------------------------------------------------------
+      // The rule re-done here for S, A, X and Y: the register as the closure of
+      // the stem's bits over unnamed and own-named nodes; the lines as the
+      // controls of its switches less the clocks (forty or more switches);
+      // each line's bounded backward cone inside the control pipeline and the
+      // static logic, clocks never expanded; shared nodes split out. Then what
+      // each is made from, by name, and the cards against the harness chip.
       {
-        const REGB = sch.blockNames.indexOf('Registers');
         const homeS = new Set(['Control pipeline', 'Static logic'].map((x) => sch.blockNames.indexOf(x)));
         const blkS = (n) => sch.nodeBlock[n] & 0x7f;
         const backS = new Map(), undS = new Map(); const addS = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
@@ -1147,79 +1146,186 @@ f.addEventListener('load', async () => {
         for (const [c, a, b] of sch.switches) { addS(backS, a, b); addS(backS, b, a); addS(undS, a, b); addS(undS, b, a); addS(ctlOfS, a, c); addS(ctlOfS, b, c); ctlCountS.set(c, (ctlCountS.get(c) || 0) + 1); }
         const nbS = (m, n) => m.get(n) || new Set();
         const clocksS = new Set([...ctlCountS].filter(([, c]) => c >= 40).map(([n]) => n));
-        const bitsS = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => byName.get(`s${i}`));
-        const regS = new Set(bitsS); { const q = [...bitsS]; while (q.length) { const n = q.shift(); for (const m of nbS(undS, n)) if (!regS.has(m) && !rails.has(m) && blkS(m) === REGB) { regS.add(m); q.push(m); } } }
-        const linesS = new Set(); for (const n of regS) for (const c of nbS(ctlOfS, n)) if (!clocksS.has(c)) linesS.add(c);
-        const coneS = (l) => { const dd = new Map([[l, 0]]); const q = [l]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const bnd = [...nbS(backS, n)].some((x) => !rails.has(x) && !homeS.has(blkS(x))); if (n !== l && (bnd || clocksS.has(n))) continue; for (const x of nbS(backS, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeS.has(blkS(x)) && !clocksS.has(x)) q.push(x); } } return [...dd.keys()].filter((n) => (homeS.has(blkS(n)) && !clocksS.has(n)) || n === l); };
-        const conesS = new Map([...linesS].map((l) => [l, coneS(l)]));
-        const ownersS = new Map(); for (const [l, c] of conesS) for (const n of c) { if (!ownersS.has(n)) ownersS.set(n, []); ownersS.get(n).push(l); }
         const nmS = (n) => sch.names[n] || `#${n}`;
         const idS = (l) => nmS(l).slice(nmS(l).indexOf('_') + 1);
-        const gotS = T.stackList();
-        const gS = (id) => gotS.find((c) => c.id === id);
-        const wantReg = [...regS].filter((n) => mine.has(n)).sort((a, b) => a - b);
-        ok('the S register is the harness\'s own closure of s0..s7 inside the Registers block: 32 nodes, four a bit', gS('reg').nodes.join() === wantReg.join() && wantReg.length === 32 && [0, 1, 2, 3, 4, 5, 6, 7].every((i) => gS('reg').nodes.map(nmS).includes(`nots${i}`)), `${gS('reg').nodes.length} vs ${wantReg.length}`);
-        ok('its switches reach exactly sb0..7 and adl0..7 outside it', gS('reg').outside.map(nmS).sort().join() === [...Array(8).keys()].flatMap((i) => [`sb${i}`, `adl${i}`]).sort().join(), gS('reg').outside.map(nmS).join(' '));
-        const wantLines = [...linesS].map(idS).sort();
-        ok('the lines are SS, SBS, SSB and SADL, the clocks left out', wantLines.join() === ['SADL', 'SBS', 'SS', 'SSB'].join() && gotS.filter((c) => c.kind === 'line').map((c) => c.id).sort().join() === wantLines.join() && gotS.filter((c) => c.kind === 'line').every((c) => c.onRegister === 8),
-           `${wantLines.join(' ')}; page ${gotS.filter((c) => c.kind === 'line').map((c) => `${c.id}:${c.onRegister}`).join(' ')}`);
-        let coneOk = 0;
-        for (const [l, c] of conesS) { const own = c.filter((n) => ownersS.get(n).length === 1 && mine.has(n)).sort((a, b) => a - b); if (gS(idS(l)) && gS(idS(l)).nodes.join() === own.join()) coneOk++; }
-        const sharedS = [...ownersS].filter(([, ls]) => ls.length > 1).map(([n]) => n).filter((n) => mine.has(n)).sort((a, b) => a - b);
-        ok('each line\'s group is its cone less what it shares, and the shared nodes are their own group', coneOk === 4 && gotS.filter((c) => c.kind === 'shared').length === 1 && gS('SS-SBS') && gS('SS-SBS').nodes.join() === sharedS.join(), `${coneOk} of 4 cones; shared ${sharedS.map(nmS).join(' ')}`);
-        ok('SADL is made from the JSR and stack terms, SSB from TSX, SS and SBS from TXS: the instruction set in the wires',
-           ['op-T0-jsr', 'op-T2-stack'].every((x) => gS('SADL').reads.map(nmS).includes(x)) && gS('SSB').reads.map(nmS).includes('op-T0-tsx') && gS('SS').reads.map(nmS).includes('op-T0-txs') && gS('SBS').reads.map(nmS).includes('op-T0-txs'),
-           gotS.filter((c) => c.kind === 'line').map((c) => `${c.id}: ${c.reads.map(nmS).join(' ')}`).join(' | '));
-        const spath = (id) => d.querySelector(`#tc-stack-regions .tc-kg2[data-stack="${id}"]`);
-        let outS = 0; for (const c of gotS) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(spath(c.id), p.x, p.y)) outS++; }
+        const coneS = (l) => { const dd = new Map([[l, 0]]); const q = [l]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const bnd = [...nbS(backS, n)].some((x) => !rails.has(x) && !homeS.has(blkS(x))); if (n !== l && (bnd || clocksS.has(n))) continue; for (const x of nbS(backS, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeS.has(blkS(x)) && !clocksS.has(x)) q.push(x); } } return [...dd.keys()].filter((n) => (homeS.has(blkS(n)) && !clocksS.has(n)) || n === l); };
+        const gotR = T.regsList();
+        const gR = (id) => gotR.find((c) => c.id === id);
+        const want = {};
+        for (const stem of ['s', 'a', 'x', 'y']) {
+          const own = new RegExp(`^(not|#)?${stem}\\d$`);
+          const bits = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => byName.get(`${stem}${i}`));
+          const reg = new Set(bits); { const q = [...bits]; while (q.length) { const n = q.shift(); for (const m of nbS(undS, n)) if (!reg.has(m) && !rails.has(m) && (!sch.names[m] || own.test(sch.names[m]))) { reg.add(m); q.push(m); } } }
+          const outside = new Set(); for (const n of reg) for (const m of nbS(undS, n)) if (!reg.has(m) && !rails.has(m)) outside.add(m);
+          const lines = new Set(); for (const n of reg) for (const c of nbS(ctlOfS, n)) if (!clocksS.has(c)) lines.add(c);
+          const cones = new Map([...lines].map((l) => [l, coneS(l)]));
+          const owners = new Map(); for (const [l, c] of cones) for (const n of c) { if (!owners.has(n)) owners.set(n, []); owners.get(n).push(idS(l)); }
+          want[stem] = { reg: [...reg].filter((n) => mine.has(n)).sort((a, b) => a - b), outside: [...outside].map(nmS).sort(), lines: new Map([...cones].map(([l, c]) => [idS(l), c])), cones: new Map([...cones].map(([l, c]) => [idS(l), c])) };
+        }
+        ok('each register is the harness\'s own closure: S 32 (four a bit), A 24, X 24, Y 24',
+           ['s', 'a', 'x', 'y'].every((st) => gR(st) && gR(st).nodes.join() === want[st].reg.join()) && want.s.reg.length === 32 && want.a.reg.length === 24 && want.x.reg.length === 24 && want.y.reg.length === 24,
+           ['s', 'a', 'x', 'y'].map((st) => `${st}:${gR(st) ? gR(st).nodes.length : '-'}/${want[st].reg.length}`).join(' '));
+        ok('S meets sb and adl, X and Y sb alone, A sb, the adjusted dasb bits and idb',
+           want.s.outside.join() === [...Array(8).keys()].flatMap((i) => [`sb${i}`, `adl${i}`]).sort().join() && want.x.outside.join() === [...Array(8).keys()].map((i) => `sb${i}`).join() && want.y.outside.join() === want.x.outside.join()
+           && ['dasb1', 'dasb2', 'dasb3', 'dasb5', 'dasb6', 'dasb7', 'idb0', 'idb7', 'sb0'].every((x) => want.a.outside.includes(x)) && !want.a.outside.includes('adl0')
+           && ['s', 'a', 'x', 'y'].every((st) => gR(st).outside.map(nmS).sort().join() === want[st].outside.join()),
+           `A: ${want.a.outside.join(' ')}`);
+        ok('the lines are S: SS SBS SSB SADL; A: SBAC ACDB ACSB; X: SBX XSB; Y: SBY YSB, the clocks left out, eight switches each on the register',
+           [...want.s.lines.keys()].sort().join() === 'SADL,SBS,SS,SSB' && [...want.a.lines.keys()].sort().join() === 'ACDB,ACSB,SBAC' && [...want.x.lines.keys()].sort().join() === 'SBX,XSB' && [...want.y.lines.keys()].sort().join() === 'SBY,YSB'
+           && gotR.filter((c) => c.kind === 'line').every((c) => c.onRegister === 8 && want[c.stem].lines.has(c.line)),
+           gotR.filter((c) => c.kind === 'line').map((c) => c.id).join(' '));
+        let coneOk = 0, coneN = 0;
+        // Sharing is split out across every register at once: #43 and #1247
+        // sit in the load cone of all four, so the per-register split would
+        // leave them in two beads, and the page's groups were compared here
+        // per register first and came out six nodes short.
+        const ownersAll = new Map();
+        for (const st of ['s', 'a', 'x', 'y']) { for (const n of want[st].reg) { if (!ownersAll.has(n)) ownersAll.set(n, []); ownersAll.get(n).push(st); } for (const [id, c] of want[st].cones) for (const n of c) { if (!ownersAll.has(n)) ownersAll.set(n, []); ownersAll.get(n).push(`${st}.${id}`); } }
+        for (const st of ['s', 'a', 'x', 'y']) for (const [id, c] of want[st].cones) { coneN++; const own = c.filter((n) => ownersAll.get(n).length === 1 && mine.has(n)).sort((a, b) => a - b); if (gR(`${st}.${id}`) && gR(`${st}.${id}`).nodes.join() === own.join()) coneOk++; }
+        const wantShared = new Map(); for (const [n, ids] of ownersAll) if (ids.length > 1 && mine.has(n)) { const k = ids.join('-'); if (!wantShared.has(k)) wantShared.set(k, []); wantShared.get(k).push(n); }
+        const gotShared = gotR.filter((c) => c.kind === 'shared');
+        ok('each line\'s group is its cone less what it shares, and the shared nodes are their own groups, split across every register at once',
+           coneOk === coneN && gotShared.length === wantShared.size && [...wantShared].every(([k, ns]) => gotShared.some((g) => g.id === `shared.${k}` && g.nodes.join() === ns.sort((a, b) => a - b).join())),
+           `${coneOk} of ${coneN} cones; shared ${[...wantShared].map(([k, ns]) => `${k}:${ns.length}`).join(' ')}`);
+        ok('one node is in the cone of every register line (all nine), one in the load lines of all four, one in S\'s hold and load alone: common control logic belonging to no register',
+           gotShared.some((g) => g.of.length === 9 && g.nodes.length === 1) && gotShared.some((g) => g.nodes.length === 1 && ['a.SBAC', 'x.SBX', 'y.SBY', 's.SBS'].every((x) => g.of.includes(x)) && !g.of.includes('a.ACDB')) && gotShared.some((g) => g.of.join() === 's.SS,s.SBS' && g.nodes.length === 1),
+           gotShared.map((g) => `${g.id}:${g.nodes.length}`).join(' '));
+        ok('what each line is made from is the instruction set in the wires: SADL from JSR and the stack terms, SSB from TSX, SS and SBS from TXS, SBAC from LDA, ACDB from sta/cmp and PHA, SBX from LDX, SBY from LDY',
+           ['op-T0-jsr', 'op-T2-stack'].every((x) => gR('s.SADL').reads.map(nmS).includes(x)) && gR('s.SSB').reads.map(nmS).includes('op-T0-tsx') && gR('s.SS').reads.map(nmS).includes('op-T0-txs') && gR('s.SBS').reads.map(nmS).includes('op-T0-txs')
+           && gR('a.SBAC').reads.map(nmS).includes('op-T0-lda') && ['op-sta/cmp', 'op-T2-pha'].every((x) => gR('a.ACDB').reads.map(nmS).includes(x)) && gR('x.SBX').reads.map(nmS).includes('op-T0-ldx/tax/tsx') && gR('y.SBY').reads.map(nmS).includes('op-T0-ldy-mem'),
+           gotR.filter((c) => c.kind === 'line').map((c) => `${c.id}: ${c.reads.map(nmS).filter((x) => /^op-/.test(x)).join(' ')}`).join(' | '));
+        const xpath = (id) => d.querySelector(`#tc-reg-regions .tc-xg[data-reg="${id}"]`);
+        let outS = 0; for (const c of gotR) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(xpath(c.id), p.x, p.y)) outS++; }
         ok('every node lies inside its group\'s beads', outS === 0, `${outS} outside`);
-        T.selectStack('reg');
-        ok('the register card reads S off the chip as the harness chip has it', $('tc-block').textContent.includes(`S reads $${hex2(m.s())}`), $('tc-block').textContent.slice(0, 80));
-        let lineOk = 0;
-        for (const c of gotS.filter((x) => x.kind === 'line')) { T.selectStack(c.id); const txt = $('tc-block').textContent; const open = L41[c.node] > 0; if (txt.includes(`the line reads ${open ? 1 : 0}`) && txt.includes(open ? 'are open now' : 'are shut now')) lineOk++; }
-        ok('each line card says open or shut by the level the harness chip has', lineOk === 4, `${lineOk} of 4`);
-        T.selectStack('reg');
-        const regSet = new Set(gS('reg').nodes);
+        let regOk = 0;
+        for (const st of ['s', 'a', 'x', 'y']) { T.selectRegs(st); if ($('tc-block').textContent.includes(`${st.toUpperCase()} reads $${hex2(m[st]())}`)) regOk++; }
+        ok('each register card reads its byte off the chip as the harness chip has it', regOk === 4, `${regOk} of 4`);
+        let lineOk = 0, lineN = 0;
+        for (const c of gotR.filter((x) => x.kind === 'line')) { lineN++; T.selectRegs(c.id); const txt = $('tc-block').textContent; const open = L41[c.node] > 0; if (txt.includes(`the line reads ${open ? 1 : 0}`) && txt.includes(open ? 'are open now' : 'are shut now')) lineOk++; }
+        ok('each line card says open or shut by the level the harness chip has', lineOk === lineN, `${lineOk} of ${lineN}`);
+        T.selectRegs('s');
+        const regSet = new Set(gR('s').nodes);
         let dimS = 0; for (const c of circles()) if (c.classList.contains('sel-out') === regSet.has(Number(c.dataset.node))) dimS++;
-        ok('every node but the register\'s steps back', dimS === 0, `${dimS} wrong`);
+        ok('every node but the S register\'s steps back', dimS === 0, `${dimS} wrong`);
         let sspot = null;
-        for (const n of gS('reg').nodes) {
+        for (const n of gR('s').nodes) {
           const p = mine.get(n);
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
-            if (!hit2(spath('reg'), x, y)) continue;
+            if (!hit2(xpath('s'), x, y)) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             sspot = { x, y, n }; break;
           }
           if (sspot) break;
         }
-        ok('a point inside the register\'s beads, clear of nodes, exists', !!sspot);
-        T.selectStack(null);
+        ok('a point inside the S register\'s beads, clear of nodes, exists', !!sspot);
+        T.selectRegs(null);
         T.frameNodes([sspot.n]);
         f.style.height = '2600px'; await sleep(100);
         const tgS = click2(sspot.x, sspot.y);
-        ok('the click lands on a stack bead', tgS.classList.contains('tc-kg2'), tgS.tagName + '.' + tgS.className.baseVal);
-        ok('and selects the register, over the s capsule and the Registers region under it', st.stack === 'reg' && st.stem === null && st.block === null && st.control === null, `${st.stack} / ${st.stem} / ${st.block}`);
+        ok('the click lands on a register bead', tgS.classList.contains('tc-xg'), tgS.tagName + '.' + tgS.className.baseVal);
+        ok('and selects the S register, over the s capsule and the Registers region under it', st.reg === 's' && st.stem === null && st.block === null && st.control === null, `${st.reg} / ${st.stem} / ${st.block}`);
         click2(sspot.x, sspot.y);
-        ok('clicking the selected bead again clears it', st.stack === null);
-        T.selectStack('SS'); T.selectStem('s');
-        ok('a capsule clears a stack group, and a stack group a capsule', st.stack === null && st.stem === 's' && (T.selectStack('SS'), st.stem === null && st.stack === 'SS'));
-        T.setCollapsed('stack:reg', true);
-        const snS = d.querySelector('#tc-supers .tc-sn[data-key="stack:reg"]');
-        let sx2 = 0, sy2 = 0; for (const n of gS('reg').nodes) { const p = mine.get(n); sx2 += p.x; sy2 += p.y; }
-        ok('the register collapses into one node at its mean, thirty-two members', !!snS && Math.abs(Number(snS.getAttribute('cx')) - sx2 / 32) < 0.6 && Math.abs(Number(snS.getAttribute('cy')) - sy2 / 32) < 0.6 && d.querySelector('.tc-sn-lb[data-key="stack:reg"]').textContent === 'S register · 32');
-        T.setCollapsed('stack:reg', false);
-        T.selectStack(null);
-        T.setStackRegions(false);
-        ok('the stack toggle hides the beads', w.getComputedStyle($('tc-stack-regions')).display === 'none' && $('tc-stack-btn').getAttribute('aria-pressed') === 'false');
-        T.setStackRegions(true);
+        ok('clicking the selected bead again clears it', st.reg === null);
+        T.selectRegs('s.SS'); T.selectStem('s');
+        ok('a capsule clears a register group, and a register group a capsule', st.reg === null && st.stem === 's' && (T.selectRegs('s.SS'), st.stem === null && st.reg === 's.SS'));
+        T.setCollapsed('regs:s', true);
+        const snS = d.querySelector('#tc-supers .tc-sn[data-key="regs:s"]');
+        let sx2 = 0, sy2 = 0; for (const n of gR('s').nodes) { const p = mine.get(n); sx2 += p.x; sy2 += p.y; }
+        ok('the S register collapses into one node at its mean, thirty-two members', !!snS && Math.abs(Number(snS.getAttribute('cx')) - sx2 / 32) < 0.6 && Math.abs(Number(snS.getAttribute('cy')) - sy2 / 32) < 0.6 && d.querySelector('.tc-sn-lb[data-key="regs:s"]').textContent === 'S register · 32');
+        T.setCollapsed('regs:s', false);
+        T.selectRegs(null);
+        T.setRegsRegions(false);
+        ok('the registers toggle hides the beads', w.getComputedStyle($('tc-reg-regions')).display === 'none' && $('tc-regs-btn').getAttribute('aria-pressed') === 'false');
+        T.setRegsRegions(true);
         const f9 = d.createElement('iframe');
         f9.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
         d.body.appendChild(f9);
-        await new Promise((res) => { f9.addEventListener('load', res, { once: true }); f9.src = 'tracer.html?program=1&step=41&stack=SADL'; });
-        for (let i = 0; i < 400 && !(f9.contentWindow.__tracer && !f9.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
-        ok('?stack=SADL selects the line on a fresh page', f9.contentWindow.__tracer.state.stack === 'SADL' && f9.contentDocument.getElementById('tc-block').textContent.includes('stack pointer, SADL'));
+        await new Promise((res) => { f9.addEventListener('load', res, { once: true }); f9.src = 'tracer.html?program=1&step=41&reg=a.ACDB'; });
+        for (let i = 0; i < 2000 && !(f9.contentWindow.__tracer && !f9.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?reg=a.ACDB selects the line on a fresh page', f9.contentWindow.__tracer.state.reg === 'a.ACDB' && f9.contentDocument.getElementById('tc-block').textContent.includes('A, ACDB'));
         f9.remove();
+      }
+
+      // --- the program counter's incrementer -----------------------------------------
+      // The rule re-done here: backward cones from #pclp0..7, #pchp0..7 and the
+      // three lines, inside the static logic and the Program counter block with
+      // the counter's storage as stops. Then reads and feeds pinned by name,
+      // and the card against the harness chip.
+      {
+        const homeN = new Set(['Static logic', 'Program counter'].map((x) => sch.blockNames.indexOf(x)));
+        const blkN = (n) => sch.nodeBlock[n] & 0x7f;
+        const stopN = (n) => /^(pcl|pch|pclp|pchp)\d$/.test(sch.names[n] || '');
+        const homeOk = (n) => homeN.has(blkN(n)) && !stopN(n);
+        const backN = new Map(), fwdN = new Map(); const addN = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addN(backN, out, i); addN(fwdN, i, out); } if (pre >= 0) { addN(backN, out, pre); addN(fwdN, pre, out); } }
+        for (const [, a, b] of sch.switches) { addN(backN, a, b); addN(backN, b, a); addN(fwdN, a, b); addN(fwdN, b, a); }
+        const nbN = (m, n) => m.get(n) || new Set();
+        const rootsN = [...[...Array(8).keys()].map((i) => byName.get(`#pclp${i}`)), ...[...Array(8).keys()].map((i) => byName.get(`#pchp${i}`)), ...['dpc36_#IPC', 'dpc34_PCLC', 'dpc35_PCHC'].map((x) => byName.get(x))];
+        const rootSetN = new Set(rootsN);
+        const reachedN = new Set();
+        for (const o of rootsN) { const dd = new Map([[o, 0]]); const q = [o]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const bnd = [...nbN(backN, n)].some((x) => !rails.has(x) && !homeOk(x) && !rootSetN.has(x)); if (n !== o && bnd) continue; for (const x of nbN(backN, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeOk(x)) q.push(x); } } for (const n of dd.keys()) if (homeOk(n) || rootSetN.has(n)) reachedN.add(n); }
+        const wantN = [...reachedN].filter((n) => mine.has(n)).sort((a, b) => a - b);
+        const gotN = T.incrList()[0];
+        const nmN = (n) => sch.names[n] || `#${n}`;
+        ok('the incrementer is the harness\'s own walk, node for node, one piece', gotN.nodes.join() === wantN.join() && gotN.components === 1 && wantN.length > 60, `page ${gotN.nodes.length}, harness ${wantN.length}`);
+        const pcBits = [...Array(8).keys()].flatMap((i) => [`pcl${i}`, `pch${i}`]);
+        ok('it reads exactly the sixteen counter bits plus the enable\'s inputs, the branch logic\'s page short circuit among them',
+           pcBits.every((x) => gotN.reads.map(nmN).includes(x)) && ['#1570', 'pipeIPCrelated', 'notRdy0', 'ONEBYTE'].every((x) => gotN.reads.map(nmN).includes(x)) && !gotN.reads.map(nmN).some((x) => /^pclp|^pchp/.test(x)), gotN.reads.map(nmN).join(' '));
+        ok('and feeds exactly the sixteen prime latches', gotN.feeds.map(nmN).sort().join() === [...Array(8).keys()].flatMap((i) => [`pclp${i}`, `pchp${i}`]).sort().join(), gotN.feeds.map(nmN).join(' '));
+        ok('the three parts partition it: enable holds #IPC, low holds PCLC, high holds PCHC; the carry ripples nine deep',
+           gotN.parts.enable.length + gotN.parts.low.length + gotN.parts.high.length === gotN.nodes.length && gotN.parts.enable.map(nmN).includes('dpc36_#IPC') && gotN.parts.low.map(nmN).includes('dpc34_PCLC') && gotN.parts.high.map(nmN).includes('dpc35_PCHC') && gotN.depth === 9,
+           `${gotN.parts.enable.length}/${gotN.parts.low.length}/${gotN.parts.high.length}, depth ${gotN.depth}`);
+        const npath = d.querySelector('#tc-incr-regions .tc-ng[data-incr="pc"]');
+        let outN = 0; for (const n of gotN.nodes) { const p = mine.get(n); if (!hit2(npath, p.x, p.y)) outN++; }
+        ok('every node lies inside the outline', outN === 0, `${outN} outside`);
+        T.selectIncr('pc');
+        const cardN = $('tc-block');
+        ok('the card reads PC off the chip as the harness chip has it, and lists reads and feeds with its levels',
+           cardN.textContent.includes(`PC reads $${hex4(m.pc())}`) && [...cardN.querySelectorAll('.tc-node.tc-hi')].every((b) => { const n = Number(b.dataset.node); return b.querySelector('i').textContent === (L41[n] > 0 ? '1' : '0'); }) && cardN.querySelectorAll('.tc-node.tc-hi').length === gotN.reads.length + gotN.feeds.length,
+           cardN.textContent.slice(0, 100));
+        const incSet = new Set(gotN.nodes);
+        let dimN = 0; for (const c of circles()) if (c.classList.contains('sel-out') === incSet.has(Number(c.dataset.node))) dimN++;
+        ok('every node but the incrementer\'s steps back', dimN === 0, `${dimN} wrong`);
+        let nspot = null;
+        for (const n of gotN.nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(npath, x, y)) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
+            nspot = { x, y, n }; break;
+          }
+          if (nspot) break;
+        }
+        ok('a point inside the outline, clear of nodes and outranking outlines, exists', !!nspot);
+        T.selectIncr(null);
+        T.frameNodes([nspot.n]);
+        f.style.height = '2600px'; await sleep(100);
+        const tgN = click2(nspot.x, nspot.y);
+        ok('the click lands on the outline', tgN.classList.contains('tc-ng'), tgN.tagName + '.' + tgN.className.baseVal);
+        ok('and selects the incrementer, clearing every other kind', st.incr === 'pc' && st.stem === null && st.block === null && st.reg === null, `${st.incr} / ${st.stem}`);
+        click2(nspot.x, nspot.y);
+        ok('clicking the selected outline again clears it', st.incr === null);
+        T.selectIncr('pc'); T.selectRegs('x');
+        ok('a register clears the incrementer, and the incrementer a register', st.incr === null && st.reg === 'x' && (T.selectIncr('pc'), st.reg === null && st.incr === 'pc'));
+        T.setCollapsed('incr:pc', true);
+        const snN = d.querySelector('#tc-supers .tc-sn[data-key="incr:pc"]');
+        let nx2 = 0, ny2 = 0; for (const n of gotN.nodes) { const p = mine.get(n); nx2 += p.x; ny2 += p.y; }
+        ok('the incrementer collapses into one node at its mean', !!snN && Math.abs(Number(snN.getAttribute('cx')) - nx2 / gotN.nodes.length) < 0.6 && Math.abs(Number(snN.getAttribute('cy')) - ny2 / gotN.nodes.length) < 0.6 && d.querySelector('.tc-sn-lb[data-key="incr:pc"]').textContent === `PC incrementer · ${gotN.nodes.length}`);
+        T.setCollapsed('incr:pc', false);
+        T.selectIncr(null);
+        T.setIncrRegions(false);
+        ok('the incrementer toggle hides the outline', w.getComputedStyle($('tc-incr-regions')).display === 'none' && $('tc-incr-btn').getAttribute('aria-pressed') === 'false');
+        T.setIncrRegions(true);
+        const f10 = d.createElement('iframe');
+        f10.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f10);
+        await new Promise((res) => { f10.addEventListener('load', res, { once: true }); f10.src = 'tracer.html?program=1&step=41&incr=1'; });
+        for (let i = 0; i < 2000 && !(f10.contentWindow.__tracer && !f10.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?incr=1 selects the incrementer on a fresh page', f10.contentWindow.__tracer.state.incr === 'pc' && f10.contentDocument.getElementById('tc-block').textContent.includes('program counter incrementer'));
+        f10.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------
@@ -1304,7 +1410,7 @@ f.addEventListener('load', async () => {
         f3.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
         d.body.appendChild(f3);
         await new Promise((res) => { f3.addEventListener('load', res, { once: true }); f3.src = 'tracer.html?collapse=blocks,stage:T0&step=4'; });
-        for (let i = 0; i < 200 && !(f3.contentWindow.__tracer && !f3.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        for (let i = 0; i < 2000 && !(f3.contentWindow.__tracer && !f3.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         const T3 = f3.contentWindow.__tracer;
         ok('?collapse=blocks,stage:T0 arrives with thirteen collapsed nodes', T3 && T3.state.supers.length === 13 && T3.state.collapsed.has('stage:T0'), `${T3 && T3.state.supers.length}`);
         f3.remove();

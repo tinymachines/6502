@@ -93,7 +93,8 @@
               <button class="btn" type="button" id="tc-intr-btn" aria-pressed="true">interrupt logic</button>
               <button class="btn" type="button" id="tc-branch-btn" aria-pressed="true">branch logic</button>
               <button class="btn" type="button" id="tc-decimal-btn" aria-pressed="true">decimal correction</button>
-              <button class="btn" type="button" id="tc-stack-btn" aria-pressed="true">stack pointer</button>
+              <button class="btn" type="button" id="tc-regs-btn" aria-pressed="true">registers</button>
+              <button class="btn" type="button" id="tc-incr-btn" aria-pressed="true">PC incrementer</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -117,7 +118,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for the stack pointer or one of its lines, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -370,24 +371,44 @@
         seven, which is where six is added to a nibble over nine on the way
         to the accumulator. The card sorts the nodes by which walk found them,
         detect, enable and adjust, with the levels now.
-        The square-dotted beads are the stack pointer logic: the S register
-        as the die builds it, and the lines that move it. The register is
-        everything reachable from its eight bits inside the Registers block,
-        four nodes a bit (the bit, its inverse, two latch nodes), and its
-        switches reach exactly the special bus and the address-low bus
-        outside it, the two buses S can meet. The lines are the controls of
-        those switches, less the clocks, and each comes with the cone that
-        makes it, walked back inside the control pipeline and the static
-        logic to where it reads a decode term: <span class="mono">SS</span>
-        holds S (asserted by the absence of any term), <span class="mono">SBS</span>
-        loads it from the special bus and is made from TXS,
-        <span class="mono">SSB</span> drives it onto the special bus and is
-        made from TSX, <span class="mono">SADL</span> drives it onto the
-        address-low bus, the stack address, and is made from JSR and the
-        stack terms. Hold and load share three nodes, one decode read by
-        both, and those are their own bead. The register's card reads S off
-        the chip; a line's card says whether its eight switches are open at
-        this half-cycle and what it is made from.
+        The square-dotted beads are the registers as the die builds them, S,
+        A, X and Y, and the lines that move each. A register is everything
+        reachable from its eight bits through unnamed nodes and nodes named
+        after it, which stops at the buses: S is four nodes a bit (the bit,
+        its inverse, two latch nodes) and its switches reach exactly the
+        special bus and the address-low bus, the two buses S can meet; X and
+        Y are three a bit and meet the special bus alone; A is three a bit
+        and meets the special bus, the decimal-adjusted bits and the data
+        bus. The lines are the controls of those switches, less the clocks,
+        and each comes with the cone that makes it, walked back inside the
+        control pipeline and the static logic to where it reads a decode
+        term, which is the instruction set written in the wires:
+        <span class="mono">SS</span> holds S (asserted by the absence of any
+        term), <span class="mono">SBS</span> loads it and is made from TXS,
+        <span class="mono">SSB</span> drives it onto the special bus from
+        TSX, <span class="mono">SADL</span> puts it on the address-low bus
+        from JSR and the stack terms; <span class="mono">SBX</span> and
+        <span class="mono">SBY</span> load X and Y from LDX and LDY and the
+        increments, <span class="mono">XSB</span> and <span class="mono">YSB</span>
+        drive them out for the indexed modes; <span class="mono">SBAC</span>
+        loads A from LDA, PLA, TXA, TYA and the ALU's results,
+        <span class="mono">ACDB</span> drives it onto the data bus for STA,
+        CMP and PHA, <span class="mono">ACSB</span> onto the special bus for
+        TAX, TAY and the shifts. Lines that share a node share it as a bead
+        of its own. A register's card reads its byte off the chip; a line's
+        card says whether its eight switches are open at this half-cycle and
+        what it is made from.
+        The red outline is the program counter's incrementer, what lies
+        between the counter and its next value: from the sixteen outputs
+        that become the prime latches, and from the increment enable and the
+        two carries the die names, the rule walks back inside the static
+        logic and the Program counter block, never entering the counter's
+        own storage, and finds one piece that reads exactly the sixteen
+        counter bits (plus what enables the count: the branch logic's page
+        short circuit among them) and feeds exactly the sixteen prime
+        latches, the carry rippling nine deep through bit seven. The card
+        sorts it into enable, low byte and high byte, and reads PC off the
+        chip.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

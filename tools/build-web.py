@@ -216,8 +216,10 @@ def main() -> None:
     b.copy_hashed("branch-logic.js")
     # The decimal correction, everything its names are wired into; a leaf the tracer draws.
     b.copy_hashed("decimal-correction.js")
-    # The stack pointer: the S register as built and the lines that move it; a leaf the tracer draws.
-    b.copy_hashed("stack-pointer.js")
+    # The registers as built and the lines that move them (S, A, X, Y), and the
+    # program counter's incrementer; leaves the tracer draws.
+    b.copy_hashed("register-logic.js")
+    b.copy_hashed("pc-increment.js")
     # The study view's floating console (strip, drawer, drag, clamp), shared by
     # schematic.js and tracer.js so the two cannot drag two different ways. A
     # leaf: imports nothing.
@@ -600,7 +602,8 @@ def main() -> None:
         ("./interrupt-paths.js", "./" + b.ref("interrupt-paths.js")),
         ("./branch-logic.js", "./" + b.ref("branch-logic.js")),
         ("./decimal-correction.js", "./" + b.ref("decimal-correction.js")),
-        ("./stack-pointer.js", "./" + b.ref("stack-pointer.js")),
+        ("./register-logic.js", "./" + b.ref("register-logic.js")),
+        ("./pc-increment.js", "./" + b.ref("pc-increment.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

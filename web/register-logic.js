@@ -1,17 +1,24 @@
-// The stack pointer logic: the S register as the die builds it, the control
-// lines that move it, and how those lines are made.
+// A register as the die builds it, the control lines that move it, and how
+// those lines are made. Written for the stack pointer and then run for A, X
+// and Y, because the rule never mentioned S.
 //
-// The register is eight dynamic latches. Each bit is four nodes: `s`, its
-// inverse `nots`, and two latch nodes joined to them by switches, one under
-// `dpc7_SS` (hold: the bit recirculates, and the line is asserted by the
-// ABSENCE of any term, so S keeps its value unless told otherwise) and one
-// under `cclk`. Three more lines move it: `dpc6_SBS` loads it from the
-// special bus, `dpc4_SSB` drives it onto the special bus, `dpc5_SADL` drives
-// it onto the address-low bus, which is how the stack page is addressed. None
-// of that is authored here; it is read off the switches:
+// S is eight dynamic latches. Each bit is four nodes: `s`, its inverse
+// `nots`, and two latch nodes joined to them by switches, one under `dpc7_SS`
+// (hold: the bit recirculates, and the line is asserted by the ABSENCE of any
+// term, so S keeps its value unless told otherwise) and one under `cclk`.
+// Three more lines move it: `dpc6_SBS` loads it from the special bus,
+// `dpc4_SSB` drives it onto the special bus, `dpc5_SADL` drives it onto the
+// address-low bus, which is how the stack page is addressed. None of that is
+// authored here; it is read off the switches:
 //
-//  1. The register is everything reachable from `s0..s7` through gates and
-//     switch channels without leaving the Registers block: 32 nodes.
+//  1. The register is everything reachable from the stem's eight bits through
+//     gates and switch channels, entering only unnamed nodes and nodes named
+//     with the stem itself (`nots0`, `notx0`), never a rail and never another
+//     named wire: the closure stops at the buses. That is the rule that reads
+//     A too, whose latch nodes are filed in three blocks: A is 24 nodes (the
+//     bit, its inverse in the static logic, a data-bus-side node), X and Y 24
+//     each, S 32. The first version said "without leaving the Registers
+//     block" and found A as its eight bits alone.
 //  2. The lines are the controls of every switch touching a register node,
 //     less the clocks: a node that controls forty or more switches is a
 //     clock (`cclk` 243, `cp1` 96, nothing else comes close) and is never a
@@ -35,6 +42,14 @@
 // register's switches reach exactly `sb0..7` and `adl0..7` outside it, the
 // two buses S can meet. Converges by a depth of 6.
 //
+// Measured for the others: X meets `sb` alone through `SBX` and `XSB`, Y the
+// same through `SBY` and `YSB`, each pair sharing one node; A meets `sb`, the
+// adjusted bits `dasb1..3`, `dasb5..7` and `idb0..7`, through `SBAC` (load
+// from the special bus, made from LDA, PLA, TXA, TYA and the ALU's T+ terms),
+// `ACDB` (onto the data bus, made from `sta/cmp` and PHA) and `ACSB` (onto
+// the special bus, made from TAX, TAY, ANDS and the shifts), the three
+// sharing one node.
+//
 // A leaf: it imports nothing and touches no DOM.
 
 export const STEM = 's';
@@ -50,10 +65,11 @@ export const CLOCK_SWITCHES = 40;
  *   `cone` is a line's whole backward cone; `nodes` is the cone less what it
  *   shares with another line, which is then in `shared`.
  */
-export function stackPointer(sch, { home = HOME, cap = 32 } = {}) {
+export function registerLogic(sch, { home = HOME, cap = 32, stem = STEM } = {}) {
   const rails = new Set([sch.vss, sch.vcc]);
   const blk = (n) => sch.nodeBlock[n] & 0x7f;
-  const REG = sch.blockNames.indexOf('Registers');
+  const own = new RegExp(`^(not|#)?${stem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\d$`);
+  const enterable = (n) => !rails.has(n) && (!sch.names[n] || own.test(sch.names[n]));
   const inside = new Set(home.map((s) => sch.blockNames.indexOf(s)).filter((i) => i >= 0));
   const byName = new Map();
   sch.names.forEach((s, n) => { if (s) byName.set(s, n); });
@@ -73,14 +89,14 @@ export function stackPointer(sch, { home = HOME, cap = 32 } = {}) {
   const clocks = [...ctlCount].filter(([, c]) => c >= CLOCK_SWITCHES).map(([n]) => n).sort((a, b) => a - b);
   const clockSet = new Set(clocks);
 
-  // The register: closure of the bits inside the Registers block.
+  // The register: closure of the bits over unnamed and own-stem nodes.
   const bits = [];
-  for (let i = 0; i < 8; i++) { const n = byName.get(`${STEM}${i}`); if (n !== undefined) bits.push(n); }
+  for (let i = 0; i < 8; i++) { const n = byName.get(`${stem}${i}`); if (n !== undefined) bits.push(n); }
   const reg = new Set(bits);
   const q = [...bits];
   while (q.length) {
     const n = q.shift();
-    for (const m of nb(und, n)) if (!reg.has(m) && !rails.has(m) && blk(m) === REG) { reg.add(m); q.push(m); }
+    for (const m of nb(und, n)) if (!reg.has(m) && enterable(m)) { reg.add(m); q.push(m); }
   }
   const outside = new Set();
   for (const n of reg) for (const m of nb(und, n)) if (!reg.has(m) && !rails.has(m)) outside.add(m);
@@ -119,5 +135,10 @@ export function stackPointer(sch, { home = HOME, cap = 32 } = {}) {
   for (const [n, ids] of owners) if (ids.length > 1) { const k = ids.join('-'); if (!sharedMap.has(k)) sharedMap.set(k, { id: k, of: ids, nodes: [] }); sharedMap.get(k).nodes.push(n); }
   for (const L of lines) L.nodes = L.cone.filter((n) => owners.get(n).length === 1);
   const shared = [...sharedMap.values()].map((g) => ({ ...g, nodes: g.nodes.sort((a, b) => a - b) }));
-  return { register: { nodes: [...reg].sort((a, b) => a - b), outside: [...outside].sort((a, b) => a - b) }, lines, shared, clocks };
+  return { stem, register: { nodes: [...reg].sort((a, b) => a - b), outside: [...outside].sort((a, b) => a - b) }, lines, shared, clocks };
+}
+
+/** The stack pointer: the rule run for S. */
+export function stackPointer(sch, opts = {}) {
+  return registerLogic(sch, { ...opts, stem: 's' });
 }

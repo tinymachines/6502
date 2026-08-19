@@ -2990,17 +2990,29 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.z-labels .tc-dg-lb { font-size: 50px; stroke-width: 8px; }
 .tc-cam.has-sel .tc-dg-lb:not(.sel) { opacity: .3; }
 
-/* The stack pointer: square-dotted beads, the register and each of its lines in its own hue. */
-.tc-stack-regions.off { display: none; }
-.tc-kg2 { fill: color-mix(in srgb, var(--bc) 16%, transparent); stroke: color-mix(in srgb, var(--bc) 75%, transparent);
-          stroke-width: 5; stroke-dasharray: 6 8; stroke-linecap: square; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
-.tc-kg2:hover { fill: color-mix(in srgb, var(--bc) 28%, transparent); }
-.tc-kg2.sel { fill: color-mix(in srgb, var(--bc) 40%, transparent); stroke: var(--bc); stroke-width: 11; stroke-dasharray: none; }
-.tc-cam.has-sel .tc-kg2:not(.sel) { stroke: color-mix(in srgb, var(--bc) 20%, transparent); fill: color-mix(in srgb, var(--bc) 5%, transparent); }
-.tc-kg2-lb { font: 800 80px var(--font-mono); fill: var(--bc); text-anchor: middle; pointer-events: none;
-             paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 14px; }
-.tc-cam.z-labels .tc-kg2-lb { font-size: 46px; stroke-width: 8px; }
-.tc-cam.has-sel .tc-kg2-lb:not(.sel) { opacity: .3; }
+/* The registers: square-dotted beads, each register and its lines in the register's hue. */
+.tc-reg-regions.off { display: none; }
+.tc-xg { fill: color-mix(in srgb, var(--bc) 16%, transparent); stroke: color-mix(in srgb, var(--bc) 75%, transparent);
+         stroke-width: 5; stroke-dasharray: 6 8; stroke-linecap: square; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-xg:hover { fill: color-mix(in srgb, var(--bc) 28%, transparent); }
+.tc-xg.sel { fill: color-mix(in srgb, var(--bc) 40%, transparent); stroke: var(--bc); stroke-width: 11; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-xg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 20%, transparent); fill: color-mix(in srgb, var(--bc) 5%, transparent); }
+.tc-xg-lb { font: 800 80px var(--font-mono); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 14px; }
+.tc-cam.z-labels .tc-xg-lb { font-size: 46px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-xg-lb:not(.sel) { opacity: .3; }
+
+/* The program counter's incrementer: one red outline between the counter and its next value. */
+.tc-incr-regions.off { display: none; }
+.tc-ng { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 80%, transparent);
+         stroke-width: 7; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-ng:hover { fill: color-mix(in srgb, var(--bc) 18%, transparent); }
+.tc-ng.sel { fill: color-mix(in srgb, var(--bc) 28%, transparent); stroke: var(--bc); stroke-width: 13; }
+.tc-cam.has-sel .tc-ng:not(.sel) { stroke: color-mix(in srgb, var(--bc) 25%, transparent); fill: none; }
+.tc-ng-lb { font: 800 96px var(--font-sans); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 16px; }
+.tc-cam.z-labels .tc-ng-lb { font-size: 50px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-ng-lb:not(.sel) { opacity: .3; }
 
 /* The pins by measured direction: a halo on each pad, in the direction's hue. */
 .tc-pin-regions.off { display: none; }
