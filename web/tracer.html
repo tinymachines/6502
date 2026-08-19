@@ -218,6 +218,18 @@
         comparison of two readings of the chip, taken by this page.
       </p>
       <p>
+        A node with a dashed outline has no pullup: a transistor pulls it to
+        vcc, and its pulldowns either discharge it or leave it holding charge.
+        For most of them that transistor is a clock, and the node is precharged,
+        which is how the decode lines and <span class="mono">sync</span> work
+        and why the chip has a minimum clock speed. For the address and data
+        pads the same shape is the pull-up half of a push-pull output driver.
+        A solid outline is a static gate output, held high by a depletion
+        pullup, or a wire that takes whatever it is joined to. Which is which
+        is read from the same file the workbench draws its gates from, and
+        clicking a dashed node names the transistor's gate.
+      </p>
+      <p>
         The list under the code says the same thing in words: every node that
         changed level, grouped by block, with the way it went. Click a name and
         the drawing flies to it. Turn on <em>show only what moved</em> and the

@@ -62,6 +62,7 @@ export const LABEL_ZOOM = 3;
 const state = {
   m: null,
   sch: null,
+  pre: null,        // dynamic gate output -> the node gating its pull-up transistor
   pos: null,
   bounds: null,
   home: null,
@@ -188,13 +189,27 @@ function buildGraph() {
     seen.add(key);
     edges.push({ a, b, kind, control, out: kind === 'gate' ? b : -1 });
   };
-  for (const [out, , , legs] of sch.gates) {
+  // The precharged (dynamic) gate outputs, by their kind in schematic.json:
+  // a clocked transistor pulls them to vcc and the pulldown network discharges
+  // them or leaves them holding charge. They are drawn with a dashed outline,
+  // because a static gate output and a charge-holding node are two different
+  // kinds of thing that otherwise look identical on the page.
+  // `pre` maps each to the node gating the transistor that pulls it up: a
+  // clock for the precharged ones (cclk, or an unnamed clock), and for the 24
+  // address and data pads the data itself, because there the same shape is the
+  // pull-up half of a push-pull output driver. The page reports which node it
+  // was rather than deciding which reading applies.
+  const pre = new Map();
+  const dyn = sch.kinds.indexOf('dynamic');
+  for (const [out, kind, up, legs] of sch.gates) {
+    if (kind === dyn) pre.set(out, up);
     for (const i of new Set(legs.flat())) push(i, out, 'gate', -1);
   }
   for (const [control, a, b] of sch.switches) push(a, b, 'switch', control);
 
   const nodes = new Set();
   for (const e of edges) { nodes.add(e.a); nodes.add(e.b); }
+  state.pre = pre;
   return { nodes: [...nodes], edges };
 }
 
@@ -235,7 +250,7 @@ function draw() {
   for (const nd of g.nodes) {
     const p = pos.get(nd);
     const c = el('circle', { cx: p.x, cy: p.y, r: sch.names[nd] ? 26 : 16,
-                             class: 'tc-n' + (sch.names[nd] ? ' tc-named' : ''),
+                             class: 'tc-n' + (sch.names[nd] ? ' tc-named' : '') + (state.pre.has(nd) ? ' tc-pre' : ''),
                              'data-node': nd }, dots);
     c.style.fill = blockCss(sch.nodeBlock[nd] & 0x7f);
     state.nodeEl.set(nd, c);
@@ -636,7 +651,10 @@ function paintPicked() {
   const block = state.sch.blockNames[state.sch.nodeBlock[n] & 0x7f];
   const lvl = state.levels ? (state.levels[n] > 0 ? 'high' : 'low') : '';
   const fan = state.edgesByNode.get(n)?.length || 0;
-  box.textContent = `${name} · ${block} · ${lvl} · ${fan} edge${fan === 1 ? '' : 's'} drawn`;
+  const up = state.pre?.get(n);
+  const pre = up === undefined ? ''
+    : ` · no pullup, pulled to vcc by ${up >= 0 ? (state.sch.names[up] || `unnamed node ${up}`) : 'nothing'}`;
+  box.textContent = `${name} · ${block} · ${lvl}${pre} · ${fan} edge${fan === 1 ? '' : 's'} drawn`;
 }
 
 function pick(n, fly = false) {

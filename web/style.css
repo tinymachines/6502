@@ -2860,6 +2860,12 @@ body.no-scroll #view { z-index: 70; }
    ring for the last one. */
 .tc-n { stroke: rgba(2, 6, 16, .6); stroke-width: 3; opacity: .38; }
 .tc-n.hi { opacity: 1; }
+/* A precharged (dynamic) gate output: pulled to vcc by a clocked transistor,
+   then discharged or left holding charge. Dashed, because holding a level and
+   being driven to one are different things and look the same otherwise. The
+   dash is on the resting outline only; a ring for a change still wins. */
+.tc-n.tc-pre { stroke: color-mix(in srgb, var(--foreground) 70%, transparent); stroke-width: 5; stroke-dasharray: 7 6; }
+.tc-n.tc-pre.chg, .tc-n.tc-pre.was, .tc-n.tc-pre.wt, .tc-n.tc-pre.on-pick, .tc-n.tc-pre:hover { stroke-dasharray: none; }
 .tc-n.was { stroke: color-mix(in srgb, var(--hot) 55%, transparent); stroke-width: 12; opacity: .8; }
 .tc-n.chg { stroke: var(--hot); stroke-width: 20; opacity: 1; }
 .tc-n.wt { stroke: var(--gold); stroke-width: 10; }

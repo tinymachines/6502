@@ -898,6 +898,17 @@ this is that graph with a clock.
   nodes flipped. `_tracer-test.html` runs a chip of its own to the same
   half-cycle and recomputes all four sets; a page that lit the right *number*
   of things would fail it.
+- **A dashed outline is a node with no pullup**, read from `schematic.json`'s
+  `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
+  (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same
+  shape (a transistor to vcc, no depletion load) is the pull-up half of a
+  push-pull output driver. The page does not decide which reading applies:
+  the key says both, and the pick card names the node gating the pull-up
+  transistor (`state.pre`). The dash is the resting outline only; a ring for
+  a change or a watch wins over it. `_tracer-test.html` recounts the set from
+  the file and checks the computed `stroke-dasharray` on a node at rest,
+  because the first version of that check picked a ringed one and read `none`
+  on both sides.
 - **The watch is stems, and a latch is eight nodes on the die.** `abh abl adh
   adl db idb sb` by default, presets for address, data, registers and ALU, and
   a free text field. Each stem is a byte readout with the moved bits marked, a

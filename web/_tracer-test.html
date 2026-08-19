@@ -109,6 +109,32 @@ f.addEventListener('load', async () => {
     const edgesEl = () => [...d.querySelectorAll('#tc-svg .tc-e')];
     ok('the default view is every node, and the edge count is the netlist\'s own',
        edgesEl().length === want && circles().some((c) => !sch.names[Number(c.dataset.node)]), `page ${edgesEl().length}, harness ${want}`);
+    // Precharged nodes: the dashed outline marks exactly the dynamic gate
+    // outputs in schematic.json, counted here from the file rather than from
+    // the page. The drawn set is the intersection with what is on screen, and
+    // it must be non-empty, or a missing class passes vacuously.
+    const dyn = sch.kinds.indexOf('dynamic');
+    const wantPre = new Set(sch.gates.filter((g) => g[1] === dyn).map((g) => g[0]));
+    const drawnNodes = new Set(circles().map((c) => Number(c.dataset.node)));
+    const wantPreDrawn = [...wantPre].filter((n) => drawnNodes.has(n)).sort((a, b) => a - b);
+    const gotPre = circles().filter((c) => c.classList.contains('tc-pre')).map((c) => Number(c.dataset.node)).sort((a, b) => a - b);
+    ok('the dashed outline marks exactly the precharged (dynamic) gate outputs',
+       gotPre.length > 0 && gotPre.join() === wantPreDrawn.join(), `page ${gotPre.length}, harness ${wantPreDrawn.length} of ${wantPre.size} dynamic gates`);
+    // A ring for a change outranks the dash, so compare two nodes at rest.
+    const resting = (c) => !['chg', 'was', 'wt', 'on-pick'].some((k) => c.classList.contains(k));
+    const preDash = circles().find((c) => c.classList.contains('tc-pre') && resting(c));
+    const solid = circles().find((c) => !c.classList.contains('tc-pre') && resting(c));
+    ok('and the outline really is dashed, where a solid node is not',
+       w.getComputedStyle(preDash).strokeDasharray !== 'none' && w.getComputedStyle(solid).strokeDasharray === 'none',
+       `${w.getComputedStyle(preDash).strokeDasharray} vs ${w.getComputedStyle(solid).strokeDasharray}`);
+    const syncN = byName.get('sync');
+    ok('sync is one of them, as the schematic reports it', wantPre.has(syncN) && st.nodeEl.get(syncN)?.classList.contains('tc-pre'));
+    w.__tracer.pick(syncN);
+    const syncUp = sch.gates.find((g) => g[0] === syncN)[2];
+    ok('and the picked-node line names what pulls it up', $('tc-picked').textContent.includes(`pulled to vcc by ${sch.names[syncUp] || `unnamed node ${syncUp}`}`), $('tc-picked').textContent);
+    w.__tracer.pick(byName.get('a0'));
+    ok('where a plain wire says nothing of the kind', !/pulled to vcc/.test($('tc-picked').textContent), $('tc-picked').textContent);
+    w.__tracer.pick(null);
 
     // --- what moved at half-cycle 41, against the harness chip ---------------------
     const [L40, L41] = pair(41);
