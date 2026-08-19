@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -838,7 +838,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(qpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
             qspot = { x, y, n }; break;
           }
@@ -927,7 +927,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(ipath('nmi'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ispot = { x, y, n }; break;
           }
@@ -1019,7 +1019,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0], [0, 60], [0, -60]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(bpath('taken'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             bcands.push({ x, y, n });
           }
@@ -1099,7 +1099,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1297,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1574,7 +1574,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(upath('bit5'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-irp-regions .tc-ig2, #tc-sbus-regions .tc-yg, #tc-sdp-regions .tc-wg, #tc-rdy-regions .tc-rg2, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ucands.push({ x, y, n });
           }
@@ -2007,6 +2007,117 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f17.contentWindow.__tracer && !f17.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?sd=detect selects the detect on a fresh page', f17.contentWindow.__tracer.state.sdp === 'detect' && f17.contentDocument.getElementById('tc-block').textContent.includes('the store detect'));
         f17.remove();
+      }
+
+      // --- the ready logic ------------------------------------------------------------
+      // The rule re-done here: the master's channel partners and delay chain
+      // first (the copies), then its backward cone with the copies excluded
+      // (the receiver). Then the structure by name, the stall driven from the
+      // harness chip's own RDY PIN and read back through the readout, and the
+      // cards.
+      {
+        const homeR = new Set(['Static logic', 'Control pipeline', 'Timing chain'].map((x) => sch.blockNames.indexOf(x)));
+        const blkR = (n) => sch.nodeBlock[n] & 0x7f;
+        const backR = new Map(), fwdR = new Map(), chanR = new Map(); const addR = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addR(backR, out, i); addR(fwdR, i, out); } if (pre >= 0) { addR(backR, out, pre); addR(fwdR, pre, out); } }
+        const ctlCountR = new Map();
+        for (const [c, a, b] of sch.switches) { addR(backR, a, b); addR(backR, b, a); addR(fwdR, a, b); addR(fwdR, b, a); addR(chanR, a, b); addR(chanR, b, a); ctlCountR.set(c, (ctlCountR.get(c) || 0) + 1); }
+        const nbR = (m, n) => m.get(n) || new Set();
+        const clocksR = new Set([...ctlCountR].filter(([, c]) => c >= 40).map(([n]) => n));
+        const homeOkR = (n) => homeR.has(blkR(n)) && !clocksR.has(n);
+        const nmR = (n) => sch.names[n] || `#${n}`;
+        const masterR = byName.get('notRdy0');
+        const preR = sch.gates.find((g) => g[0] === masterR)[2];
+        const copiesR = new Set([...nbR(chanR, masterR)].filter((n) => !rails.has(n) && n !== preR));
+        const phi1R = byName.get('notRdy0.phi1');
+        for (const x of nbR(fwdR, phi1R)) if (!rails.has(x) && blkR(x) === sch.blockNames.indexOf('Timing chain')) copiesR.add(x);
+        for (const dn of ['#notRdy0.delay', 'notRdy0.delay']) copiesR.add(byName.get(dn));
+        copiesR.delete(masterR);
+        const dR = new Map([[masterR, 0]]); { const q = [masterR]; while (q.length) { const n = q.shift(); if (dR.get(n) >= 40) continue; const bnd = [...nbR(backR, n)].some((x) => !rails.has(x) && !homeOkR(x)); if (n !== masterR && bnd) continue; for (const x of nbR(backR, n)) { if (rails.has(x) || dR.has(x) || copiesR.has(x)) continue; dR.set(x, dR.get(n) + 1); if (homeOkR(x)) q.push(x); } } }
+        const wantIn = [...dR.keys()].filter((n) => n !== masterR && homeOkR(n) && mine.has(n)).sort((a, b) => a - b);
+        const gotR2 = T.rdyList();
+        const gR2 = (id) => gotR2.find((c) => c.id === id);
+        ok('the three groups are the harness\'s own: the receiver 4, the master alone, the copies 8',
+           gR2('in').nodes.join() === wantIn.join() && wantIn.length === 4 && gR2('master').nodes.join() === String(masterR) && gR2('copies').nodes.join() === [...copiesR].filter((n) => mine.has(n)).sort((a, b) => a - b).join() && copiesR.size === 8,
+           gotR2.map((c) => `${c.id}:${c.nodes.length}`).join(' '));
+        ok('the receiver reads #759 from the write control (a write ignores RDY) and #1449 from the pin\'s latch, and holds the precharge',
+           ['#759', '#1449'].every((x) => gR2('in').reads.map(nmR).includes(x)) && gR2('in').nodes.map(nmR).includes('#424') && gR2('in').nodes.map(nmR).includes('pipeUNK37'),
+           `reads ${gR2('in').reads.map(nmR).join(' ')}; nodes ${gR2('in').nodes.map(nmR).join(' ')}`);
+        ok('the master feeds the timing chain\'s hold, fetch, the write control, the store detect and the PC increment enable, thirty-odd consumers',
+           gR2('master').feeds.length >= 30 && ['fetch', 'notRnWprepad', '#191', '#1275', 'brk-done', 'VEC0'].every((x) => gR2('master').feeds.map(nmR).includes(x)),
+           `${gR2('master').feeds.length} consumers`);
+        ok('the copies are the five cp1 partners and the delay chain', ['notRdy0.phi1', '#notRdy0.delay', 'notRdy0.delay', '#608', '#902', '#1276', '#1624', '#1679'].every((x) => gR2('copies').nodes.map(nmR).includes(x)), gR2('copies').nodes.map(nmR).join(' '));
+        // The stall, driven from the harness chip's own pin: pull RDY low
+        // during a read and the readout must hold its T-state while the
+        // master reads 1; release it and the chip moves on.
+        {
+          const m3 = new Machine();
+          m3.load(LOAD_ADDR, new Uint8Array(prog.bytes));
+          m3.setResetVector(LOAD_ADDR);
+          m3.powerCycle();
+          for (let i = 0; i < 20; i++) m3.halfStep();
+          m3.setRdy(false);
+          for (let i = 0; i < 4; i++) m3.halfStep();   // let the receiver latch it through
+          const t0 = m3.timingStates();
+          const l0 = m3.nodeLevels();
+          let held = 0;
+          for (let i = 0; i < 12; i++) { m3.halfStep(); if (m3.timingStates() === t0) held++; }
+          const stalled = m3.nodeLevels()[masterR] > 0;
+          m3.setRdy(true);
+          let moved = false;
+          for (let i = 0; i < 12; i++) { m3.halfStep(); if (m3.timingStates() !== t0) { moved = true; break; } }
+          ok('pulling RDY low on the harness chip raises notRdy0, holds the T-state for twelve half-cycles, and releasing it moves on',
+             l0[masterR] > 0 && stalled && held === 12 && moved, `master ${l0[masterR]}, held ${held} of 12, moved ${moved}`);
+        }
+        const rpath = (id) => d.querySelector(`#tc-rdy-regions .tc-rg2[data-rdy="${id}"]`);
+        let outR = 0; for (const c of gotR2) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(rpath(c.id), p.x, p.y)) outR++; }
+        ok('every node lies inside its group\'s beads', outR === 0, `${outR} outside`);
+        T.selectRdy('master');
+        ok('the master card says ready or stalled by the level the harness chip has', $('tc-block').textContent.includes(L41[masterR] > 0 ? 'is stalled' : 'is ready'), $('tc-block').textContent.slice(0, 120));
+        T.selectRdy('in');
+        ok('the receiver card reads the pin as the harness chip has it', $('tc-block').textContent.includes(`rdy pin reads ${L41[byName.get('rdy')] > 0 ? 1 : 0}`));
+        const inSet2 = new Set(gR2('in').nodes);
+        let dimR = 0; for (const c of circles()) if (c.classList.contains('sel-out') === inSet2.has(Number(c.dataset.node))) dimR++;
+        ok('every node but the receiver\'s steps back', dimR === 0, `${dimR} wrong`);
+        const rcands = [];
+        for (const n of gR2('copies').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(rpath('copies'), x, y)) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            rcands.push({ x, y, n });
+          }
+        }
+        ok('a point inside the copies\' beads, clear of nodes, exists', rcands.length > 0);
+        T.selectRdy(null);
+        f.style.height = '2600px';
+        let rspot = null;
+        for (const c of rcands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains('tc-rg2')) { rspot = c; break; } }
+        ok('one of them has the bead itself under the pointer once framed', !!rspot, `${rcands.length} candidates`);
+        const tgR = click2(rspot.x, rspot.y);
+        ok('the click lands on a ready bead', tgR.classList.contains('tc-rg2'), tgR.tagName + '.' + tgR.className.baseVal);
+        ok('and selects the copies, clearing every other kind', st.rdy === 'copies' && st.block === null && st.chain === null && st.sdp === null, `${st.rdy}`);
+        click2(rspot.x, rspot.y);
+        ok('clicking the selected bead again clears it', st.rdy === null);
+        T.selectRdy('master'); T.selectSdp('sd1');
+        ok('a store-pipeline group clears a ready group, and back', st.rdy === null && st.sdp === 'sd1' && (T.selectRdy('master'), st.sdp === null && st.rdy === 'master'));
+        T.setCollapsed('rdy:copies', true);
+        const snR = d.querySelector('#tc-supers .tc-sn[data-key="rdy:copies"]');
+        let rx2 = 0, ry2 = 0; for (const n of gR2('copies').nodes) { const p = mine.get(n); rx2 += p.x; ry2 += p.y; }
+        ok('the copies collapse into one node at their mean, eight members', !!snR && Math.abs(Number(snR.getAttribute('cx')) - rx2 / 8) < 0.6 && Math.abs(Number(snR.getAttribute('cy')) - ry2 / 8) < 0.6 && d.querySelector('.tc-sn-lb[data-key="rdy:copies"]').textContent === 'ready copies · 8');
+        T.setCollapsed('rdy:copies', false);
+        T.selectRdy(null);
+        T.setRdyRegions(false);
+        ok('the ready toggle hides the beads', w.getComputedStyle($('tc-rdy-regions')).display === 'none' && $('tc-rdy-btn').getAttribute('aria-pressed') === 'false');
+        T.setRdyRegions(true);
+        const f18 = d.createElement('iframe');
+        f18.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f18);
+        await new Promise((res) => { f18.addEventListener('load', res, { once: true }); f18.src = 'tracer.html?program=1&step=41&rdy=master'; });
+        for (let i = 0; i < 2000 && !(f18.contentWindow.__tracer && !f18.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?rdy=master selects the master on a fresh page', f18.contentWindow.__tracer.state.rdy === 'master' && f18.contentDocument.getElementById('tc-block').textContent.includes('notRdy0, the master'));
+        f18.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

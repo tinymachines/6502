@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, the special bus with its lines by measured direction, and the store-data pipeline as the detect and the two latches the timing readout names. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, the special bus with its lines by measured direction, the store-data pipeline as the detect and the two latches the timing readout names, and the ready logic as the receiver, the master and its re-timed copies. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1504,6 +1504,30 @@ this is that graph with a clock.
     ADL/ABL cone beads, which outrank them and correctly so (that cone reads
     these latches). The cards read each latch's level off the chip and name
     what it feeds.
+
+- **The ready logic is a container per stage: the receiver, the master, the
+  copies.** `ready-logic.js` (a leaf). Ready had turned up as a read at the
+  boundary of nearly every container before it; this is the wire itself.
+  `in` (4: `#944`, `pipeUNK37`, `#198` and the precharge `#424`) is the
+  master's backward cone with the copies excluded, home the static logic,
+  the control pipeline and the timing chain: **the pads are outside the
+  home**, so the pin's latch `#1449` and the write control's `#759` land in
+  `reads` (the first draft had Pads in the home and swallowed the whole
+  write control through `#759`). That `#944` NORs the pin with `#759` is
+  the famous rule in one gate: **a low RDY never stalls a write cycle**.
+  `master` is `notRdy0` alone, one dynamic node, active low, read by **35**
+  consumers. `copies` (8) are the five `cp1` channel partners and the
+  `cclk` delay chain: ready on the other phase and a cycle late. Copies are
+  built **before** the receiver's cone, which sees them as back-channel
+  neighbours of the master and would otherwise claim them.
+  - **The harness stalls the chip for real**: `setRdy(false)` on its own
+    chip raises `notRdy0`, the T-state holds for twelve half-cycles, and
+    `setRdy(true)` moves on. That is the wire doing the thing its whole
+    fan-out exists for, driven from the pin rather than asserted.
+  - Kind `rdy`, ids `in master copies`; `?rdy=master`, `?ready=0`; priority
+    after the store pipeline. The receiver's card reads the pin, the
+    master's says stalled or ready off the chip, the copies' names what
+    they feed. Twenty-second container kind.
 
 ### `graph.json`: the chip as one node-and-edge file
 
