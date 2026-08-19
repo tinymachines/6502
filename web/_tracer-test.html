@@ -568,7 +568,7 @@ f.addEventListener('load', async () => {
             if (!hit2(kpath(c.id), x, y) || !caps.some((cp) => hit2(cp, x, y))) continue;
             // The stack pointer's beads outrank a control outline (they are
             // the more specific claim about the same lines), so keep clear.
-            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
             kspot = { x, y, id: c.id, n }; break;
           }
@@ -762,7 +762,7 @@ f.addEventListener('load', async () => {
             if (!hit2(hpath('T4'), x, y)) continue;
             // Control outlines, the clock generator and the interrupt beads all
             // outrank a chain cell, and the nmi path runs down the same edge.
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg, #tc-incr-regions .tc-ng')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             hspot = { x, y, n }; break;
           }
@@ -838,7 +838,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[60, 0], [-60, 0], [0, 60], [0, -60], [45, 45], [-45, -45]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(qpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-chain-regions .tc-hg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 40)) continue;
             qspot = { x, y, n }; break;
           }
@@ -927,7 +927,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(ipath('nmi'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ispot = { x, y, n }; break;
           }
@@ -1019,7 +1019,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0], [0, 60], [0, -60]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(bpath('taken'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             bcands.push({ x, y, n });
           }
@@ -1099,7 +1099,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(dpath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             dspot = { x, y, n }; break;
           }
@@ -1297,7 +1297,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[55, 0], [-55, 0], [0, 55], [0, -55], [40, 40], [-40, -40]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(npath, x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-alu-regions .tc-ug, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 34)) continue;
             nspot = { x, y, n }; break;
           }
@@ -1574,7 +1574,7 @@ f.addEventListener('load', async () => {
           for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
             const x = p.x + dx, y = p.y + dy;
             if (!hit2(upath('bit5'), x, y)) continue;
-            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
+            if ([...d.querySelectorAll('#tc-control-regions .tc-kg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag, #tc-dbus-regions .tc-vg, #tc-clock-regions .tc-qg, #tc-intr-regions .tc-ig, #tc-branch-regions .tc-bg, #tc-decimal-regions .tc-dg, #tc-reg-regions .tc-xg')].some((k) => hit2(k, x, y))) continue;
             if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
             ucands.push({ x, y, n });
           }
@@ -1608,6 +1608,106 @@ f.addEventListener('load', async () => {
         for (let i = 0; i < 2000 && !(f13.contentWindow.__tracer && !f13.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
         ok('?alu=cout selects the group on a fresh page', f13.contentWindow.__tracer.state.alu === 'cout' && f13.contentDocument.getElementById('tc-block').textContent.includes('ALU carry out'));
         f13.remove();
+      }
+
+      // --- the data latch and data bus -----------------------------------------------
+      // The rule re-done here: idl and dor as closures over unnamed and own-named
+      // nodes; idb as its bits with the lines on them; the line cones; the R/W
+      // control as the cones of its four names. Then reads and feeds by name,
+      // and the cards against the harness chip.
+      {
+        const homeV = new Set(['Control pipeline', 'Static logic'].map((x) => sch.blockNames.indexOf(x)));
+        const PADSB = sch.blockNames.indexOf('Pads & I/O');
+        const blkV = (n) => sch.nodeBlock[n] & 0x7f;
+        const backV = new Map(), fwdV = new Map(), undV = new Map(); const addV = (m, a, b) => { if (!m.has(a)) m.set(a, new Set()); m.get(a).add(b); };
+        for (const [out, , pre, legs] of sch.gates) { for (const i of new Set(legs.flat())) { addV(backV, out, i); addV(fwdV, i, out); addV(undV, out, i); addV(undV, i, out); } if (pre >= 0) { addV(backV, out, pre); addV(fwdV, pre, out); addV(undV, out, pre); addV(undV, pre, out); } }
+        const ctlCountV = new Map();
+        for (const [c, a, b] of sch.switches) { addV(backV, a, b); addV(backV, b, a); addV(fwdV, a, b); addV(fwdV, b, a); addV(undV, a, b); addV(undV, b, a); ctlCountV.set(c, (ctlCountV.get(c) || 0) + 1); }
+        const nbV = (m, n) => m.get(n) || new Set();
+        const clocksV = new Set([...ctlCountV].filter(([, c]) => c >= 40).map(([n]) => n));
+        const nmV = (n) => sch.names[n] || `#${n}`;
+        const closureV = (stem) => { const own = new RegExp(`^(not|#)?${stem}\\d$`); const bits = [...Array(8).keys()].map((i) => byName.get(`${stem}${i}`)); const set = new Set(bits); const q = [...bits]; while (q.length) { const n = q.shift(); for (const m of nbV(undV, n)) if (!set.has(m) && !rails.has(m) && (!sch.names[m] || own.test(sch.names[m]))) { set.add(m); q.push(m); } } return set; };
+        const readsV = (set) => [...new Set([...set].flatMap((n) => [...nbV(backV, n)]).filter((m) => !set.has(m) && !rails.has(m)))].map(nmV).sort();
+        const feedsV = (set) => [...new Set([...set].flatMap((n) => [...nbV(fwdV, n)]).filter((m) => !set.has(m) && !rails.has(m)))].map(nmV).sort();
+        const coneV = (root, homeFn) => { const dd = new Map([[root, 0]]); const q = [root]; while (q.length) { const n = q.shift(); if (dd.get(n) >= 40) continue; const bnd = [...nbV(backV, n)].some((x) => !rails.has(x) && !homeFn(x)); if (n !== root && (bnd || clocksV.has(n))) continue; for (const x of nbV(backV, n)) { if (rails.has(x) || dd.has(x)) continue; dd.set(x, dd.get(n) + 1); if (homeFn(x) && !clocksV.has(x)) q.push(x); } } return [...dd.keys()].filter((n) => n === root || (homeFn(n) && !clocksV.has(n))); };
+        const gotV = T.dbusList();
+        const gV = (id) => gotV.find((c) => c.id === id);
+        const idlV = closureV('idl'), dorV = closureV('dor');
+        ok('the data latch is the harness\'s own closure, 32, four a bit, and the output register 48, six a bit', gV('idl').nodes.join() === [...idlV].filter((n) => mine.has(n)).sort((a, b) => a - b).join() && gV('dor').nodes.join() === [...dorV].filter((n) => mine.has(n)).sort((a, b) => a - b).join() && idlV.size === 32 && dorV.size === 48, `${gV('idl').nodes.length}/${idlV.size} ${gV('dor').nodes.length}/${dorV.size}`);
+        ok('the latch reads the eight db pads and feeds idb, adl and adh; the register reads idb and RnWstretched and feeds the eight pads',
+           [...Array(8).keys()].every((i) => readsV(idlV).includes(`db${i}`) && feedsV(idlV).includes(`idb${i}`) && feedsV(idlV).includes(`adl${i}`) && feedsV(idlV).includes(`adh${i}`))
+           && readsV(dorV).join() === ['RnWstretched', ...[...Array(8).keys()].map((i) => `idb${i}`)].sort().join() && feedsV(dorV).join() === [...Array(8).keys()].map((i) => `db${i}`).sort().join(),
+           `dor reads ${readsV(dorV).join(' ')} feeds ${feedsV(dorV).join(' ')}`);
+        ok('the latch\'s lines are DL/DB, DL/ADL and DL/ADH, and the bus has a switch on every bit under seven lines', gV('idl').lines.map(nmV).sort().join() === 'dpc41_DL/ADL,dpc42_DL/ADH,dpc43_DL/DB' && gV('idb').lines.length === 7 && ['dpc43_DL/DB', 'dpc25_SBDB', 'dpc26_ACDB', 'dpc37_PCLDB', 'dpc33_PCHDB', 'dpc9_DBADD', 'H1x1'].every((x) => gV('idb').lines.map(nmV).includes(x)) && gV('idb').nodes.length === 8, gV('idb').lines.map(nmV).join(' '));
+        const homeCSV = (n) => homeV.has(blkV(n));
+        const lineIds = ['DL/DB', 'DL/ADL', 'DL/ADH', 'SBDB', 'PCLDB', 'PCHDB'];
+        const lineName = { 'DL/DB': 'dpc43_DL/DB', 'DL/ADL': 'dpc41_DL/ADL', 'DL/ADH': 'dpc42_DL/ADH', SBDB: 'dpc25_SBDB', PCLDB: 'dpc37_PCLDB', PCHDB: 'dpc33_PCHDB' };
+        let lineOkV = 0; for (const id of lineIds) { const want = coneV(byName.get(lineName[id]), homeCSV).filter((n) => mine.has(n)).sort((a, b) => a - b); if (gV(id) && gV(id).nodes.join() === want.join()) lineOkV++; }
+        ok('each line\'s group is its cone, six of them, and DL/ADH reaches the timing chain\'s T0 cell', lineOkV === 6 && gV('DL/ADH').nodes.map(nmV).includes('pipe#T0'), `${lineOkV} of 6; DL/ADH ${gV('DL/ADH').nodes.map(nmV).join(' ')}`);
+        const homeRWV = (n) => homeV.has(blkV(n)) || blkV(n) === PADSB;
+        const wantRW = new Set(['rw', 'notRnWprepad', 'RnWstretched', '#WR'].flatMap((x) => coneV(byName.get(x), homeRWV)));
+        const claimedV = new Set([...idlV, ...dorV, ...gV('idb').nodes, ...lineIds.flatMap((id) => gV(id).nodes)]);
+        ok('the read/write control is the cones of rw, notRnWprepad, RnWstretched and #WR, reading the write latch, ready and reset',
+           gV('rw').nodes.join() === [...wantRW].filter((n) => mine.has(n) && !claimedV.has(n)).sort((a, b) => a - b).join() && ['pipe#WR.phi2', 'notRdy0', 'C1x5Reset'].every((x) => gV('rw').reads.map(nmV).includes(x) || gV('rw').nodes.map(nmV).includes(x)),
+           `${gV('rw').nodes.length}; reads ${gV('rw').reads.map(nmV).join(' ')}`);
+        const ownersV = new Map(); for (const g of gotV) for (const n of g.nodes) { if (!ownersV.has(n)) ownersV.set(n, []); ownersV.get(n).push(g.id); }
+        ok('one owner per node across the ten groups', gotV.length === 10 && [...ownersV].every(([, ids]) => ids.length === 1), `${gotV.length} groups`);
+        const vpath = (id) => d.querySelector(`#tc-dbus-regions .tc-vg[data-dbus="${id}"]`);
+        let outV = 0; for (const c of gotV) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(vpath(c.id), p.x, p.y)) outV++; }
+        ok('every node lies inside its group\'s beads', outV === 0, `${outV} outside`);
+        const byteV = (stem) => { let v = 0; for (let i = 0; i < 8; i++) if (L41[byName.get(`${stem}${i}`)] > 0) v |= 1 << i; return v; };
+        T.selectDbus('idl');
+        ok('the latch card reads idl and the pins off the chip as the harness chip has them', $('tc-block').textContent.includes(`idl holds $${hex2(byteV('idl'))} (the pins read $${hex2(m.dataBus())})`), $('tc-block').textContent.slice(0, 90));
+        T.selectDbus('dor');
+        ok('the output register card reads dor and says reading or writing as the harness chip has it', $('tc-block').textContent.includes(`dor holds $${hex2(byteV('dor'))}`) && $('tc-block').textContent.includes(m.isRead() ? 'is reading' : 'is writing'));
+        T.selectDbus('idb');
+        ok('the bus card reads idb off the chip', $('tc-block').textContent.includes(`idb carries $${hex2(byteV('idb'))}`));
+        T.selectDbus('rw');
+        ok('the read/write card reads the pin as the harness chip has it', $('tc-block').textContent.includes(`rw pin reads ${L41[byName.get('rw')] > 0 ? 1 : 0} (${m.isRead() ? 'read' : 'write'})`), $('tc-block').textContent.slice(0, 90));
+        T.selectDbus('idl');
+        const idlSet = new Set(gV('idl').nodes);
+        let dimV = 0; for (const c of circles()) if (c.classList.contains('sel-out') === idlSet.has(Number(c.dataset.node))) dimV++;
+        ok('every node but the data latch\'s steps back', dimV === 0, `${dimV} wrong`);
+        const vcands = [];
+        for (const n of gV('idl').nodes) {
+          const p = mine.get(n);
+          for (const [dx, dy] of [[45, 0], [-45, 0], [0, 45], [0, -45], [32, 32], [-32, -32], [60, 0], [-60, 0]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (!hit2(vpath('idl'), x, y)) continue;
+            if ([...d.querySelectorAll('#tc-reg-regions .tc-xg, #tc-flag-regions .tc-fg, #tc-alat-regions .tc-ag')].some((k) => hit2(k, x, y))) continue;
+            if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 30)) continue;
+            vcands.push({ x, y, n });
+          }
+        }
+        ok('a point inside the latch\'s beads, clear of nodes and outranking beads, exists', vcands.length > 0);
+        T.selectDbus(null);
+        f.style.height = '2600px';
+        let vspot = null;
+        for (const c of vcands) { T.frameNodes([c.n]); await sleep(60); const cc = toClient2(c.x, c.y); const e = d.elementFromPoint(cc.x, cc.y); if (e && e.classList.contains('tc-vg')) { vspot = c; break; } }
+        ok('one of them has the bead itself under the pointer once framed', !!vspot, `${vcands.length} candidates`);
+        const tgV = click2(vspot.x, vspot.y);
+        ok('the click lands on a data-bus bead', tgV.classList.contains('tc-vg'), tgV.tagName + '.' + tgV.className.baseVal);
+        ok('and selects the data latch, over the idl capsule and the block under it', st.dbus === 'idl' && st.stem === null && st.block === null, `${st.dbus} / ${st.stem}`);
+        click2(vspot.x, vspot.y);
+        ok('clicking the selected bead again clears it', st.dbus === null);
+        T.selectDbus('rw'); T.selectAlat('abl');
+        ok('an address latch clears a data-bus group, and a data-bus group an address latch', st.dbus === null && st.alat === 'abl' && (T.selectDbus('rw'), st.alat === null && st.dbus === 'rw'));
+        T.setCollapsed('dbus:dor', true);
+        const snV = d.querySelector('#tc-supers .tc-sn[data-key="dbus:dor"]');
+        let vx2 = 0, vy2 = 0; for (const n of gV('dor').nodes) { const p = mine.get(n); vx2 += p.x; vy2 += p.y; }
+        ok('the output register collapses into one node at its mean, forty-eight members', !!snV && Math.abs(Number(snV.getAttribute('cx')) - vx2 / 48) < 0.6 && Math.abs(Number(snV.getAttribute('cy')) - vy2 / 48) < 0.6 && d.querySelector('.tc-sn-lb[data-key="dbus:dor"]').textContent === 'data out · 48');
+        T.setCollapsed('dbus:dor', false);
+        T.selectDbus(null);
+        T.setDbusRegions(false);
+        ok('the data-bus toggle hides the beads', w.getComputedStyle($('tc-dbus-regions')).display === 'none' && $('tc-dbus-btn').getAttribute('aria-pressed') === 'false');
+        T.setDbusRegions(true);
+        const f14 = d.createElement('iframe');
+        f14.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+        d.body.appendChild(f14);
+        await new Promise((res) => { f14.addEventListener('load', res, { once: true }); f14.src = 'tracer.html?program=1&step=41&dbus=SBDB'; });
+        for (let i = 0; i < 2000 && !(f14.contentWindow.__tracer && !f14.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+        ok('?dbus=SBDB selects the line on a fresh page', f14.contentWindow.__tracer.state.dbus === 'SBDB' && f14.contentDocument.getElementById('tc-block').textContent.includes('data bus line SBDB'));
+        f14.remove();
       }
 
       // --- collapsing a container into one node ------------------------------------

@@ -98,6 +98,7 @@
               <button class="btn" type="button" id="tc-flags-btn" aria-pressed="true">flags</button>
               <button class="btn" type="button" id="tc-alat-btn" aria-pressed="true">address latches</button>
               <button class="btn" type="button" id="tc-alu-btn" aria-pressed="true">ALU</button>
+              <button class="btn" type="button" id="tc-dbus-btn" aria-pressed="true">data bus</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -121,7 +122,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit's hue for a slice of the adder, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a long-dashed bead for a cell of the timing chain, the bright outline for the clock generator, a double-ringed bead for a path of the interrupt logic, a dash-dot bead for a piece of the branch logic, the orange outline for the decimal correction, a square-dotted bead for a register or one of its lines, the red outline for the program counter's incrementer, a ringed bead for a flag and its logic, a blue bead for an address latch or its load line, a bead in the bit's hue for a slice of the adder, a teal or orange bead for the data latch or the data out register, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -468,6 +469,21 @@
         the three ways out, each with its cone. A slice's card reads its bit
         and the whole ALU byte off the chip; an input's its byte; a line
         group's which lines are high now.
+        The teal and orange beads are how the chip meets memory: the input
+        data latch, four nodes a bit from the pad's inverter through
+        <span class="mono">notidl</span> and <span class="mono">idl</span> to
+        a latched copy that three lines open onto the internal data bus and
+        the two address buses; the data output register, six a bit, loaded
+        from the internal bus and driving the pads through a push-pull
+        driver under the write control; the internal data bus as its eight
+        bits alone, because its closure over unnamed nodes reaches most of
+        the chip, with every line that holds a switch on a bus bit listed on
+        its card and the ones that are nobody else's given their cones here;
+        and the read/write control, the cones of the four nodes the die names
+        for it, which read the write latch, ready and reset: a write needs
+        the chip ready and not in reset, and that is read off the wires. A
+        latch's card reads its byte off the chip; the bus's its byte and its
+        lines; the control's the pin.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

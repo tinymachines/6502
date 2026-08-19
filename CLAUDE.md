@@ -31,7 +31,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Primer | The mental model, corrected one step at a time. Every number derived, every claim runnable. |
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
-| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, and the ALU read bit by bit with its inputs, ends and line groups. |
+| Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, and the data latch, the output register, the bus and the read/write control. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1387,6 +1387,36 @@ this is that graph with a clock.
     ends and line groups, pins bit 3's names and the `#A.B` set, checks the
     cards against its chip, clicks (framed candidates), collapses,
     deep-links.
+
+- **The data latch, the data output register, the internal data bus and the
+  read/write control are a container each.** `data-bus.js` (a leaf). `idl` is
+  the register closure of `idl0..7`: **32, four a bit** (the pad's inverter,
+  `notidl` under `cclk`, `idl`, and a latched copy under `cp1` filed in the
+  Address latches block that `DL/DB`, `DL/ADL`, `DL/ADH` open onto the
+  buses), reading exactly the `db` pads. `dor` is **48, six a bit** (`notdor`
+  loaded from the bus under `cp1`, `dor`, the pad's push-pull driver), reading
+  exactly `idb0..7` and `RnWstretched`, feeding exactly the pads, with no
+  line of its own. `idb` is its eight bits alone (**its closure reaches 369
+  nodes**, because a bus touches everything) with the seven lines that hold
+  a switch on a bit (`DL/DB SBDB ACDB PCLDB PCHDB DBADD H1x1`); the three
+  that are nobody else's get cones here (`SBDB` 5, `PCLDB` 7, `PCHDB` 5),
+  the latch's three too (`DL/DB` 5, `DL/ADL` 5, `DL/ADH` 17: it reaches the
+  timing chain's T0 cell, the high byte of a fetched address landing at T0).
+  The R/W control is the cones of `rw`, `notRnWprepad`, `RnWstretched`, `#WR`
+  inside the pads, the static logic and the pipeline: **31**, reading
+  `pipe#WR.phi2`, the store terms through the store-data latches, `notRdy0`
+  and `C1x5Reset`: a write needs the chip ready and not in reset, read off
+  the wires. Converges by depth 12; one owner per node.
+  - Kind `dbus`, ids `idl dor idb rw DL/DB DL/ADL DL/ADH SBDB PCLDB PCHDB`;
+    `?dbus=SBDB`, `?databus=0`; priority after the address latches, before
+    the control clusters. Cards read the latch and register bytes, the bus
+    byte and the R/W pin off the chip. The harness re-derives closures, line
+    cones and the R/W union, pins reads and feeds by name, checks the cards
+    against its chip, clicks, collapses, deep-links.
+  - **The View drawer grew past the strip and the study-view drag test
+    caught it**: with eighteen toggles the console's drag up by 200px came
+    back 165, clamped against a drawer taller than the room. The drawer now
+    carries the Ports drawer's cap (`--sp-strip-h`) and scrolls.
 
 ### `graph.json`: the chip as one node-and-edge file
 
