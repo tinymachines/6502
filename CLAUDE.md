@@ -953,6 +953,27 @@ this is that graph with a clock.
     iframe is made 2600px tall for the clicks and put back; and the stepping
     check moves the chip, so it runs last, because the ring assertions after
     it assume the change set is (40, 41).
+- **The buses and latches are capsules inside the regions, and the set is a
+  stated rule, not a list.** A stem is letters only (no `#`, `~`, no ALU
+  product like `(AxB)`), not a `not…` complement, with bit 0 named and at
+  least seven of bits 0..7 named: the seven is there for exactly one reason,
+  `p` has no bit 5. Measured, that is 24 stems (`a ab abh abl adh adl alu alua
+  alub db dor idb idl ir p pch pchp pcl pclp pd s sb x y`), and the rule was
+  tightened twice against what it let through: `Pout`, `dasb` and `pipeUNK`
+  qualified under "six of eight" and none of them is a bus. Each capsule is
+  everything within `STEM_R` (220) of one of its bits (bits sit ~400 apart
+  down the datapath, so a byte is one capsule), drawn by the same
+  `blockRegions()` with a node-to-stem index, named above its top, in the
+  watch colour. Clicking selects the stem through `applySelection`, the one
+  path both kinds of selection share; a capsule wins over the block region it
+  sits in, being the more specific claim; the card reads the byte now, the
+  bits that moved, the pieces, the block(s) its bits are filed under, and
+  offers `watch`/`unwatch`, which edits the watch list. One selection at a
+  time: a stem clears a block and a block a stem. `?bus=STEM` deep-links.
+  - **The harness re-derives the 24 from the names**, checks every bit is in
+    its capsule by `isPointInFill`, clicks a lattice point that is inside one
+    capsule *and* a block region and asserts the bus was selected, compares
+    the card's byte with its own chip, and round-trips the watch button.
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same

@@ -68,6 +68,15 @@ export const LABEL_ZOOM = 3;
 // across the control side, as a dozen. Both numbers are printed in the caption.
 export const REGION_R = 300;
 export const REGION_CELL = 50;
+// A bus or latch is every stem the die names bit by bit: letters only (so no
+// `#`, `~` or ALU product like `(AxB)`), not a `not…` complement, with bit 0
+// named and at least seven of bits 0..7 (seven rather than eight for exactly
+// one reason: `p` has no bit 5). Its region is everything within STEM_R of one
+// of its bits; bits sit about 400 die units apart down the datapath, so 220
+// joins a byte into one capsule and keeps neighbouring columns apart where
+// they are apart (which, for alua and alub, 28 units from each other, they
+// are not, and the capsules say so).
+export const STEM_R = 220;
 
 const state = {
   m: null,
@@ -83,6 +92,10 @@ const state = {
   regionData: null, // block -> {loops, cells, pieces, label, members}, computed once
   regionStats: null,
   block: null,      // the selected functional block, or null
+  stem: null,       // the selected bus or latch (a stem), or null
+  stems: null,      // [{stem, nodes}] the buses and latches, derived from the names
+  stemRegionData: null,
+  stemRegions: true,
   watch: DEFAULT_WATCH.slice(),
   program: 0,
   // The drawing.
@@ -263,6 +276,82 @@ function regionData() {
   return data;
 }
 
+/** The buses and latches, by the rule above. Computed once from the names. */
+function stemList() {
+  if (state.stems) return state.stems;
+  const { sch, byName } = state;
+  const found = new Map();
+  for (const nm of sch.names) {
+    if (!nm) continue;
+    const m = /^([A-Za-z]+)(\d{1,2})$/.exec(nm);
+    if (!m || /^not/i.test(m[1])) continue;
+    if (!found.has(m[1])) found.set(m[1], new Set());
+    found.get(m[1]).add(Number(m[2]));
+  }
+  const out = [];
+  for (const [stem, bits] of found) {
+    if (!bits.has(0)) continue;
+    let low = 0;
+    for (let b = 0; b < 8; b++) if (bits.has(b)) low++;
+    if (low < 7) continue;
+    const nodes = [];
+    for (let b = 0; b < 16; b++) { const n = byName.get(`${stem}${b}`); nodes.push(n === undefined ? null : n); }
+    while (nodes.length && nodes[nodes.length - 1] === null) nodes.pop();
+    out.push({ stem, nodes });
+  }
+  out.sort((a, b) => a.stem.localeCompare(b.stem));
+  state.stems = out;
+  return out;
+}
+
+function stemRegionData() {
+  if (state.stemRegionData) return state.stemRegionData;
+  const list = stemList();
+  const { pos, bounds } = state;
+  const idx = new Array(2048).fill(-1);
+  list.forEach((s, i) => { for (const n of s.nodes) if (n !== null) idx[n] = i; });
+  const data = blockRegions(pos, idx, list.map((_, i) => i), bounds, { radius: STEM_R, cell: REGION_CELL });
+  const out = new Map();
+  list.forEach((s, i) => out.set(s.stem, data.get(i)));
+  state.stemRegionData = out;
+  return out;
+}
+
+function drawStemRegions(g) {
+  const data = stemRegionData();
+  for (const [stem, r] of data) {
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-sg' + (state.stem === stem ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-stem': stem }, g);
+    path.setAttribute('aria-label', `${stem} region`);
+    if (r.label) {
+      // The name sits above the capsule's top, where it does not cover a bit.
+      let top = Infinity, tx = r.label.x;
+      for (const l of r.loops) for (const p of l) if (p.y < top) { top = p.y; tx = p.x; }
+      const t = el('text', { x: tx, y: top - 30, class: 'tc-sg-lb' + (state.stem === stem ? ' sel' : ''), 'data-stem': stem }, g);
+      t.textContent = stem;
+    }
+  }
+  g.classList.toggle('off', !state.stemRegions);
+}
+
+/** Which bus or latch a die point is in: nearest bit among the capsules holding it. */
+function stemAt(pt) {
+  const data = stemRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const [stem, r] of data) {
+    if (!inRegion(pt, r.loops)) continue;
+    const s = stemList().find((x) => x.stem === stem);
+    for (const n of s.nodes) {
+      if (n === null || !pos.has(n)) continue;
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = stem; }
+    }
+  }
+  return best;
+}
+
 function drawRegions(g) {
   const data = regionData();
   const { sch } = state;
@@ -313,24 +402,46 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
+  if (b !== null) state.stem = null;
   const { sch } = state;
+  applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
+}
+
+/** Select a bus or latch: the same treatment, with the stem's bits as members. */
+function selectStem(stem, { fly = false } = {}) {
+  const s = stem === null ? null : stemList().find((x) => x.stem === stem);
+  state.stem = s ? s.stem : null;
+  if (s) state.block = null;
+  const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/**
+ * One selection, of either kind: the chosen region brightens, every node
+ * outside it steps back, an edge with either end in it stays (it is the
+ * boundary), the moved list marks it, and the card reports it.
+ */
+function applySelection(isMember, fly) {
+  const on = isMember !== null;
   const cam = $('tc-cam');
-  if (cam) cam.classList.toggle('has-sel', b !== null);
+  if (cam) cam.classList.toggle('has-sel', on);
   for (const p of document.querySelectorAll('#tc-regions .tc-rg, #tc-regions .tc-rg-lb')) {
-    p.classList.toggle('sel', b !== null && Number(p.dataset.block) === b);
+    p.classList.toggle('sel', state.block !== null && Number(p.dataset.block) === state.block);
   }
-  const inB = (n) => (sch.nodeBlock[n] & 0x7f) === b;
+  for (const p of document.querySelectorAll('#tc-stem-regions .tc-sg, #tc-stem-regions .tc-sg-lb')) {
+    p.classList.toggle('sel', state.stem !== null && p.dataset.stem === state.stem);
+  }
   for (const [n, c] of state.nodeEl) {
-    const out = b !== null && !inB(n);
+    const out = on && !isMember(n);
     c.classList.toggle('sel-out', out);
     state.labelEl.get(n)?.classList.toggle('sel-out', out);
   }
-  for (const e of state.edges) e.el.classList.toggle('sel-out', b !== null && !inB(e.a) && !inB(e.b));
+  for (const e of state.edges) e.el.classList.toggle('sel-out', on && !isMember(e.a) && !isMember(e.b));
   paintBlock();
   paintMoved();
-  if (fly && b !== null) {
+  if (fly && on) {
     const members = [];
-    for (const [n, c] of state.nodeEl) if (inB(n)) members.push(n);
+    for (const n of state.nodeEl.keys()) if (isMember(n)) members.push(n);
     frameNodes(members);
   }
 }
@@ -346,8 +457,9 @@ function selectBlockBySlug(slug) {
 function paintBlock() {
   const box = $('tc-block');
   const b = state.block;
+  if (b === null && state.stem !== null) { paintStemCard(box); return; }
   if (b === null) {
-    const t = 'Click a region in the drawing to select a block; click it again to clear.';
+    const t = 'Click a region in the drawing to select a block, or a capsule to select a bus or latch; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -363,6 +475,31 @@ function paintBlock() {
     + `<span class="tc-bk-moved">${moved}</span> moved at this half-cycle · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}, `
     + `${pct}% of the die`
     + (slug ? ` · <a href="block?b=${slug}">its page</a>` : '');
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/** The card for a selected bus or latch: its byte now, the bits that moved. */
+function paintStemCard(box) {
+  const s = stemList().find((x) => x.stem === state.stem);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  let v = 0, moved = 0, present = 0;
+  s.nodes.forEach((n, b) => {
+    if (n === null) return;
+    present++;
+    if (L && L[n] > 0) v |= 1 << b;
+    if (L && P && P[n] !== L[n]) moved++;
+  });
+  const width = s.nodes.length > 8 ? 4 : 2;
+  const blocks = [...new Set(s.nodes.filter((n) => n !== null).map((n) => sch.blockNames[sch.nodeBlock[n] & 0x7f]))];
+  const r = stemRegionData().get(s.stem);
+  const watched = state.watch.includes(s.stem);
+  const html = `<span class="tc-bk-name">${s.stem}</span> · ${present} bit${present === 1 ? '' : 's'}`
+    + (s.nodes.length !== present ? ` of ${s.nodes.length}` : '')
+    + ` · <span class="tc-bk-val">$${(L ? v : 0).toString(16).padStart(width, '0').toUpperCase()}</span>`
+    + ` · <span class="tc-bk-moved">${moved}</span> bit${moved === 1 ? '' : 's'} moved at this half-cycle`
+    + ` · ${r.pieces} piece${r.pieces === 1 ? '' : 's'} · filed under ${blocks.join(', ')}`
+    + ` · <button type="button" class="tc-bk-watch" data-stem="${s.stem}">${watched ? 'unwatch' : 'watch'}</button>`;
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -385,6 +522,7 @@ function draw() {
 
   const cam = el('g', { class: 'tc-cam' + (state.only ? ' only' : ''), id: 'tc-cam' }, svg);
   drawRegions(el('g', { class: 'tc-regions', id: 'tc-regions' }, cam));
+  drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
   g.edges.forEach((e, i) => {
     const p = pos.get(e.a), q = pos.get(e.b);
@@ -417,6 +555,7 @@ function draw() {
   drawWatch(buses);
   paintZoomClass();
   if (state.block !== null) selectBlock(state.block);
+  else if (state.stem !== null) selectStem(state.stem);
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
   $('tc-caption').textContent =
@@ -438,7 +577,18 @@ function regionCaption() {
     + `within ${REGION_R} die units of one of its nodes: ${st.pieces} pieces in all, and they `
     + `overlap, because ${st.shared} of the ${st.members} block nodes (${pct}%) sit inside `
     + 'another block\'s region too. A convex hull per block was measured first and rejected: '
-    + 'the datapath blocks are interleaved bit-slices, and a hull claims the neighbour\'s silicon.';
+    + 'the datapath blocks are interleaved bit-slices, and a hull claims the neighbour\'s silicon. '
+    + stemCaption();
+}
+
+function stemCaption() {
+  const data = state.stemRegionData;
+  if (!data) return '';
+  let pieces = 0;
+  for (const r of data.values()) pieces += r.pieces;
+  return `The outlined capsules are the ${data.size} buses and latches: every stem the die names `
+    + `bit by bit, each drawn as everything within ${STEM_R} die units of one of its bits, `
+    + `${pieces} pieces in all. Click one to select it.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -923,6 +1073,12 @@ function setMode(m) {
   paint();
 }
 
+function setStemRegions(on) {
+  state.stemRegions = on;
+  $('tc-stems-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-stem-regions')?.classList.toggle('off', !on);
+}
+
 function setRegions(on) {
   state.regions = on;
   $('tc-regions-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1060,6 +1216,15 @@ async function boot() {
     if (q.get('only') === '1') setOnly(true);
     $('tc-regions-btn').addEventListener('click', () => setRegions(!state.regions));
     if (q.get('regions') === '0') setRegions(false);
+    $('tc-stems-btn').addEventListener('click', () => setStemRegions(!state.stemRegions));
+    if (q.get('buses') === '0') setStemRegions(false);
+    $('tc-block').addEventListener('click', (e) => {
+      const b = e.target.closest('.tc-bk-watch');
+      if (!b) return;
+      const stem = b.dataset.stem;
+      setWatch(state.watch.includes(stem) ? state.watch.filter((w) => w !== stem) : [...state.watch, stem]);
+      paintBlock();
+    });
     $('tc-home').addEventListener('click', () => { setView(state.home.slice()); });
 
     // Fullscreen, as the workbench has it: the drawing covers the viewport and
@@ -1119,7 +1284,10 @@ async function boot() {
       // A click on the regions selects the block with the nearest member at
       // that point (they overlap); on the selected block it clears; off every
       // region it clears too.
-      const b = state.regions ? blockAt(atClient(e)) : null;
+      const pt = atClient(e);
+      const stem = state.stemRegions ? stemAt(pt) : null;
+      if (stem !== null) { selectStem(stem === state.stem ? null : stem); return; }
+      const b = state.regions ? blockAt(pt) : null;
       selectBlock(b === state.block ? null : b);
     });
 
@@ -1148,6 +1316,8 @@ async function boot() {
     // ?block=SLUG selects a block and frames it, the slug being the one the
     // block pages and the workbench use.
     if (q.has('block')) selectBlockBySlug(q.get('block'));
+    // ?bus=STEM selects a bus or latch and frames it.
+    if (q.has('bus')) selectStem(q.get('bus').toLowerCase(), { fly: true });
     if (q.get('run') === '1') setRunning(true);
     tick();
     $('tc-stats').textContent =
@@ -1160,5 +1330,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, regionData, selectBlock, selectBlockBySlug, blockAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, blockAt, stemAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

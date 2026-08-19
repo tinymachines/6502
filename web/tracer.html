@@ -83,6 +83,7 @@
               <button class="btn" type="button" data-mode="named">named signals</button>
               <button class="btn" type="button" id="tc-only" aria-pressed="false">show only what moved</button>
               <button class="btn" type="button" id="tc-regions-btn" aria-pressed="true">block regions</button>
+              <button class="btn" type="button" id="tc-stems-btn" aria-pressed="true">bus capsules</button>
             </div>
           </div>
           <div class="field tc-watch-field" id="tc-watch-field">
@@ -104,7 +105,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region in the drawing to select a block; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region in the drawing to select a block, or a capsule to select a bus or latch; click it again to clear.</span>
           </div>
         </div>
 
@@ -232,7 +233,13 @@
         rest of the drawing steps back, the block card says how many of its
         nodes are drawn and how many moved at this half-cycle, and the moved
         list marks its group. Where regions overlap, the click goes to the
-        block with the nearest node, which is the same rule that drew them. A convex hull per block was measured first and rejected, because
+        block with the nearest node, which is the same rule that drew them.
+        The thinner capsules inside them are the buses and latches: every stem
+        the die names bit by bit, a byte (or the sixteen address pins) drawn
+        as everything within a shorter distance of one of its bits, with its
+        name above it. Click a capsule to select the bus: the card reads its
+        value now and how many bits moved, and offers to watch it. A capsule
+        wins over the region it sits in, being the more specific claim. A convex hull per block was measured first and rejected, because
         the datapath blocks are interleaved bit-slices: the address latches'
         hull contained every node of the ALU and the program counter, which is
         the opposite of a container. The unclassified residue and the static

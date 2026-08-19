@@ -314,6 +314,83 @@ f.addEventListener('load', async () => {
     const movedBits = [...d.querySelectorAll('#tc-watch [data-stem="abl"] .tc-lamps i.moved')].length;
     const wantMoved = [...Array(8).keys()].filter((b) => chgSet.has(byName.get(`abl${b}`))).length;
     ok('and mark the bits that moved this half-cycle', movedBits === wantMoved, `${movedBits} vs ${wantMoved}`);
+    // --- the bus and latch capsules ---------------------------------------------
+    // The set is re-derived here from the names by the stated rule, the
+    // geometry checked with the SVG's hit test, and a click on a capsule that
+    // also lies in a block region must select the bus, not the block.
+    {
+      const found = new Map();
+      for (const nm of sch.names) {
+        if (!nm) continue;
+        const mm = /^([A-Za-z]+)(\d{1,2})$/.exec(nm);
+        if (!mm || /^not/i.test(mm[1])) continue;
+        if (!found.has(mm[1])) found.set(mm[1], new Set());
+        found.get(mm[1]).add(Number(mm[2]));
+      }
+      const wantStems = [...found].filter(([, bits]) => bits.has(0) && [...Array(8).keys()].filter((b) => bits.has(b)).length >= 7).map(([k]) => k).sort();
+      const caps = [...d.querySelectorAll('#tc-stem-regions .tc-sg')];
+      const gotStems = caps.map((c) => c.dataset.stem).sort();
+      ok('the capsules are exactly the stems the die names bit by bit, by the stated rule',
+         gotStems.join() === wantStems.join(), `page ${gotStems.length}: ${gotStems.join(' ')} | harness ${wantStems.length}`);
+      ok('and p, which has no bit 5, and ab, sixteen wide, are among them', gotStems.includes('p') && gotStems.includes('ab') && !gotStems.includes('notir') && !gotStems.includes('pipeUNK'));
+      const svg2 = $('tc-svg'); const pt2 = svg2.createSVGPoint();
+      const hit2 = (path, x, y) => { pt2.x = x; pt2.y = y; return path.isPointInFill(pt2); };
+      const capOf = new Map(caps.map((c) => [c.dataset.stem, c]));
+      let outBits = 0, bitsN = 0;
+      const bitsOf = (stem) => { const out = []; for (let b = 0; b < 16; b++) { const n = byName.get(`${stem}${b}`); if (n !== undefined && mine.has(n)) out.push(mine.get(n)); } return out; };
+      for (const stem of wantStems) for (const p of bitsOf(stem)) { bitsN++; if (!hit2(capOf.get(stem), p.x, p.y)) outBits++; }
+      ok('every bit of every stem lies inside its capsule', outBits === 0, `${outBits} of ${bitsN} outside`);
+      ok('each capsule is named above it', wantStems.every((stem) => d.querySelector(`#tc-stem-regions .tc-sg-lb[data-stem="${stem}"]`)?.textContent === stem));
+      // A click: a lattice point inside exactly one capsule, clear of nodes, and
+      // inside at least one block region, so the capsule has to win.
+      const blockPaths = [...d.querySelectorAll('#tc-regions .tc-rg')];
+      const allPts2 = [...mine.values()];
+      const clear2 = (x, y) => allPts2.every((p) => Math.hypot(p.x - x, p.y - y) > 90);
+      let spot = null;
+      const sX = (xmax - xmin) / 90, sY = (ymax - ymin) / 90;
+      for (let x = xmin; x <= xmax && !spot; x += sX) for (let y = ymin; y <= ymax; y += sY) {
+        const inCaps = caps.filter((c) => hit2(c, x, y));
+        if (inCaps.length !== 1 || !clear2(x, y)) continue;
+        if (!blockPaths.some((bp) => hit2(bp, x, y))) continue;
+        spot = { x, y, stem: inCaps[0].dataset.stem }; break;
+      }
+      ok('the lattice offers a point inside one capsule and a block region', !!spot, spot && spot.stem);
+      T.setView(st.home.slice());
+      f.style.height = '2600px'; await sleep(100);
+      const toClient2 = (x, y) => { const mtx = svg2.getScreenCTM(); pt2.x = x; pt2.y = y; const q = pt2.matrixTransform(mtx); return q; };
+      const click2 = (x, y) => { const c = toClient2(x, y); const tg = d.elementFromPoint(c.x, c.y); tg.dispatchEvent(new w.MouseEvent('click', { bubbles: true, clientX: c.x, clientY: c.y })); return tg; };
+      const tg = click2(spot.x, spot.y);
+      ok('the click lands on the capsule, which is above the block region', tg.classList.contains('tc-sg'), tg.tagName + '.' + tg.className.baseVal);
+      ok('and selects the bus, not the block', st.stem === spot.stem && st.block === null, `${st.stem} / ${st.block}`);
+      ok('its capsule is marked selected and no other is', capOf.get(spot.stem).classList.contains('sel') && caps.filter((c) => c.classList.contains('sel')).length === 1);
+      const bitSet = new Set(); for (let b = 0; b < 16; b++) { const n = byName.get(`${spot.stem}${b}`); if (n !== undefined) bitSet.add(n); }
+      let dimBad = 0;
+      for (const c of circles()) if (c.classList.contains('sel-out') === bitSet.has(Number(c.dataset.node))) dimBad++;
+      ok('every node but the stem\'s bits steps back', dimBad === 0, `${dimBad} wrong`);
+      const cardS = $('tc-block').textContent;
+      const wv = watchVal(spot.stem); const wd = (byName.has(`${spot.stem}8`) ? 4 : 2);
+      ok('the card reads the bus\'s byte as the harness reads it, and names the stem', cardS.startsWith(spot.stem) && cardS.includes(`$${wv.toString(16).padStart(wd, '0').toUpperCase()}`), cardS);
+      const movedS = [...bitSet].filter((n) => chgSet.has(n)).length;
+      ok('and counts the bits that moved', cardS.includes(`${movedS} bit${movedS === 1 ? '' : 's'} moved`), cardS);
+      // The watch button on the card adds the stem to the watch, and removes it again.
+      const wasWatched = st.watch.includes(spot.stem);
+      $('tc-block').querySelector('.tc-bk-watch').click();
+      ok('the card\'s watch button toggles the stem in the watch', st.watch.includes(spot.stem) !== wasWatched && !!d.querySelector(`#tc-watch [data-stem="${spot.stem}"]`) === !wasWatched);
+      $('tc-block').querySelector('.tc-bk-watch').click();
+      ok('and back', st.watch.includes(spot.stem) === wasWatched);
+      click2(spot.x, spot.y);
+      ok('clicking the selected capsule again clears it', st.stem === null && !circles().some((c) => c.classList.contains('sel-out')));
+      // Selecting a block then a bus leaves one selection.
+      T.selectBlock(sch.blockNames.indexOf('ALU'));
+      T.selectStem('sb');
+      ok('selecting a bus clears a selected block, and the other way round', st.block === null && st.stem === 'sb' && (T.selectBlock(sch.blockNames.indexOf('ALU')), st.stem === null && st.block === sch.blockNames.indexOf('ALU')));
+      T.selectBlock(null);
+      T.setStemRegions(false);
+      ok('the capsule toggle hides them', w.getComputedStyle($('tc-stem-regions')).display === 'none' && $('tc-stems-btn').getAttribute('aria-pressed') === 'false');
+      T.setStemRegions(true);
+      f.style.height = '1000px';
+      T.frameNodes([byName.get('abl0')]);  // the view the checks below were written against
+    }
     ok('the watched bits are ringed in the drawing and labelled at any zoom',
        [...Array(8).keys()].every((b) => st.nodeEl.get(byName.get(`abl${b}`))?.classList.contains('wt')
                                      && st.labelEl.get(byName.get(`abl${b}`))?.classList.contains('wt'))

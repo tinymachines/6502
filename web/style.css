@@ -2874,6 +2874,22 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.has-sel .tc-n.sel-out.chg, .tc-cam.has-sel .tc-n.sel-out.wt, .tc-cam.has-sel .tc-n.sel-out.on-pick { opacity: .45; }
 .tc-cam.has-sel .tc-e.sel-out { opacity: .12; }
 .tc-cam.has-sel .tc-lb.sel-out { opacity: .3; }
+/* The bus and latch capsules: thinner, in the watch colour, named above. */
+.tc-stem-regions.off { display: none; }
+.tc-sg { fill: color-mix(in srgb, var(--gold) 6%, transparent); stroke: color-mix(in srgb, var(--gold) 65%, transparent);
+         stroke-width: 8; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-sg:hover { fill: color-mix(in srgb, var(--gold) 12%, transparent); }
+.tc-sg.sel { fill: color-mix(in srgb, var(--gold) 16%, transparent); stroke: var(--gold); stroke-width: 12; }
+.tc-cam.has-sel .tc-sg:not(.sel) { stroke: color-mix(in srgb, var(--gold) 14%, transparent); fill: none; }
+.tc-sg-lb { font: 700 110px var(--font-mono); fill: color-mix(in srgb, var(--gold) 80%, transparent); text-anchor: middle;
+            pointer-events: none; paint-order: stroke; stroke: rgba(2, 6, 16, .7); stroke-width: 16px; }
+.tc-sg-lb.sel { fill: var(--gold); }
+.tc-cam.has-sel .tc-sg-lb:not(.sel) { opacity: .3; }
+.tc-cam.z-labels .tc-sg-lb { font-size: 60px; stroke-width: 9px; }
+.tc-bk-val { color: var(--gold); font-weight: 800; }
+.tc-bk-watch { font: inherit; color: var(--gold); background: none; border: 1px solid var(--line); border-radius: .25rem;
+               padding: 0 .35rem; cursor: pointer; }
+.tc-bk-watch:hover { border-color: var(--gold); }
 .tc-bk-name { color: var(--foreground); font-weight: 800; }
 .tc-bk-moved { color: var(--hot); font-weight: 800; }
 #tc-block a { color: var(--gold); }
