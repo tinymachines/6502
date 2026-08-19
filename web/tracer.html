@@ -87,6 +87,7 @@
               <button class="btn" type="button" id="tc-clusters-btn" aria-pressed="true">gate clusters</button>
               <button class="btn" type="button" id="tc-stages-btn" aria-pressed="true">decode stages</button>
               <button class="btn" type="button" id="tc-controls-btn" aria-pressed="true">control lines</button>
+              <button class="btn" type="button" id="tc-pins-btn" aria-pressed="true">pins</button>
               <button class="btn" type="button" id="tc-collapse-blocks">collapse the blocks</button>
               <button class="btn" type="button" id="tc-expand-all">expand all</button>
             </div>
@@ -110,7 +111,7 @@
           </div>
           <div class="field" id="tc-block-field">
             <span>Block</span>
-            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a dotted outline for the control lines of a unit; click it again to clear.</span>
+            <span class="mono muted" id="tc-block">Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a dotted outline for the control lines of a unit, a pad's halo for the pins of a direction; click it again to clear.</span>
           </div>
         </div>
 
@@ -272,6 +273,15 @@
         one to select the set: the card names the lines that are high at this
         half-cycle and counts the switches they are holding open. A control
         cluster wins over a capsule, being smaller.
+        The halos on the pads are the pins, grouped by the direction the
+        <a href="pinout">pinout</a> page measures from the switch network: a
+        pin is an output if a gate that can pull down drives it, an input if
+        it feeds gates, and both if both, which is how the data pins come out
+        bidirectional with nobody saying so. The group is a set around the
+        ring, so its halos are scattered; click one and the card reads every
+        pin of that direction, its level, and which moved. The address and
+        data pads are also capsules, and a halo reaches past the capsule on
+        purpose so it can still be clicked at the pad's edge.
         Any of these can be folded into one node: <em>collapse</em> on its
         card, or <span class="mono">c</span> with it selected, and
         <em>collapse the blocks</em> folds all twelve at once. The one liberty

@@ -32,6 +32,7 @@ import { el } from './sch-draw.js';
 import { centroids } from './die-centroids.js';
 import { blockRegions, loopsToPath, inRegion, gridCells } from './block-regions.js';
 import { SLUGS } from './block-notes.js';
+import { PACKAGE, direction, pinFacts } from './pins.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -106,6 +107,16 @@ export const TERM_R = 70;
 // beside what they drive, so a group runs together at CONTROL_R and the
 // clusters read as the control for each unit.
 export const CONTROL_R = 150;
+// The pins, clustered by the direction the pinout page measures: a pin is an
+// output if a gate that can pull down drives it, an input if it feeds gates,
+// both if both (pins.js). The package table is the only authored part and it
+// is shared with that page; the rails are not signals and are left out. A
+// pin group is a set around the ring, so its beads are scattered like the
+// stage beads; PIN_R is larger than STEM_R so a data or address pad's bead
+// reaches past the capsule drawn over the same pads and can still be clicked.
+export const PIN_R = 300;
+const PIN_COLOR = { input: 'rgb(125 211 252)', output: 'rgb(255 180 110)', bidirectional: 'rgb(150 235 160)', neither: 'rgb(170 175 190)' };
+const PIN_LABEL = { input: 'inputs', output: 'outputs', bidirectional: 'bidirectional', neither: 'neither' };
 export const STAGES = ['T0', 'T2', 'T3', 'T4', 'T5', 'T+', 'any'];
 // Presentation: one hue per stage, warm early to cool late, grey for any.
 const STAGE_COLOR = {
@@ -144,6 +155,10 @@ const state = {
   controlRegionData: null,
   control: null,     // the selected control cluster id (a block id), or null
   controlRegions: true,
+  pins: null,        // [{id: direction, nodes}] the pins by measured direction
+  pinRegionData: null,
+  pin: null,         // the selected pin group (a direction), or null
+  pinRegions: true,
   collapsed: new Set(), // container keys ('block:8', 'stem:sb', 'cluster:12', 'stage:T0', 'control:8') drawn as one node
   supers: [],           // the collapsed containers' single nodes, from applyCollapse()
   nodeOwner: new Map(), // node -> the key of the collapsed container that hides it
@@ -600,6 +615,77 @@ function controlAt(pt) {
   return best;
 }
 
+/** The pins grouped by measured direction. */
+function pinList() {
+  if (state.pins) return state.pins;
+  const { sch, pos } = state;
+  const d = pinFacts(sch);
+  const groups = new Map();
+  const seen = new Set();
+  let pins = 0;
+  for (const p of PACKAGE) {
+    if (!p.node || p.power || seen.has(p.node)) continue;
+    seen.add(p.node);
+    const n = d.byName.get(p.node);
+    if (n === undefined || !pos.has(n)) continue;
+    pins++;
+    const dir = direction(d, p.node) || 'neither';
+    if (!groups.has(dir)) groups.set(dir, []);
+    groups.get(dir).push(n);
+  }
+  const out = [];
+  for (const id of ['input', 'output', 'bidirectional', 'neither']) {
+    const nodes = groups.get(id);
+    if (nodes && nodes.length >= 2) out.push({ id, nodes: nodes.sort((a, b) => a - b) });
+  }
+  state.pins = out;
+  state.pinStats = { groups: out.length, pins };
+  return out;
+}
+
+function pinRegionData() {
+  if (state.pinRegionData) return state.pinRegionData;
+  const list = pinList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: PIN_R, cell: REGION_CELL });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.pinRegionData = out;
+  return out;
+}
+
+function drawPinRegions(g) {
+  const data = pinRegionData();
+  for (const c of pinList()) {
+    const r = data.get(c.id);
+    const css = PIN_COLOR[c.id];
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-pg' + (state.pin === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-pin': c.id, style: `--bc: ${css}` }, g);
+    path.setAttribute('aria-label', `${c.nodes.length} ${PIN_LABEL[c.id]} pins`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y - PIN_R - 30, class: 'tc-pg-lb' + (state.pin === c.id ? ' sel' : ''), 'data-pin': c.id, style: `--bc: ${css}` }, g);
+      t.textContent = `pins: ${PIN_LABEL[c.id]}`;
+    }
+  }
+  g.classList.toggle('off', !state.pinRegions);
+}
+
+function pinAt(pt) {
+  const data = pinRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const c of pinList()) {
+    if (!inRegion(pt, data.get(c.id).loops)) continue;
+    for (const n of c.nodes) {
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = c.id; }
+    }
+  }
+  return best;
+}
+
 function drawStemRegions(g) {
   const data = stemRegionData();
   for (const [stem, r] of data) {
@@ -685,7 +771,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; }
+  if (b !== null) { state.stem = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -694,7 +780,7 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; }
+  if (s) { state.block = null; state.cluster = null; state.stage = null; state.control = null; state.pin = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -703,7 +789,7 @@ function selectStem(stem, { fly = false } = {}) {
 function selectCluster(id, { fly = false } = {}) {
   const c = id === null ? null : clusterList().find((x) => x.id === id);
   state.cluster = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; }
+  if (c) { state.block = null; state.stem = null; state.stage = null; state.control = null; state.pin = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -712,7 +798,7 @@ function selectCluster(id, { fly = false } = {}) {
 function selectStage(id, { fly = false } = {}) {
   const c = id === null ? null : stageList().find((x) => x.id === id);
   state.stage = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.control = null; state.pin = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -721,7 +807,16 @@ function selectStage(id, { fly = false } = {}) {
 function selectControl(id, { fly = false } = {}) {
   const c = id === null ? null : controlList().find((x) => x.id === id);
   state.control = c ? c.id : null;
-  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; }
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.pin = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
+/** Select the pins of one direction, as a set. */
+function selectPins(id, { fly = false } = {}) {
+  const c = id === null ? null : pinList().find((x) => x.id === id);
+  state.pin = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; state.cluster = null; state.stage = null; state.control = null; }
   const members = c ? new Set(c.nodes) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
@@ -749,6 +844,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-control-regions .tc-kg, #tc-control-regions .tc-kg-lb')) {
     p.classList.toggle('sel', state.control !== null && Number(p.dataset.control) === state.control);
+  }
+  for (const p of document.querySelectorAll('#tc-pin-regions .tc-pg, #tc-pin-regions .tc-pg-lb')) {
+    p.classList.toggle('sel', state.pin !== null && p.dataset.pin === state.pin);
   }
   for (const [n, c] of state.nodeEl) {
     const out = on && !isMember(n);
@@ -789,8 +887,9 @@ function paintBlock() {
   if (b === null && state.cluster !== null) { paintClusterCard(box); return; }
   if (b === null && state.stage !== null) { paintStageCard(box); return; }
   if (b === null && state.control !== null) { paintControlCard(box); return; }
+  if (b === null && state.pin !== null) { paintPinCard(box); return; }
   if (b === null) {
-    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a dotted outline for the control lines of a unit; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates, a bead for the decode terms of a stage, a dotted outline for the control lines of a unit, a pad\'s halo for the pins of a direction; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -806,6 +905,22 @@ function paintBlock() {
     + `<span class="tc-bk-moved">${moved}</span> moved at this half-cycle · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}, `
     + `${pct}% of the die`
     + (slug ? ` · <a href="block?b=${slug}">its page</a>` : '') + collapseButton();
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/** The card for the pins of one direction: every pin's level, the ones that moved. */
+function paintPinCard(box) {
+  const c = pinList().find((x) => x.id === state.pin);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  let high = 0, moved = 0;
+  const pills = c.nodes.map((n) => {
+    const on = L && L[n] > 0, mv = L && P && P[n] !== L[n];
+    if (on) high++; if (mv) moved++;
+    return `<button type="button" class="tc-node ${on ? 'up tc-hi' : 'down'}${mv ? ' tc-mv' : ''}" data-node="${n}">${sch.names[n]}<i>${on ? '1' : '0'}</i></button>`;
+  }).join(' ');
+  const html = `<span class="tc-bk-name">pins, ${PIN_LABEL[c.id]}</span> · ${c.nodes.length} pins`
+    + ` · <span class="tc-bk-moved">${high}</span> high · ${moved} moved at this half-cycle · ${pills}` + collapseButton();
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -909,6 +1024,7 @@ function draw() {
 
   const cam = el('g', { class: 'tc-cam' + (state.only ? ' only' : ''), id: 'tc-cam' }, svg);
   drawRegions(el('g', { class: 'tc-regions', id: 'tc-regions' }, cam));
+  drawPinRegions(el('g', { class: 'tc-pin-regions', id: 'tc-pin-regions' }, cam));
   drawClusterRegions(el('g', { class: 'tc-cluster-regions', id: 'tc-cluster-regions' }, cam));
   drawStageRegions(el('g', { class: 'tc-stage-regions', id: 'tc-stage-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
@@ -951,6 +1067,7 @@ function draw() {
   else if (state.cluster !== null) selectCluster(state.cluster);
   else if (state.stage !== null) selectStage(state.stage);
   else if (state.control !== null) selectControl(state.control);
+  else if (state.pin !== null) selectPins(state.pin);
   applyCollapse();
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
@@ -1012,7 +1129,15 @@ function controlCaption() {
   const { sch } = state;
   return `The dotted outlines are the ${st.lines} decode control lines in ${st.clusters} clusters by the block `
     + `holding most of the transistors each one gates (${controlList().map((c) => `${sch.blockNames[c.block]} ${c.nodes.length}`).join(', ')})`
-    + (st.singles ? `, ${st.singles} on its own and left out` : '') + '.';
+    + (st.singles ? `, ${st.singles} on its own and left out` : '') + '. ' + pinCaption();
+}
+
+function pinCaption() {
+  const st = state.pinStats;
+  if (!st) return '';
+  return `The halos on the pads are the ${st.pins} pins the die names, grouped by the direction the pinout page `
+    + `measures (${pinList().map((c) => `${c.nodes.length} ${PIN_LABEL[c.id]}`).join(', ')}): a pin is an output if a gate `
+    + 'that can pull down drives it, an input if it feeds gates, both if both.';
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -1257,7 +1382,7 @@ function paint() {
 // share of its members that are high, ringed if any changed, and a bundle
 // flashes if any edge in it fired or toggled.
 
-const KINDS = ['control', 'stem', 'stage', 'cluster', 'block'];
+const KINDS = ['control', 'stem', 'stage', 'cluster', 'pins', 'block'];
 
 /** What a container key stands for: its members, a label and a colour. */
 function container(key) {
@@ -1287,12 +1412,17 @@ function container(key) {
     const c = controlList().find((x) => x.id === Number(id));
     return c ? { kind, id: c.id, nodes: c.nodes, label: `ctl → ${sch.blockNames[c.block]}`, css: blockCss(c.block) } : null;
   }
+  if (kind === 'pins') {
+    const c = pinList().find((x) => x.id === id);
+    return c ? { kind, id, nodes: c.nodes, label: `pins: ${PIN_LABEL[id]}`, css: PIN_COLOR[id] } : null;
+  }
   return null;
 }
 
 /** The key of whatever is selected, or null. */
 function selectedKey() {
   if (state.control !== null) return `control:${state.control}`;
+  if (state.pin !== null) return `pins:${state.pin}`;
   if (state.stem !== null) return `stem:${state.stem}`;
   if (state.stage !== null) return `stage:${state.stage}`;
   if (state.cluster !== null) return `cluster:${state.cluster}`;
@@ -1308,6 +1438,7 @@ function selectKey(key) {
   else if (c.kind === 'cluster') selectCluster(c.id);
   else if (c.kind === 'stage') selectStage(c.id);
   else if (c.kind === 'control') selectControl(c.id);
+  else if (c.kind === 'pins') selectPins(c.id);
 }
 
 function setCollapsed(key, on) {
@@ -1693,6 +1824,12 @@ function setMode(m) {
   paint();
 }
 
+function setPinRegions(on) {
+  state.pinRegions = on;
+  $('tc-pins-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-pin-regions')?.classList.toggle('off', !on);
+}
+
 function setControlRegions(on) {
   state.controlRegions = on;
   $('tc-controls-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1870,6 +2007,8 @@ async function boot() {
     if (q.get('terms') === '0') setStageRegions(false);
     $('tc-controls-btn').addEventListener('click', () => setControlRegions(!state.controlRegions));
     if (q.get('controls') === '0') setControlRegions(false);
+    $('tc-pins-btn').addEventListener('click', () => setPinRegions(!state.pinRegions));
+    if (q.get('pins') === '0') setPinRegions(false);
     $('tc-collapse-blocks').addEventListener('click', () => {
       const all = [...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`));
       collapseAllBlocks(!all);
@@ -1961,6 +2100,8 @@ async function boot() {
       if (sg !== null) { selectStage(sg === state.stage ? null : sg); return; }
       const cl = state.clusterRegions ? clusterAt(pt) : null;
       if (cl !== null) { selectCluster(cl === state.cluster ? null : cl); return; }
+      const pg = state.pinRegions ? pinAt(pt) : null;
+      if (pg !== null) { selectPins(pg === state.pin ? null : pg); return; }
       const b = state.regions ? blockAt(pt) : null;
       selectBlock(b === state.block ? null : b);
     });
@@ -2003,6 +2144,8 @@ async function boot() {
       applyCollapse();
       if ([...regionData().keys()].every((b) => state.collapsed.has(`block:${b}`))) $('tc-collapse-blocks').textContent = 'expand the blocks';
     }
+    // ?pin=input|output|bidirectional selects the pins of that direction.
+    if (q.has('pin')) selectPins(q.get('pin'), { fly: true });
     // ?control=SLUG selects the control lines operating that block and frames them.
     if (q.has('control')) {
       const slug = q.get('control');
@@ -2029,5 +2172,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, selectStage, stageList, stageRegionData, setStageRegions, selectControl, controlList, controlRegionData, setControlRegions, selectPins, pinList, pinRegionData, setPinRegions, blockAt, stemAt, clusterAt, stageAt, controlAt, pinAt, setCollapsed, collapseAllBlocks, container, selectedKey, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, TERM_R, STAGES, CONTROL_R, PIN_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

@@ -521,10 +521,14 @@ def main() -> None:
     b.emit("diegraph.js", dg.encode())
 
     # 3o. pinout.js: the package, with every column but the numbering derived.
+    # pins.js carries the package table and the direction rule, shared with
+    # the tracer.
+    b.copy_hashed("pins.js")
     po = b.read("pinout.js").decode()
     for original, resolved in [
         ("./block-palette.js", "./" + b.ref("block-palette.js")),
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
+        ("./pins.js", "./" + b.ref("pins.js")),
     ]:
         po = replace_once(po, f"'{original}'", f"'{resolved}'", where="pinout.js")
     po = replace_once(po, "fetch('schematic.json')",
@@ -569,6 +573,7 @@ def main() -> None:
         ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
         ("./block-regions.js", "./" + b.ref("block-regions.js")),
         ("./block-notes.js", "./" + b.ref("block-notes.js")),
+        ("./pins.js", "./" + b.ref("pins.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

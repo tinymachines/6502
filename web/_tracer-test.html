@@ -605,6 +605,70 @@ f.addEventListener('load', async () => {
       ok('the control toggle hides them', w.getComputedStyle($('tc-control-regions')).display === 'none' && $('tc-controls-btn').getAttribute('aria-pressed') === 'false');
       T.setControlRegions(true);
 
+      // --- the pins by measured direction -------------------------------------------
+      // The rule is re-stated here rather than imported, and the result is then
+      // checked against what a 6502's pins are known to do, as the pinout
+      // harness does, because the page and a naive harness could agree.
+      {
+        const driverH = new Map(), feedsH = new Map();
+        for (const [node, , pre, legs] of sch.gates) {
+          if (legs.some((leg) => !leg.every((x) => x === sch.vss))) driverH.set(node, true);
+          for (const leg of legs) for (const i of leg) feedsH.set(i, (feedsH.get(i) || 0) + 1);
+          if (pre >= 0) feedsH.set(pre, (feedsH.get(pre) || 0) + 1);
+        }
+        const dirOf = (n) => { const dr = !!driverH.get(n), rd = (feedsH.get(n) || 0) > 0; return dr && rd ? 'bidirectional' : dr ? 'output' : rd ? 'input' : 'neither'; };
+        const pinNames = ['rdy', 'clk1out', 'irq', 'nmi', 'sync', ...Array.from({ length: 16 }, (_, i) => `ab${i}`), ...Array.from({ length: 8 }, (_, i) => `db${i}`), 'rw', 'clk0', 'so', 'clk2out', 'res'];
+        const wantPins = new Map();
+        for (const nm of pinNames) { const n = byName.get(nm); const dr = dirOf(n); if (!wantPins.has(dr)) wantPins.set(dr, []); wantPins.get(dr).push(n); }
+        const gotPins = T.pinList();
+        ok('the pin groups are the harness\'s own, pin for pin, by the measured direction',
+           gotPins.length === [...wantPins].filter(([, v]) => v.length >= 2).length
+           && gotPins.every((c) => (wantPins.get(c.id) || []).sort((a, b) => a - b).join() === c.nodes.join()),
+           gotPins.map((c) => `${c.id}:${c.nodes.length}`).join(' '));
+        const names = (id) => (gotPins.find((c) => c.id === id)?.nodes || []).map((n) => sch.names[n]).sort();
+        ok('and they are what a 6502\'s pins are known to do: six inputs, twenty outputs, eight bidirectional',
+           names('input').join() === ['clk0', 'irq', 'nmi', 'rdy', 'res', 'so'].join()
+           && names('bidirectional').join() === Array.from({ length: 8 }, (_, i) => `db${i}`).sort().join()
+           && names('output').length === 20 && ['rw', 'sync', 'clk1out', 'clk2out', 'ab0', 'ab15'].every((x) => names('output').includes(x)),
+           `${names('input').join(' ')} | ${names('bidirectional').join(' ')} | ${names('output').length} outputs`);
+        const ppath = (id) => d.querySelector(`#tc-pin-regions .tc-pg[data-pin="${id}"]`);
+        let outP = 0; for (const c of gotPins) for (const n of c.nodes) { const p = mine.get(n); if (!hit2(ppath(c.id), p.x, p.y)) outP++; }
+        ok('every pin lies inside its group\'s halo', outP === 0);
+        // A click at a data pad's edge: inside the halo, outside the db capsule.
+        const db3 = byName.get('db3'); const pd3 = mine.get(db3);
+        let pspot = null;
+        for (const ang of [0, 45, 90, 135, 180, 225, 270, 315]) {
+          const x = pd3.x + 262 * Math.cos(ang * Math.PI / 180), y = pd3.y + 262 * Math.sin(ang * Math.PI / 180);
+          if (!hit2(ppath('bidirectional'), x, y) || caps.some((cp) => hit2(cp, x, y))) continue;
+          if (allPts2.some((q) => Math.hypot(q.x - x, q.y - y) < 32)) continue;
+          pspot = { x, y }; break;
+        }
+        ok('a point in db3\'s halo but outside the db capsule exists', !!pspot);
+        T.frameNodes([db3]);
+        f.style.height = '2600px'; await sleep(100);
+        const tg6 = click2(pspot.x, pspot.y);
+        ok('the click lands on the halo', tg6.classList.contains('tc-pg'), tg6.tagName + '.' + tg6.className.baseVal);
+        ok('and selects the bidirectional pins, not the bus or the pad block', st.pin === 'bidirectional' && st.stem === null && st.block === null, `${st.pin} / ${st.stem} / ${st.block}`);
+        const cardP = $('tc-block');
+        const pillsP = [...cardP.querySelectorAll('.tc-node')].map((b) => [b.textContent.replace(/[01]$/, ''), b.querySelector('i').textContent]);
+        const wantP = wantPins.get('bidirectional').map((n) => [sch.names[n], L41[n] > 0 ? '1' : '0']);
+        ok('the card lists every pin of the group with the level the harness chip reads', pillsP.length === 8 && pillsP.every(([nm, v]) => wantP.some(([wn, wv]) => wn === nm && wv === v)), pillsP.map((x) => x.join(':')).join(' '));
+        click2(pspot.x, pspot.y);
+        ok('clicking the selected halo again clears it', st.pin === null);
+        T.selectPins('input'); T.selectStem('sb');
+        ok('a bus clears a pin group, and a pin group a bus', st.pin === null && st.stem === 'sb' && (T.selectPins('input'), st.stem === null && st.pin === 'input'));
+        T.setCollapsed('pins:input', true);
+        const snP = d.querySelector('#tc-supers .tc-sn[data-key="pins:input"]');
+        const ins = wantPins.get('input');
+        let mx = 0, my = 0; for (const n of ins) { const p = mine.get(n); mx += p.x; my += p.y; }
+        ok('the input pins collapse into one node at their mean, six members', !!snP && Math.abs(Number(snP.getAttribute('cx')) - mx / ins.length) < 0.6 && Math.abs(Number(snP.getAttribute('cy')) - my / ins.length) < 0.6 && d.querySelector('.tc-sn-lb[data-key="pins:input"]').textContent === 'pins: inputs · 6');
+        T.setCollapsed('pins:input', false);
+        T.selectPins(null);
+        T.setPinRegions(false);
+        ok('the pins toggle hides the halos', w.getComputedStyle($('tc-pin-regions')).display === 'none' && $('tc-pins-btn').getAttribute('aria-pressed') === 'false');
+        T.setPinRegions(true);
+      }
+
       // --- collapsing a container into one node ------------------------------------
       {
         const aluB = sch.blockNames.indexOf('ALU');

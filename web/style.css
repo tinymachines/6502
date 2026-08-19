@@ -2929,6 +2929,19 @@ body.no-scroll #view { z-index: 70; }
 .tc-bundle.fired { stroke: var(--hot); }
 .tc-bundle.sel-out { opacity: .12; }
 
+/* The pins by measured direction: a halo on each pad, in the direction's hue. */
+.tc-pin-regions.off { display: none; }
+.tc-pg { fill: color-mix(in srgb, var(--bc) 9%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);
+         stroke-width: 7; stroke-dasharray: 2 10; stroke-linecap: round; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-pg:hover { fill: color-mix(in srgb, var(--bc) 18%, transparent); }
+.tc-pg.sel { fill: color-mix(in srgb, var(--bc) 26%, transparent); stroke: var(--bc); stroke-width: 12; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-pg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 16%, transparent); fill: none; }
+.tc-pg-lb { font: 800 110px var(--font-sans); fill: var(--bc); text-anchor: middle; pointer-events: none;
+            paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 16px; }
+.tc-cam.z-labels .tc-pg-lb { font-size: 54px; stroke-width: 8px; }
+.tc-cam.has-sel .tc-pg-lb:not(.sel) { opacity: .3; }
+#tc-block .tc-node.tc-mv { outline: 2px solid var(--hot); }
+
 /* The bus and latch capsules: thinner, in the watch colour, named above. */
 .tc-stem-regions.off { display: none; }
 .tc-sg { fill: color-mix(in srgb, var(--gold) 6%, transparent); stroke: color-mix(in srgb, var(--gold) 65%, transparent);

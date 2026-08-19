@@ -1052,6 +1052,21 @@ this is that graph with a clock.
     runs with `only=1`, which hides most nodes for its own reason; a first
     version read `display: none` and reported 2174 edges wrong. And a
     `fillOpacity` written as `0.60` reads back as `0.6`: compare numbers.
+- **The pins are containers too, grouped by the direction the pinout page
+  measures**, and that meant an extraction first: `PACKAGE`, `direction()`
+  and the `driver`/`feeds`/`chan` derivation moved out of `pinout.js` into
+  `pins.js`, shared by both pages, because a second copy of the direction rule
+  that dropped its one subtlety (a gate whose every leg is gated by vss is a
+  pullup in a gate's clothes) would call RDY and S.O. outputs. `_pinout-test`
+  passed unchanged before and after. On the tracer: 6 inputs, 20 outputs, 8
+  bidirectional (the data pads, with nobody saying so), halos of `PIN_R` (300)
+  on each pad in the direction's hue, a set around the ring like the stage
+  beads; `PIN_R` exceeds `STEM_R` on purpose so a data or address pad's halo
+  reaches past the capsule over the same pads and can be clicked at the
+  pad's edge. The card lists every pin with its level and marks the ones that
+  moved. `pins:input` etc. collapse like everything else (the mean of a set
+  around the ring lands mid-die, which is the rule and is stated). Priority:
+  control, capsule, stage, cluster, pins, block. `?pin=input` deep-links.
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same
