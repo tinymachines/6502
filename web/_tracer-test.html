@@ -28,7 +28,7 @@ import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR } from './programs.js';
 
 const results = [];
-const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const ok = (n, c, d) => { results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`); document.title = `running ${results.length}`; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const f = document.getElementById('f');
 const hex2 = (v) => v.toString(16).padStart(2, '0').toUpperCase();
@@ -240,6 +240,73 @@ f.addEventListener('load', async () => {
     ok('zooming past the threshold shows every named label', $('tc-cam').classList.contains('z-labels') && st.home[2] / vb()[2] >= 3, `${(st.home[2] / vb()[2]).toFixed(1)}x`);
     $('tc-home').click();
     ok('Fit goes home', vb().join() === st.home.join());
+
+    // --- the camera: pan, pinch, and a tap is not a drag ---------------------------
+    // Driven through the real handlers with synthetic pointer events: down on
+    // the stage, move and up on the window, which is where the page listens.
+    // The assertion that matters is not "the scale went up" -- the explorer's
+    // pinch bug left the scale right and the anchor at (0,0) -- but that the
+    // die point under the fingers is still under the fingers afterwards.
+    const stage = d.querySelector('.tc-stage');
+    const dieAt = (cx, cy) => {
+      const r = $('tc-svg').getBoundingClientRect(); const [x, y, w, hh] = vb();
+      return { x: x + ((cx - r.left) / r.width) * w, y: y + ((cy - r.top) / r.height) * hh };
+    };
+    const ptr = (type, id, x, y, target, pointerType = 'touch') =>
+      target.dispatchEvent(new w.PointerEvent(type, { bubbles: true, pointerId: id, pointerType, clientX: x, clientY: y, isPrimary: id === 1 }));
+    const sr0 = $('tc-svg').getBoundingClientRect();
+    const mx = sr0.left + sr0.width * 0.4, my = sr0.top + sr0.height * 0.45;
+    // Pan with one finger: the die moves with it.
+    const under0 = dieAt(mx, my);
+    ptr('pointerdown', 1, mx, my, stage);
+    ptr('pointermove', 1, mx + 90, my + 60, w);
+    ptr('pointerup', 1, mx + 90, my + 60, w);
+    const under1 = dieAt(mx + 90, my + 60);
+    ok('one finger pans: the die point that was under it is still under it 90px later',
+       Math.hypot(under1.x - under0.x, under1.y - under0.y) < 1 && vb()[2] === st.home[2] && st.dragged === true,
+       `${under0.x.toFixed(0)},${under0.y.toFixed(0)} -> ${under1.x.toFixed(0)},${under1.y.toFixed(0)}`);
+    // Pinch with two: spread doubles about a fixed midpoint, the view width halves,
+    // and the die point under the midpoint does not move.
+    const w0 = vb()[2];
+    const ax = mx - 50, bx = mx + 50;
+    const mid0 = dieAt(mx, my);
+    ptr('pointerdown', 1, ax, my, stage);
+    ptr('pointerdown', 2, bx, my, stage);
+    ptr('pointermove', 1, mx - 100, my, w);
+    ptr('pointermove', 2, mx + 100, my, w);
+    const mid1 = dieAt(mx, my);
+    ok('two fingers pinch: doubling the spread halves the view, about the midpoint',
+       Math.abs(vb()[2] / w0 - 0.5) < 0.01 && Math.hypot(mid1.x - mid0.x, mid1.y - mid0.y) < 1 && vb().every(Number.isFinite),
+       `${(w0 / vb()[2]).toFixed(2)}x, midpoint drift ${Math.hypot(mid1.x - mid0.x, mid1.y - mid0.y).toFixed(1)}`);
+    // One finger lifts: the other pans from where it is, with no jump.
+    ptr('pointerup', 2, mx + 100, my, w);
+    const held = dieAt(mx - 100, my);
+    ptr('pointermove', 1, mx - 60, my + 30, w);
+    const heldAfter = dieAt(mx - 60, my + 30);
+    ptr('pointerup', 1, mx - 60, my + 30, w);
+    ok('lifting one finger leaves the other panning from where it is',
+       Math.hypot(heldAfter.x - held.x, heldAfter.y - held.y) < 1 && Math.abs(vb()[2] / w0 - 0.5) < 0.01,
+       `drift ${Math.hypot(heldAfter.x - held.x, heldAfter.y - held.y).toFixed(1)}`);
+    // Verified to be able to tell: with the page's pinch anchored at (0,0) instead
+    // of the fingers (the explorer's old bug), the scale above still reads 2.00x
+    // and the midpoint drifts by about a view-width (8025 units), and only the
+    // midpoint clause goes red.
+    // A tap on a node picks it; a press that travelled more than the touch slop
+    // does not.
+    const someNode = [...st.nodeEl.entries()].find(([n, c]) => c.getBoundingClientRect().width > 0 && n !== sch.vss);
+    const nc = someNode[1].getBoundingClientRect();
+    ptr('pointerdown', 1, nc.left + nc.width / 2, nc.top + nc.height / 2, stage);
+    ptr('pointermove', 1, nc.left + nc.width / 2 + 5, nc.top + nc.height / 2 + 5, w);
+    ptr('pointerup', 1, nc.left + nc.width / 2 + 5, nc.top + nc.height / 2 + 5, w);
+    someNode[1].dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    ok('a touch that moved 7px is a tap, and picks the node', st.picked === someNode[0] && st.dragged === false, `picked ${st.picked}`);
+    ptr('pointerdown', 1, nc.left + nc.width / 2, nc.top + nc.height / 2, stage);
+    ptr('pointermove', 1, nc.left + nc.width / 2 + 40, nc.top + nc.height / 2, w);
+    ptr('pointerup', 1, nc.left + nc.width / 2 + 40, nc.top + nc.height / 2, w);
+    T.pick(null);
+    someNode[1].dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    ok('a touch that moved 40px is a drag, and its click picks nothing', st.picked === null && st.dragged === true);
+    $('tc-home').click();
 
     // --- reset and program change --------------------------------------------------
     $('tc-reset').click();

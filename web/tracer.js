@@ -96,6 +96,7 @@ const state = {
   picked: null,
   raf: 0,
   solo: false,             // the study view (fullscreen) is on
+  dragged: false,          // the last press became a pan, so its click picks nothing
 };
 
 // ---------------------------------------------------------------------------
@@ -312,6 +313,76 @@ function atClient(e) {
   const [x, y, w, hh] = state.view;
   return { x: x + ((e.clientX - r.left) / r.width) * w, y: y + ((e.clientY - r.top) / r.height) * hh };
 }
+/**
+ * Pan and pinch. The camera is the viewBox, so a gesture holds one die point
+ * under one screen point: the finger, or the midpoint of two. One pointer pans;
+ * two pinch about their midpoint and pan by its movement. Same shape as the
+ * schematic's camera, and the same two rules that each cost a round there:
+ * pinch geometry has exactly one constructor (`pinchOf`), and the ratio is read
+ * against the gesture's own start rather than accumulated per event, which
+ * drifts. Move and release are watched on the window, so a finger that leaves
+ * the stage mid-pan keeps panning, and because `setPointerCapture` would
+ * retarget the click that picks a node. A press that became a drag leaves
+ * `state.dragged` raised for that click to read.
+ */
+function setupCamera(stage, svg) {
+  const live = new Map();     // pointerId -> {x, y} on screen
+  let gesture = null;         // {c: die point held, w0: view width at start, d0: pinch spread at start}
+  let travel = 0;
+  const pinchOf = (a, b) => ({ d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 });
+  const anchorOf = () => {
+    const pts = [...live.values()];
+    return pts.length >= 2 ? pinchOf(pts[0], pts[1]) : { cx: pts[0].x, cy: pts[0].y, d: 0 };
+  };
+  const dieAt = (cx, cy) => atClient({ clientX: cx, clientY: cy });
+  // Put die point c under screen point (cx, cy) at view width nw.
+  const place = (nw, c, cx, cy) => {
+    const r = svg.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const w = Math.max(120, Math.min(state.home[2] * 4, nw));
+    const hh = w * (state.view[3] / state.view[2]);
+    const x = c.x - ((cx - r.left) / r.width) * w;
+    const y = c.y - ((cy - r.top) / r.height) * hh;
+    if (![x, y, w, hh].every(Number.isFinite)) return;
+    setView([x, y, w, hh]);
+  };
+  const seed = () => {
+    if (!live.size) { gesture = null; return; }
+    const a = anchorOf();
+    gesture = { c: dieAt(a.cx, a.cy), w0: state.view[2], d0: a.d };
+  };
+  stage.addEventListener('pointerdown', (e) => {
+    // The console floats over the stage and has its own drag; a press on it
+    // is never a pan.
+    if (e.target.closest && e.target.closest('.solo-palette')) return;
+    state.dragged = false;
+    travel = 0;
+    live.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    seed();
+  });
+  const onMove = (e) => {
+    if (!live.has(e.pointerId) || !gesture) return;
+    const from = live.get(e.pointerId);
+    travel = Math.max(travel, Math.hypot(e.clientX - from.x, e.clientY - from.y));
+    live.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const a = anchorOf();
+    if (live.size >= 2 && gesture.d0 > 0 && a.d > 0) place(gesture.w0 * (gesture.d0 / a.d), gesture.c, a.cx, a.cy);
+    else if (live.size === 1) place(state.view[2], gesture.c, a.cx, a.cy);
+  };
+  const onUp = (e) => {
+    if (!live.delete(e.pointerId)) return;
+    // A finger always moves a little: the slop that separates a tap from a
+    // drag is larger for touch, or a tap on a node would never pick it.
+    if (travel > (e.pointerType === 'mouse' ? 4 : 12)) state.dragged = true;
+    // A finger lifting mid-pinch re-seeds from whatever is still down, so the
+    // remaining one pans from where it is rather than jumping.
+    seed();
+  };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
+}
+
 /** Fly to a set of nodes: the smallest view that holds them, never tighter than a floor. */
 function frameNodes(nodes) {
   const pts = nodes.filter((n) => state.pos.has(n)).map((n) => state.pos.get(n));
@@ -844,20 +915,9 @@ async function boot() {
       const p = atClient(e);
       zoomAt(e.deltaY > 0 ? 1.18 : 1 / 1.18, p.x, p.y);
     }, { passive: false });
-    let from = null, moved = 0;
-    svg.addEventListener('pointerdown', (e) => { from = atClient(e); moved = 0; });
-    svg.addEventListener('pointermove', (e) => {
-      if (!from) return;
-      const p = atClient(e);
-      moved += Math.abs(p.x - from.x) + Math.abs(p.y - from.y);
-      const [, , w, hh] = state.view;
-      setView([state.view[0] - (p.x - from.x), state.view[1] - (p.y - from.y), w, hh]);
-    });
-    const release = () => { from = null; };
-    svg.addEventListener('pointerup', release);
-    svg.addEventListener('pointerleave', release);
+    setupCamera(document.querySelector('.tc-stage'), svg);
     svg.addEventListener('click', (e) => {
-      if (moved > 60) return;
+      if (state.dragged) return;
       const t = e.target.closest('.tc-n');
       pick(t ? Number(t.dataset.node) : null);
     });

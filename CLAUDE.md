@@ -973,6 +973,19 @@ this is that graph with a clock.
     written, and re-entering opens the same drawer. The drag assertion had to
     pull *upward*: the default position is the bottom-left corner, and a drag
     down measured the clamp and failed on correct behaviour.
+- **The camera pans and pinches through one pointer map** (`setupCamera`):
+  one pointer holds a die point under the finger, two hold the die point under
+  their midpoint and scale by spread against the gesture's *start*, and a
+  finger lifting mid-pinch re-seeds so the other pans from where it is. Same
+  shape as the schematic's, with the two rules that each cost a round there
+  (one `pinchOf`, ratio never accumulated). Move and release are on the
+  window, so a finger leaving the stage keeps panning; the first version
+  released on `pointerleave` and had no second pointer at all, so a phone
+  could not zoom it. `_tracer-test.html` drives pan, pinch and lift-one
+  through the real handlers and asserts the die point under the fingers stays
+  under the fingers; with the anchor moved to (0,0) the scale still reads
+  2.00x and only that clause goes red, which is the check "did the scale go
+  up" cannot make. Touch slop 12px, mouse 4px, read by the click that picks.
 - **Header picker and transport drive it**, as on the blueprint; the console's
   own Run, Back, ½ cycle, Cycle and Reset are a second view of the store, and
   Back is `stepBack()` (rewind, so bounded by the keyframes). Arrow keys and
