@@ -32,7 +32,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, the special bus with its lines by measured direction, the store-data pipeline as the detect and the two latches the timing readout names, the ready logic as the receiver, the master and its re-timed copies, the program counter's own storage with its six lines, the 52-latch pipeline file, and the SYNC generator. Twenty-five kinds; the clustering arc is complete. |
-| Chip map | The whole chip as one schematic: the tracer's derivations made disjoint into 134 groups covering every node once, columns by measured pin distance, die order within a column, 540 counted bundles, live off the running chip, every box linking to its container on the tracer. |
+| Chip map | The whole chip as one schematic: the tracer's derivations made disjoint into 132 groups covering every node once, columns by measured pin distance, die order within a column, 534 counted bundles, live off the running chip, every box linking to its container on the tracer. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1710,11 +1710,13 @@ somebody chose, and at the container level it stops being true.
   screen; ownership is about which claim is more specific, and "the lines no
   derivation explains, grouped by what they operate" is a catch-all. Left
   where the tracer has it, it took `dpc18_#DAA` and `dpc22_#DSA` away from
-  the decimal correction's own walk, which the harness caught. What no
-  container claims groups by the block it is filed in, and the static logic
-  by `nodeDrives`. Measured: **134 groups over 24 kinds, covering all 1547
-  nodes exactly once** (the universe is every node the netlist touches, rails
-  out). The order decides real things and the page's prose names them: the
+  the decimal correction's own walk, which the harness caught. Moved last it
+  comes out **empty**, and that is a finding rather than dead code: once
+  every derivation has claimed its own lines, no block has two unexplained
+  control lines left to cluster. What no container claims groups by the
+  block it is filed in, and the static logic by `nodeDrives`. Measured:
+  **132 groups over 23 kinds, covering all 1547 nodes exactly once** (the
+  universe is every node the netlist touches, rails out). The order decides real things and the page's prose names them: the
   pipe latch file outranks the chain (the `pipeTnout` latches file with the
   file, the chain keeps its combinational cells); the address latches outrank
   the store pipeline (SD1 files with the `ADL/ABL` cone that reads it).
@@ -1725,8 +1727,8 @@ somebody chose, and at the container level it stops being true.
   never reach are the last, stated in the caption. Within a column, order is
   the median die Y from `layout.bin`. The harness recomputes every group's
   column and every bundle's counts from the raw arrays and compares.
-- **A line is a bundle and nothing is thresholded away**: 540 bundles carrying
-  1686 gate edges and 310 switches between groups (880 and 313 stay inside
+- **A line is a bundle and nothing is thresholded away**: 534 bundles carrying
+  1644 gate edges and 310 switches between groups (922 and 313 stay inside
   one; the caption counts both). Switch bundles brighter, as everywhere. A
   one-edge bundle is simply faint (`--bw` sets opacity by weight, via the
   CSSOM).

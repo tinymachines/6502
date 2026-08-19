@@ -53,7 +53,10 @@ export const STAGES = ['T0', 'T2', 'T3', 'T4', 'T5', 'T+', 'any'];
 // about which claim is more specific, and "the lines no derivation explains,
 // grouped by what they operate" is a catch-all. Left where the tracer has it,
 // it took `dpc18_#DAA` and `dpc22_#DSA` away from the decimal correction's
-// own walk, which the harness caught. `bus` (the two internal address buses,
+// own walk, which the harness caught. Moved last it comes out empty: once
+// every derivation has claimed its own lines, no block has two unexplained
+// control lines left to cluster, so the kind exists as a claim that finds
+// nothing, which is what a catch-all should be. `bus` (the two internal address buses,
 // pure bits nobody's closure claims) and the two residual kinds are this
 // module's own, at the end where they belong.
 export const KIND_ORDER = ['regs', 'flags', 'alat', 'dbus', 'irp', 'sbus', 'sdp',
