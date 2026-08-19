@@ -250,6 +250,37 @@ f.addEventListener('load', async () => {
     await sleep(50);
     ok('choosing a program reloads and the header agrees', $('tc-code').textContent.includes(PROGRAMS[0].name) && d.querySelector('.nav-prog select').value === '0');
 
+    // --- fullscreen ----------------------------------------------------------------
+    // The native API needs a user activation a harness cannot give, so the
+    // fallback is forced (the spy goes on the element: an own property shadows
+    // the prototype) and the mode is driven through the real button.
+    const con = d.querySelector('#bench .console');
+    con.requestFullscreen = undefined;
+    con.webkitRequestFullscreen = undefined;
+    const stageH0 = $('tc-svg').getBoundingClientRect().height;
+    $('tc-fullscreen').click();
+    await sleep(400);
+    const r = con.getBoundingClientRect();
+    ok('the fullscreen button covers the viewport with the console (fallback path)',
+       con.classList.contains('immersive') && con.classList.contains('faux') && d.body.classList.contains('no-scroll')
+       && Math.abs(r.width - w.innerWidth) < 2 && Math.abs(r.height - w.innerHeight) < 2, `${r.width}x${r.height} of ${w.innerWidth}x${w.innerHeight}`);
+    const stageH1 = $('tc-svg').getBoundingClientRect().height;
+    ok('and the drawing takes the height', stageH1 > stageH0 * 0.7 && stageH1 > w.innerHeight * 0.6, `${stageH0.toFixed(0)} -> ${stageH1.toFixed(0)} of ${w.innerHeight}`);
+    ok('the panel button appears only in fullscreen', w.getComputedStyle($('tc-panel')).display !== 'none');
+    const stageW0 = $('tc-svg').getBoundingClientRect().width;
+    $('tc-panel').click();
+    await sleep(100);
+    ok('putting the panel away gives the graph the whole width',
+       w.getComputedStyle(d.querySelector('.tc-side')).display === 'none' && $('tc-svg').getBoundingClientRect().width > stageW0 * 1.2
+       && $('tc-panel').getAttribute('aria-pressed') === 'false', `${stageW0.toFixed(0)} -> ${$('tc-svg').getBoundingClientRect().width.toFixed(0)}`);
+    $('tc-panel').click();
+    await sleep(100);
+    ok('and back', w.getComputedStyle(d.querySelector('.tc-side')).display !== 'none');
+    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await sleep(100);
+    ok('Escape leaves fullscreen', !con.classList.contains('immersive') && !d.body.classList.contains('no-scroll')
+       && w.getComputedStyle($('tc-panel')).display === 'none');
+
     // --- prose and shell -----------------------------------------------------------
     const stray = [];
     for (const p of d.querySelectorAll('.bp-prose p')) {

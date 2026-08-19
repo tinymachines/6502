@@ -2880,6 +2880,32 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.only .tc-e:not(.fired):not(.tog) { display: none; }
 .tc-cam.only .tc-lb:not(.chg):not(.wt) { display: none; }
 
+/* Fullscreen: the console covers the viewport (the shared .immersive/.faux
+   rules), the grid takes the height, the drawing takes the grid's height, and
+   the side column scrolls inside its own. `panel` puts the side away so the
+   graph has the whole screen. #bench needs lifting like #view does: every
+   .wrap is its own stacking context. */
+body.no-scroll #bench { z-index: 70; }
+#tc-panel { display: none; }
+.console.immersive #tc-panel { display: inline-block; }
+.console.immersive #tc-panel[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.console.immersive .tc-grid { flex: 1; min-height: 0; padding: .5rem .7rem .7rem; grid-template-rows: minmax(0, 1fr); }
+.console.immersive .tc-stage { height: 100%; min-height: 0; }
+.console.immersive #tc-svg { height: 100%; }
+.console.immersive .tc-side { height: 100%; min-height: 0; overflow-y: auto; }
+.console.immersive .tc-watch-field { grid-column: auto; }
+@media (min-width: 72rem) {
+  .console.immersive .tc-controls { grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr) minmax(14rem, 1fr); }
+}
+.console.immersive #tc-caption { display: none; }
+.console.immersive.tc-nopanel .tc-grid { grid-template-columns: minmax(0, 1fr); }
+.console.immersive.tc-nopanel .tc-side { display: none; }
+@media (max-width: 71.99rem) {
+  .console.immersive .tc-grid { grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
+  .console.immersive.tc-nopanel .tc-grid { grid-template-rows: minmax(0, 1fr); }
+  .console.immersive .tc-controls { display: none; }
+}
+
 /* The side column. */
 .tc-head {
   padding: .55rem .7rem; border: 2px solid var(--line); border-radius: .4rem; background: var(--subtle);

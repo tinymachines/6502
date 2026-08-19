@@ -31,6 +31,7 @@ import { blockCss } from './block-palette.js';
 import { el } from './sch-draw.js';
 import { centroids } from './die-centroids.js';
 import { hex2, hex4 } from './demos.js';
+import { setupFullscreen } from './fullscreen.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -690,6 +691,27 @@ async function boot() {
     $('tc-only').addEventListener('click', () => setOnly(!state.only));
     if (q.get('only') === '1') setOnly(true);
     $('tc-home').addEventListener('click', () => { setView(state.home.slice()); });
+
+    // Fullscreen, as the workbench has it: the console covers the viewport and
+    // the drawing takes the height, with the side panel beside it unless it is
+    // put away. The same helper as the schematic, so a phone gets the same
+    // fallback and Escape leaves the same way. The viewBox does the rest: the
+    // drawing scales into whatever box it is given.
+    const console_ = document.querySelector('#bench .console');
+    setupFullscreen(console_, $('tc-fullscreen'), () => {
+      state.full = console_.classList.contains('immersive');
+    });
+    const paintPanel = () => {
+      const on = !console_.classList.contains('tc-nopanel');
+      $('tc-panel').setAttribute('aria-pressed', on ? 'true' : 'false');
+      $('tc-panel').title = on ? 'Hide the side panel' : 'Show the side panel';
+    };
+    $('tc-panel').addEventListener('click', () => { console_.classList.toggle('tc-nopanel'); paintPanel(); });
+    paintPanel();
+    // ?full=1 goes through the button rather than the API: a page load carries
+    // no user activation, so a real request would be refused, and the button's
+    // own fallback covers the viewport anyway.
+    if (q.get('full') === '1') $('tc-fullscreen').click();
     $('tc-in').addEventListener('click', () => { const [x, y, w, hh] = state.view; zoomAt(1 / 1.6, x + w / 2, y + hh / 2); });
     $('tc-out').addEventListener('click', () => { const [x, y, w, hh] = state.view; zoomAt(1.6, x + w / 2, y + hh / 2); });
     $('tc-watch-input').addEventListener('change', () => setWatch($('tc-watch-input').value.split(/[\s,]+/)));

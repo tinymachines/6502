@@ -931,7 +931,7 @@ this is that graph with a clock.
 - **The moved list is the change set in words**, grouped by block, named nodes
   as pills with the way they went and unnamed as a count, each pill flying the
   drawing to its node. It is the same list the trace page shows for one opcode.
-- **Deep links:** `?program=N&run=1&step=N&watch=abl,pcl&fly=abl&mode=named&only=1`.
+- **Deep links:** `?program=N&run=1&step=N&watch=abl,pcl&fly=abl&mode=named&only=1&full=1`.
   `?fly=STEM` frames a watched stem and exists because it is also the only way
   to photograph a zoomed view headlessly.
 - **Two layout bugs, both measured off a screenshot.** `scrollIntoView` on the
@@ -942,6 +942,15 @@ this is that graph with a clock.
   a scroll container's automatic minimum is zero, so with a definite height
   the grid gave them nothing. It is a flex column the stage's height now, the
   code box fixed and the moved list taking what remains.
+- **Fullscreen is the workbench's, through `fullscreen.js`**: the console
+  covers the viewport (the shared `.immersive`/`.faux` rules; `#bench` lifted
+  like `#view`), the grid takes the height, the drawing takes the grid's
+  height through the viewBox, and the side column scrolls inside its own. A
+  `panel` button, shown only in the mode, puts the side away so the graph has
+  the whole screen. `?full=1` clicks the button rather than calling the API,
+  as `?solo=1` does, for the same reason. `_tracer-test.html` forces the
+  fallback by stubbing `requestFullscreen` on the element and measures the
+  console against the viewport.
 - **Header picker and transport drive it**, as on the blueprint; the console's
   own Run, Back, ½ cycle, Cycle and Reset are a second view of the store, and
   Back is `stepBack()` (rewind, so bounded by the keyframes). Arrow keys and

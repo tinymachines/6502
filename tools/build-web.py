@@ -561,6 +561,7 @@ def main() -> None:
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
         ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
+        ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
     ]:
         tc = replace_once(tc, f"'{original}'", f"'{resolved}'", where="tracer.js")
     for original in ["schematic.json", "layout.bin"]:
