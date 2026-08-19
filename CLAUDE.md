@@ -974,6 +974,25 @@ this is that graph with a clock.
     its capsule by `isPointInFill`, clicks a lattice point that is inside one
     capsule *and* a block region and asserts the bus was selected, compares
     the card's byte with its own chip, and round-trips the watch button.
+- **The static logic is clustered two ways at once, because one way is not
+  enough.** The 674 gate outputs in no block have no natural spatial scale:
+  neighbour spacing is a median 110 die units, and union-find at 2R gives 375
+  pieces at R=60, 192 at 100 with a giant of 136, and one mass of 462 at 200.
+  Any single R is arbitrary. So a cluster is: the gates that **drive the same
+  block** (`blocks.json`'s `nodeDrives`, the attribution the block pages use,
+  fetched here for the first time and cross-checked against `schematic.json`'s
+  masked `nodeBlock` at boot), then **within 2 x CLUSTER_R (120)** of each
+  other. Measured: 266 groups, 163 of them single gates, so **103 clusters of
+  two or more**; the largest is the control pipeline's drivers at 127. A gate
+  on its own is not a cluster and is not drawn; the caption counts them. Ids
+  are the lowest node number in the cluster, which `?cluster=N` uses (N is any
+  node in it). Dashed outline tinted by the driven block (lavender for "no
+  single block"), a count label only past `LABEL_ZOOM`. Click priority is
+  capsule, then cluster, then block region: most specific wins.
+  - `_tracer-test.html` re-derives the 103 node for node from `blocks.json`
+    and the centroids, hit-tests all 511 gates into their outlines, clicks a
+    point inside one cluster and a block region and no capsule, and checks
+    the card's high and moved counts against its own chip.
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same

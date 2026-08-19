@@ -77,6 +77,14 @@ export const REGION_CELL = 50;
 // they are apart (which, for alua and alub, 28 units from each other, they
 // are not, and the capsules say so).
 export const STEM_R = 220;
+// The static logic in clusters. The 674 gate outputs that belong to no block
+// have no natural spatial scale: their neighbour spacing is a median 110 die
+// units and at 200 they merge into one mass of 462, because the logic does not
+// thin out anywhere. So the clustering is two-level and stated: by the block
+// the gate DRIVES (blocks.json's `nodeDrives`, the attribution the block pages
+// already use), then by proximity, two gates joined when within 2 x CLUSTER_R.
+// A cluster of one is not a cluster and is not drawn; the caption counts them.
+export const CLUSTER_R = 120;
 
 const state = {
   m: null,
@@ -96,6 +104,11 @@ const state = {
   stems: null,      // [{stem, nodes}] the buses and latches, derived from the names
   stemRegionData: null,
   stemRegions: true,
+  blocks: null,      // blocks.json, for nodeDrives
+  clusters: null,    // [{id, nodes, drives}] static-logic clusters of two or more
+  clusterRegionData: null,
+  cluster: null,     // the selected cluster id (its lowest node number), or null
+  clusterRegions: true,
   watch: DEFAULT_WATCH.slice(),
   program: 0,
   // The drawing.
@@ -317,6 +330,96 @@ function stemRegionData() {
   return out;
 }
 
+/**
+ * The static-logic clusters, by the rule above. Id is the lowest node number
+ * in the cluster, which is stable across anything but a change to the rule.
+ */
+function clusterList() {
+  if (state.clusters) return state.clusters;
+  const { sch, pos, blocks } = state;
+  const SL = sch.blockNames.length - 1;
+  const drives = blocks.nodeDrives;
+  const byDrive = new Map();
+  for (const [n, p] of pos) {
+    if ((sch.nodeBlock[n] & 0x7f) !== SL) continue;
+    const d = drives[n] || 0;
+    if (!byDrive.has(d)) byDrive.set(d, []);
+    byDrive.get(d).push(n);
+  }
+  const out = [];
+  let singles = 0, gates = 0;
+  for (const [d, nodes] of byDrive) {
+    gates += nodes.length;
+    const parent = nodes.map((_, i) => i);
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    for (let i = 0; i < nodes.length; i++) {
+      const p = pos.get(nodes[i]);
+      for (let j = i + 1; j < nodes.length; j++) {
+        const q = pos.get(nodes[j]);
+        if (Math.hypot(p.x - q.x, p.y - q.y) <= 2 * CLUSTER_R) parent[find(i)] = find(j);
+      }
+    }
+    const groups = new Map();
+    nodes.forEach((n, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(n); });
+    for (const g of groups.values()) {
+      if (g.length < 2) { singles++; continue; }
+      g.sort((a, b) => a - b);
+      out.push({ id: g[0], nodes: g, drives: d });
+    }
+  }
+  out.sort((a, b) => a.id - b.id);
+  state.clusters = out;
+  state.clusterStats = { clusters: out.length, singles, gates };
+  return out;
+}
+
+function clusterRegionData() {
+  if (state.clusterRegionData) return state.clusterRegionData;
+  const list = clusterList();
+  const idx = new Array(2048).fill(-1);
+  list.forEach((c, i) => { for (const n of c.nodes) idx[n] = i; });
+  const data = blockRegions(state.pos, idx, list.map((_, i) => i), state.bounds, { radius: CLUSTER_R, cell: REGION_CELL });
+  const out = new Map();
+  list.forEach((c, i) => out.set(c.id, data.get(i)));
+  state.clusterRegionData = out;
+  return out;
+}
+
+function drawClusterRegions(g) {
+  const data = clusterRegionData();
+  const { sch } = state;
+  const SL = sch.blockNames.length - 1;
+  for (const c of clusterList()) {
+    const r = data.get(c.id);
+    // Tinted by the block the cluster drives; the lavender of the static logic
+    // itself when it drives no single block.
+    const css = blockCss(c.drives || SL);
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-cg' + (state.cluster === c.id ? ' sel' : ''), 'fill-rule': 'evenodd',
+                              'data-cluster': c.id, style: `--bc: ${css}` }, g);
+    path.setAttribute('aria-label', `${c.nodes.length} gates driving ${c.drives ? sch.blockNames[c.drives] : 'no single block'}`);
+    if (r.label) {
+      const t = el('text', { x: r.label.x, y: r.label.y, class: 'tc-cl-lb' + (state.cluster === c.id ? ' sel' : ''), 'data-cluster': c.id, style: `--bc: ${css}` }, g);
+      t.textContent = `${c.nodes.length}${c.drives ? ' → ' + sch.blockNames[c.drives] : ''}`;
+    }
+  }
+  g.classList.toggle('off', !state.clusterRegions);
+}
+
+function clusterAt(pt) {
+  const data = clusterRegionData();
+  const { pos } = state;
+  let best = null, bd = Infinity;
+  for (const c of clusterList()) {
+    if (!inRegion(pt, data.get(c.id).loops)) continue;
+    for (const n of c.nodes) {
+      const p = pos.get(n);
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = c.id; }
+    }
+  }
+  return best;
+}
+
 function drawStemRegions(g) {
   const data = stemRegionData();
   for (const [stem, r] of data) {
@@ -402,7 +505,7 @@ function blockAt(pt) {
  */
 function selectBlock(b, { fly = false } = {}) {
   state.block = b;
-  if (b !== null) state.stem = null;
+  if (b !== null) { state.stem = null; state.cluster = null; }
   const { sch } = state;
   applySelection(b === null ? null : (n) => (sch.nodeBlock[n] & 0x7f) === b, fly);
 }
@@ -411,13 +514,22 @@ function selectBlock(b, { fly = false } = {}) {
 function selectStem(stem, { fly = false } = {}) {
   const s = stem === null ? null : stemList().find((x) => x.stem === stem);
   state.stem = s ? s.stem : null;
-  if (s) state.block = null;
+  if (s) { state.block = null; state.cluster = null; }
   const members = s ? new Set(s.nodes.filter((n) => n !== null)) : null;
   applySelection(members ? (n) => members.has(n) : null, fly);
 }
 
+/** Select a static-logic cluster by its id (the lowest node number in it). */
+function selectCluster(id, { fly = false } = {}) {
+  const c = id === null ? null : clusterList().find((x) => x.id === id);
+  state.cluster = c ? c.id : null;
+  if (c) { state.block = null; state.stem = null; }
+  const members = c ? new Set(c.nodes) : null;
+  applySelection(members ? (n) => members.has(n) : null, fly);
+}
+
 /**
- * One selection, of either kind: the chosen region brightens, every node
+ * One selection, of any kind: the chosen region brightens, every node
  * outside it steps back, an edge with either end in it stays (it is the
  * boundary), the moved list marks it, and the card reports it.
  */
@@ -430,6 +542,9 @@ function applySelection(isMember, fly) {
   }
   for (const p of document.querySelectorAll('#tc-stem-regions .tc-sg, #tc-stem-regions .tc-sg-lb')) {
     p.classList.toggle('sel', state.stem !== null && p.dataset.stem === state.stem);
+  }
+  for (const p of document.querySelectorAll('#tc-cluster-regions .tc-cg, #tc-cluster-regions .tc-cl-lb')) {
+    p.classList.toggle('sel', state.cluster !== null && Number(p.dataset.cluster) === state.cluster);
   }
   for (const [n, c] of state.nodeEl) {
     const out = on && !isMember(n);
@@ -458,8 +573,9 @@ function paintBlock() {
   const box = $('tc-block');
   const b = state.block;
   if (b === null && state.stem !== null) { paintStemCard(box); return; }
+  if (b === null && state.cluster !== null) { paintClusterCard(box); return; }
   if (b === null) {
-    const t = 'Click a region in the drawing to select a block, or a capsule to select a bus or latch; click it again to clear.';
+    const t = 'Click a region to select a block, a capsule for a bus or latch, a dashed outline for a cluster of gates; click it again to clear.';
     if (box.textContent !== t) box.textContent = t;
     return;
   }
@@ -475,6 +591,26 @@ function paintBlock() {
     + `<span class="tc-bk-moved">${moved}</span> moved at this half-cycle · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}, `
     + `${pct}% of the die`
     + (slug ? ` · <a href="block?b=${slug}">its page</a>` : '');
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/** The card for a selected cluster of static gates. */
+function paintClusterCard(box) {
+  const c = clusterList().find((x) => x.id === state.cluster);
+  const { sch } = state;
+  const L = state.levels, P = state.prevLevels;
+  let moved = 0, high = 0, named = 0;
+  for (const n of c.nodes) {
+    if (L && L[n] > 0) high++;
+    if (L && P && P[n] !== L[n]) moved++;
+    if (sch.names[n]) named++;
+  }
+  const r = clusterRegionData().get(c.id);
+  const html = `<span class="tc-bk-name">static logic</span> · ${c.nodes.length} gates`
+    + (named ? ` (${named} named)` : '')
+    + ` · ${c.drives ? `drive the <span class="tc-bk-drive">${sch.blockNames[c.drives]}</span>` : 'drive no single block'}`
+    + ` · ${high} high · <span class="tc-bk-moved">${moved}</span> moved at this half-cycle`
+    + ` · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}`;
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
@@ -522,6 +658,7 @@ function draw() {
 
   const cam = el('g', { class: 'tc-cam' + (state.only ? ' only' : ''), id: 'tc-cam' }, svg);
   drawRegions(el('g', { class: 'tc-regions', id: 'tc-regions' }, cam));
+  drawClusterRegions(el('g', { class: 'tc-cluster-regions', id: 'tc-cluster-regions' }, cam));
   drawStemRegions(el('g', { class: 'tc-stem-regions', id: 'tc-stem-regions' }, cam));
   const wires = el('g', { class: 'tc-wires' }, cam);
   g.edges.forEach((e, i) => {
@@ -556,6 +693,7 @@ function draw() {
   paintZoomClass();
   if (state.block !== null) selectBlock(state.block);
   else if (state.stem !== null) selectStem(state.stem);
+  else if (state.cluster !== null) selectCluster(state.cluster);
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
   $('tc-caption').textContent =
@@ -588,7 +726,15 @@ function stemCaption() {
   for (const r of data.values()) pieces += r.pieces;
   return `The outlined capsules are the ${data.size} buses and latches: every stem the die names `
     + `bit by bit, each drawn as everything within ${STEM_R} die units of one of its bits, `
-    + `${pieces} pieces in all. Click one to select it.`;
+    + `${pieces} pieces in all. Click one to select it. ` + clusterCaption();
+}
+
+function clusterCaption() {
+  const st = state.clusterStats;
+  if (!st) return '';
+  return `The dashed outlines are the static logic in clusters: the ${st.gates} gates that belong to no `
+    + `block, grouped by the block they drive and then by proximity at ${CLUSTER_R} die units, `
+    + `${st.clusters} clusters of two or more and ${st.singles} gates that sit alone and get none.`;
 }
 
 /** The stems being watched, as a polyline through their bits, and labels per bit. */
@@ -1073,6 +1219,12 @@ function setMode(m) {
   paint();
 }
 
+function setClusterRegions(on) {
+  state.clusterRegions = on;
+  $('tc-clusters-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
+  $('tc-cluster-regions')?.classList.toggle('off', !on);
+}
+
 function setStemRegions(on) {
   state.stemRegions = on;
   $('tc-stems-btn').setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1125,12 +1277,20 @@ function tick(now) {
 async function boot() {
   const status = $('tc-status');
   try {
-    const [, sch, buf] = await Promise.all([
+    const [, sch, buf, blocks] = await Promise.all([
       init(),
       fetch('schematic.json').then((r) => { if (!r.ok) throw new Error(`schematic.json: HTTP ${r.status}`); return r.json(); }),
       fetch('layout.bin').then((r) => { if (!r.ok) throw new Error(`layout.bin: HTTP ${r.status}`); return r.arrayBuffer(); }),
+      fetch('blocks.json').then((r) => { if (!r.ok) throw new Error(`blocks.json: HTTP ${r.status}`); return r.json(); }),
     ]);
     state.sch = sch;
+    // Two node-indexed files, compared rather than trusted, as block.html does:
+    // blocks.json carries was_seeded in bit 7 and schematic.json does not, so
+    // the masked values are what must agree.
+    for (let i = 0; i < sch.nodeBlock.length; i++) {
+      if ((sch.nodeBlock[i] & 0x7f) !== (blocks.nodeBlock[i] & 0x7f)) throw new Error(`schematic.json and blocks.json disagree about node ${i}`);
+    }
+    state.blocks = blocks;
     state.byName = new Map(sch.names.map((n, i) => [n, i]).filter(([n]) => n));
     const c = centroids(buf);
     state.pos = c.pos;
@@ -1218,6 +1378,8 @@ async function boot() {
     if (q.get('regions') === '0') setRegions(false);
     $('tc-stems-btn').addEventListener('click', () => setStemRegions(!state.stemRegions));
     if (q.get('buses') === '0') setStemRegions(false);
+    $('tc-clusters-btn').addEventListener('click', () => setClusterRegions(!state.clusterRegions));
+    if (q.get('clusters') === '0') setClusterRegions(false);
     $('tc-block').addEventListener('click', (e) => {
       const b = e.target.closest('.tc-bk-watch');
       if (!b) return;
@@ -1287,6 +1449,8 @@ async function boot() {
       const pt = atClient(e);
       const stem = state.stemRegions ? stemAt(pt) : null;
       if (stem !== null) { selectStem(stem === state.stem ? null : stem); return; }
+      const cl = state.clusterRegions ? clusterAt(pt) : null;
+      if (cl !== null) { selectCluster(cl === state.cluster ? null : cl); return; }
       const b = state.regions ? blockAt(pt) : null;
       selectBlock(b === state.block ? null : b);
     });
@@ -1318,6 +1482,12 @@ async function boot() {
     if (q.has('block')) selectBlockBySlug(q.get('block'));
     // ?bus=STEM selects a bus or latch and frames it.
     if (q.has('bus')) selectStem(q.get('bus').toLowerCase(), { fly: true });
+    // ?cluster=N selects the cluster holding node N and frames it.
+    if (q.has('cluster')) {
+      const n = Number(q.get('cluster'));
+      const c = clusterList().find((x) => x.nodes.includes(n));
+      if (c) selectCluster(c.id, { fly: true });
+    }
     if (q.get('run') === '1') setRunning(true);
     tick();
     $('tc-stats').textContent =
@@ -1330,5 +1500,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, blockAt, stemAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, setStemRegions, regionData, stemRegionData, stemList, selectBlock, selectBlockBySlug, selectStem, selectCluster, clusterList, clusterRegionData, setClusterRegions, blockAt, stemAt, clusterAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, STEM_R, CLUSTER_R, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

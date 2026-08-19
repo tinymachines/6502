@@ -388,6 +388,77 @@ f.addEventListener('load', async () => {
       T.setStemRegions(false);
       ok('the capsule toggle hides them', w.getComputedStyle($('tc-stem-regions')).display === 'none' && $('tc-stems-btn').getAttribute('aria-pressed') === 'false');
       T.setStemRegions(true);
+
+      // --- the static-logic clusters ----------------------------------------------
+      // Re-derived here from blocks.json's nodeDrives and the centroids by the
+      // stated rule, and compared to the page's list node for node.
+      const blocksJson = await fetch('blocks.json').then((r) => r.json());
+      const SL = sch.blockNames.length - 1;
+      const CR = T.CLUSTER_R;
+      const byDrive = new Map();
+      for (const [n, p] of mine) {
+        if ((sch.nodeBlock[n] & 0x7f) !== SL) continue;
+        const dr = blocksJson.nodeDrives[n] || 0;
+        if (!byDrive.has(dr)) byDrive.set(dr, []);
+        byDrive.get(dr).push(n);
+      }
+      const wantClusters = []; let wantSingles = 0, wantGates = 0;
+      for (const [dr, ns] of byDrive) {
+        wantGates += ns.length;
+        const par = ns.map((_, i) => i);
+        const fd = (i) => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; };
+        for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+          const p = mine.get(ns[i]), q = mine.get(ns[j]);
+          if (Math.hypot(p.x - q.x, p.y - q.y) <= 2 * CR) par[fd(i)] = fd(j);
+        }
+        const gs = new Map();
+        ns.forEach((n, i) => { const r = fd(i); if (!gs.has(r)) gs.set(r, []); gs.get(r).push(n); });
+        for (const g of gs.values()) { if (g.length < 2) { wantSingles++; continue; } g.sort((a, b) => a - b); wantClusters.push({ id: g[0], nodes: g, drives: dr }); }
+      }
+      wantClusters.sort((a, b) => a.id - b.id);
+      const gotClusters = T.clusterList();
+      ok('the clusters are the harness\'s own, node for node: by driven block, then proximity',
+         gotClusters.length === wantClusters.length && gotClusters.every((c, i) => c.id === wantClusters[i].id && c.drives === wantClusters[i].drives && c.nodes.join() === wantClusters[i].nodes.join()),
+         `page ${gotClusters.length}, harness ${wantClusters.length}; ${wantSingles} singles of ${wantGates} gates`);
+      ok('every cluster has two or more gates and one path', gotClusters.every((c) => c.nodes.length >= 2 && !!d.querySelector(`#tc-cluster-regions .tc-cg[data-cluster="${c.id}"]`)));
+      ok('the caption counts the clusters and the singles', $('tc-caption').textContent.includes(`${wantClusters.length} clusters of two or more and ${wantSingles} gates that sit alone`), $('tc-caption').textContent.slice(-160));
+      const cpath = (id) => d.querySelector(`#tc-cluster-regions .tc-cg[data-cluster="${id}"]`);
+      let outG = 0, allG = 0;
+      for (const c of wantClusters) for (const n of c.nodes) { allG++; const p = mine.get(n); if (!hit2(cpath(c.id), p.x, p.y)) outG++; }
+      ok('every gate of every cluster lies inside its outline', outG === 0, `${outG} of ${allG} outside`);
+      const biggest = wantClusters.reduce((a, b) => (b.nodes.length > a.nodes.length ? b : a));
+      ok('the largest cluster is the control pipeline\'s drivers, over a hundred gates', biggest.drives === sch.blockNames.indexOf('Control pipeline') && biggest.nodes.length > 100, `${biggest.nodes.length} gates driving ${sch.blockNames[biggest.drives]}`);
+      // A click on a cluster that lies in a block region and in no capsule.
+      let cspot = null;
+      for (let x = xmin; x <= xmax && !cspot; x += sX) for (let y = ymin; y <= ymax; y += sY) {
+        const inCl = wantClusters.filter((c) => hit2(cpath(c.id), x, y));
+        if (inCl.length !== 1 || !clear2(x, y)) continue;
+        if (caps.some((c) => hit2(c, x, y))) continue;
+        if (!blockPaths.some((bp) => hit2(bp, x, y))) continue;
+        cspot = { x, y, id: inCl[0].id }; break;
+      }
+      ok('the lattice offers a point inside one cluster and a block region and no capsule', !!cspot, cspot && String(cspot.id));
+      T.setView(st.home.slice());
+      const tg3 = click2(cspot.x, cspot.y);
+      ok('the click lands on the cluster outline', tg3.classList.contains('tc-cg'), tg3.tagName + '.' + tg3.className.baseVal);
+      ok('and selects the cluster, not the block', st.cluster === cspot.id && st.block === null && st.stem === null, `${st.cluster} / ${st.block} / ${st.stem}`);
+      const cl = wantClusters.find((c) => c.id === cspot.id);
+      const clSet = new Set(cl.nodes);
+      let dimC = 0; for (const c of circles()) if (c.classList.contains('sel-out') === clSet.has(Number(c.dataset.node))) dimC++;
+      ok('every node but the cluster\'s gates steps back', dimC === 0, `${dimC} wrong`);
+      const cardC = $('tc-block').textContent;
+      const movedC = cl.nodes.filter((n) => chgSet.has(n)).length;
+      const highC = cl.nodes.filter((n) => L41[n] > 0).length;
+      ok('the card counts the gates, names the driven block, and reads high and moved from the chip',
+         cardC.includes(`${cl.nodes.length} gates`) && cardC.includes(cl.drives ? sch.blockNames[cl.drives] : 'no single block') && cardC.includes(`${highC} high`) && cardC.includes(`${movedC} moved`), cardC);
+      click2(cspot.x, cspot.y);
+      ok('clicking the selected cluster again clears it', st.cluster === null && !circles().some((c) => c.classList.contains('sel-out')));
+      T.selectCluster(cspot.id); T.selectStem('sb');
+      ok('a bus clears a cluster, and a cluster a bus', st.cluster === null && st.stem === 'sb' && (T.selectCluster(cspot.id), st.stem === null && st.cluster === cspot.id));
+      T.selectCluster(null);
+      T.setClusterRegions(false);
+      ok('the cluster toggle hides them', w.getComputedStyle($('tc-cluster-regions')).display === 'none' && $('tc-clusters-btn').getAttribute('aria-pressed') === 'false');
+      T.setClusterRegions(true);
       f.style.height = '1000px';
       T.frameNodes([byName.get('abl0')]);  // the view the checks below were written against
     }

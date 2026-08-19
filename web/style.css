@@ -2874,6 +2874,20 @@ body.no-scroll #view { z-index: 70; }
 .tc-cam.has-sel .tc-n.sel-out.chg, .tc-cam.has-sel .tc-n.sel-out.wt, .tc-cam.has-sel .tc-n.sel-out.on-pick { opacity: .45; }
 .tc-cam.has-sel .tc-e.sel-out { opacity: .12; }
 .tc-cam.has-sel .tc-lb.sel-out { opacity: .3; }
+/* The static-logic clusters: dashed, tinted by the block they drive, counted
+   only once the reader is zoomed in. */
+.tc-cluster-regions.off { display: none; }
+.tc-cg { fill: color-mix(in srgb, var(--bc) 7%, transparent); stroke: color-mix(in srgb, var(--bc) 55%, transparent);
+         stroke-width: 6; stroke-dasharray: 22 14; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-cg:hover { fill: color-mix(in srgb, var(--bc) 14%, transparent); }
+.tc-cg.sel { fill: color-mix(in srgb, var(--bc) 18%, transparent); stroke: var(--bc); stroke-width: 12; stroke-dasharray: none; }
+.tc-cam.has-sel .tc-cg:not(.sel) { stroke: color-mix(in srgb, var(--bc) 16%, transparent); fill: none; }
+.tc-cl-lb { display: none; font: 700 54px var(--font-mono); fill: color-mix(in srgb, var(--bc) 85%, transparent); text-anchor: middle;
+            dominant-baseline: middle; pointer-events: none; paint-order: stroke; stroke: rgba(2, 6, 16, .75); stroke-width: 8px; }
+.tc-cam.z-labels .tc-cl-lb, .tc-cl-lb.sel { display: block; }
+.tc-cam.has-sel .tc-cl-lb:not(.sel) { opacity: .3; }
+.tc-bk-drive { color: var(--foreground); font-weight: 700; }
+
 /* The bus and latch capsules: thinner, in the watch colour, named above. */
 .tc-stem-regions.off { display: none; }
 .tc-sg { fill: color-mix(in srgb, var(--gold) 6%, transparent); stroke: color-mix(in srgb, var(--gold) 65%, transparent);

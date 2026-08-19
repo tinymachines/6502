@@ -574,7 +574,7 @@ def main() -> None:
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),
     ]:
         tc = replace_once(tc, f"'{original}'", f"'{resolved}'", where="tracer.js")
-    for original in ["schematic.json", "layout.bin"]:
+    for original in ["schematic.json", "layout.bin", "blocks.json"]:
         tc = replace_once(tc, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
                           where="tracer.js")
     b.emit("tracer.js", tc.encode())
