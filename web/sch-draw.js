@@ -40,7 +40,22 @@ const PAD = 20;
 
 export function el(tag, attrs, parent) {
   const e = document.createElementNS(SVGNS, tag);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  for (const [k, v] of Object.entries(attrs)) {
+    // A `style` key goes through the CSSOM, never the attribute. The live
+    // site's CSP is `style-src 'self'` with no 'unsafe-inline', and that
+    // blocks writing a style ATTRIBUTE (the tracer's region colours all
+    // vanished, one console error per element) while `style.setProperty`
+    // is not inline style and is allowed. Same result in development, where
+    // there is no CSP, so a harness cannot see the difference: check the
+    // live site's console.
+    if (k === 'style') {
+      for (const decl of String(v).split(';')) {
+        const i = decl.indexOf(':');
+        if (i < 0) continue;
+        e.style.setProperty(decl.slice(0, i).trim(), decl.slice(i + 1).trim());
+      }
+    } else e.setAttribute(k, v);
+  }
   if (parent) parent.append(e);
   return e;
 }

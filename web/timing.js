@@ -138,9 +138,14 @@ async function boot() {
       const n = counts[c];
       const pct = Math.round((100 * n) / timed.length);
       return `<div class="bar-row"><span class="bar-label mono">${c} cyc</span>`
-        + `<span class="bar"><i class="cyc-${c}" style="width:${Math.max(pct * 2.6, 2)}%"></i></span>`
+        + `<span class="bar"><i class="cyc-${c}" data-w="${Math.max(pct * 2.6, 2)}"></i></span>`
         + `<span class="bar-n mono">${n}</span></div>`;
     }).join('');
+    // Bar widths through the CSSOM: a style attribute in the template is
+    // blocked by the live CSP (`style-src 'self'`), and every bar was zero
+    // wide on the live site while the dev server showed them. _csp-test.html
+    // runs the page under the policy.
+    for (const i of $('histogram').querySelectorAll('i[data-w]')) i.style.width = `${i.dataset.w}%`;
 
     const q = new URLSearchParams(location.search);
     const op = q.has('op') ? parseInt(q.get('op'), 16) : 0xa9;

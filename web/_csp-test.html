@@ -1,0 +1,106 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  Every page, booted under the live site's Content Security Policy.
+
+  This exists because of the failure it found. The tracer's region colours
+  were written as a style ATTRIBUTE through the shared `el()` helper, and the
+  live CSP is `style-src 'self'` with no 'unsafe-inline', which blocks that
+  write and allows `style.setProperty`. Every region, bead, halo and
+  collapsed node lost its colour on the live site, one console error per
+  element, and no harness could see it: nothing served web/ with a CSP, and
+  the two routes leave an identical DOM (the CSSOM reflects into the
+  attribute), so an assertion on the rendered elements passes either way. Run
+  under the policy, the same sweep then found two more pages that had
+  shipped that way for the life of the site: the explorer's layer swatches
+  and the timing histogram's bars.
+
+  The only honest check is to run the page under the policy, at its own URL,
+  so the deep links work. tools/serve.py now sends the live policy (read out
+  of the nginx config) on every page that is not a harness, with a report-uri
+  into a collector it keeps in memory; this harness empties the collector,
+  frames each page, waits for it to draw, and reads the reports back. A
+  srcdoc frame was tried first and inherits the policy fine, but about:srcdoc
+  can carry no query and refuses replaceState, so the pages that only build
+  something under ?block= or ?step= were passing vacuously.
+
+  Two checks prove the arrangement before any page is trusted: the header is
+  on the page, and a style attribute written into a framed page from here is
+  reported. Without those a server that had quietly stopped sending the
+  policy would pass every page forever.
+
+    http://localhost:8777/_csp-test.html
+    http://localhost:8777/_csp-test.html?pages=tracer;schematic?block=alu%26solo=1
+  (entries separated by ';' because a query carries '&')
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+iframe{width:1280px;height:900px;border:0}pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<iframe id="f"></iframe>
+<pre id="out"></pre>
+<script type="module">
+const results = [];
+const ok = (n, c, d) => { results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`); document.title = `running ${results.length}`; };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const f = document.getElementById('f');
+
+const ALL = ['index.html', 'programs', 'primer', 'trace', 'tracer', 'tracer?step=40&block=alu&collapse=blocks,stage:T0&bus=sb&full=1',
+             'halfshot', 'exploded', 'block', 'block?b=alu',
+             'schematic', 'schematic?signal=dpc3_SBX&block=alu&solo=1&ports=feedsIn:1', 'blueprint', 'blockdiagram',
+             'diegraph', 'pinout', 'decode', 'timing', 'talk', 'designer'];
+const q = new URLSearchParams(location.search);
+const PAGES = q.get('pages') ? q.get('pages').split(';') : ALL;
+
+const reports = async (clear) => (await fetch(`/__csp-reports${clear ? '?clear=1' : ''}`)).json();
+const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once: true }); f.src = src; });
+const summarise = (list) => {
+  const byKey = new Map();
+  for (const v of list) {
+    const k = `${v['violated-directive'] || v['effective-directive']} ${(v['source-file'] || '').split('/').pop()}:${v['line-number']}`;
+    byKey.set(k, (byKey.get(k) || 0) + 1);
+  }
+  return [...byKey].map(([k, n]) => `${k} x${n}`);
+};
+
+// The arrangement itself, before any page.
+{
+  const csp = (await fetch('tracer', { cache: 'no-store' })).headers.get('content-security-policy') || '';
+  ok('the dev server sends a policy on the page', /style-src 'self'/.test(csp) && !/unsafe-inline/.test(csp) && /report-uri/.test(csp), csp || 'no header');
+  const own = (await fetch(location.pathname, { cache: 'no-store' })).headers.get('content-security-policy');
+  ok('...and none on the harness, which could not boot under it', !own, own || '');
+  await reports(true);
+  await load('timing');
+  await sleep(1500);
+  const before = (await reports(true)).length;
+  f.contentDocument.body.setAttribute('style', 'color: red');
+  await sleep(1200);
+  const got = await reports(true);
+  ok('the policy reaches a framed page: a style attribute write is reported', got.length === 1 && /style-src/.test(got[0]['violated-directive'] || got[0]['effective-directive']),
+     `${got.length} reports, ${before} before the write: ${JSON.stringify(got.map((g) => g['violated-directive']))}`);
+  f.contentDocument.body.style.setProperty('--x', '1');
+  await sleep(1200);
+  ok('...and a CSSOM write is not', (await reports(true)).length === 0);
+}
+
+for (const page of PAGES) {
+  try {
+    await reports(true);
+    await load(page);
+    // Drawing happens after the page's own fetches and the wasm boot, so give
+    // it a moment past load; virtual time only advances once the page is idle.
+    await sleep(6000);
+    const got = await reports(true);
+    ok(`${page}: no CSP violation`, got.length === 0, summarise(got).slice(0, 6).join('; '));
+  } catch (e) {
+    ok(`${page}: booted under the policy`, false, String(e));
+  }
+}
+
+const fails = results.filter((r) => r.startsWith('FAIL')).length;
+document.getElementById('out').textContent = results.join('\n');
+document.title = fails ? `${fails} FAIL` : 'ALL PASS';
+</script>
+</body></html>

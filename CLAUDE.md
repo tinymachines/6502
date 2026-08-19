@@ -211,6 +211,15 @@ links point at bare paths (`/schematic`), which nginx resolves with
 mirrors the same three-step lookup in the same order — file, then `.html`, then
 directory — because a page has to beat a same-named directory.
 
+**`serve.py` also sends the live Content Security Policy**, read out of
+`deploy/6502.tinymachines.ai.nginx` at startup so the two cannot drift, on
+every response except the `_*` harness documents (whose inline module could
+not run under `script-src 'self'`; the pages they frame are not exempt). It
+adds `report-uri /__csp-report` and keeps the reports in memory, readable at
+`GET /__csp-reports` (`?clear=1` empties them), which is what `_csp-test.html`
+polls. See "The CSP is part of the page" under the renderer invariants for
+what this cost before it existed.
+
 **Develop against `web/`, not `dist/`.** The hashed bundle exists for production
 caching; iterating through it means rebuilding for every edit, and a service
 worker in development will serve you yesterday's code.
@@ -420,7 +429,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Thirty harnesses plus two probes, all prefixed `_` and **never shipped** —
+Thirty-one harnesses plus two probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -483,6 +492,9 @@ _diegraph-test.html    # the die graph: the harness recomputes every centroid
 _ports-test.html       # the block bench's Ports drawer: the filter filters, a
                        # switched-on pill survives a filter that excludes it,
                        # and the drawer is capped to the strip and SCROLLS
+_csp-test.html         # every page, with its deep links, booted under the LIVE
+                       # Content Security Policy: zero violations reported, and
+                       # the policy proven to reach a framed page first
 ```
 
 **A harness that samples state still in flight tests nothing.** `_handler-test`
@@ -3205,6 +3217,47 @@ instead sweeps in the terms describing the instruction's class (`op-implied`,
 - Term names are emitted into `timing.json` rather than shared by index with
   `decode.json`. Both index the same `Pla::rows` order, but coupling two
   published files by index alone mislabels everything the day that order moves.
+
+### The CSP is part of the page, and nothing in development enforced it
+
+The live site sends `style-src 'self'` with no `'unsafe-inline'`. That blocks
+writing a **style attribute** (`setAttribute('style', …)`, or `style="…"` in
+an `innerHTML` template) and allows the CSSOM (`el.style.setProperty`,
+`el.style.width = …`). The two leave an identical DOM, because the CSSOM
+reflects back into the attribute, so no assertion on rendered elements can
+tell them apart, and the dev server sent no policy at all. The tracer shipped
+with every container colour (`--bc` on regions, beads, halos, capsules, super
+nodes) written through `sch-draw.js`'s `el()` as an attribute: on the live
+site every container drew grey with one console error per element, while
+`_tracer-test.html` was green. A reader's console dump is how it surfaced.
+
+- **`el()` routes a `style` key through `style.setProperty`** and never the
+  attribute, so every caller of the shared helper is fixed at once.
+- **Run under the policy, the sweep found two pages that had shipped that way
+  for the life of the site**: the explorer's layer-key swatches
+  (`buildKeyPanel`) and the timing histogram's bars (`style="width:…"` in a
+  template: every bar zero wide on the live site), plus the schematic's Ports
+  pill swatch. All three set the value from the CSSOM after the template now.
+- **`serve.py` sends the live policy** (see the Commands section), so every
+  harness that frames a page now frames it under the conditions it ships
+  under. The archive builders are not affected: `_*` is the only exemption.
+- **`_csp-test.html` frames every page at its own URL, with its deep links,
+  and reads the violation reports back from the server.** It proves the
+  arrangement first (the header is on the page and not on the harness; a
+  style attribute written into a framed page from the harness is reported; a
+  CSSOM write is not), because a server that had quietly stopped sending the
+  policy would otherwise pass every page forever. Each fix was verified by
+  reverting it and watching its entry go red.
+  - **A `srcdoc` frame was tried first and rejected.** It inherits the
+    parent's policy, and a `<meta>` CSP on the harness did reach it; but
+    `about:srcdoc` can carry no query and refuses `replaceState`, so the pages
+    that only build something under `?block=` or `?step=` were passing
+    vacuously. The check that caught it was the frame reporting its own
+    `location.search` back, which came back empty. A harness that feeds a
+    page a condition has to assert the condition took.
+  - **Chrome deduplicates `report-uri` reports** by document, directive and
+    source line, so the harness sees `x1` where the in-page
+    `securitypolicyviolation` event fired 262 times. Count sites, not events.
 
 ### Renderer invariants — each of these was a real bug
 

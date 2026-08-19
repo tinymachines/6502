@@ -331,12 +331,19 @@ const LAYER_NOTES = [
 function buildKeyPanel() {
   const el = $('key-layers');
   el.innerHTML = LAYER_INFO.map((info, i) => {
-    const rgb = info.color.map((c) => Math.round(c * 255)).join(',');
     return `<div class="key-row">
-      <span class="layer-swatch" style="background:rgb(${rgb})"></span>
+      <span class="layer-swatch"></span>
       <div><b>${escapeHtml(info.name)}</b><p>${LAYER_NOTES[i]}</p></div>
     </div>`;
   }).join('');
+  // The swatch colour goes in through the CSSOM, not a style attribute in the
+  // template: the live CSP is `style-src 'self'` and blocks the attribute,
+  // which left every swatch colourless on the live site while the dev server
+  // (no CSP) showed them fine. _csp-test.html runs the page under the policy.
+  el.querySelectorAll('.layer-swatch').forEach((s, i) => {
+    const rgb = LAYER_INFO[i].color.map((c) => Math.round(c * 255)).join(',');
+    s.style.background = `rgb(${rgb})`;
+  });
 }
 
 /**

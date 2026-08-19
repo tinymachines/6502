@@ -1345,7 +1345,7 @@ const PANELS = {
           `<button type="button" class="sp-port" data-port="${key}:${i}"
              data-find="${(s.stem + ' ' + s.nodes.map(nameOf).join(' ')).toLowerCase()}"
              title="${s.nodes.map(nameOf).sort().join(' ')}"
-           ><i style="background:${blockCss(s.block)}"></i>${s.stem}`
+           ><i data-block="${s.block}"></i>${s.stem}`
           + (s.nodes.length > 1 ? `<span class="mono">×${s.nodes.length}</span>` : '')
           + '</button>').join('')
         + '</div></div>');
@@ -1356,6 +1356,10 @@ const PANELS = {
       <b>shown</b> instead.</p>`);
     host.innerHTML = parts.join('');
 
+    // The block swatch goes in through the CSSOM, not a style attribute in
+    // the template: the live CSP (`style-src 'self'`) blocks the attribute.
+    // See _csp-test.html.
+    for (const sw of host.querySelectorAll('.sp-port i[data-block]')) sw.style.background = blockCss(Number(sw.dataset.block));
     for (const btn of host.querySelectorAll('.sp-port')) {
       btn.addEventListener('click', () => {
         const pk = btn.dataset.port;
