@@ -31,6 +31,7 @@ import { blockCss } from './block-palette.js';
 import { el } from './sch-draw.js';
 import { centroids } from './die-centroids.js';
 import { blockRegions, loopsToPath, inRegion, gridCells } from './block-regions.js';
+import { SLUGS } from './block-notes.js';
 import { hex2, hex4 } from './demos.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
@@ -81,6 +82,7 @@ const state = {
   regions: true,    // draw the block regions behind the graph
   regionData: null, // block -> {loops, cells, pieces, label, members}, computed once
   regionStats: null,
+  block: null,      // the selected functional block, or null
   watch: DEFAULT_WATCH.slice(),
   program: 0,
   // The drawing.
@@ -266,14 +268,102 @@ function drawRegions(g) {
   const { sch } = state;
   for (const [b, r] of data) {
     const css = blockCss(b);
-    el('path', { d: loopsToPath(r.loops), class: 'tc-rg', 'fill-rule': 'evenodd',
+    const path = el('path', { d: loopsToPath(r.loops), class: 'tc-rg' + (state.block === b ? ' sel' : ''), 'fill-rule': 'evenodd',
                  'data-block': b, style: `--bc: ${css}` }, g);
+    path.setAttribute('tabindex', '-1');
+    path.setAttribute('aria-label', `${sch.blockNames[b]} region`);
     if (r.label) {
       const t = el('text', { x: r.label.x, y: r.label.y, class: 'tc-rg-lb', 'data-block': b, style: `--bc: ${css}` }, g);
       t.textContent = sch.blockNames[b];
     }
   }
   g.classList.toggle('off', !state.regions);
+}
+
+/**
+ * Which block a die point belongs to, for a click on the regions.
+ *
+ * The regions overlap, so the path under the pointer is only the one drawn
+ * last there. The rule that made the regions settles it instead: of the
+ * blocks whose region contains the point, the one with the nearest member
+ * node. Null when no region contains it.
+ */
+function blockAt(pt) {
+  const data = regionData();
+  const { sch, pos } = state;
+  const nb = sch.nodeBlock;
+  let best = null, bd = Infinity;
+  for (const [b, r] of data) {
+    if (!inRegion(pt, r.loops)) continue;
+    for (const [n, p] of pos) {
+      if ((nb[n] & 0x7f) !== b) continue;
+      const d = Math.hypot(p.x - pt.x, p.y - pt.y);
+      if (d < bd) { bd = d; best = b; }
+    }
+  }
+  return best;
+}
+
+/**
+ * Select a functional block: its region brightens, the rest of the drawing
+ * steps back, and the block card reports it. Null clears. Membership is
+ * `nodeBlock`, so a node of the block is lit wherever it sits, and an edge
+ * with either end in the block stays, because that edge is the block's
+ * boundary.
+ */
+function selectBlock(b, { fly = false } = {}) {
+  state.block = b;
+  const { sch } = state;
+  const cam = $('tc-cam');
+  if (cam) cam.classList.toggle('has-sel', b !== null);
+  for (const p of document.querySelectorAll('#tc-regions .tc-rg, #tc-regions .tc-rg-lb')) {
+    p.classList.toggle('sel', b !== null && Number(p.dataset.block) === b);
+  }
+  const inB = (n) => (sch.nodeBlock[n] & 0x7f) === b;
+  for (const [n, c] of state.nodeEl) {
+    const out = b !== null && !inB(n);
+    c.classList.toggle('sel-out', out);
+    state.labelEl.get(n)?.classList.toggle('sel-out', out);
+  }
+  for (const e of state.edges) e.el.classList.toggle('sel-out', b !== null && !inB(e.a) && !inB(e.b));
+  paintBlock();
+  paintMoved();
+  if (fly && b !== null) {
+    const members = [];
+    for (const [n, c] of state.nodeEl) if (inB(n)) members.push(n);
+    frameNodes(members);
+  }
+}
+
+function selectBlockBySlug(slug) {
+  const { sch } = state;
+  for (let b = 0; b < sch.blockNames.length; b++) {
+    if (SLUGS[sch.blockNames[b]] === slug && regionData().has(b)) return selectBlock(b, { fly: true });
+  }
+}
+
+/** The block card: what is selected, how much of it is drawn and moving. */
+function paintBlock() {
+  const box = $('tc-block');
+  const b = state.block;
+  if (b === null) {
+    const t = 'Click a region in the drawing to select a block; click it again to clear.';
+    if (box.textContent !== t) box.textContent = t;
+    return;
+  }
+  const { sch } = state;
+  const r = regionData().get(b);
+  let drawn = 0, moved = 0;
+  for (const n of state.nodeEl.keys()) if ((sch.nodeBlock[n] & 0x7f) === b) drawn++;
+  for (const n of state.changed) if ((sch.nodeBlock[n] & 0x7f) === b) moved++;
+  const st = state.regionStats;
+  const pct = st ? Math.round(100 * r.cells / st.grid) : 0;
+  const slug = SLUGS[sch.blockNames[b]];
+  const html = `<span class="tc-bk-name">${sch.blockNames[b]}</span> · ${r.members} nodes, ${drawn} drawn · `
+    + `<span class="tc-bk-moved">${moved}</span> moved at this half-cycle · ${r.pieces} piece${r.pieces === 1 ? '' : 's'}, `
+    + `${pct}% of the die`
+    + (slug ? ` · <a href="block?b=${slug}">its page</a>` : '');
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
 function draw() {
@@ -315,7 +405,7 @@ function draw() {
     const p = pos.get(nd);
     const c = el('circle', { cx: p.x, cy: p.y, r: sch.names[nd] ? 26 : 16,
                              class: 'tc-n' + (sch.names[nd] ? ' tc-named' : '') + (state.pre.has(nd) ? ' tc-pre' : ''),
-                             'data-node': nd }, dots);
+                             'data-node': nd, 'data-block': sch.nodeBlock[nd] & 0x7f }, dots);
     c.style.fill = blockCss(sch.nodeBlock[nd] & 0x7f);
     state.nodeEl.set(nd, c);
     if (sch.names[nd]) {
@@ -326,6 +416,7 @@ function draw() {
   }
   drawWatch(buses);
   paintZoomClass();
+  if (state.block !== null) selectBlock(state.block);
 
   const sw = g.edges.filter((e) => e.kind === 'switch').length;
   $('tc-caption').textContent =
@@ -572,6 +663,7 @@ function paint() {
   paintListing();
   paintMoved();
   paintPicked();
+  paintBlock();
 }
 
 function paintHead() {
@@ -710,7 +802,8 @@ function paintMoved() {
       .map((n) => `<button type="button" class="tc-node ${L[n] ? 'up' : 'down'}" data-node="${n}">${sch.names[n]}<i>${L[n] ? '▲' : '▼'}</i></button>`)
       .join('');
     const un = g.unnamed ? `<span class="tc-node tc-unnamed">${g.unnamed} unnamed</span>` : '';
-    parts.push(`<div class="tc-blk"><h4>${b} <span>${g.named.length + g.unnamed}</span></h4><p>${pills}${un}</p></div>`);
+    const selCls = state.block === null ? '' : (sch.blockNames[state.block] === b ? ' sel' : ' sel-out');
+    parts.push(`<div class="tc-blk${selCls}"><h4>${b} <span>${g.named.length + g.unnamed}</span></h4><p>${pills}${un}</p></div>`);
   }
   const html = parts.join('');
   const host = $('tc-moved');
@@ -797,7 +890,7 @@ const PANELS = {
   watch: (host) => { returnAll(); borrow(host, 'tc-watch-field', 'tc-watch'); return noop; },
   code: (host) => { returnAll(); borrow(host, 'tc-code'); return noop; },
   moved: (host) => { returnAll(); borrow(host, 'tc-moved-sum', 'tc-moved'); return noop; },
-  view: (host) => { returnAll(); borrow(host, 'tc-modes', 'tc-zoomctl', 'tc-picked-field'); return noop; },
+  view: (host) => { returnAll(); borrow(host, 'tc-modes', 'tc-zoomctl', 'tc-picked-field', 'tc-block-field'); return noop; },
 };
 const TAB_NAMES = { regs: 'Registers', watch: 'Watch', code: 'Code', moved: 'Moved', view: 'View' };
 
@@ -1021,7 +1114,13 @@ async function boot() {
     svg.addEventListener('click', (e) => {
       if (state.dragged) return;
       const t = e.target.closest('.tc-n');
-      pick(t ? Number(t.dataset.node) : null);
+      if (t) { pick(Number(t.dataset.node)); return; }
+      pick(null);
+      // A click on the regions selects the block with the nearest member at
+      // that point (they overlap); on the selected block it clears; off every
+      // region it clears too.
+      const b = state.regions ? blockAt(atClient(e)) : null;
+      selectBlock(b === state.block ? null : b);
     });
 
     document.addEventListener('keydown', (e) => {
@@ -1046,6 +1145,9 @@ async function boot() {
       const w = state.watchEls.find((x) => x.stem === q.get('fly').toLowerCase());
       if (w) frameNodes(w.nodes.filter((n) => n !== null));
     }
+    // ?block=SLUG selects a block and frames it, the slug being the one the
+    // block pages and the workbench use.
+    if (q.has('block')) selectBlockBySlug(q.get('block'));
     if (q.get('run') === '1') setRunning(true);
     tick();
     $('tc-stats').textContent =
@@ -1058,5 +1160,5 @@ async function boot() {
   }
 }
 
-window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, regionData, setWatch, frameNodes, setView, REGION_R, REGION_CELL, pick, loadProgram, palette: () => pal, CFG_KEY };
+window.__tracer = { state, paint, stepOnce, stepBack, advance, setMode, setOnly, setRegions, regionData, selectBlock, selectBlockBySlug, blockAt, setWatch, frameNodes, setView, REGION_R, REGION_CELL, pick, loadProgram, palette: () => pal, CFG_KEY };
 boot();

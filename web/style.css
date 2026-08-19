@@ -2862,7 +2862,23 @@ body.no-scroll #view { z-index: 70; }
    because by then the reader is inside one block. */
 .tc-regions.off { display: none; }
 .tc-rg { fill: color-mix(in srgb, var(--bc) 10%, transparent); stroke: color-mix(in srgb, var(--bc) 38%, transparent);
-         stroke-width: 9; stroke-linejoin: round; pointer-events: none; }
+         stroke-width: 9; stroke-linejoin: round; pointer-events: visibleFill; cursor: pointer; outline: none; }
+.tc-rg:hover { fill: color-mix(in srgb, var(--bc) 16%, transparent); }
+/* A selected block: its region brightens and everything else steps back. A
+   node of the block is lit wherever it sits, an edge with either end in it
+   stays, because that edge is the block's boundary. */
+.tc-rg.sel { fill: color-mix(in srgb, var(--bc) 20%, transparent); stroke: color-mix(in srgb, var(--bc) 85%, transparent); stroke-width: 16; }
+.tc-cam.has-sel .tc-rg:not(.sel) { fill: color-mix(in srgb, var(--bc) 4%, transparent); stroke: color-mix(in srgb, var(--bc) 14%, transparent); }
+.tc-cam.has-sel .tc-rg-lb:not(.sel) { opacity: .3; }
+.tc-cam.has-sel .tc-n.sel-out { opacity: .12; }
+.tc-cam.has-sel .tc-n.sel-out.chg, .tc-cam.has-sel .tc-n.sel-out.wt, .tc-cam.has-sel .tc-n.sel-out.on-pick { opacity: .45; }
+.tc-cam.has-sel .tc-e.sel-out { opacity: .12; }
+.tc-cam.has-sel .tc-lb.sel-out { opacity: .3; }
+.tc-bk-name { color: var(--foreground); font-weight: 800; }
+.tc-bk-moved { color: var(--hot); font-weight: 800; }
+#tc-block a { color: var(--gold); }
+.tc-blk.sel h4 { color: var(--gold); }
+.tc-blk.sel-out { opacity: .45; }
 .tc-rg-lb { font: 800 170px var(--font-sans); fill: color-mix(in srgb, var(--bc) 75%, transparent);
             text-anchor: middle; dominant-baseline: middle; letter-spacing: .02em; pointer-events: none;
             paint-order: stroke; stroke: rgba(2, 6, 16, .7); stroke-width: 24px; }

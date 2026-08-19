@@ -568,6 +568,7 @@ def main() -> None:
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
         ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
         ("./block-regions.js", "./" + b.ref("block-regions.js")),
+        ("./block-notes.js", "./" + b.ref("block-notes.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
         ("./solo-palette.js", "./" + b.ref("solo-palette.js")),

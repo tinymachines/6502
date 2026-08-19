@@ -935,6 +935,24 @@ this is that graph with a clock.
     node labels arrive at `LABEL_ZOOM`.
   - `?regions=0` hides them; the "block regions" button toggles. Region
     labels hide past `LABEL_ZOOM` because by then the reader is inside one.
+  - **A click on a region selects the block, and the overlap is resolved by
+    the rule that drew them.** The path under the pointer is only the one
+    drawn last there, so `blockAt()` takes the blocks whose region contains
+    the die point and picks the one with the nearest member node. `selectBlock`
+    brightens the region, steps every non-member node back (`sel-out`), keeps
+    an edge with either end in the block because that edge is its boundary,
+    marks the block's group in the moved list, and paints a block card
+    (members, drawn, moved at this half-cycle, pieces, % of the die, a link to
+    its page by `SLUGS`). Clicking the selected block again, or off every
+    region, clears; `draw()` re-applies a selection after rebuilding.
+    `?block=<slug>` selects and frames it, the slug being the block pages'.
+  - **The harness clicks for real**: `elementFromPoint` at the screen point of
+    a lattice point inside exactly one region and clear of every node, then
+    at one inside two, asserting the nearest-member block won. Two things it
+    had to learn: the document would not scroll headlessly, so the harness
+    iframe is made 2600px tall for the clicks and put back; and the stepping
+    check moves the chip, so it runs last, because the ring assertions after
+    it assume the change set is (40, 41).
 - **A dashed outline is a node with no pullup**, read from `schematic.json`'s
   `dynamic` gate kind: 142 nodes, of which 118 are precharged by a clock
   (`cclk` or an unnamed clock) and 24 are the `ab`/`db` pads, where the same

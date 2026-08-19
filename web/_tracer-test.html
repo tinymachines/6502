@@ -167,6 +167,74 @@ f.addEventListener('load', async () => {
       w.__tracer.setView(w.__tracer.state.home.slice());
       // A point well outside the die is in no region.
       ok('the die\'s far corner is in no region', ![...byBlock.values()].some((p) => hits(p, xmax + 2000, ymax + 2000)));
+
+      // --- clicking a region selects a block --------------------------------------
+      // Real clicks at real screen points, with the target taken from
+      // elementFromPoint, so the path has to be hit-testable and on top of
+      // whatever the page put there. The die point is chosen from the lattice:
+      // inside exactly one region and clear of every node, so the click can
+      // only mean one thing; then a point inside two regions, where the page
+      // must choose the block with the nearest member.
+      const nearest = (x, y) => { let bb = null, bd = Infinity; for (const [b, pts] of membersOf) for (const p of pts) { const dd = Math.hypot(p.x - x, p.y - y); if (dd < bd) { bd = dd; bb = b; } } return [bb, bd]; };
+      const containing = (x, y) => [...byBlock].filter(([, p]) => hits(p, x, y)).map(([b]) => b);
+      const toClient = (x, y) => { const m = svg.getScreenCTM(); pt.x = x; pt.y = y; const q = pt.matrixTransform(m); return { x: q.x, y: q.y }; };
+      // The drawing has to be on screen for elementFromPoint to reach it, and
+      // it is scrolled there before every click rather than once: the page
+      // scrolls the document while it boots and paints.
+      // Scrolling the iframe's document headlessly turned out to do nothing,
+      // so the iframe itself is made tall enough to hold the drawing unscrolled.
+      f.style.height = '2600px';
+      await sleep(100);
+      const clickAt = (x, y) => {
+        const c = toClient(x, y);
+        const target = d.elementFromPoint(c.x, c.y);
+        target.dispatchEvent(new w.MouseEvent('click', { bubbles: true, clientX: c.x, clientY: c.y }));
+        return target;
+      };
+      const allPts = [...mine.values()];
+      const clearOfNodes = (x, y) => allPts.every((p) => Math.hypot(p.x - x, p.y - y) > 120);
+      let solo = null, dual = null;
+      for (let x = xmin; x <= xmax && !(solo && dual); x += stepX) for (let y = ymin; y <= ymax; y += stepY) {
+        const cs = containing(x, y);
+        if (!clearOfNodes(x, y)) continue;
+        if (cs.length === 1 && !solo) solo = { x, y, b: cs[0] };
+        if (cs.length >= 2 && !dual) { const [nb] = nearest(x, y); if (cs.includes(nb) && cs.some((b) => b !== nb)) dual = { x, y, b: nb, cs }; }
+      }
+      ok('the lattice offers a point inside exactly one region and one inside two', !!solo && !!dual, `${solo && sch.blockNames[solo.b]} / ${dual && dual.cs.map((b) => sch.blockNames[b]).join('+')} -> ${dual && sch.blockNames[dual.b]}`);
+      const tgt = clickAt(solo.x, solo.y);
+      ok('a click on a region lands on the region path', tgt.classList.contains('tc-rg'), `${tgt.tagName}.${tgt.className.baseVal} at client ${JSON.stringify(toClient(solo.x, solo.y))}, svg rect ${JSON.stringify(svg.getBoundingClientRect())}, viewport ${w.innerWidth}x${w.innerHeight}, view ${st.view.map(Math.round)}`);
+      ok('and selects that block', st.block === solo.b, `${st.block} vs ${solo.b}`);
+      ok('the region is marked selected and the others are not', byBlock.get(solo.b).classList.contains('sel') && [...byBlock.values()].filter((p) => p.classList.contains('sel')).length === 1);
+      let cls = 0, bad = 0;
+      for (const c of circles()) { const mem = (sch.nodeBlock[Number(c.dataset.node)] & 0x7f) === solo.b; if (c.classList.contains('sel-out') === mem) bad++; else cls++; }
+      ok('every node outside the block steps back and every member does not', bad === 0, `${bad} wrong of ${cls}`);
+      const eb = st.edges.filter((e) => { const m = ((sch.nodeBlock[e.a] & 0x7f) === solo.b) || ((sch.nodeBlock[e.b] & 0x7f) === solo.b); return e.el.classList.contains('sel-out') === m; }).length;
+      ok('an edge stays exactly when either end is in the block', eb === 0, `${eb} wrong`);
+      const card = $('tc-block').textContent;
+      const drawnB = circles().filter((c) => (sch.nodeBlock[Number(c.dataset.node)] & 0x7f) === solo.b).length;
+      const movedB = st.changed.filter((n) => (sch.nodeBlock[n] & 0x7f) === solo.b).length;
+      ok('the block card names it and counts its drawn and moved nodes', card.startsWith(sch.blockNames[solo.b]) && card.includes(`${membersOf.get(solo.b).length} nodes, ${drawnB} drawn`) && card.includes(`${movedB} moved`), card);
+      ok('and links to its page', !!$('tc-block').querySelector('a[href^="block?b="]'));
+      ok('the moved list marks the block\'s group and dims the rest', [...d.querySelectorAll('#tc-moved .tc-blk')].every((g) => g.classList.contains(g.querySelector('h4').textContent.trim().startsWith(sch.blockNames[solo.b]) ? 'sel' : 'sel-out')));
+      clickAt(dual.x, dual.y);
+      ok('where two regions overlap, the click goes to the block with the nearest member', st.block === dual.b, `got ${sch.blockNames[st.block]}, wanted ${sch.blockNames[dual.b]} of ${dual.cs.map((b) => sch.blockNames[b]).join('+')}`);
+      clickAt(dual.x, dual.y);
+      ok('clicking the selected block again clears it', st.block === null && !$('tc-cam').classList.contains('has-sel') && !circles().some((c) => c.classList.contains('sel-out')));
+      w.__tracer.soloBlock = solo.b;  // for the stepping check at the end, which moves the chip
+      f.style.height = '1000px';
+      // A deep link selects by slug and frames the block. The instruction
+      // register rather than the ALU, because the ALU's bit slices run most of
+      // the die's height and framing it barely zooms, which is correct.
+      const f2 = d.createElement('iframe');
+      f2.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:900px;opacity:0;pointer-events:none';
+      d.body.appendChild(f2);
+      await new Promise((res) => { f2.addEventListener('load', res, { once: true }); f2.src = 'tracer.html?block=instruction-register&step=4'; });
+      for (let i = 0; i < 200 && !(f2.contentWindow.__tracer && !f2.contentDocument.getElementById('tc-main').hidden); i++) await sleep(50);
+      const T2 = f2.contentWindow.__tracer;
+      const irId = sch.blockNames.indexOf('Instruction register');
+      ok('?block=instruction-register selects the instruction register', T2 && T2.state.block === irId, `${T2 && T2.state.block}`);
+      ok('and frames it: the view is narrower than the whole die', T2 && T2.state.view[2] < T2.state.home[2] * 0.8, `${T2 && Math.round(T2.state.view[2])} of ${T2 && Math.round(T2.state.home[2])}`);
+      f2.remove();
     }
     // The full graph, counted independently.
     const seen = new Set(); let want = 0;
@@ -538,6 +606,16 @@ f.addEventListener('load', async () => {
        !!d.querySelector('footer.site-foot .wrap .mark') && !!d.querySelector('footer.site-foot .wrap .foot-meta')
        && !!d.querySelector('footer.site-foot span.version-foot[data-version-footer]'), '');
     ok('no em dash in the rendered page', !d.querySelector('main').textContent.includes('—'), '');
+    // Last, because it moves the chip: a step keeps the block selection and
+    // the card's moved count follows.
+    {
+      const b = T.soloBlock;
+      T.selectBlock(b);
+      T.stepOnce();
+      const movedAfter = st.changed.filter((n) => (sch.nodeBlock[n] & 0x7f) === b).length;
+      ok('a step keeps the block selection and the card\'s moved count follows the chip', st.block === b && $('tc-block').textContent.includes(`${movedAfter} moved`), $('tc-block').textContent);
+      T.selectBlock(null);
+    }
   } catch (e) {
     ok('the harness ran to the end', false, e && e.stack ? e.stack.split('\n').slice(0, 2).join(' ') : String(e));
   }

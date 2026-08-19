@@ -102,6 +102,10 @@
             <span>Node</span>
             <span class="mono muted" id="tc-picked">Click a node in the drawing, or a name in the list.</span>
           </div>
+          <div class="field" id="tc-block-field">
+            <span>Block</span>
+            <span class="mono muted" id="tc-block">Click a region in the drawing to select a block; click it again to clear.</span>
+          </div>
         </div>
 
         <div class="tc-grid">
@@ -224,7 +228,11 @@
         everything on the die within a fixed distance of one of the block's
         nodes. A block can come out in several pieces, and two blocks' regions
         can overlap; both happen, and the caption under the drawing counts
-        them. A convex hull per block was measured first and rejected, because
+        them. Click a region to select its block: the region brightens, the
+        rest of the drawing steps back, the block card says how many of its
+        nodes are drawn and how many moved at this half-cycle, and the moved
+        list marks its group. Where regions overlap, the click goes to the
+        block with the nearest node, which is the same rule that drew them. A convex hull per block was measured first and rejected, because
         the datapath blocks are interleaved bit-slices: the address latches'
         hull contained every node of the ALU and the program counter, which is
         the opposite of a container. The unclassified residue and the static
