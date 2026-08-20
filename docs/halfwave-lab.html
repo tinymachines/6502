@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Halfwave Lab · a 6502, half a clock phase at a time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#101620; --panel:#18202D; --panel2:#141B26; --rule:#26313F;
+  --dim:#6D7C8F; --mid:#93A3B5; --text:#C9D4E0; --bright:#EAF1F8;
+  --addr:#4FBFD4; --data:#E06A96; --alu:#E0A24B;
+  --phi1:#7C9BC4; --phi2:#E8A05C;
+  --glow:var(--phi1);
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --sans:"IBM Plex Sans",system-ui,sans-serif;
+  --disp:"Archivo",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ground); color:var(--text);
+  font-family:var(--sans); font-size:14px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{margin:0;font-family:var(--disp);font-weight:600}
+button,input,textarea,select{font:inherit;color:inherit}
+
+/* ---------- structural ---------- */
+.wrap{max-width:1500px;margin:0 auto;padding:0 18px 132px}
+header{
+  display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
+  padding:20px 0 16px;border-bottom:1px solid var(--rule);margin-bottom:18px;
+}
+.brand{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-.02em;color:var(--bright)}
+.brand em{font-style:normal;color:var(--glow);transition:color .18s}
+.tag{font-family:var(--sans);font-size:13px;color:var(--dim);flex:1 1 260px}
+.eyebrow{
+  font-family:var(--disp);font-size:10px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dim);
+}
+.grid{display:grid;grid-template-columns:290px minmax(0,1fr) 264px;gap:16px;align-items:start}
+@media(max-width:1180px){.grid{grid-template-columns:1fr;}}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px}
+.panel > .ph{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:9px 12px;border-bottom:1px solid var(--rule);
+}
+.panel > .pb{padding:12px}
+
+/* ---------- clock badge ---------- */
+.clockbar{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+.phasepill{
+  display:inline-flex;align-items:center;gap:8px;
+  border:1px solid var(--glow);border-radius:2px;padding:5px 11px;
+  font-family:var(--mono);font-size:12px;font-weight:600;color:var(--glow);
+  background:color-mix(in srgb,var(--glow) 12%,transparent);transition:.18s;
+}
+.phasepill .dot{width:7px;height:7px;border-radius:50%;background:var(--glow)}
+.pos{font-family:var(--mono);font-size:12px;color:var(--mid);white-space:nowrap}
+.pos b{color:var(--bright);font-weight:600}
+.conn{font-family:var(--mono);font-size:11px;padding:4px 8px;border:1px solid var(--rule);border-radius:2px;color:var(--dim)}
+.conn.live{color:var(--addr);border-color:color-mix(in srgb,var(--addr) 45%,var(--rule))}
+.conn.demo{color:var(--alu);border-color:color-mix(in srgb,var(--alu) 45%,var(--rule))}
+
+/* ---------- editor rail ---------- */
+textarea#src{
+  width:100%;min-height:214px;resize:vertical;background:var(--panel2);
+  border:1px solid var(--rule);border-radius:2px;padding:10px;
+  font-family:var(--mono);font-size:12.5px;line-height:1.62;color:var(--text);
+  tab-size:8;white-space:pre;overflow-x:auto;
+}
+textarea#src:focus,select:focus,button:focus-visible,input:focus{outline:2px solid var(--glow);outline-offset:1px}
+select{
+  width:100%;background:var(--panel2);border:1px solid var(--rule);border-radius:2px;
+  padding:7px 9px;font-family:var(--mono);font-size:12px;
+}
+.btn{
+  background:var(--panel2);border:1px solid var(--rule);border-radius:2px;
+  padding:8px 12px;font-family:var(--disp);font-weight:600;font-size:12px;
+  letter-spacing:.03em;cursor:pointer;transition:.14s;color:var(--text);
+}
+.btn:hover:not(:disabled){border-color:var(--glow);color:var(--bright)}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+.btn.go{background:color-mix(in srgb,var(--addr) 16%,var(--panel2));border-color:color-mix(in srgb,var(--addr) 50%,var(--rule));color:var(--bright)}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.note{font-size:12px;color:var(--dim);margin:9px 0 0;line-height:1.5}
+.err{font-family:var(--mono);font-size:11.5px;color:var(--data);margin-top:9px;white-space:pre-wrap}
+
+/* ---------- datapath stage ---------- */
+.stage{border-top:2px solid var(--glow);transition:border-color .18s}
+#map{display:block;width:100%;height:auto}
+.bx rect{fill:var(--panel2);stroke:var(--rule);stroke-width:1}
+.bx text.n{font-family:var(--disp);font-size:9.5px;font-weight:700;letter-spacing:.08em;fill:var(--mid)}
+.bx text.v{font-family:var(--mono);font-size:12.5px;font-weight:600;fill:var(--dim)}
+.bx.hot rect{stroke:var(--bright);fill:#1F2937}
+.bx.hot text.v{fill:var(--bright)}
+.bx.bus rect{fill:#131A24}
+.bx.bus text.n{font-size:9.5px}
+.e{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.2;opacity:.11}
+.e.addr{stroke:var(--addr)} .e.data{stroke:var(--data)} .e.alu{stroke:var(--alu)}
+.e.struct{opacity:.3}
+.e.on{opacity:1;stroke-width:2.6;stroke-dasharray:7 5;animation:flow .7s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-24}}
+.elab{font-family:var(--mono);font-size:8.5px;fill:var(--dim);opacity:0;letter-spacing:.02em}
+.elab.on{opacity:.95}
+
+/* ---------- narration ---------- */
+.tell{padding:14px 16px;border-top:1px solid var(--rule);background:var(--panel2)}
+.tell .lede{font-size:15.5px;line-height:1.55;color:var(--bright);margin:0}
+.tell .lede b{color:var(--glow);font-weight:500}
+.tell ul{margin:11px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.tell li{font-size:13.5px;color:var(--mid);padding-left:15px;position:relative;line-height:1.5}
+.tell li:before{content:"";position:absolute;left:0;top:.58em;width:6px;height:1.5px;background:var(--dim)}
+.tell li.k:before{background:var(--glow);height:2px}
+.tell li.k{color:var(--text)}
+.tell code{font-family:var(--mono);font-size:12.5px;color:var(--bright);background:#0C1219;padding:1px 4px;border-radius:2px}
+
+/* ---------- control-line grid ---------- */
+.lines{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:5px}
+.ln{
+  display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:2px;
+  border:1px solid var(--rule);background:var(--panel2);
+  font-family:var(--mono);font-size:10.5px;color:var(--dim);
+}
+.ln i{width:6px;height:6px;border-radius:1px;background:var(--rule);flex:none;font-style:normal}
+.ln.on{color:var(--bright);border-color:currentColor;background:#1E2735}
+.ln.on i{background:currentColor}
+.ln.addr.on{color:var(--addr)} .ln.data.on{color:var(--data)} .ln.alu.on{color:var(--alu)}
+
+/* ---------- registers / memory side ---------- */
+.regs{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.reg{background:var(--panel2);border:1px solid var(--rule);border-radius:2px;padding:7px 9px}
+.reg .k{font-family:var(--disp);font-size:9.5px;font-weight:700;letter-spacing:.12em;color:var(--dim)}
+.reg .v{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text);margin-top:1px}
+.reg.wide{grid-column:span 2}
+.reg.chg{border-color:var(--glow);background:color-mix(in srgb,var(--glow) 13%,var(--panel2))}
+.reg.chg .v{color:var(--bright)}
+.flags{font-family:var(--mono);font-size:15px;letter-spacing:.15em;margin-top:1px}
+.flags span{color:#3B4757}
+.flags span.set{color:var(--alu)}
+.mem{font-family:var(--mono);font-size:11px;line-height:1.75;overflow-x:auto;white-space:nowrap}
+.mem .a{color:var(--dim)}
+.mem b{font-weight:400;color:var(--text)}
+.mem b.w{color:var(--data);font-weight:600}
+.mem b.z{color:#3B4757}
+.lline{padding:1px 4px;border-left:2px solid transparent;border-radius:2px}
+.lline.here{border-left-color:var(--glow);background:color-mix(in srgb,var(--glow) 14%,transparent)}
+.lline.here b,.lline.here{color:var(--bright)}
+
+/* ---------- transport ---------- */
+.transport{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  background:color-mix(in srgb,var(--ground) 94%,#000);
+  border-top:1px solid var(--rule);backdrop-filter:blur(8px);
+}
+.tin{max-width:1500px;margin:0 auto;padding:9px 18px 11px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.tbtn{
+  background:var(--panel);border:1px solid var(--rule);border-radius:2px;
+  padding:6px 9px;font-family:var(--mono);font-size:11.5px;cursor:pointer;color:var(--mid);
+}
+.tbtn:hover:not(:disabled){color:var(--bright);border-color:var(--glow)}
+.tbtn:disabled{opacity:.35;cursor:not-allowed}
+.tbtn.play{min-width:64px;color:var(--bright)}
+#scrub{flex:1 1 220px;min-width:160px;accent-color:var(--glow);height:22px}
+.strip{width:100%;height:22px;display:block;background:var(--panel2);border:1px solid var(--rule);border-radius:2px;cursor:pointer}
+.tlab{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media(prefers-reduced-motion:reduce){.e.on{animation:none}*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <div class="brand">Halfwave <em>Lab</em></div>
+    <div class="eyebrow" style="margin-top:3px">Notebook for a transistor-level 6502</div>
+  </div>
+  <p class="tag">Write a program, assemble it, and walk the chip one half-cycle at a time. Every value here is read out of a storage node on the die.</p>
+  <div class="clockbar">
+    <span class="conn" id="conn">checking…</span>
+    <span class="pos" id="pos">h <b>0</b> · cycle <b>0</b></span>
+    <span class="phasepill" id="pill"><span class="dot"></span><span id="pilltxt">φ1</span></span>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- ============ LEFT RAIL ============ -->
+  <div>
+    <section class="panel">
+      <div class="ph"><h2 class="eyebrow">Program</h2><span class="eyebrow" id="asmlen"></span></div>
+      <div class="pb">
+        <select id="preset" aria-label="Load an example program"></select>
+        <p class="note" id="presetnote" style="margin-top:8px"></p>
+        <textarea id="src" spellcheck="false" aria-label="6502 assembly source"></textarea>
+        <div class="row">
+          <button class="btn go" id="run">Assemble &amp; boot</button>
+          <button class="btn" id="more" disabled>Run 200 more</button>
+        </div>
+        <p class="err" id="err" hidden></p>
+        <p class="note" id="hint"></p>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="ph"><h2 class="eyebrow">Listing</h2></div>
+      <div class="pb"><div class="mem" id="listing"></div></div>
+    </section>
+  </div>
+
+  <!-- ============ CENTER STAGE ============ -->
+  <div>
+    <section class="panel stage" id="stage">
+      <div class="ph">
+        <h2 class="eyebrow">The datapath, right now</h2>
+        <span class="eyebrow" id="tstate"></span>
+      </div>
+      <div class="pb" style="padding:6px 10px 2px">
+        <svg id="map" viewBox="0 0 540 336" role="img" aria-label="Live 6502 datapath diagram"></svg>
+      </div>
+      <div class="tell">
+        <p class="lede" id="lede">Boot a program to begin.</p>
+        <ul id="beats"></ul>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="ph">
+        <h2 class="eyebrow">Pass transistors — what is conducting</h2>
+        <span class="eyebrow" id="lncount"></span>
+      </div>
+      <div class="pb"><div class="lines" id="lines"></div>
+        <p class="note">The diagram above and the sentence below it are generated from these same 22 booleans, so the picture cannot disagree with the words.</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ RIGHT SIDE ============ -->
+  <div>
+    <section class="panel">
+      <div class="ph"><h2 class="eyebrow">Registers</h2></div>
+      <div class="pb"><div class="regs" id="regs"></div></div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="ph"><h2 class="eyebrow">External bus</h2></div>
+      <div class="pb"><div class="regs" id="busbox"></div></div>
+    </section>
+
+    <section class="panel" style="margin-top:16px">
+      <div class="ph"><h2 class="eyebrow">Zero page</h2><span class="eyebrow">$0080–$00BF</span></div>
+      <div class="pb"><div class="mem" id="zp"></div></div>
+    </section>
+  </div>
+</div>
+</div>
+
+<!-- ============ TRANSPORT ============ -->
+<div class="transport">
+  <div class="tin">
+    <button class="tbtn" id="b-hb" title="Back one half-cycle (←)">◄ ½</button>
+    <button class="tbtn play" id="b-play" title="Play / pause (space)">▶ play</button>
+    <button class="tbtn" id="b-hf" title="Forward one half-cycle (→)">½ ►</button>
+    <button class="tbtn" id="b-cf" title="Next full cycle (shift + →)">cycle ►</button>
+    <button class="tbtn" id="b-if" title="Next opcode fetch (shift + ↓)">next opcode ►</button>
+    <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Half-cycle position">
+    <span class="tlab" id="tlab">0 / 0</span>
+  </div>
+  <div class="tin" style="padding-top:0">
+    <canvas class="strip" id="strip" height="22" aria-label="Timeline: opcode fetches and bus activity"></canvas>
+  </div>
+</div>
+
+<script id="demo" type="application/json">{"cols":["h","cyc","ph2","addr","data","wr","sync","pc","a","x","y","s","p","ir","t","hid","sd","w","fa"],"lines":["PCLADL","PCHADH","SBDB","SBAC","DBADD","SBADD","ADLADD","ADDADL","ADDSB06","ADDSB7","ADLPCL","PCLPCL","PCHPCH","ADHPCH","PCLDB","PCHDB","SBY","SBX","SBS","SBADH","SUMS","0ADD"],"rows":[[0,0,0,512,169,0,1,512,170,0,0,253,54,0,"T1","T1","",1057968,512],[1,0,1,512,169,0,1,512,170,0,0,253,54,0,"T1","T1","",1049351,512],[2,1,0,513,46,0,0,513,170,0,0,253,54,169,"T0+T2","","",1058615,512],[3,1,1,513,46,0,0,513,170,0,0,253,54,169,"T0+T2","","",1048583,512],[4,2,0,514,133,0,1,514,46,0,0,253,52,169,"T1","T1","",1057855,514],[5,2,1,514,133,0,1,514,46,0,0,253,52,169,"T1","T1","",1049351,514],[6,3,0,515,128,0,0,515,46,0,0,253,52,133,"T2","","",1058615,514],[7,3,1,515,128,0,0,515,46,0,0,253,52,133,"T2","","",1048576,514],[8,4,0,128,128,1,0,516,46,0,0,253,52,133,"T0","","",1054816,514],[9,4,1,128,46,1,0,516,46,0,0,253,52,133,"T0","","",1048579,514],[10,5,0,516,169,0,1,516,46,0,0,253,52,133,"T1","T1","",1057843,516],[11,5,1,516,169,0,1,516,46,0,0,253,52,133,"T1","T1","",1049351,516],[12,6,0,517,20,0,0,517,46,0,0,253,52,169,"T0+T2","","",1058615,516],[13,6,1,517,20,0,0,517,46,0,0,253,52,169,"T0+T2","","",1048583,516],[14,7,0,518,133,0,1,518,20,0,0,253,52,169,"T1","T1","",1057855,518],[15,7,1,518,133,0,1,518,20,0,0,253,52,169,"T1","T1","",1049351,518],[16,8,0,519,129,0,0,519,20,0,0,253,52,133,"T2","","",1058615,518],[17,8,1,519,129,0,0,519,20,0,0,253,52,133,"T2","","",1048576,518],[18,9,0,129,129,1,0,520,20,0,0,253,52,133,"T0","","",1054816,518],[19,9,1,129,20,1,0,520,20,0,0,253,52,133,"T0","","",1048579,518],[20,10,0,520,24,0,1,520,20,0,0,253,52,133,"T1","T1","",1057843,520],[21,10,1,520,24,0,1,520,20,0,0,253,52,133,"T1","T1","",1049351,520],[22,11,0,521,165,0,0,521,20,0,0,253,52,24,"T0+T2","","",1058615,520],[23,11,1,521,165,0,0,521,20,0,0,253,52,24,"T0+T2","","",1048579,520],[24,12,0,521,165,0,1,521,20,0,0,253,52,24,"T1","T1","",1057843,521],[25,12,1,521,165,0,1,521,20,0,0,253,52,24,"T1","T1","",1049351,521],[26,13,0,522,128,0,0,522,20,0,0,253,52,165,"T2","","",1058615,521],[27,13,1,522,128,0,0,522,20,0,0,253,52,165,"T2","","",1048576,521],[28,14,0,128,46,0,0,523,20,0,0,253,52,165,"T0","","",1054816,521],[29,14,1,128,46,0,0,523,20,0,0,253,52,165,"T0","","",1048583,521],[30,15,0,523,101,0,1,523,46,0,0,253,52,165,"T1","T1","",1057855,523],[31,15,1,523,101,0,1,523,46,0,0,253,52,165,"T1","T1","",1049351,523],[32,16,0,524,129,0,0,524,46,0,0,253,52,101,"T2","","",1058615,523],[33,16,1,524,129,0,0,524,46,0,0,253,52,101,"T2","","",1048576,523],[34,17,0,129,20,0,0,525,46,0,0,253,52,101,"T0","","",1054816,523],[35,17,1,129,20,0,0,525,46,0,0,253,52,101,"T0","","",1048579,523],[36,18,0,525,133,0,1,525,46,0,0,253,52,101,"T1","T1","",1057843,525],[37,18,1,525,133,0,1,525,46,0,0,253,52,101,"T1","T1","",1049351,525],[38,19,0,526,130,0,0,526,66,0,0,253,52,133,"T2","","",1058623,525],[39,19,1,526,130,0,0,526,66,0,0,253,52,133,"T2","","",1048576,525],[40,20,0,130,130,1,0,527,66,0,0,253,52,133,"T0","","",1054816,525],[41,20,1,130,66,1,0,527,66,0,0,253,52,133,"T0","","",1048579,525],[42,21,0,527,76,0,1,527,66,0,0,253,52,133,"T1","T1","",1057843,527],[43,21,1,527,76,0,1,527,66,0,0,253,52,133,"T1","T1","",1049351,527],[44,22,0,528,0,0,0,528,66,0,0,253,52,76,"T2","","",1058615,527],[45,22,1,528,0,0,0,528,66,0,0,253,52,76,"T2","","",1048579,527],[46,23,0,529,2,0,0,529,66,0,0,253,52,76,"T0","","",3154963,527],[47,23,1,529,2,0,0,529,66,0,0,253,52,76,"T0","","",1048704,527],[48,24,0,512,169,0,1,512,66,0,0,253,52,76,"T1","T1","",3155088,512],[49,24,1,512,169,0,1,512,66,0,0,253,52,76,"T1","T1","",1049351,512],[50,25,0,513,46,0,0,513,66,0,0,253,52,169,"T0+T2","","",3155735,512],[51,25,1,513,46,0,0,513,66,0,0,253,52,169,"T0+T2","","",1048583,512],[52,26,0,514,133,0,1,514,46,0,0,253,52,169,"T1","T1","",1057855,514],[53,26,1,514,133,0,1,514,46,0,0,253,52,169,"T1","T1","",1049351,514],[54,27,0,515,128,0,0,515,46,0,0,253,52,133,"T2","","",1058615,514],[55,27,1,515,128,0,0,515,46,0,0,253,52,133,"T2","","",1048576,514],[56,28,0,128,128,1,0,516,46,0,0,253,52,133,"T0","","",1054816,514],[57,28,1,128,46,1,0,516,46,0,0,253,52,133,"T0","","",1048579,514],[58,29,0,516,169,0,1,516,46,0,0,253,52,133,"T1","T1","",1057843,516],[59,29,1,516,169,0,1,516,46,0,0,253,52,133,"T1","T1","",1049351,516],[60,30,0,517,20,0,0,517,46,0,0,253,52,169,"T0+T2","","",1058615,516],[61,30,1,517,20,0,0,517,46,0,0,253,52,169,"T0+T2","","",1048583,516],[62,31,0,518,133,0,1,518,20,0,0,253,52,169,"T1","T1","",1057855,518],[63,31,1,518,133,0,1,518,20,0,0,253,52,169,"T1","T1","",1049351,518],[64,32,0,519,129,0,0,519,20,0,0,253,52,133,"T2","","",1058615,518],[65,32,1,519,129,0,0,519,20,0,0,253,52,133,"T2","","",1048576,518],[66,33,0,129,129,1,0,520,20,0,0,253,52,133,"T0","","",1054816,518],[67,33,1,129,20,1,0,520,20,0,0,253,52,133,"T0","","",1048579,518],[68,34,0,520,24,0,1,520,20,0,0,253,52,133,"T1","T1","",1057843,520],[69,34,1,520,24,0,1,520,20,0,0,253,52,133,"T1","T1","",1049351,520],[70,35,0,521,165,0,0,521,20,0,0,253,52,24,"T0+T2","","",1058615,520],[71,35,1,521,165,0,0,521,20,0,0,253,52,24,"T0+T2","","",1048579,520],[72,36,0,521,165,0,1,521,20,0,0,253,52,24,"T1","T1","",1057843,521],[73,36,1,521,165,0,1,521,20,0,0,253,52,24,"T1","T1","",1049351,521],[74,37,0,522,128,0,0,522,20,0,0,253,52,165,"T2","","",1058615,521],[75,37,1,522,128,0,0,522,20,0,0,253,52,165,"T2","","",1048576,521],[76,38,0,128,46,0,0,523,20,0,0,253,52,165,"T0","","",1054816,521],[77,38,1,128,46,0,0,523,20,0,0,253,52,165,"T0","","",1048583,521],[78,39,0,523,101,0,1,523,46,0,0,253,52,165,"T1","T1","",1057855,523],[79,39,1,523,101,0,1,523,46,0,0,253,52,165,"T1","T1","",1049351,523],[80,40,0,524,129,0,0,524,46,0,0,253,52,101,"T2","","",1058615,523],[81,40,1,524,129,0,0,524,46,0,0,253,52,101,"T2","","",1048576,523],[82,41,0,129,20,0,0,525,46,0,0,253,52,101,"T0","","",1054816,523],[83,41,1,129,20,0,0,525,46,0,0,253,52,101,"T0","","",1048579,523],[84,42,0,525,133,0,1,525,46,0,0,253,52,101,"T1","T1","",1057843,525],[85,42,1,525,133,0,1,525,46,0,0,253,52,101,"T1","T1","",1049351,525],[86,43,0,526,130,0,0,526,66,0,0,253,52,133,"T2","","",1058623,525],[87,43,1,526,130,0,0,526,66,0,0,253,52,133,"T2","","",1048576,525],[88,44,0,130,130,1,0,527,66,0,0,253,52,133,"T0","","",1054816,525],[89,44,1,130,66,1,0,527,66,0,0,253,52,133,"T0","","",1048579,525],[90,45,0,527,76,0,1,527,66,0,0,253,52,133,"T1","T1","",1057843,527],[91,45,1,527,76,0,1,527,66,0,0,253,52,133,"T1","T1","",1049351,527],[92,46,0,528,0,0,0,528,66,0,0,253,52,76,"T2","","",1058615,527],[93,46,1,528,0,0,0,528,66,0,0,253,52,76,"T2","","",1048579,527],[94,47,0,529,2,0,0,529,66,0,0,253,52,76,"T0","","",3154963,527],[95,47,1,529,2,0,0,529,66,0,0,253,52,76,"T0","","",1048704,527],[96,48,0,512,169,0,1,512,66,0,0,253,52,76,"T1","T1","",3155088,512],[97,48,1,512,169,0,1,512,66,0,0,253,52,76,"T1","T1","",1049351,512],[98,49,0,513,46,0,0,513,66,0,0,253,52,169,"T0+T2","","",3155735,512],[99,49,1,513,46,0,0,513,66,0,0,253,52,169,"T0+T2","","",1048583,512],[100,50,0,514,133,0,1,514,46,0,0,253,52,169,"T1","T1","",1057855,514],[101,50,1,514,133,0,1,514,46,0,0,253,52,169,"T1","T1","",1049351,514],[102,51,0,515,128,0,0,515,46,0,0,253,52,133,"T2","","",1058615,514],[103,51,1,515,128,0,0,515,46,0,0,253,52,133,"T2","","",1048576,514],[104,52,0,128,128,1,0,516,46,0,0,253,52,133,"T0","","",1054816,514],[105,52,1,128,46,1,0,516,46,0,0,253,52,133,"T0","","",1048579,514],[106,53,0,516,169,0,1,516,46,0,0,253,52,133,"T1","T1","",1057843,516],[107,53,1,516,169,0,1,516,46,0,0,253,52,133,"T1","T1","",1049351,516],[108,54,0,517,20,0,0,517,46,0,0,253,52,169,"T0+T2","","",1058615,516],[109,54,1,517,20,0,0,517,46,0,0,253,52,169,"T0+T2","","",1048583,516],[110,55,0,518,133,0,1,518,20,0,0,253,52,169,"T1","T1","",1057855,518],[111,55,1,518,133,0,1,518,20,0,0,253,52,169,"T1","T1","",1049351,518],[112,56,0,519,129,0,0,519,20,0,0,253,52,133,"T2","","",1058615,518],[113,56,1,519,129,0,0,519,20,0,0,253,52,133,"T2","","",1048576,518],[114,57,0,129,129,1,0,520,20,0,0,253,52,133,"T0","","",1054816,518],[115,57,1,129,20,1,0,520,20,0,0,253,52,133,"T0","","",1048579,518],[116,58,0,520,24,0,1,520,20,0,0,253,52,133,"T1","T1","",1057843,520],[117,58,1,520,24,0,1,520,20,0,0,253,52,133,"T1","T1","",1049351,520],[118,59,0,521,165,0,0,521,20,0,0,253,52,24,"T0+T2","","",1058615,520],[119,59,1,521,165,0,0,521,20,0,0,253,52,24,"T0+T2","","",1048579,520],[120,60,0,521,165,0,1,521,20,0,0,253,52,24,"T1","T1","",1057843,521],[121,60,1,521,165,0,1,521,20,0,0,253,52,24,"T1","T1","",1049351,521],[122,61,0,522,128,0,0,522,20,0,0,253,52,165,"T2","","",1058615,521],[123,61,1,522,128,0,0,522,20,0,0,253,52,165,"T2","","",1048576,521],[124,62,0,128,46,0,0,523,20,0,0,253,52,165,"T0","","",1054816,521],[125,62,1,128,46,0,0,523,20,0,0,253,52,165,"T0","","",1048583,521],[126,63,0,523,101,0,1,523,46,0,0,253,52,165,"T1","T1","",1057855,523],[127,63,1,523,101,0,1,523,46,0,0,253,52,165,"T1","T1","",1049351,523],[128,64,0,524,129,0,0,524,46,0,0,253,52,101,"T2","","",1058615,523],[129,64,1,524,129,0,0,524,46,0,0,253,52,101,"T2","","",1048576,523],[130,65,0,129,20,0,0,525,46,0,0,253,52,101,"T0","","",1054816,523],[131,65,1,129,20,0,0,525,46,0,0,253,52,101,"T0","","",1048579,523],[132,66,0,525,133,0,1,525,46,0,0,253,52,101,"T1","T1","",1057843,525]],"mem":{"fill":"00","pages":{"02":"a92e8580a914858118a580658185824c000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","ff":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000"}},"asm":{"org":512,"end":529,"size":18,"bytes":"a92e8580a914858118a580658185824c0002","labels":{"start":512,"sum":520},"listing":[{"n":1,"text":"        .org $0200","label":null,"addr":512,"bytes":null},{"n":2,"text":"start:  LDA #$2E","label":"start","addr":512,"bytes":"a92e"},{"n":3,"text":"        STA $80","label":null,"addr":514,"bytes":"8580"},{"n":4,"text":"        LDA #$14","label":null,"addr":516,"bytes":"a914"},{"n":5,"text":"        STA $81","label":null,"addr":518,"bytes":"8581"},{"n":6,"text":"sum:    CLC","label":"sum","addr":520,"bytes":"18"},{"n":7,"text":"        LDA $80","label":null,"addr":521,"bytes":"a580"},{"n":8,"text":"        ADC $81","label":null,"addr":523,"bytes":"6581"},{"n":9,"text":"        STA $82","label":null,"addr":525,"bytes":"8582"},{"n":10,"text":"        JMP start","label":null,"addr":527,"bytes":"4c0002"}]},"src":"        .org $0200\nstart:  LDA #$2E\n        STA $80\n        LDA #$14\n        STA $81\nsum:    CLC\n        LDA $80\n        ADC $81\n        STA $82\n        JMP start"}</script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const hx = (v,n=2) => "$"+v.toString(16).toUpperCase().padStart(n,"0");
+
+/* ---------- watch list: the 22 datapath control lines ---------- */
+const WATCH = ["dpc38_PCLADL","dpc32_PCHADH","dpc25_SBDB","dpc23_SBAC","dpc9_DBADD",
+  "dpc11_SBADD","dpc10_ADLADD","dpc21_ADDADL","dpc20_ADDSB06","dpc19_ADDSB7",
+  "dpc40_ADLPCL","dpc39_PCLPCL","dpc31_PCHPCH","dpc30_ADHPCH","dpc37_PCLDB",
+  "dpc33_PCHDB","dpc1_SBY","dpc3_SBX","dpc6_SBS","dpc27_SBADH","dpc17_SUMS","dpc12_0ADD"];
+const SHORT = WATCH.map(w => w.split("_")[1]);
+const IX = {}; SHORT.forEach((s,i)=>IX[s]=i);
+
+/* human-readable label + which path each line belongs to */
+const LINEMETA = {
+  PCLADL:["PCL→ADL","addr"], PCHADH:["PCH→ADH","addr"], ADLPCL:["ADL→PCL","addr"],
+  ADHPCH:["ADH→PCH","addr"], SBADH:["SB→ADH","addr"], ADDADL:["ALU→ADL","alu"],
+  PCLPCL:["PCL holds","addr"], PCHPCH:["PCH holds","addr"],
+  SBDB:["SB↔DB","data"], PCLDB:["PCL→DB","data"], PCHDB:["PCH→DB","data"],
+  SBAC:["SB→A","data"], SBX:["SB→X","data"], SBY:["SB→Y","data"], SBS:["SB→S","data"],
+  SBADD:["SB→ALU a","alu"], DBADD:["DB→ALU b","alu"], ADLADD:["ADL→ALU b","alu"],
+  "0ADD":["0→ALU a","alu"], SUMS:["ALU sums","alu"],
+  ADDSB06:["ALU→SB 0-6","alu"], ADDSB7:["ALU→SB 7","alu"]
+};
+
+const SHORTLAB={SBAC:"→A",SBX:"→X",SBY:"→Y",SBS:"→S"};
+function aluTxt(o){
+  const a=on(o,"SBADD")?"SB":on(o,"0ADD")?"0":null;
+  const b=on(o,"DBADD")?"DB":on(o,"ADLADD")?"ADL":null;
+  return (a&&b)?`${a} + ${b}`:"hold";
+}
+/* ---------- datapath geometry ---------- */
+const BOXES = [
+  {id:"PCH",x:96,y:16,w:96,h:30,label:"PCH",get:o=>hx(o.pc>>8)},
+  {id:"PCL",x:232,y:16,w:96,h:30,label:"PCL",get:o=>hx(o.pc&255)},
+  {id:"ADH",x:96,y:70,w:96,h:30,label:"ADH",get:o=>hx(o.addr>>8)},
+  {id:"ADL",x:232,y:70,w:96,h:30,label:"ADL",get:o=>hx(o.addr&255)},
+  {id:"ABUS",x:60,y:124,w:304,h:30,label:"ADDRESS BUS",bus:1,get:o=>hx(o.addr,4)},
+  {id:"DBUS",x:36,y:178,w:468,h:28,label:"DATA BUS",bus:1,get:o=>hx(o.data)},
+  {id:"SB",x:36,y:226,w:468,h:26,label:"SB \u00B7 SPECIAL BUS",bus:1,get:()=>""},
+  {id:"ALU",x:36,y:274,w:180,h:38,label:"ALU",get:o=>aluTxt(o)},
+  {id:"A",x:268,y:274,w:52,h:34,label:"A",get:o=>hx(o.a)},
+  {id:"X",x:328,y:274,w:52,h:34,label:"X",get:o=>hx(o.x)},
+  {id:"Y",x:388,y:274,w:52,h:34,label:"Y",get:o=>hx(o.y)},
+  {id:"S",x:448,y:274,w:52,h:34,label:"S",get:o=>hx(o.s)}
+];
+const EDGES = [
+  {ln:null,    k:"addr",d:"M144,100 V124",struct:1},
+  {ln:null,    k:"addr",d:"M280,100 V124",struct:1},
+  {ln:"PCHADH",k:"addr",d:"M144,46 V70",            lx:150,ly:64,anchor:"start"},
+  {ln:"PCLADL",k:"addr",d:"M280,46 V70",            lx:286,ly:64,anchor:"start"},
+  {ln:"ADHPCH",k:"addr",d:"M96,85 H78 V31 H96",     lx:74,ly:52,anchor:"end"},
+  {ln:"ADLPCL",k:"addr",d:"M232,85 H214 V31 H232",  lx:210,ly:52,anchor:"end"},
+  {ln:"PCHDB", k:"data",d:"M144,16 V6 H478 V178",   lx:404,ly:3},
+  {ln:"PCLDB", k:"data",d:"M280,16 V11 H490 V178",  lx:404,ly:22},
+  {ln:"SBDB",  k:"data",d:"M152,206 V226",          lx:158,ly:220,anchor:"start"},
+  {ln:"SBADH", k:"addr",d:"M60,226 H24 V85 H96",    lx:28,ly:150,anchor:"start"},
+  {ln:"SBAC",  k:"data",d:"M294,252 V274",          lx:298,ly:266,anchor:"start"},
+  {ln:"SBX",   k:"data",d:"M354,252 V274",          lx:358,ly:266,anchor:"start"},
+  {ln:"SBY",   k:"data",d:"M414,252 V274",          lx:418,ly:266,anchor:"start"},
+  {ln:"SBS",   k:"data",d:"M474,252 V274",          lx:478,ly:266,anchor:"start"},
+  {ln:"SBADD", k:"alu", d:"M126,252 V274",          lx:132,ly:266,anchor:"start"},
+  {ln:"DBADD", k:"alu", d:"M36,192 H12 V294 H36",   lx:16,ly:216,anchor:"start"},
+  {ln:"ADLADD",k:"alu", d:"M232,94 H4 V304 H36",    lx:8,ly:258,anchor:"start"},
+  {ln:"ADDSB", k:"alu", d:"M216,286 H240 V252",     lx:236,ly:266,anchor:"end"},
+  {ln:"ADDADL",k:"alu", d:"M126,312 V326 H528 V85 H328", lx:300,ly:322,anchor:"middle"}
+];
+
+/* ---------- example programs ---------- */
+const PRESETS = [
+{name:"Add two bytes — where does the sum live?",
+ note:"Step to half-cycle 38. The sum lands in A during the NEXT instruction's fetch, not during ADC.",
+ src:`        .org $0200
+start:  LDA #$2E
+        STA $80
+        LDA #$14
+        STA $81
+sum:    CLC
+        LDA $80
+        ADC $81
+        STA $82
+        JMP start`},
+{name:"Fibonacci in zero page",
+ note:"$F2 collects the running sum. Watch PCL→ADL open every time a byte is fetched.",
+ src:`        .org $0200
+start:  LDA #$00
+        STA $F0
+        LDA #$01
+        STA $F1
+loop:   LDA $F0
+        CLC
+        ADC $F1
+        STA $F2
+        LDA $F1
+        STA $F0
+        LDA $F2
+        STA $F1
+        JMP loop`},
+{name:"Read-modify-write — INC touches the bus three times",
+ note:"INC reads the byte, writes it back unchanged, then writes the incremented value to the same address.",
+ src:`        .org $0200
+        LDA #$41
+        STA $90
+loop:   INC $0090
+        JMP loop`},
+{name:"JMP indirect — the page-boundary bug",
+ note:"The pointer is $02FF. Watch the second indirect read: it addresses $0200, not $0300. No carry from ADL to ADH.",
+ src:`        .org $0200
+start:  LDX #$11
+        JMP ($02FF)
+        .org $02FF
+        .byte $00`}
+];
+
+/* ---------- state ---------- */
+let API   = location.origin + "/api";
+let LIVE  = false;
+let F     = [];         // frames, compact row arrays
+let MEM0  = {fill:"00",pages:{}};
+let MACH  = null;       // machine at the end of F (live mode only)
+let i     = 0;          // current frame index
+let timer = null;
+const C = {h:0,cyc:1,ph2:2,addr:3,data:4,wr:5,sync:6,pc:7,a:8,x:9,y:10,s:11,p:12,ir:13,t:14,hid:15,sd:16,w:17,fa:18};
+
+const obs = n => { const r=F[n]; if(!r) return null;
+  return {h:r[0],cyc:r[1],ph2:!!r[2],addr:r[3],data:r[4],wr:!!r[5],sync:!!r[6],pc:r[7],
+          a:r[8],x:r[9],y:r[10],s:r[11],p:r[12],ir:r[13],t:r[14],hid:r[15],sd:r[16],w:r[17],fa:r[18]}; };
+const on = (o,name) => name==="ADDSB" ? (!!(o.w&(1<<IX.ADDSB06))||!!(o.w&(1<<IX.ADDSB7)))
+                                      : !!(o.w & (1<<IX[name]));
+
+/* ---------- build static DOM ---------- */
+(function build(){
+  const svg=$("#map"); let s="";
+  for(const e of EDGES){
+    s+=`<path class="e ${e.k}${e.struct?" struct":""}" data-ln="${e.ln||""}" d="${e.d}"/>`;
+    if(e.ln) s+=`<text class="elab" data-ln="${e.ln}" x="${e.lx}" y="${e.ly}" text-anchor="${e.anchor||"middle"}">${SHORTLAB[e.ln]||(LINEMETA[e.ln]?LINEMETA[e.ln][0]:e.ln)}</text>`;
+  }
+  for(const b of BOXES){
+    const cx=b.x+b.w/2;
+    s+=`<g class="bx${b.bus?" bus":""}" data-bx="${b.id}">`
+      +`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="2"/>`
+      +(b.bus
+         ? `<text class="n" x="${b.x+9}" y="${b.y+b.h/2+3.5}">${b.label}</text>`
+           +`<text class="v" data-v="${b.id}" x="${b.x+b.w-9}" y="${b.y+b.h/2+4}" text-anchor="end"></text>`
+         : `<text class="n" x="${cx}" y="${b.y+12}" text-anchor="middle">${b.label}</text>`
+           +`<text class="v" data-v="${b.id}" x="${cx}" y="${b.y+b.h-7}" text-anchor="middle"></text>`)
+      +`</g>`;
+  }
+  svg.innerHTML=s;
+
+  $("#lines").innerHTML = SHORT.map(n=>{
+    const m=LINEMETA[n]||[n,"alu"];
+    return `<span class="ln ${m[1]}" data-ln="${n}"><i></i>${m[0]}</span>`;
+  }).join("");
+
+  $("#regs").innerHTML =
+    ["A","X","Y","S"].map(k=>`<div class="reg" data-r="${k}"><div class="k">${k}</div><div class="v">–</div></div>`).join("")
+    +`<div class="reg wide" data-r="PC"><div class="k">PROGRAM COUNTER</div><div class="v">–</div></div>`
+    +`<div class="reg" data-r="IR"><div class="k">IR</div><div class="v">–</div></div>`
+    +`<div class="reg" data-r="P"><div class="k">P</div><div class="v">–</div></div>`
+    +`<div class="reg wide" data-r="F"><div class="k">FLAGS</div><div class="flags">–</div></div>`;
+
+  $("#busbox").innerHTML =
+    `<div class="reg wide" data-r="AB"><div class="k">ADDRESS</div><div class="v">–</div></div>`
+   +`<div class="reg" data-r="DB"><div class="k">DATA</div><div class="v">–</div></div>`
+   +`<div class="reg" data-r="RW"><div class="k">R / W</div><div class="v">–</div></div>`
+   +`<div class="reg" data-r="SY"><div class="k">SYNC</div><div class="v">–</div></div>`
+   +`<div class="reg" data-r="TS"><div class="k">TIMING</div><div class="v">–</div></div>`;
+
+  const sel=$("#preset");
+  sel.innerHTML=PRESETS.map((p,n)=>`<option value="${n}">${p.name}</option>`).join("");
+  loadPreset(0);
+})();
+
+function loadPreset(n){ $("#src").value=PRESETS[n].src; $("#presetnote").textContent=PRESETS[n].note; }
+
+/* ---------- narration ---------- */
+function narrate(o,p){
+  const beats=[];
+  const rd=!o.wr;
+  const pcDrives=on(o,"PCLADL");
+  const addrFrom = pcDrives ? "the program counter"
+                 : on(o,"ADDADL") ? "the adder — this is a computed address"
+                 : "the address holding registers";
+
+  const lede = o.ph2
+    ? (rd ? `<b>&#966;2 &middot; evaluate.</b> Memory has answered ${hx(o.addr,4)} with <code>${hx(o.data)}</code>. Whatever gate is open now decides where it goes.`
+          : `<b>&#966;2 &middot; evaluate.</b> The CPU is driving <code>${hx(o.data)}</code> out to ${hx(o.addr,4)}. This is the half-cycle memory actually writes.`)
+    : `<b>&#966;1 &middot; setup.</b> ${hx(o.addr,4)} goes out on the address lines, driven by ${addrFrom}.`;
+
+  if(o.sync) beats.push([1,`<code>SYNC</code> is high, so the byte coming back is an <b>opcode</b>. It reaches IR at the end of this cycle &mdash; which is why IR still reads <code>${hx(o.ir)}</code>, the instruction before it.`]);
+  if(o.sd)  beats.push([1,`Store pipeline <code>${o.sd}</code> is holding a byte for a write later in this instruction.`]);
+
+  const land=[["SBAC","A","a"],["SBX","X","x"],["SBY","Y","y"],["SBS","S","s"]];
+  for(const [ln,nm,key] of land){
+    if(!on(o,ln)) continue;
+    beats.push([1, (p && p[key]!==o[key])
+      ? `<code>SB&rarr;${nm}</code> is conducting and <b>${nm} just changed ${hx(p[key])} &rarr; ${hx(o[key])}</b>.`
+      : `<code>SB&rarr;${nm}</code> is conducting &mdash; ${nm} takes whatever sits on the special bus.`]);
+  }
+
+  const aIn = on(o,"SBADD")?"SB":on(o,"0ADD")?"zero":null;
+  const bIn = on(o,"DBADD")?"the data bus":on(o,"ADLADD")?"ADL":null;
+  const took = on(o,"SBAC")||on(o,"SBX")||on(o,"SBY")||on(o,"SBS");
+  if(aIn&&bIn){
+    beats.push([on(o,"DBADD")?1:0, on(o,"DBADD")
+      ? `The adder has <b>${aIn}</b> on one input and <b>${bIn}</b> on the other. This is arithmetic on real data, not address maths.`
+      : `The adder is working on <b>${aIn}</b> and <b>${bIn}</b> &mdash; address arithmetic, which it does most cycles.`]);
+  }
+  if(on(o,"ADDSB")&&!took)
+    beats.push([1,`The adder result is out on SB and <b>no register is taking it</b>. The value exists and lives nowhere.`]);
+  if(on(o,"ADDADL"))
+    beats.push([1,`The adder result goes to <code>ADL</code>: the chip is building an address, not a value.`]);
+
+  const loadPC=on(o,"ADLPCL")||on(o,"ADHPCH");
+  if(loadPC&&!pcDrives)
+    beats.push([1,`PC is loading from the address bus but <b>PC is not what put the value there</b> &mdash; this is a jump.`]);
+  else if(loadPC)
+    beats.push([0,`PC drives the address bus and the address bus loads back into PC. That round trip through the incrementer <i>is</i> the increment.`]);
+  else if(on(o,"PCLPCL")&&on(o,"PCHPCH"))
+    beats.push([1,`PC is holding at ${hx(o.pc,4)}. The address bus belongs to an operand right now, not to the program.`]);
+
+  if(o.wr) beats.push([1,`<code>R/W</code> is low. ${hx(o.addr,4)} takes <code>${hx(o.data)}</code>.`]);
+  if(on(o,"SBDB")) beats.push([0,`SB and the data bus are tied together &mdash; one value, two names.`]);
+
+  beats.push([0,`Timing chain <code>${o.t}</code>${o.hid?` plus hidden <code>${o.hid}</code>`:""}${o.t.indexOf("+")>=0?" &mdash; two instructions overlap here.":""}`]);
+  return {lede,beats};
+}
+
+/* ---------- render ---------- */
+function render(){
+  const o=obs(i), p=obs(i-1);
+  if(!o) return;
+
+  document.documentElement.style.setProperty("--glow", o.ph2?"var(--phi2)":"var(--phi1)");
+  $("#pilltxt").textContent = o.ph2?"φ2 · evaluate":"φ1 · setup";
+  $("#pos").innerHTML = `h <b>${o.h}</b> · cycle <b>${o.cyc}</b>`;
+  $("#tstate").textContent = o.t + (o.hid?" · "+o.hid:"") + (o.sd?" · "+o.sd:"");
+
+  /* edges */
+  for(const el of document.querySelectorAll("#map .e[data-ln]")){
+    const n=el.dataset.ln; el.classList.toggle("on", n && on(o,n));
+  }
+  for(const el of document.querySelectorAll("#map .elab")){
+    el.classList.toggle("on", on(o,el.dataset.ln));
+  }
+  /* boxes */
+  const hot={ABUS:1,DBUS:1};
+  hot.PCL=on(o,"PCLADL")||on(o,"PCLDB")||on(o,"ADLPCL");
+  hot.PCH=on(o,"PCHADH")||on(o,"PCHDB")||on(o,"ADHPCH");
+  hot.ADL=on(o,"PCLADL")||on(o,"ADDADL")||on(o,"ADLADD")||on(o,"ADLPCL");
+  hot.ADH=on(o,"PCHADH")||on(o,"SBADH")||on(o,"ADHPCH");
+  hot.SB =on(o,"SBDB")||on(o,"ADDSB")||on(o,"SBADD");
+  hot.ALU=on(o,"SUMS")&&(on(o,"SBADD")||on(o,"0ADD"));
+  hot.A=on(o,"SBAC"); hot.X=on(o,"SBX"); hot.Y=on(o,"SBY"); hot.S=on(o,"SBS");
+  for(const b of BOXES){
+    const g=document.querySelector(`[data-bx="${b.id}"]`);
+    g.classList.toggle("hot", !!hot[b.id]);
+    g.querySelector(`[data-v="${b.id}"]`).textContent=b.get(o);
+  }
+
+  /* control-line grid */
+  let cnt=0;
+  for(const el of document.querySelectorAll(".ln")){
+    const v=on(o,el.dataset.ln); el.classList.toggle("on",v); if(v)cnt++;
+  }
+  $("#lncount").textContent=`${cnt} of 22 conducting`;
+
+  /* narration */
+  const {lede,beats}=narrate(o,p);
+  $("#lede").innerHTML=lede;
+  $("#beats").innerHTML=beats.map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
+
+  /* registers */
+  const rv={A:[hx(o.a),p&&p.a!==o.a],X:[hx(o.x),p&&p.x!==o.x],Y:[hx(o.y),p&&p.y!==o.y],
+            S:[hx(o.s),p&&p.s!==o.s],PC:[hx(o.pc,4),p&&p.pc!==o.pc],
+            IR:[hx(o.ir),p&&p.ir!==o.ir],P:[hx(o.p),p&&p.p!==o.p]};
+  for(const k in rv){
+    const el=document.querySelector(`[data-r="${k}"]`);
+    el.querySelector(".v").textContent=rv[k][0];
+    el.classList.toggle("chg",!!rv[k][1]);
+  }
+  const fl="NV-BDIZC";
+  $('[data-r="F"] .flags').innerHTML=[...fl].map((c,n)=>
+    `<span class="${(o.p>>(7-n))&1?"set":""}">${(o.p>>(7-n))&1?c:c.toLowerCase()}</span>`).join("");
+  document.querySelector('[data-r="F"]').classList.toggle("chg",!!(p&&p.p!==o.p));
+
+  const setb=(k,v,c)=>{const e=document.querySelector(`[data-r="${k}"]`);e.querySelector(".v").textContent=v;e.classList.toggle("chg",!!c);};
+  setb("AB",hx(o.addr,4),p&&p.addr!==o.addr);
+  setb("DB",hx(o.data),p&&p.data!==o.data);
+  setb("RW",o.wr?"WRITE":"read",o.wr);
+  setb("SY",o.sync?"HIGH":"low",o.sync);
+  setb("TS",o.t,p&&p.t!==o.t);
+
+  for(const el of document.querySelectorAll(".lline"))
+    el.classList.toggle("here", +el.dataset.addr===o.fa);
+  renderZP();
+  $("#scrub").value=i;
+  $("#tlab").textContent=`${i} / ${F.length-1}`;
+  drawStrip();
+}
+
+/* zero page, reconstructed from boot memory + every write up to here */
+function renderZP(){
+  const page=MEM0.pages["00"]||"00".repeat(256);
+  const bytes=[]; for(let n=0;n<256;n++) bytes.push(parseInt(page.substr(n*2,2),16)||0);
+  const touched={};
+  for(let n=1;n<=i;n++){
+    const r=F[n]; if(r[C.wr]&&r[C.addr]<256){ bytes[r[C.addr]]=r[C.data]; touched[r[C.addr]]=(n===i)?2:1; }
+  }
+  let s="";
+  for(let base=0x80;base<0xC0;base+=8){
+    s+=`<span class="a">${hx(base,4)}</span>  `;
+    for(let n=0;n<8;n++){
+      const v=bytes[base+n],t=touched[base+n];
+      s+=`<b class="${t===2?"w":v===0?"z":""}">${v.toString(16).toUpperCase().padStart(2,"0")}</b> `;
+    }
+    s+="<br>";
+  }
+  $("#zp").innerHTML=s;
+}
+
+/* timeline strip: a tick per half-cycle, opcode fetches marked */
+function drawStrip(){
+  const cv=$("#strip"); const w=cv.clientWidth||600; cv.width=w;
+  const g=cv.getContext("2d"); g.clearRect(0,0,w,22);
+  const n=F.length; if(!n) return; const px=w/n;
+  for(let k=0;k<n;k++){
+    const r=F[k]; const x=k*px;
+    g.fillStyle = r[C.wr] ? "#E06A96" : r[C.sync] ? "#4FBFD4" : (r[C.ph2] ? "#2C3849" : "#212B39");
+    g.fillRect(x,r[C.sync]||r[C.wr]?2:8,Math.max(px,.6),r[C.sync]||r[C.wr]?18:8);
+  }
+  g.fillStyle="#EAF1F8"; g.fillRect(Math.min(i*px,w-2),0,2,22);
+}
+
+/* ---------- transport ---------- */
+function go(n){ i=Math.max(0,Math.min(F.length-1,n)); render(); }
+function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][C.sync]&&!F[n][C.ph2]) return go(n); go(F.length-1); }
+$("#b-hb").onclick=()=>go(i-1); $("#b-hf").onclick=()=>go(i+1);
+$("#b-cf").onclick=()=>go(i+2); $("#b-if").onclick=nextFetch;
+$("#scrub").oninput=e=>go(+e.target.value);
+$("#b-play").onclick=()=>{
+  if(timer){clearInterval(timer);timer=null;$("#b-play").textContent="▶ play";return;}
+  $("#b-play").textContent="❚❚ pause";
+  timer=setInterval(()=>{ if(i>=F.length-1){clearInterval(timer);timer=null;$("#b-play").textContent="▶ play";return;} go(i+1); },170);
+};
+$("#strip").onclick=e=>{ const r=e.target.getBoundingClientRect(); go(Math.round((e.clientX-r.left)/r.width*(F.length-1))); };
+addEventListener("keydown",e=>{
+  if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if(e.key==="ArrowRight"){e.preventDefault();go(i+(e.shiftKey?2:1));}
+  else if(e.key==="ArrowLeft"){e.preventDefault();go(i-(e.shiftKey?2:1));}
+  else if(e.key==="ArrowDown"&&e.shiftKey){e.preventDefault();nextFetch();}
+  else if(e.key===" "){e.preventDefault();$("#b-play").click();}
+});
+addEventListener("resize",drawStrip);
+$("#preset").onchange=e=>loadPreset(+e.target.value);
+
+/* ---------- API ---------- */
+async function post(path,body){
+  const r=await fetch(API+"/v1/"+path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({detail:"unreadable response"}));
+  if(!r.ok) throw new Error(typeof j.detail==="string"?j.detail:JSON.stringify(j.detail||j));
+  return j;
+}
+const pack = o => [o.half_cycle,o.cycle,o.phase==="phi2"?1:0,o.addr,o.data,o.rw==="write"?1:0,
+  o.sync?1:0,o.pc,o.a,o.x,o.y,o.s,o.p,o.ir,o.tstates,o.hidden||"",o.store_data||"",
+  WATCH.reduce((m,w,n)=>m|((o.watch&&o.watch[w])?1<<n:0),0),(o.fetch&&o.fetch.addr!=null)?o.fetch.addr:-1];
+
+function showListing(a){
+  $("#asmlen").textContent=`${a.size} bytes @ ${hx(a.org,4)}`;
+  $("#listing").innerHTML=a.listing.filter(l=>l.addr!==null).map(l=>
+    `<div class="lline" data-addr="${l.addr}"><span class="a">${hx(l.addr,4)}</span>  <b>${
+      (l.bytes||"").padEnd(6," ").replace(/ /g,"&nbsp;")}</b>  ${
+      (l.text||"").trim().replace(/</g,"&lt;")}</div>`).join("");
+}
+
+async function boot(){
+  const btn=$("#run"); btn.disabled=true; btn.textContent="assembling…"; $("#err").hidden=true;
+  try{
+    const b=await post("boot",{rom:{source:$("#src").value},watch:WATCH});
+    const s=await post("step",{machine:b.machine,half_cycles:300,trace:true,watch:WATCH});
+    F=[pack(b.observe),...s.trace.map(pack)];
+    MEM0=b.machine.memory; MACH=s.machine;
+    showListing(b.assembled);
+    $("#more").disabled=false; $("#hint").textContent="Arrow keys step. Shift+→ jumps a full cycle.";
+    go(0);
+  }catch(e){ $("#err").hidden=false; $("#err").textContent=e.message; }
+  finally{ btn.disabled=false; btn.textContent="Assemble & boot"; }
+}
+$("#run").onclick=boot;
+$("#more").onclick=async()=>{
+  const btn=$("#more"); btn.disabled=true; btn.textContent="running…";
+  try{
+    const s=await post("step",{machine:MACH,half_cycles:200,trace:true,watch:WATCH});
+    F=F.concat(s.trace.map(pack)); MACH=s.machine;
+    $("#scrub").max=F.length-1; render();
+  }catch(e){ $("#err").hidden=false; $("#err").textContent=e.message; }
+  finally{ btn.disabled=false; btn.textContent="Run 200 more"; }
+};
+
+/* ---------- start: live if the API answers, otherwise the packed trace ---------- */
+function useDemo(reason){
+  const d=JSON.parse($("#demo").textContent);
+  F=d.rows; MEM0=d.mem; $("#src").value=d.src; $("#presetnote").textContent=PRESETS[0].note;
+  showListing(d.asm);
+  $("#conn").className="conn demo"; $("#conn").textContent="packed trace";
+  $("#hint").textContent=reason;
+  $("#more").disabled=true; $("#run").disabled=true;
+  $("#scrub").max=F.length-1; go(0);
+}
+(async()=>{
+  try{
+    const r=await fetch(API+"/v1/meta",{cache:"no-store"});
+    if(!r.ok) throw 0;
+    const m=await r.json();
+    LIVE=true;
+    $("#conn").className="conn live";
+    $("#conn").textContent=`live · ${m.transistors} transistors`;
+    $("#scrub").max=0;
+    await boot();
+  }catch(e){
+    useDemo("No API on this origin, so this is a trace captured earlier — stepping works, assembling does not. Serve this page from the same host as /api to go live.");
+  }
+})();
+</script>
+</body>
+</html>
