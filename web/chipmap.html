@@ -71,6 +71,10 @@
           <button class="btn" type="button" id="cm-nodes" aria-pressed="true">Nodes</button>
           <button class="btn" type="button" id="cm-tidy"
                   title="Put every box back where the layout derives it">Tidy</button>
+          <button class="btn" type="button" id="cm-scramble"
+                  title="Throw every box somewhere else (seeded, so the first one is always the same one)">Scramble</button>
+          <button class="btn" type="button" id="cm-opt"
+                  title="Repulsion between boxes, attraction along bundles by their weight; the note reports the stretch">Optimize</button>
           <button class="btn" type="button" id="cm-save"
                   title="Save your arrangement: container key, x and y offset">Save</button>
           <button class="btn" type="button" id="cm-load-btn"
@@ -208,7 +212,15 @@
         the page's claim, and a moved box is yours. Save writes the
         arrangement as one small file, a container key to its x and y offset
         and nothing else; Load applies one, skipping and counting anything it
-        does not recognise. A square is a node
+        does not recognise. Scramble throws every box somewhere else, seeded
+        so the first throw is always the same throw, and Optimize untangles
+        by physics: every pair of boxes repels, every bundle pulls its ends
+        together with a strength scaled by the edges it carries, and the
+        step size cools until it settles. The note reports the stretch, the
+        sum over bundles of weight times centre distance, before and after;
+        that number is the measurement, and whether the result reads better
+        than the derived columns is yours to judge. Tidy remains the way
+        back. A square is a node
         that holds switches, filled while its switches conduct and empty while
         they are open circuit; everything else is a dot, lit while it is high
         and ringed when it changed at the last half-cycle. Clicking a glyph

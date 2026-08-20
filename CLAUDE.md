@@ -1796,6 +1796,25 @@ somebody chose, and at the container level it stops being true.
     dragged arrangement, tidies, loads it back with two junk entries mixed
     in, and asserts the box returns to the saved offset with exactly the junk
     skipped. Both buttons ride into the View drawer in fullscreen.
+  - **Scramble and Optimize are the arrangement as physics.** Scramble throws
+    every box somewhere else through a SEEDED PRNG (mulberry32 from 0x6502),
+    so a fresh page's first throw is always the same throw, and the harness
+    holds the prose to that. Optimize is Fruchterman-Reingold over the boxes:
+    every pair repels (backed off by the boxes' own radii), every bundle
+    pulls its ends together scaled by `sqrt(weight/maxWeight)`, the step
+    cools by 1.5% a step for 400 steps, clamped to the canvas, snapped and
+    saved on settle. **It runs in setTimeout chunks, not animation frames**,
+    both so the untangling is watchable and so it still runs in an iframe,
+    where the harness lives. The measured claim is the STRETCH (the sum over
+    bundles of weight times centre distance), reported before and after in
+    the note; typical: a scramble at ~2300k settles near ~990k. The harness
+    recomputes the stretch itself from the transforms and asserts the settle
+    beat the scramble, everything snapped and finite, Tidy still restoring.
+    A pointerdown on a box stops the optimizer: the reader's hand wins.
+  - **A fixed sleep after a file-input change is a flake under a virtual-time
+    budget**: `file.text()` resolves on real IO, and virtual time
+    fast-forwards straight past a `sleep(200)`. One green run, then one red.
+    Poll for the note the action writes instead.
 - **Fullscreen is the workbench's study view, floating console included**,
   from the same two shared modules as the tracer (`fullscreen.js`,
   `solo-palette.js`), so a phone gets the same fallback and Escape leaves the

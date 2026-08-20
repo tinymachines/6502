@@ -516,7 +516,10 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
       const input = d5.getElementById('cm-load');
       input.files = dt.files;
       input.dispatchEvent(new f.contentWindow.Event('change', { bubbles: true }));
-      await sleep(200);
+      // Poll for the note rather than sleeping: file.text() resolves on real
+      // IO, and a fixed sleep under a virtual-time budget can fast-forward
+      // straight past it. Found as a flake, one green run then one red.
+      for (let i = 0; i < 400 && !/placed/.test(d5.getElementById('cm-io-note').textContent); i++) await sleep(25);
     }
     ok('Load puts the arrangement back through the real file input',
        d5.querySelector('.cm-box[data-key="regs:a"]').getAttribute('transform')
@@ -529,6 +532,69 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
        JSON.parse(localStorage.getItem('v6502.chipmap.layout') || '{}')['regs:a'] !== undefined);
     d5.getElementById('cm-tidy').click();
     await sleep(30);
+
+    // --- scramble and optimize ------------------------------------------------
+    //
+    // The stretch is recomputed HERE, from the boxes' own transforms and the
+    // bundle weights, so "optimizing reduces it" is not the page grading its
+    // own work. The optimizer runs in setTimeout chunks precisely so it still
+    // runs in this iframe, where animation frames are throttled to nothing.
+    const stretchOf = () => {
+      const gs = f.contentWindow.__chipmap.groups;
+      const bs = f.contentWindow.__chipmap.bundles;
+      const boxes5 = [...f.contentDocument.querySelectorAll('.cm-box')];
+      const c = gs.map((g, i) => {
+        const tfm = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(boxes5[i].getAttribute('transform') || '');
+        const dx = tfm ? Number(tfm[1]) : 0, dy = tfm ? Number(tfm[2]) : 0;
+        return [g.x + dx + g.w / 2, g.y + dy + g.h / 2];
+      });
+      let sum = 0;
+      for (const bd of bs) sum += bd.weight * Math.hypot(c[bd.a][0] - c[bd.b][0], c[bd.a][1] - c[bd.b][1]);
+      return sum;
+    };
+    d5.getElementById('cm-scramble').click();
+    await sleep(60);
+    {
+      const tfs = [...d5.querySelectorAll('.cm-box')].map((b) => b.getAttribute('transform') || '');
+      const moved5 = tfs.filter((t) => /translate\((?!0 0\))/.test(t)).length;
+      const snapped5 = tfs.every((t) => {
+        const m2 = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(t);
+        return !m2 || (Number(m2[1]) % 13 === 0 && Number(m2[2]) % 13 === 0);
+      });
+      ok('Scramble throws nearly every box somewhere else, snapped',
+         moved5 > 100 && snapped5, `${moved5} moved, snapped ${snapped5}`);
+      ok('...and says what it did to the stretch',
+         /scrambled: stretch \d+k/.test(d5.getElementById('cm-io-note').textContent),
+         d5.getElementById('cm-io-note').textContent);
+    }
+    const sBefore = stretchOf();
+    d5.getElementById('cm-opt').click();
+    ok('Optimize becomes Stop while it runs', d5.getElementById('cm-opt').textContent === 'Stop');
+    for (let i = 0; i < 1200 && !/settled after/.test(d5.getElementById('cm-io-note').textContent); i++) await sleep(50);
+    ok('the optimizer settles and reports both stretches',
+       /settled after \d+ steps: stretch \d+k, was \d+k/.test(d5.getElementById('cm-io-note').textContent),
+       d5.getElementById('cm-io-note').textContent);
+    const sAfter = stretchOf();
+    ok('optimizing reduces the weighted stretch, measured by this harness',
+       sAfter < sBefore * 0.9, `${Math.round(sAfter / 1000)}k vs ${Math.round(sBefore / 1000)}k scrambled`);
+    {
+      const gs = f.contentWindow.__chipmap.groups;
+      const boxes5 = [...d5.querySelectorAll('.cm-box')];
+      const sane = gs.every((g, i) => {
+        const tfm = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(boxes5[i].getAttribute('transform') || '');
+        const dx = tfm ? Number(tfm[1]) : 0, dy = tfm ? Number(tfm[2]) : 0;
+        if (!Number.isFinite(dx) || !Number.isFinite(dy) || dx % 13 !== 0 || dy % 13 !== 0) return false;
+        const cx = g.x + dx + g.w / 2, cy = g.y + dy + g.h / 2;
+        const [, , W5, H5] = [0, 0, 3000, 3000];
+        return cx > 0 && cy > 0 && cx < 1e5 && cy < 1e5 && !!W5 && !!H5;
+      });
+      ok('the settled arrangement is snapped and finite everywhere', sane);
+      ok('...and kept like a dragged one', !!localStorage.getItem('v6502.chipmap.layout'));
+    }
+    d5.getElementById('cm-tidy').click();
+    await sleep(30);
+    ok('Tidy still gives the derived layout back after the physics',
+       ![...d5.querySelectorAll('.cm-box')].some((b) => b.getAttribute('transform')));
 
     // --- the study view: fullscreen with the floating console ----------------
     d5.getElementById('cm-fullscreen').click();
@@ -559,6 +625,21 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
        !con.classList.contains('solo')
        && d5.getElementById('cm-card').parentElement.classList.contains('console')
        && d5.getElementById('cmt-start').parentElement.classList.contains('console-bar'));
+
+    // --- the seeded scramble: the first throw is the same throw ---------------
+    const firstThrow = async () => {
+      localStorage.removeItem('v6502.chipmap.layout');
+      await load('chipmap.html');
+      for (let i = 0; i < 2000 && !f.contentWindow.__chipmap; i++) await sleep(50);
+      f.contentDocument.getElementById('cm-scramble').click();
+      await sleep(60);
+      return f.contentDocument.querySelector('.cm-box[data-key="alu:bit3"]').getAttribute('transform');
+    };
+    const t1 = await firstThrow();
+    const t2 = await firstThrow();
+    ok('the first scramble of a fresh page is reproducible, as the prose claims',
+       !!t1 && t1 === t2, `${t1} vs ${t2}`);
+    localStorage.removeItem('v6502.chipmap.layout');
   } catch (e) {
     results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e));
   }

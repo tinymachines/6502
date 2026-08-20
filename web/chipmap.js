@@ -736,7 +736,7 @@ const noop = () => {};
 const PANELS = {
   card: (host) => { returnAll(); borrow(host, 'cm-card'); return noop; },
   tour: (host) => { returnAll(); borrow(host, 'cmt-start', 'cmt-panel'); return noop; },
-  view: (host) => { returnAll(); borrow(host, 'cm-nodes', 'cm-tidy', 'cm-save', 'cm-load-btn', 'cm-home', 'cm-zoom', 'cm-io-note'); return noop; },
+  view: (host) => { returnAll(); borrow(host, 'cm-nodes', 'cm-tidy', 'cm-scramble', 'cm-opt', 'cm-save', 'cm-load-btn', 'cm-home', 'cm-zoom', 'cm-io-note'); return noop; },
 };
 const TAB_NAMES = { card: 'The selection', tour: 'The tour', view: 'View' };
 
@@ -857,6 +857,7 @@ function setupCamera() {
     const t = e.target.closest('.cm-box');
     boxDrag = live.size === 1 && t
       ? state.groups.findIndex((g) => g.key === t.dataset.key) : null;
+    if (boxDrag !== null && boxDrag >= 0) stopOptimize(true);
     if (live.size === 2) { boxDrag = null; pinch = pinchOf(); }
   });
   window.addEventListener('pointermove', (e) => {
@@ -915,6 +916,7 @@ function setupCamera() {
   });
   $('cm-home').addEventListener('click', () => setView(state.home.slice()));
   $('cm-tidy').addEventListener('click', () => {
+    stopOptimize(false);
     state.offsets.clear();
     saveOffsets();
     placeAll();
@@ -936,6 +938,147 @@ function placeAll() {
     line.setAttribute('x1', ax); line.setAttribute('y1', ay);
     line.setAttribute('x2', bx); line.setAttribute('y2', by);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Scramble and optimize: the arrangement as physics
+// ---------------------------------------------------------------------------
+//
+// Fruchterman-Reingold over the boxes: every pair repels, every bundle pulls
+// its two ends together with a strength scaled by the edges it carries, the
+// step size cools, and the whole thing runs in small timed chunks so the
+// untangling is watchable (and so it still runs where animation frames are
+// throttled, which is what an iframe does to a harness). The measured claim
+// is the STRETCH: the sum over bundles of weight times centre distance, and
+// the note reports it before and after rather than calling anything
+// "better". This is the reader's tool, like the drag: the derived layout
+// stays the page's claim, and Tidy still gives it back in one press.
+//
+// The scramble is a seeded PRNG (mulberry32), not Math.random, so a fresh
+// page's first scramble is the same scramble: an arrangement a person is
+// about to hand-tune should at least start reproducibly.
+
+let annealTimer = null;
+let annealSeed = 0x6502;
+function rng() {
+  annealSeed = (annealSeed + 0x6D2B79F5) | 0;
+  let t = Math.imul(annealSeed ^ (annealSeed >>> 15), 1 | annealSeed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/** The sum over bundles of weight times centre distance. */
+function stretchNow() {
+  let sum = 0;
+  for (const bd of state.bundles) {
+    const [ax, ay] = centerOf(state.groups[bd.a]);
+    const [bx, by] = centerOf(state.groups[bd.b]);
+    sum += bd.weight * Math.hypot(ax - bx, ay - by);
+  }
+  return sum;
+}
+const fmtStretch = (v) => `${Math.round(v / 1000)}k`;
+
+/** Write a full set of centres back as offsets; snap only when settling. */
+function setCenters(pts, snap) {
+  state.groups.forEach((g, i) => {
+    let dx = pts[i][0] - g.x - g.w / 2;
+    let dy = pts[i][1] - g.y - g.h / 2;
+    if (snap) { dx = Math.round(dx / CELL) * CELL; dy = Math.round(dy / CELL) * CELL; }
+    state.offsets.set(g.key, { dx, dy });
+  });
+  placeAll();
+}
+
+function scramble() {
+  stopOptimize(false);
+  const [, , W, H] = state.home;
+  const pts = state.groups.map((g) => [
+    PAD + g.w / 2 + rng() * Math.max(1, W - 2 * PAD - g.w),
+    PAD + g.h / 2 + rng() * Math.max(1, H - 2 * PAD - g.h),
+  ]);
+  setCenters(pts, true);
+  saveOffsets();
+  ioNote(`scrambled: stretch ${fmtStretch(stretchNow())}`);
+}
+
+function stopOptimize(settle) {
+  if (annealTimer !== null) { clearTimeout(annealTimer); annealTimer = null; }
+  const btn = $('cm-opt');
+  if (btn) { btn.textContent = 'Optimize'; btn.classList.remove('on'); }
+  if (settle) {
+    setCenters(state.groups.map((g) => centerOf(g)), true);
+    saveOffsets();
+  }
+}
+
+function optimize() {
+  if (annealTimer !== null) {
+    stopOptimize(true);
+    ioNote(`stopped: stretch ${fmtStretch(stretchNow())}`);
+    return;
+  }
+  const groups = state.groups;
+  const n = groups.length;
+  const [, , W, H] = state.home;
+  const k = Math.sqrt((W * H) / n) * 0.85;
+  const radius = groups.map((g) => Math.hypot(g.w, g.h) / 2);
+  const maxW = Math.max(...state.bundles.map((b) => b.weight));
+  const pts = groups.map((g) => centerOf(g));
+  const was = stretchNow();
+  let temp = k * 2.5;
+  let step = 0;
+  const STEPS = 400, PER_CHUNK = 4;
+  $('cm-opt').textContent = 'Stop';
+  $('cm-opt').classList.add('on');
+
+  const chunk = () => {
+    for (let it = 0; it < PER_CHUNK && step < STEPS; it++, step++) {
+      const disp = pts.map(() => [0, 0]);
+      // Every pair repels, harder when the boxes themselves would touch.
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          let vx = pts[i][0] - pts[j][0], vy = pts[i][1] - pts[j][1];
+          let d = Math.hypot(vx, vy);
+          if (d < 0.01) { vx = rng() - 0.5; vy = rng() - 0.5; d = Math.hypot(vx, vy); }
+          const gap = Math.max(1, d - (radius[i] + radius[j]) * 0.7);
+          const f = (k * k) / gap / d;
+          disp[i][0] += vx * f; disp[i][1] += vy * f;
+          disp[j][0] -= vx * f; disp[j][1] -= vy * f;
+        }
+      }
+      // Every bundle pulls, scaled by the weight of what it carries.
+      for (const bd of state.bundles) {
+        const vx = pts[bd.a][0] - pts[bd.b][0], vy = pts[bd.a][1] - pts[bd.b][1];
+        const d = Math.max(0.01, Math.hypot(vx, vy));
+        const wgt = 0.15 + 0.85 * Math.sqrt(bd.weight / maxW);
+        const f = ((d * d) / k) * wgt / d;
+        disp[bd.a][0] -= vx * f; disp[bd.a][1] -= vy * f;
+        disp[bd.b][0] += vx * f; disp[bd.b][1] += vy * f;
+      }
+      for (let i = 0; i < n; i++) {
+        const d = Math.hypot(disp[i][0], disp[i][1]);
+        if (d > 0) {
+          const move = Math.min(d, temp);
+          pts[i][0] += (disp[i][0] / d) * move;
+          pts[i][1] += (disp[i][1] / d) * move;
+        }
+        pts[i][0] = Math.min(W - PAD - groups[i].w / 2, Math.max(PAD + groups[i].w / 2, pts[i][0]));
+        pts[i][1] = Math.min(H - PAD - groups[i].h / 2, Math.max(PAD + groups[i].h / 2, pts[i][1]));
+      }
+      temp *= 0.985;
+    }
+    setCenters(pts, false);
+    ioNote(`optimizing ${step} of ${STEPS}: stretch ${fmtStretch(stretchNow())}, was ${fmtStretch(was)}`);
+    if (step >= STEPS || temp < 0.5) {
+      annealTimer = null;
+      stopOptimize(true);
+      ioNote(`settled after ${step} steps: stretch ${fmtStretch(stretchNow())}, was ${fmtStretch(was)}`);
+      return;
+    }
+    annealTimer = setTimeout(chunk, 16);
+  };
+  annealTimer = setTimeout(chunk, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -986,6 +1129,8 @@ function applyLayout(raw) {
 }
 
 function setupLayoutIO() {
+  $('cm-scramble').addEventListener('click', scramble);
+  $('cm-opt').addEventListener('click', optimize);
   $('cm-save').addEventListener('click', () => {
     const blob = new Blob([layoutJSON()], { type: 'application/json' });
     const a = document.createElement('a');
