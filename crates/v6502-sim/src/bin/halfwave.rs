@@ -20,10 +20,12 @@
 //! Request: one block of lines, terminated by `GO`.
 //!
 //!     META                        ask who I am (counts, limits, encoding)
+//!     NODES                       every named node, name to id
 //!     BOOT                        power-cycle into the supplied memory
 //!     VEC <hex4>                  (with BOOT) write the reset vector first
 //!     STEP <n>                    advance n half-cycles from STATE
 //!     RUN <max>                   advance to the next opcode fetch, capped
+//!     RUNTO <max> <hex4>          advance to the opcode fetch AT an address
 //!     STATE <value> <pullup> <pulldown> <trans_on> <half_cycle> <fetch|->
 //!     FILL <hex2>                 memory background byte (default 00)
 //!     PAGE <hex2> <512 hex>       one 256-byte page over the fill
@@ -31,7 +33,7 @@
 //!     TRACE                       record an observation per half-cycle
 //!     GO
 //!
-//! Exactly one verb (META | BOOT | STEP | RUN) per block. The response is one
+//! Exactly one verb (META | NODES | BOOT | STEP | RUN | RUNTO) per block. The response is one
 //! JSON object: `{"ok":true, "state":..., "memory":..., "observe":...}` or
 //! `{"ok":false, "error":"..."}`. A malformed block gets an error, never a
 //! guess, and never kills the process.
@@ -55,6 +57,7 @@ const MAX_TRACED: u64 = 10_000;
 struct Request {
     verb: Option<String>,
     arg: Option<u64>,
+    target: Option<u16>,
     vec: Option<u16>,
     state: Option<[String; 6]>,
     fill: u8,
@@ -68,6 +71,7 @@ impl Request {
         Request {
             verb: None,
             arg: None,
+            target: None,
             vec: None,
             state: None,
             fill: 0,
@@ -105,9 +109,27 @@ fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
+/// The buses and hold registers an observation reads beside the registers.
+/// Resolved once at startup. `alu` is the adder's hold register: the wire
+/// where a sum is real before any register holds it, which is the reading
+/// the whole overlap demo turns on.
+struct ExtraBuses {
+    alu: [NodeId; 8],
+    sb: [NodeId; 8],
+    adl: [NodeId; 8],
+    adh: [NodeId; 8],
+}
+
+impl ExtraBuses {
+    fn resolve(nl: &v6502_netlist::Netlist) -> ExtraBuses {
+        let bus = |p: &str| nl.bus::<8>(p).unwrap_or_else(|| panic!("no bus {p}0..7"));
+        ExtraBuses { alu: bus("alu"), sb: bus("sb"), adl: bus("adl"), adh: bus("adh") }
+    }
+}
+
 /// One observation as flat JSON: the architectural and microarchitectural
 /// state a learner reads off the running chip, plus any watched nodes.
-fn obs_json(cpu: &Cpu<FlatMemory>, watch: &[(String, NodeId)]) -> String {
+fn obs_json(cpu: &Cpu<FlatMemory>, extra: &ExtraBuses, watch: &[(String, NodeId)]) -> String {
     let o = cpu.observe();
     let mut s = String::with_capacity(320);
     let _ = write!(
@@ -150,6 +172,14 @@ fn obs_json(cpu: &Cpu<FlatMemory>, watch: &[(String, NodeId)]) -> String {
             StoreData::Sd2 => "SD2",
             StoreData::None => "",
         },
+    );
+    let _ = write!(
+        s,
+        ",\"alu\":{},\"sb\":{},\"adl\":{},\"adh\":{}",
+        cpu.engine().read_bus(&extra.alu),
+        cpu.engine().read_bus(&extra.sb),
+        cpu.engine().read_bus(&extra.adl),
+        cpu.engine().read_bus(&extra.adh),
     );
     match cpu.last_fetch() {
         Some(f) => {
@@ -215,11 +245,26 @@ fn err(msg: &str) -> String {
     format!("{{\"ok\":false,\"error\":\"{}\"}}", json_escape(msg))
 }
 
-fn handle(cpu: &mut Cpu<FlatMemory>, req: &Request) -> String {
+fn handle(cpu: &mut Cpu<FlatMemory>, extra: &ExtraBuses, req: &Request) -> String {
     let verb = match &req.verb {
         Some(v) => v.as_str(),
-        None => return err("no verb (META, BOOT, STEP or RUN) before GO"),
+        None => return err("no verb (META, NODES, BOOT, STEP, RUN or RUNTO) before GO"),
     };
+
+    if verb == "NODES" {
+        // Every named node, sorted by name so the output is deterministic.
+        let mut names: Vec<(&str, NodeId)> = cpu.engine().netlist().names().collect();
+        names.sort();
+        let mut s = format!("{{\"ok\":true,\"count\":{},\"nodes\":{{", names.len());
+        for (i, (name, id)) in names.iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            let _ = write!(s, "\"{}\":{}", json_escape(name), id);
+        }
+        s.push_str("}}");
+        return s;
+    }
 
     if verb == "META" {
         return format!(
@@ -255,7 +300,7 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
             }
             cpu.power_cycle();
         }
-        "STEP" | "RUN" => {
+        "STEP" | "RUN" | "RUNTO" => {
             let st = match &req.state {
                 Some(s) => s,
                 None => return err("STEP/RUN needs a STATE line"),
@@ -267,6 +312,9 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
             };
             if req.trace && n > MAX_TRACED {
                 return err(&format!("{n} traced half-cycles exceeds max_traced {MAX_TRACED}"));
+            }
+            if verb == "RUNTO" && req.target.is_none() {
+                return err("RUNTO needs a target address");
             }
             let half_cycle: u64 = match st[4].parse() {
                 Ok(h) => h,
@@ -307,16 +355,32 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                     if i > 0 {
                         trace.push(',');
                     }
-                    trace.push_str(&obs_json(cpu, &watch));
+                    trace.push_str(&obs_json(cpu, extra, &watch));
                 }
-                // RUN stops at the next opcode fetch: sync high with clk0 low,
-                // the same boundary `step_instruction` uses.
-                if verb == "RUN" && cpu.sync() && !cpu.clk0() {
+                // RUN stops at the next opcode fetch: sync high with clk0
+                // low, the same boundary `step_instruction` uses. RUNTO stops
+                // at the fetch OF a given address -- a breakpoint, with the
+                // address read from the latched fetch, the same latch the
+                // disassembler relies on.
+                let at_fetch = cpu.sync() && !cpu.clk0();
+                let stop = match verb {
+                    "RUN" => at_fetch,
+                    "RUNTO" => at_fetch && cpu.last_fetch().map(|f| f.addr) == req.target,
+                    _ => false,
+                };
+                if stop {
                     break;
                 }
             }
-            if verb == "RUN" && !(cpu.sync() && !cpu.clk0()) {
-                completed = false; // hit the cap first: a JAM, or the cap is low
+            let at_fetch = cpu.sync() && !cpu.clk0();
+            let arrived = match verb {
+                "RUN" => at_fetch,
+                "RUNTO" => at_fetch && cpu.last_fetch().map(|f| f.addr) == req.target,
+                _ => true,
+            };
+            if !arrived {
+                completed = false; // the cap came first: a JAM, a loop that
+                                   // never fetches there, or the cap is low
             }
             if req.trace {
                 trace.push(']');
@@ -327,7 +391,7 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                 completed,
                 state_json(cpu),
                 memory_json(cpu, req.fill),
-                obs_json(cpu, &watch),
+                obs_json(cpu, extra, &watch),
                 trace
             );
         }
@@ -339,12 +403,13 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
         "{{\"ok\":true,\"stepped\":0,\"completed\":true,\"state\":{},\"memory\":{},\"observe\":{}}}",
         state_json(cpu),
         memory_json(cpu, req.fill),
-        obs_json(cpu, &watch)
+        obs_json(cpu, extra, &watch)
     )
 }
 
 fn main() {
     let netlist = Arc::new(mos6502());
+    let extra = ExtraBuses::resolve(&netlist);
     let mut cpu = Cpu::new(netlist, FlatMemory::new()).expect("6502 signals resolve");
     cpu.bus.set_journalling(false);
 
@@ -364,14 +429,14 @@ fn main() {
         let r = &mut req;
         let result: Result<bool, String> = (|| match word {
             "GO" => Ok(true),
-            "META" | "BOOT" => {
+            "META" | "NODES" | "BOOT" => {
                 if r.verb.is_some() {
                     return Err("more than one verb in a block".into());
                 }
                 r.verb = Some(word.into());
                 Ok(false)
             }
-            "STEP" | "RUN" => {
+            "STEP" | "RUN" | "RUNTO" => {
                 if r.verb.is_some() {
                     return Err("more than one verb in a block".into());
                 }
@@ -379,10 +444,15 @@ fn main() {
                 r.arg = Some(
                     parts
                         .next()
-                        .ok_or("STEP/RUN needs a count")?
+                        .ok_or("STEP/RUN/RUNTO needs a count")?
                         .parse()
                         .map_err(|_| "bad count")?,
                 );
+                if word == "RUNTO" {
+                    let t = parts.next().ok_or("RUNTO needs a hex target address")?;
+                    r.target =
+                        Some(u16::from_str_radix(t, 16).map_err(|_| format!("bad target {t:?}"))?);
+                }
                 Ok(false)
             }
             "VEC" => {
@@ -439,7 +509,7 @@ fn main() {
             Ok(true) => {
                 let response = match bad.take() {
                     Some(e) => err(&e),
-                    None => handle(&mut cpu, &req),
+                    None => handle(&mut cpu, &extra, &req),
                 };
                 let _ = writeln!(out, "{response}");
                 let _ = out.flush();

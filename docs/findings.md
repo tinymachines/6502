@@ -267,3 +267,30 @@ recorded gallery of the full plate. Nothing on the site draws the 19-edge
 spine with narration generated from the same booleans as the picture; that is
 new, and the "ADL->PCL conducts on every fetch, a jump is ADL->PCL without
 PCL->ADL" reading in §3.3 is a genuinely good measured lesson.
+
+### 5.4 The suggestion list, shipped (same day)
+
+§2.3, §2.4, §2.6, and both halves of §2.7's until wishes, plus the rows
+half of §2.5, are live:
+
+- `GET /v1/nodes`: every resolvable name with its id, grouped (the grouping
+  an authored reading of the names, said so). The count is **832**, and the
+  846 in the docs was wrong in an instructive way: the die's table carries
+  846 raw entries, 12 are duplicate keys that collapse under JS object
+  semantics (the reference's own parse does the same), and 2 of the 834
+  remaining are the bit-5 sentinels `p5`/`Pout5`. nginx serves this one
+  route with `public, max-age=86400` where everything else is `no-store`.
+- `until_pc`: a breakpoint on the opcode fetch at an address, RUNTO in the
+  engine, `completed: false` at the bound. `until: "cycle"` too.
+- `alu`, `sb`, `adl`, `adh` on every Observation, read from their own
+  wires. The homeless sum is now on screen: at h=37 of the add program,
+  `alu` and `sb` both read $42 while `a` reads $2E, pinned by a test that
+  derives the half-cycle from A's own transition.
+- CORS `*` via middleware; OPTIONS preflight answers 200.
+- `format: "rows"`: the trace as columnar integer rows (`{cols,
+  watch_names, rows}`), stated encodings, watch packed to a bitmask. The
+  suite asserts it agrees with the object form column for column and is
+  at least 3x smaller; measured on a 10-row watch trace it is ~8x.
+
+Still open from the list: §1.3 (halfshot build stamp) and §2.5's `fields`
+parameter (rows shipped instead).

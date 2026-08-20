@@ -159,6 +159,10 @@ class Observation(BaseModel):
     tstates: str
     hidden: str
     store_data: str
+    alu: int = Field(description="the adder's hold register: where a sum is real before any register holds it")
+    sb: int = Field(description="the special bus. Precharged: idles high where nothing drives it")
+    adl: int = Field(description="internal address bus, low byte")
+    adh: int = Field(description="internal address bus, high byte")
     fetch: Optional[LastFetch] = None
     watch: Optional[dict[str, bool]] = None
 
@@ -174,16 +178,36 @@ class BootRequest(BaseModel):
 
 
 class StepRequest(BaseModel):
-    """Advance a machine. Either a half-cycle count, or `until="instruction"`
-    to run to the next opcode fetch (bounded by max_half_cycles, because a
-    JAM opcode never reaches one)."""
+    """Advance a machine. Exactly one of: a half-cycle count,
+    `until="instruction"` (run to the next opcode fetch), `until="cycle"`
+    (one whole clock cycle, two half-cycles), or `until_pc` (run to the
+    opcode fetch AT an address: a breakpoint). The until forms are bounded
+    by max_half_cycles, because a JAM opcode never reaches another fetch and
+    a loop may never fetch the named address."""
 
     machine: Machine
     half_cycles: Optional[int] = Field(default=None, ge=1)
-    until: Optional[Literal["instruction"]] = None
+    until: Optional[Literal["instruction", "cycle"]] = None
+    until_pc: Optional[int] = Field(default=None, ge=0, le=0xFFFF)
     max_half_cycles: int = Field(default=200, ge=1)
     watch: list[str] = Field(default_factory=list)
     trace: bool = False
+    format: Literal["objects", "rows"] = "objects"
+
+
+class TraceRows(BaseModel):
+    """The trace as columnar integer rows: the same information as the
+    object form at about a tenth of the bytes. Encodings, stated: clk0 and
+    sync are 0/1; phase is 1 or 2; rw is 0 for read, 1 for write; tstates is
+    a bitmask, bit n for Tn (T1 meaning the T1x/T+ state); hidden is 0 none,
+    1 T1, 2 VEC0, 3 T6; store_data is 0 none, 1 SD1, 2 SD2; a fetch that has
+    not happened is addr -1 and opcode -1; watch is a bitmask over
+    watch_names, bit i for name i. The flags string is dropped: it derives
+    from p."""
+
+    cols: list[str]
+    watch_names: list[str]
+    rows: list[list[int]]
 
 
 class StepResponse(BaseModel):
@@ -192,4 +216,17 @@ class StepResponse(BaseModel):
     stepped: int
     completed: bool
     trace: Optional[list[Observation]] = None
+    trace_rows: Optional[TraceRows] = None
     assembled: Optional[AssembleResponse] = None
+
+
+class NodesResponse(BaseModel):
+    """Every watchable node name, grouped. The grouping is a reading of the
+    names (an authored convenience, like the site's STEMS table), never a
+    measurement; the names and ids are the die's own. 846 raw entries in the
+    die's name table collapse to 834 distinct keys (12 duplicates) and two
+    of those are the bit-5 sentinels p5 and Pout5, which name storage the
+    6502 does not have: 832 resolve."""
+
+    count: int
+    groups: dict[str, dict[str, int]]

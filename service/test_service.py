@@ -238,6 +238,10 @@ def test_the_demo_sections_claims_are_measurements(client):
     by_h = {t["half_cycle"]: t for t in trace}
     assert by_h[wb]["watch"]["dpc23_SBAC"], "SBAC fires on the writeback"
     assert by_h[wb - 1]["a"] == 0x2E, "A still old the half-cycle before"
+    # The homeless sum, on screen: the half-cycle before the writeback, the
+    # adder's hold register and the special bus both read $42 while A does
+    # not. This is the observation the alu/sb fields exist for.
+    assert by_h[wb - 1]["alu"] == 0x42 and by_h[wb - 1]["sb"] == 0x42
     # ADC is already over: the fetch before the writeback is the NEXT
     # instruction's (STA, $85), with A still reading the operand's old value.
     assert by_h[wb - 2]["sync"] and by_h[wb - 2]["fetch"]["opcode"] == 0x85
@@ -246,9 +250,110 @@ def test_the_demo_sections_claims_are_measurements(client):
     # The page prints the numbers this run produced, not remembered ones.
     page = client.get("/").text
     assert f"h={wb}" in page, "page names the measured writeback half-cycle"
+    assert f"h={wb - 1}" in page, "page names the homeless-sum half-cycle"
     assert f"h={wb - 2}" in page, "page names the next instruction's fetch"
     assert "dpc23_SBAC" in page and "dpc17_SUMS" in page
     assert "$2E" in page and "$42" in page
+
+
+def test_nodes_lists_every_resolvable_name(client):
+    """846 raw entries in the die's name table, 12 duplicate keys, 2 bit-5
+    sentinels: 832 resolve, and every one of them is watchable. The groups
+    partition the count (nothing dropped, nothing double-filed), and a name
+    picked from the response works as a watch, which is the discoverability
+    the route exists for."""
+    r = client.get("/v1/nodes")
+    assert r.status_code == 200
+    res = r.json()
+    assert res["count"] == 832
+    total = sum(len(g) for g in res["groups"].values())
+    assert total == res["count"], "groups partition the count"
+    assert "sync" in res["groups"]["pins"]
+    assert "dpc23_SBAC" in res["groups"]["decode"]
+    assert "sb0" in res["groups"]["buses"]
+    assert "vcc" in res["groups"]["rails"]
+    # A name discovered here is accepted by watch.
+    name = sorted(res["groups"]["decode"])[0]
+    boot = boot_add(client, watch=[name])
+    assert name in boot["observe"]["watch"]
+    # And the page states the measured count.
+    assert str(res["count"]) in client.get("/").text
+
+
+def test_until_pc_is_a_breakpoint(client):
+    res = boot_add(client)
+    # The `sum` label assembles at $0208; run to its fetch.
+    assert res["assembled"]["labels"]["sum"] == 0x0208
+    r = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "until_pc": 0x0208},
+    ).json()
+    assert r["completed"] is True
+    assert r["observe"]["pc"] == 0x0208
+    assert r["observe"]["sync"] is True
+    assert r["observe"]["fetch"]["addr"] == 0x0208
+    # An address the program never fetches: the bound answers honestly.
+    r = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "until_pc": 0x1234, "max_half_cycles": 60},
+    ).json()
+    assert r["completed"] is False
+    assert r["stepped"] == 60
+
+
+def test_until_cycle_is_two_half_cycles(client):
+    res = boot_add(client)
+    r = client.post("/v1/step", json={"machine": res["machine"], "until": "cycle"}).json()
+    assert r["stepped"] == 2
+    assert r["observe"]["half_cycle"] == 2
+
+
+def test_rows_trace_carries_the_same_information(client):
+    """The rows form must agree with the object form column for column on
+    the same run: same machine in, so the trace is deterministic and the
+    two encodings are two readings of one thing."""
+    res = boot_add(client)
+    objs = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 10, "trace": True,
+              "watch": ["sync", "dpc23_SBAC"]},
+    ).json()
+    rows = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 10, "trace": True,
+              "watch": ["sync", "dpc23_SBAC"], "format": "rows"},
+    ).json()
+    assert rows["trace"] is None and rows["trace_rows"] is not None
+    tr = rows["trace_rows"]
+    assert tr["watch_names"] == ["sync", "dpc23_SBAC"]
+    assert len(tr["rows"]) == 10
+    cols = tr["cols"]
+    for o, row in zip(objs["trace"], tr["rows"]):
+        r = dict(zip(cols, row))
+        assert r["half_cycle"] == o["half_cycle"]
+        assert r["a"] == o["a"] and r["pc"] == o["pc"] and r["alu"] == o["alu"]
+        assert r["clk0"] == int(o["clk0"])
+        assert r["rw"] == (0 if o["rw"] == "read" else 1)
+        assert (r["watch"] & 1 != 0) == o["watch"]["sync"]
+        assert (r["watch"] & 2 != 0) == o["watch"]["dpc23_SBAC"]
+        # The tstates bitmask decodes to the same set the string names.
+        names = set(o["tstates"].split("+")) - {""}
+        got = {f"T{i}" for i in range(6) if r["tstates"] >> i & 1}
+        assert got == names
+    # The point of the format: it is much smaller on the wire.
+    import json as _json
+    assert len(_json.dumps(tr)) < len(_json.dumps(objs["trace"])) / 3
+
+
+def test_cors_is_open_for_any_origin(client):
+    r = client.options(
+        "/v1/step",
+        headers={"Origin": "https://example.org",
+                 "Access-Control-Request-Method": "POST",
+                 "Access-Control-Request-Headers": "content-type"},
+    )
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "*"
 
 
 def test_memory_stays_sparse_and_fill_is_honoured(client):

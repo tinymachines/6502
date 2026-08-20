@@ -806,6 +806,20 @@ state that decodes to the wrong chip is worse than one that is rejected.
   when tracing, both in `/v1/meta`. `until="instruction"` on a JAM opcode
   returns `completed: false` at the cap — the honest answer, since twelve
   opcodes never reach another fetch.
+- **The reviewer's findings (`docs/findings.md`) drove a second round, all
+  live**: `GET /v1/nodes` (every resolvable name, grouped by an authored
+  reading of the names; **832**, because the die's 846 raw entries hold 12
+  duplicate keys and the two bit-5 sentinels; nginx serves exactly this
+  route `public, max-age=86400` via an exact-match location while the rest
+  stays `no-store`); `until_pc` (a breakpoint: the engine's RUNTO stops at
+  the opcode fetch AT an address, read from the latched fetch, `completed:
+  false` at the bound); `until: "cycle"`; `alu`/`sb`/`adl`/`adh` on every
+  observation, read from their own wires, so the homeless sum is on screen
+  (h=37 of the add program: alu and sb read $42 while A reads $2E, pinned
+  by a test deriving the half-cycle from A's own transition); CORS `*`
+  (stateless, so open on purpose); and `format: "rows"` (the trace as
+  columnar integer rows with stated encodings, asserted to agree with the
+  object form column for column and be at least 3x smaller).
 - **The `/api/` nginx location declares the COMPLETE header set, and must.**
   This config's own top comment is the rule: one `add_header` in a location
   discards every inherited one, so the proxy location restates HSTS,

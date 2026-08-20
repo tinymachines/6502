@@ -162,7 +162,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
 
 <section id="endpoints">
   <p class="eyebrow">Endpoints</p>
-  <h2>Five routes, one idea</h2>
+  <h2>Six routes, one idea</h2>
 
   <div class="endpoint">
     <h3><span class="method get">GET</span>/healthz</h3>
@@ -181,6 +181,22 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
       <tr><td><code>max_traced</code></td><td>10000 half-cycles per request when <code>trace</code> is on</td></tr>
       <tr><td><code>encoding</code></td><td>the bitset wire encoding, stated (see <a href="#encoding">Encodings</a>)</td></tr>
     </table>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/nodes</h3>
+    <p>
+      Every name <code>watch</code> accepts, with its node id, grouped:
+      <code>rails</code>, <code>pins</code>, <code>registers</code>,
+      <code>buses</code>, <code>decode</code>, <code>timing</code>,
+      <code>other</code>. The grouping is a reading of the names, an authored
+      convenience; the names and ids are the die's own. <strong>832 names
+      resolve</strong>: the die's table carries 846 raw entries, 12 of them
+      duplicate keys, and 2 of the 834 that remain are the bit-5 sentinels
+      <code>p5</code> and <code>Pout5</code>, naming storage the 6502 does
+      not have. Static data: the die does not change, so cache it as hard as
+      you like.
+    </p>
   </div>
 
   <div class="endpoint">
@@ -230,10 +246,12 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
       <tr><th>request field</th><th></th></tr>
       <tr><td><code>machine</code></td><td>the <a href="#machine">Machine</a> from the previous response, unchanged or edited</td></tr>
       <tr><td><code>half_cycles</code></td><td>1..200000: advance exactly this many clock phases</td></tr>
-      <tr><td><code>until</code></td><td><code>"instruction"</code>: run to the next opcode fetch (<code>sync</code> high, <code>clk0</code> low)</td></tr>
-      <tr><td><code>max_half_cycles</code></td><td>bound for <code>until</code>, default 200. A JAM opcode never reaches another fetch; the response says <code>completed: false</code> at the bound rather than hanging</td></tr>
-      <tr><td><code>watch</code></td><td>node names, read at the end and at every traced step. An unknown name is a 400, not a silently absent key</td></tr>
+      <tr><td><code>until</code></td><td><code>"instruction"</code>: run to the next opcode fetch (<code>sync</code> high, <code>clk0</code> low). <code>"cycle"</code>: one whole clock cycle, two half-cycles</td></tr>
+      <tr><td><code>until_pc</code></td><td>0..65535: run to the opcode fetch <em>at</em> this address. A breakpoint, with the same honesty at the bound: a loop that never fetches there returns <code>completed: false</code></td></tr>
+      <tr><td><code>max_half_cycles</code></td><td>bound for <code>until</code> and <code>until_pc</code>, default 200. A JAM opcode never reaches another fetch; the response says <code>completed: false</code> at the bound rather than hanging</td></tr>
+      <tr><td><code>watch</code></td><td>node names, read at the end and at every traced step (see <code>/v1/nodes</code> for all of them). An unknown name is a 400, not a silently absent key</td></tr>
       <tr><td><code>trace</code></td><td>if true, one <a href="#observation">Observation</a> per half-cycle</td></tr>
+      <tr><td><code>format</code></td><td><code>"objects"</code> (default) or <code>"rows"</code>: the trace as columnar integer rows in <code>trace_rows</code>, the same information at about a tenth of the bytes. The encodings are stated in the response model and in <a href="#encoding">Encodings</a></td></tr>
     </table>
   </div>
 </section>
@@ -313,8 +331,9 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     <tr><td><code>tstates</code></td><td>the timing chain, e.g. <code>"T0+T1"</code>. More than one can be active: the chain overlaps the tail of one instruction with the head of the next</td></tr>
     <tr><td><code>hidden</code></td><td><code>"T1"</code>, <code>"VEC0"</code>, <code>"T6"</code> or "": the timing bits that never reach the decode PLA</td></tr>
     <tr><td><code>store_data</code></td><td><code>"SD1"</code>, <code>"SD2"</code> or "": the store-data pipeline, active in a store's or read-modify-write's data cycles</td></tr>
+    <tr><td><code>alu, sb, adl, adh</code></td><td>the adder's hold register, the special bus, and the internal address bus, each read from its own wires. These are the values that live in no register: during ADC's overlap the sum is real on <code>alu</code> and <code>sb</code> while <code>a</code> still reads the old value. A precharged bus idles high where nothing drives it, which is the silicon's answer, not a default</td></tr>
     <tr><td><code>fetch</code></td><td>the last opcode fetch, for disassembly</td></tr>
-    <tr><td><code>watch</code></td><td>each watched node name to its level. Any of the 846 named nodes on the die works: <code>sync</code>, <code>sb0</code>, <code>cclk</code>, <code>dpc17_SUMS</code>, ...</td></tr>
+    <tr><td><code>watch</code></td><td>each watched node name to its level. Any of the 832 resolvable names on the die works: <code>sync</code>, <code>sb0</code>, <code>cclk</code>, <code>dpc17_SUMS</code>, ... and <code>/v1/nodes</code> lists them all</td></tr>
   </table>
 
   <h3 id="stepresponse">StepResponse</h3>
@@ -343,6 +362,20 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     Memory pages are 256 bytes as 512 hex chars, plain byte order. All hex
     is accepted case-insensitively and returned lowercase.
   </p>
+  <h3>The rows trace</h3>
+  <p>
+    With <code>format: "rows"</code>, <code>trace_rows</code> carries
+    <code>{cols, watch_names, rows}</code>: one integer row per half-cycle,
+    columns named by <code>cols</code>. Encodings, stated: <code>clk0</code>
+    and <code>sync</code> are 0/1; <code>phase</code> is 1 or 2;
+    <code>rw</code> is 0 read, 1 write; <code>tstates</code> is a bitmask,
+    bit n for Tn (bit 1 meaning the T+/T1x state); <code>hidden</code> is
+    0 none, 1 T1, 2 VEC0, 3 T6; <code>store_data</code> is 0 none, 1 SD1,
+    2 SD2; a fetch that has not happened is addr -1, opcode -1;
+    <code>watch</code> is a bitmask over <code>watch_names</code>, bit i for
+    name i. The flags string is dropped because it derives from
+    <code>p</code>.
+  </p>
 </section>
 
 <section id="errors">
@@ -351,8 +384,14 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
   <table>
     <tr><th>status</th><th>meaning</th></tr>
     <tr><td>400</td><td>the engine refused: an unknown watch name, a count over <code>max_step</code>, a malformed state blob that passed shape validation</td></tr>
-    <tr><td>422</td><td>the request shape: a truncated hex blob, both or neither of <code>half_cycles</code>/<code>until</code>, or an assembly error (with the line number in <code>detail</code>)</td></tr>
+    <tr><td>422</td><td>the request shape: a truncated hex blob, more or fewer than one of <code>half_cycles</code>/<code>until</code>/<code>until_pc</code>, or an assembly error (with the line number in <code>detail</code>)</td></tr>
   </table>
+  <p>
+    CORS is open (<code>Access-Control-Allow-Origin: *</code>), on purpose:
+    the server holds no user state and no credentials, so a notebook, a
+    classroom page, or a CodePen can POST a machine here from any origin and
+    risk nothing.
+  </p>
 </section>
 
 <section id="demo">
@@ -372,9 +411,10 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     The pulse at <code>h=38</code> is the one to stare at. ADC's own cycles
     are over: <code>sync</code> was high at h=36 for the <em>next</em>
     instruction's fetch, IR already holds STA's opcode, and A still reads
-    $2E. The sum <strong>exists and is in no register</strong>: it sits in
-    the ALU's hold register. One half-cycle into STA, SBAC fires and A snaps
-    to $42. The pulse at h=30 is the same overlap happening to the LDA
+    $2E. The sum <strong>exists and is in no register</strong>, and the
+    observation now shows it: at <code>h=37</code> the <code>alu</code> and
+    <code>sb</code> fields both read $42 while <code>a</code> reads $2E.
+    One half-cycle into STA, SBAC fires and A snaps to $42. The pulse at h=30 is the same overlap happening to the LDA
     before it. Every behavioural emulator hides this; it falls out of this
     one because nothing here knows what ADC is supposed to do.
   </p>
