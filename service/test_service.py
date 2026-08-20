@@ -211,6 +211,46 @@ def test_the_api_page_documents_what_the_service_does(client):
     assert "\u2014" not in page
 
 
+def test_the_demo_sections_claims_are_measurements(client):
+    """The api page's "what to run first" section states what a reader will
+    see in their trace: SUMS held high throughout, SBAC pulsing at the
+    writeback, A snapping $2E to $42 one half-cycle after the next fetch is
+    already underway. Prose is the part of a page most likely to go quietly
+    wrong, so every one of those claims is re-run here on the page's exact
+    recipe, and the half-cycle number the page prints is derived, not
+    trusted. This test exists because the section first shipped pointing at
+    SUMS as the line to watch, and a reader measured it high in every
+    half-cycle of their run: a claim written from memory instead of from a
+    trace."""
+    res = boot_add(client)
+    r = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 45, "trace": True,
+              "watch": ["dpc17_SUMS", "dpc23_SBAC"]},
+    ).json()
+    trace = r["trace"]
+
+    # SUMS is held: high in every one of the 45 half-cycles.
+    assert all(t["watch"]["dpc17_SUMS"] for t in trace)
+
+    # The writeback: the first half-cycle where A reads $42.
+    wb = next(t["half_cycle"] for t in trace if t["a"] == 0x42)
+    by_h = {t["half_cycle"]: t for t in trace}
+    assert by_h[wb]["watch"]["dpc23_SBAC"], "SBAC fires on the writeback"
+    assert by_h[wb - 1]["a"] == 0x2E, "A still old the half-cycle before"
+    # ADC is already over: the fetch before the writeback is the NEXT
+    # instruction's (STA, $85), with A still reading the operand's old value.
+    assert by_h[wb - 2]["sync"] and by_h[wb - 2]["fetch"]["opcode"] == 0x85
+    assert by_h[wb - 2]["a"] == 0x2E
+
+    # The page prints the numbers this run produced, not remembered ones.
+    page = client.get("/").text
+    assert f"h={wb}" in page, "page names the measured writeback half-cycle"
+    assert f"h={wb - 2}" in page, "page names the next instruction's fetch"
+    assert "dpc23_SBAC" in page and "dpc17_SUMS" in page
+    assert "$2E" in page and "$42" in page
+
+
 def test_memory_stays_sparse_and_fill_is_honoured(client):
     # A fill of $EA (NOP) and no rom: the chip executes NOPs from wherever
     # the fill's reset vector sends it ($EAEA), and no page ever differs

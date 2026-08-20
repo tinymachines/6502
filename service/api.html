@@ -359,15 +359,24 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
   <p class="eyebrow">What to run first</p>
   <h2>The result that is in no register</h2>
   <p>
-    Boot the add program from the quick start and step through the ADC with
-    <code>trace</code> on. In the tail of the instruction the sum
-    <strong>exists and is in no register</strong>: it sits in the ALU's hold
-    register while A still reads the old value, and transfers during the
-    <em>next</em> instruction's fetch. Watch <code>dpc17_SUMS</code> (the
-    adder's sum select) and read <code>a</code> across those half-cycles and
-    you can see the overlap happen. Every behavioural emulator hides this;
-    it falls out of this one because nothing here knows what ADC is
-    supposed to do.
+    Boot the add program from the quick start and step 45 half-cycles with
+    <code>trace</code> on, watching <code>dpc17_SUMS</code> (the adder's sum
+    select) and <code>dpc23_SBAC</code> (special bus into A: the writeback).
+    The trace shows two different kinds of control line at once, measured on
+    this exact run: <strong>SUMS is high in all 45 half-cycles</strong>,
+    because the adder sums continuously whether or not the instruction wants
+    it, while <strong>SBAC pulses exactly where A loads</strong>, once per
+    instruction that writes it.
+  </p>
+  <p>
+    The pulse at <code>h=38</code> is the one to stare at. ADC's own cycles
+    are over: <code>sync</code> was high at h=36 for the <em>next</em>
+    instruction's fetch, IR already holds STA's opcode, and A still reads
+    $2E. The sum <strong>exists and is in no register</strong>: it sits in
+    the ALU's hold register. One half-cycle into STA, SBAC fires and A snaps
+    to $42. The pulse at h=30 is the same overlap happening to the LDA
+    before it. Every behavioural emulator hides this; it falls out of this
+    one because nothing here knows what ADC is supposed to do.
   </p>
   <div class="note">
     <p>
