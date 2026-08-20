@@ -1807,10 +1807,29 @@ somebody chose, and at the container level it stops being true.
     both so the untangling is watchable and so it still runs in an iframe,
     where the harness lives. The measured claim is the STRETCH (the sum over
     bundles of weight times centre distance), reported before and after in
-    the note; typical: a scramble at ~2300k settles near ~990k. The harness
+    the note; typical: a scramble at ~2300k settles near ~800k. The harness
     recomputes the stretch itself from the transforms and asserts the settle
     beat the scramble, everything snapped and finite, Tidy still restoring.
     A pointerdown on a box stops the optimizer: the reader's hand wins.
+    - **The run is unwalled, and the walls were measured to cost energy**:
+      clamped to the canvas the same seed settled at ~990k, free it settles
+      near ~800k. Pairwise forces are equal and opposite, so the centroid
+      stays put on its own; the camera follows the cloud each chunk and Fit
+      frames the content (`contentBox()`), wherever it went, negative
+      coordinates included: the harness assertion written for the walled
+      world required `cx > 0` and failed on correct behaviour.
+    - **One weak force remains, and it is load-bearing: gravity toward the
+      cloud's own centroid**, proportional to distance. A container with no
+      bundles at all feels pure repulsion and accelerates away for as long
+      as the cooling lets it; measured before the gravity existed, one
+      reached 31,000 units out. Wired boxes get 0.08 of it; a bundleless box
+      has only gravity to answer to and gets 0.6. The harness pins the free
+      cloud under 6000 units across, an order of magnitude inside the bug.
+    - **The force balance was tuned against measurements, not taste**: with
+      the attraction floor at 0.15 the crowd pressure of 132 mutually
+      repelling boxes stretched the weakly-wired tail to ~8000 units; the
+      floor is 0.35 and the whole attraction 2.5x, which rounds the cloud
+      and beats the walled stretch at the same time.
   - **A fixed sleep after a file-input change is a flake under a virtual-time
     budget**: `file.text()` resolves on real IO, and virtual time
     fast-forwards straight past a `sleep(200)`. One green run, then one red.

@@ -583,12 +583,37 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
       const sane = gs.every((g, i) => {
         const tfm = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(boxes5[i].getAttribute('transform') || '');
         const dx = tfm ? Number(tfm[1]) : 0, dy = tfm ? Number(tfm[2]) : 0;
+        // The run is unwalled, so a negative coordinate is legitimate; what
+        // must hold is finite, snapped, and sane in magnitude. Boundedness
+        // itself is the bbox assertion below.
         if (!Number.isFinite(dx) || !Number.isFinite(dy) || dx % 13 !== 0 || dy % 13 !== 0) return false;
         const cx = g.x + dx + g.w / 2, cy = g.y + dy + g.h / 2;
-        const [, , W5, H5] = [0, 0, 3000, 3000];
-        return cx > 0 && cy > 0 && cx < 1e5 && cy < 1e5 && !!W5 && !!H5;
+        return Math.abs(cx) < 1e5 && Math.abs(cy) < 1e5;
       });
       ok('the settled arrangement is snapped and finite everywhere', sane);
+      // Free but not leaky: the run has no walls, and the weak gravity is
+      // what keeps a container with no bundles from accelerating away for as
+      // long as the cooling lets it (measured before it existed: one reached
+      // 31,000 units out). The bound is generous; the bug it catches is an
+      // order of magnitude past it.
+      {
+        let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+        gs.forEach((g, i) => {
+          const tfm = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(boxes5[i].getAttribute('transform') || '');
+          const dx = tfm ? Number(tfm[1]) : 0, dy = tfm ? Number(tfm[2]) : 0;
+          bx0 = Math.min(bx0, g.x + dx); bx1 = Math.max(bx1, g.x + dx + g.w);
+          by0 = Math.min(by0, g.y + dy); by1 = Math.max(by1, g.y + dy + g.h);
+        });
+        ok('the free cloud stays a cloud: gravity holds the unwired pieces',
+           bx1 - bx0 < 6000 && by1 - by0 < 6000,
+           `${Math.round(bx1 - bx0)} x ${Math.round(by1 - by0)}`);
+        d5.getElementById('cm-home').click();
+        await sleep(30);
+        const [vx, vy, vw, vh] = d5.getElementById('cm-svg').getAttribute('viewBox').split(' ').map(Number);
+        ok('Fit frames wherever the boxes actually are',
+           vx <= bx0 && vy <= by0 && vx + vw >= bx1 && vy + vh >= by1,
+           `view ${vx},${vy} ${vw}x${vh} vs bbox ${bx0},${by0}..${bx1},${by1}`);
+      }
       ok('...and kept like a dragged one', !!localStorage.getItem('v6502.chipmap.layout'));
     }
     d5.getElementById('cm-tidy').click();

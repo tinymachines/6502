@@ -796,6 +796,25 @@ function setupConsole() {
 // Camera: a viewBox and nothing else, the die graph's own arrangement
 // ---------------------------------------------------------------------------
 
+/** The boxes' own bounding rectangle, offsets included. */
+function contentBox() {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const g of state.groups) {
+    const o = offsetOf(g);
+    x0 = Math.min(x0, g.x + o.dx); y0 = Math.min(y0, g.y + o.dy);
+    x1 = Math.max(x1, g.x + o.dx + g.w); y1 = Math.max(y1, g.y + o.dy + g.h);
+  }
+  return [x0, y0, x1, y1];
+}
+
+/** Frame whatever is actually there: the optimizer runs unwalled, so the
+ * cloud can be any size, and a Fit that framed the original rectangle would
+ * frame the place the boxes used to be. */
+function fitContent(pad = 60) {
+  const [x0, y0, x1, y1] = contentBox();
+  setView([x0 - pad, y0 - pad, (x1 - x0) + pad * 2, (y1 - y0) + pad * 2]);
+}
+
 function setView(v) {
   state.view = v;
   $('cm-svg').setAttribute('viewBox', v.join(' '));
@@ -804,7 +823,8 @@ function setView(v) {
 
 function zoomAt(factor, cx, cy) {
   const [x, y, w, h] = state.view;
-  const nw = Math.max(120, Math.min(state.home[2] * 4, w * factor));
+  const [bx0, , bx1] = contentBox();
+  const nw = Math.max(120, Math.min(Math.max(state.home[2], bx1 - bx0) * 4, w * factor));
   const nh = nw * (h / w);
   setView([x + (cx - x) * (1 - nw / w), y + (cy - y) * (1 - nh / h), nw, nh]);
 }
@@ -914,12 +934,13 @@ function setupCamera() {
     const t = e.target.closest('.cm-box');
     select(t ? t.dataset.key : null);
   });
-  $('cm-home').addEventListener('click', () => setView(state.home.slice()));
+  $('cm-home').addEventListener('click', () => fitContent());
   $('cm-tidy').addEventListener('click', () => {
     stopOptimize(false);
     state.offsets.clear();
     saveOffsets();
     placeAll();
+    fitContent();
     ioNote('the derived layout');
   });
 }
@@ -1020,13 +1041,16 @@ function optimize() {
   }
   const groups = state.groups;
   const n = groups.length;
-  const [, , W, H] = state.home;
-  const k = Math.sqrt((W * H) / n) * 0.85;
+  const k = Math.sqrt((state.home[2] * state.home[3]) / n) * 0.85;
   const radius = groups.map((g) => Math.hypot(g.w, g.h) / 2);
   const maxW = Math.max(...state.bundles.map((b) => b.weight));
   const pts = groups.map((g) => centerOf(g));
+  // A container with no bundles has only gravity to answer to, so it gets
+  // all of it: without this the inert structures launch off the hot phase
+  // and spend the whole cooling walking home.
+  const wired = groups.map((_, i) => state.partners[i].length > 0);
   const was = stretchNow();
-  let temp = k * 2.5;
+  let temp = k * 1.8;
   let step = 0;
   const STEPS = 400, PER_CHUNK = 4;
   $('cm-opt').textContent = 'Stop';
@@ -1051,24 +1075,35 @@ function optimize() {
       for (const bd of state.bundles) {
         const vx = pts[bd.a][0] - pts[bd.b][0], vy = pts[bd.a][1] - pts[bd.b][1];
         const d = Math.max(0.01, Math.hypot(vx, vy));
-        const wgt = 0.15 + 0.85 * Math.sqrt(bd.weight / maxW);
+        const wgt = (0.35 + 0.65 * Math.sqrt(bd.weight / maxW)) * 2.5;
         const f = ((d * d) / k) * wgt / d;
         disp[bd.a][0] -= vx * f; disp[bd.a][1] -= vy * f;
         disp[bd.b][0] += vx * f; disp[bd.b][1] += vy * f;
       }
+      // A weak gravity toward the cloud's own centroid. Without it the run is
+      // not free, it is leaky: a group with no bundles at all (the inert
+      // structures) feels pure repulsion and accelerates away for as long as
+      // the temperature lets it; measured, one reached 31,000 units out. The
+      // pull is proportional to distance, so it barely touches the wired
+      // structure and firmly herds the disconnected.
+      let cx0 = 0, cy0 = 0;
+      for (const [px, py] of pts) { cx0 += px; cy0 += py; }
+      cx0 /= n; cy0 /= n;
       for (let i = 0; i < n; i++) {
+        const grav = wired[i] ? 0.08 : 0.6;
+        disp[i][0] += (cx0 - pts[i][0]) * grav;
+        disp[i][1] += (cy0 - pts[i][1]) * grav;
         const d = Math.hypot(disp[i][0], disp[i][1]);
         if (d > 0) {
           const move = Math.min(d, temp);
           pts[i][0] += (disp[i][0] / d) * move;
           pts[i][1] += (disp[i][1] / d) * move;
         }
-        pts[i][0] = Math.min(W - PAD - groups[i].w / 2, Math.max(PAD + groups[i].w / 2, pts[i][0]));
-        pts[i][1] = Math.min(H - PAD - groups[i].h / 2, Math.max(PAD + groups[i].h / 2, pts[i][1]));
       }
       temp *= 0.985;
     }
     setCenters(pts, false);
+    fitContent();
     ioNote(`optimizing ${step} of ${STEPS}: stretch ${fmtStretch(stretchNow())}, was ${fmtStretch(was)}`);
     if (step >= STEPS || temp < 0.5) {
       annealTimer = null;
