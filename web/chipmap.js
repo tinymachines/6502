@@ -34,7 +34,12 @@ import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
 import { setupChipNav } from './chip-nav.js';
-import { halfCyclesFor } from './chip-controls.js';
+import {
+  halfCyclesFor, CLOCKS, clockHz, setClock, toggleRunning, isRunning,
+  step as stepChip, stepBack as stepBackChip, reset as resetChip, subscribe,
+} from './chip-controls.js';
+import { setupFullscreen } from './fullscreen.js';
+import { createPalette } from './solo-palette.js';
 import { chipGroups, KIND_LABEL } from './chip-groups.js';
 import { centroids } from './die-centroids.js';
 import { el } from './sch-draw.js';
@@ -71,7 +76,37 @@ const state = {
   nodeEls: null,          // node id -> its glyph, in the nodes view
   rung: new Set(),        // the glyphs ringed at the last paint
   pickedNode: null,       // a clicked glyph, shown on the card
+  offsets: new Map(),     // key -> {dx, dy}: boxes the reader has moved
+  boxEls: null,           // group index -> its <g>, for the drag
+  bundleEls: null,        // bundle index -> its <line>
+  solo: false,            // the study view
 };
+let pal = null;           // the floating console (solo-palette.js)
+
+const LAYOUT_KEY = 'v6502.chipmap.layout';
+const CONSOLE_KEY = 'v6502.chipmap.console';
+
+/** A moved box's offset, snapped to the node grid's own cell. */
+function offsetOf(g) { return state.offsets.get(g.key) || { dx: 0, dy: 0 }; }
+function centerOf(g) {
+  const o = offsetOf(g);
+  return [g.x + o.dx + g.w / 2, g.y + o.dy + g.h / 2];
+}
+
+function loadOffsets() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}');
+    state.offsets = new Map(Object.entries(raw).map(([k, v]) => [k, { dx: v[0], dy: v[1] }]));
+  } catch { state.offsets = new Map(); }
+}
+function saveOffsets() {
+  const out = {};
+  for (const [k, o] of state.offsets) if (o.dx || o.dy) out[k] = [o.dx, o.dy];
+  try {
+    if (Object.keys(out).length) localStorage.setItem(LAYOUT_KEY, JSON.stringify(out));
+    else localStorage.removeItem(LAYOUT_KEY);
+  } catch { /* storage denied: the arrangement lives for the session */ }
+}
 
 // ---------------------------------------------------------------------------
 // Derivation: distance from the pins, the bundles, the layout
@@ -248,20 +283,26 @@ function drawAll() {
   const svg = $('cm-svg');
   svg.replaceChildren();
   const bg = el('g', { class: 'cm-bundles' }, svg);
+  state.bundleEls = [];
   for (const bd of state.bundles) {
-    const A = state.groups[bd.a], B = state.groups[bd.b];
+    const [ax, ay] = centerOf(state.groups[bd.a]);
+    const [bx, by] = centerOf(state.groups[bd.b]);
     const w = Math.min(9, 0.7 + Math.log2(1 + bd.weight) * 0.9);
     const cls = bd.switches ? 'cm-bd cm-bd-sw' : 'cm-bd';
     const line = el('line', {
-      x1: A.x + A.w / 2, y1: A.y + A.h / 2,
-      x2: B.x + B.w / 2, y2: B.y + B.h / 2,
+      x1: ax, y1: ay, x2: bx, y2: by,
       class: cls, 'stroke-width': w.toFixed(2), 'data-b': bd.i,
     }, bg);
     line.style.setProperty('--bw', Math.min(0.5, 0.1 + bd.weight / 60).toFixed(2));
+    state.bundleEls[bd.i] = line;
   }
   const fg = el('g', { class: 'cm-boxes' }, svg);
+  state.boxEls = [];
   for (const g of state.groups) {
     const box = el('g', { class: 'cm-box', 'data-key': g.key }, fg);
+    state.boxEls.push(box);
+    const o = offsetOf(g);
+    if (o.dx || o.dy) box.setAttribute('transform', `translate(${o.dx} ${o.dy})`);
     el('rect', { x: g.x, y: g.y, width: g.w, height: g.h, rx: 3, class: 'cm-bg' }, box);
     el('rect', { x: g.x, y: g.y, width: g.w, height: g.h, rx: 3, class: 'cm-hi' }, box);
     el('text', { x: g.x + 6, y: g.y + 11, class: 'cm-kind' }, box)
@@ -327,7 +368,7 @@ function paint() {
     for (const e of state.rung) if (!rungNow.has(e)) e.classList.remove('mv');
     state.rung = rungNow;
   }
-  for (const line of svg.querySelectorAll('.cm-bd')) {
+  for (const line of state.bundleEls || []) {
     const bd = state.bundles[Number(line.dataset.b)];
     let open = false, fired = false;
     for (const c of bd.controls) if (levels[c] > 0) { open = true; break; }
@@ -338,10 +379,12 @@ function paint() {
   state.prev = levels;
   paintCardLive();
   paintTour();
-  const head = $('cm-head');
   const text = `half-cycle ${m.halfCycle()} · ${m.clk0() ? 'φ1' : 'φ2'}`
     + `${m.sync() ? ' · sync' : ''}`;
-  if (head.textContent !== text) head.textContent = text;
+  for (const id of ['cm-head', 'cm-solo-clock']) {
+    const out = $(id);
+    if (out && out.textContent !== text) out.textContent = text;
+  }
 }
 
 function tick(now = 0) {
@@ -420,7 +463,7 @@ function select(key) {
     boxes[i].classList.toggle('sel', i === gi);
     boxes[i].classList.toggle('adj', adj.has(i));
   });
-  for (const line of svg.querySelectorAll('.cm-bd')) {
+  for (const line of state.bundleEls || []) {
     const bd = state.bundles[Number(line.dataset.b)];
     line.classList.toggle('sel', gi >= 0 && (bd.a === gi || bd.b === gi));
   }
@@ -527,8 +570,9 @@ function frameGroups(gis) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const i of gis) {
     const g = state.groups[i];
-    x0 = Math.min(x0, g.x); y0 = Math.min(y0, g.y);
-    x1 = Math.max(x1, g.x + g.w); y1 = Math.max(y1, g.y + g.h);
+    const o = offsetOf(g);
+    x0 = Math.min(x0, g.x + o.dx); y0 = Math.min(y0, g.y + o.dy);
+    x1 = Math.max(x1, g.x + o.dx + g.w); y1 = Math.max(y1, g.y + o.dy + g.h);
   }
   const pad = 60;
   let w = Math.max(700, x1 - x0 + pad * 2);
@@ -662,6 +706,93 @@ function paintTour() {
 }
 
 // ---------------------------------------------------------------------------
+// The study view: fullscreen, with the floating console
+// ---------------------------------------------------------------------------
+//
+// The tracer's arrangement, from the same two shared modules: fullscreen.js
+// decides how the viewport is claimed (and falls back where the API would
+// fight the browser), solo-palette.js owns the strip, the drawer, the drag
+// and the clamp. The drawers BORROW the page's own elements (the card, the
+// tour, the view controls) rather than drawing copies, so the console cannot
+// disagree with the page about a byte: there is only one copy of it to paint.
+
+const HOMES = [];
+function borrow(host, ...ids) {
+  for (const id of ids) {
+    const e = $(id);
+    if (!e) continue;
+    HOMES.push({ e, parent: e.parentNode, next: e.nextSibling });
+    host.append(e);
+  }
+}
+function returnAll() {
+  while (HOMES.length) {
+    const { e, parent, next } = HOMES.pop();
+    parent.insertBefore(e, next && next.parentNode === parent ? next : null);
+  }
+}
+
+const noop = () => {};
+const PANELS = {
+  card: (host) => { returnAll(); borrow(host, 'cm-card'); return noop; },
+  tour: (host) => { returnAll(); borrow(host, 'cmt-start', 'cmt-panel'); return noop; },
+  view: (host) => { returnAll(); borrow(host, 'cm-nodes', 'cm-tidy', 'cm-home', 'cm-zoom'); return noop; },
+};
+const TAB_NAMES = { card: 'The selection', tour: 'The tour', view: 'View' };
+
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem(CONSOLE_KEY) || 'null'); } catch { return null; }
+}
+function saveConfig() {
+  if (!pal) return;
+  try { localStorage.setItem(CONSOLE_KEY, JSON.stringify(pal.config())); } catch { /* session only */ }
+}
+
+function setupConsole() {
+  pal = createPalette({
+    palette: $('cm-palette'),
+    strip: $('cm-strip'),
+    host: $('cm-sp-panel'),
+    title: $('cm-drawer-title'),
+    collapse: $('cm-collapse'),
+    stage: () => document.querySelector('.cm-stage'),
+    panels: PANELS,
+    names: TAB_NAMES,
+    tab: 'card',
+    active: () => state.solo,
+    onChange: saveConfig,
+  });
+  pal.restore(loadConfig());
+
+  $('cm-solo-run').addEventListener('click', () => toggleRunning());
+  $('cm-solo-step').addEventListener('click', () => stepChip());
+  $('cm-solo-back').addEventListener('click', () => stepBackChip());
+  $('cm-solo-reset').addEventListener('click', () => resetChip());
+  $('cm-solo-exit').addEventListener('click', () => $('cm-fullscreen').click());
+  const speed = $('cm-solo-speed');
+  for (const c of CLOCKS) speed.add(new Option(c.label, String(c.hz)));
+  speed.addEventListener('change', () => setClock(Number(speed.value)));
+  // Every control here is a view of the one store, painted on its changes.
+  subscribe(() => {
+    const on = isRunning();
+    const run = $('cm-solo-run');
+    run.textContent = on ? '\u275a\u275a' : '\u25b6';
+    run.title = on ? 'Pause' : 'Run';
+    run.classList.toggle('on', on);
+    if (speed.value !== String(clockHz())) speed.value = String(clockHz());
+  });
+
+  const console_ = document.querySelector('#view .console');
+  setupFullscreen(console_, $('cm-fullscreen'), () => {
+    const on = console_.classList.contains('immersive');
+    state.solo = on;
+    console_.classList.toggle('solo', on);
+    if (on) pal.open(loadConfig());
+    else returnAll();
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Camera: a viewBox and nothing else, the die graph's own arrangement
 // ---------------------------------------------------------------------------
 
@@ -696,7 +827,22 @@ function setupCamera() {
   // against the gesture's own start. One constructor for the pinch state:
   // the explorer's NaN came from having two, spelled differently.
   const live = new Map();
-  let pinch = null, moved = 0;
+  let pinch = null, moved = 0, boxDrag = null;
+
+  /** Move one box: its transform, and the ends of every bundle it anchors. */
+  function placeBox(gi) {
+    const g = state.groups[gi];
+    const o = offsetOf(g);
+    state.boxEls[gi].setAttribute('transform', `translate(${o.dx} ${o.dy})`);
+    for (const p of state.partners[gi]) {
+      const bd = state.bundles[p.bundle];
+      const line = state.bundleEls[bd.i];
+      const [ax, ay] = centerOf(state.groups[bd.a]);
+      const [bx, by] = centerOf(state.groups[bd.b]);
+      line.setAttribute('x1', ax); line.setAttribute('y1', ay);
+      line.setAttribute('x2', bx); line.setAttribute('y2', by);
+    }
+  }
   const pinchOf = () => {
     const [p, q] = [...live.values()];
     return { mid: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 },
@@ -705,7 +851,13 @@ function setupCamera() {
   svg.addEventListener('pointerdown', (e) => {
     live.set(e.pointerId, atClient(e));
     moved = 0;
-    if (live.size === 2) pinch = pinchOf();
+    // A drag that starts on a box moves the box: the reader's own
+    // arrangement, snapped to the node grid's cell on release, persisted,
+    // and given back by Tidy. Empty ground still pans.
+    const t = e.target.closest('.cm-box');
+    boxDrag = live.size === 1 && t
+      ? state.groups.findIndex((g) => g.key === t.dataset.key) : null;
+    if (live.size === 2) { boxDrag = null; pinch = pinchOf(); }
   });
   window.addEventListener('pointermove', (e) => {
     if (!live.has(e.pointerId)) return;
@@ -722,6 +874,13 @@ function setupCamera() {
       const nh = nw * (vh / vw);
       setView([now.mid.x - (now.mid.x - vx) * (nw / vw),
                now.mid.y - (now.mid.y - vy) * (nh / vh), nw, nh]);
+    } else if (live.size === 1 && boxDrag !== null && boxDrag >= 0) {
+      const g = state.groups[boxDrag];
+      const o = { ...offsetOf(g) };
+      o.dx += p.x - was.x;
+      o.dy += p.y - was.y;
+      state.offsets.set(g.key, o);
+      placeBox(boxDrag);
     } else if (live.size === 1) {
       const [, , w, h] = state.view;
       setView([state.view[0] - (p.x - was.x), state.view[1] - (p.y - was.y), w, h]);
@@ -730,6 +889,20 @@ function setupCamera() {
   const release = (e) => {
     live.delete(e.pointerId);
     if (live.size < 2) pinch = null;
+    if (boxDrag !== null && boxDrag >= 0 && live.size === 0) {
+      if (moved > 8) {
+        // Snap to the grid the nodes already sit on, and keep it.
+        const g = state.groups[boxDrag];
+        const o = offsetOf(g);
+        state.offsets.set(g.key, {
+          dx: Math.round(o.dx / CELL) * CELL,
+          dy: Math.round(o.dy / CELL) * CELL,
+        });
+        placeBox(boxDrag);
+        saveOffsets();
+      }
+      boxDrag = null;
+    }
   };
   window.addEventListener('pointerup', release);
   window.addEventListener('pointercancel', release);
@@ -741,6 +914,20 @@ function setupCamera() {
     select(t ? t.dataset.key : null);
   });
   $('cm-home').addEventListener('click', () => setView(state.home.slice()));
+  $('cm-tidy').addEventListener('click', () => {
+    state.offsets.clear();
+    saveOffsets();
+    state.groups.forEach((g, gi) => {
+      state.boxEls[gi].removeAttribute('transform');
+    });
+    for (const bd of state.bundles) {
+      const line = state.bundleEls[bd.i];
+      const [ax, ay] = centerOf(state.groups[bd.a]);
+      const [bx, by] = centerOf(state.groups[bd.b]);
+      line.setAttribute('x1', ax); line.setAttribute('y1', ay);
+      line.setAttribute('x2', bx); line.setAttribute('y2', by);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -768,9 +955,11 @@ async function boot() {
     const { pos } = centroids(buf);
     state.pos = pos;
     state.nodesView = new URLSearchParams(location.search).get('nodes') !== '0';
+    loadOffsets();
     const edge = buildBundles();
     rebuild();
     setupCamera();
+    setupConsole();
     $('cm-nodes').setAttribute('aria-pressed', String(state.nodesView));
     $('cm-nodes').addEventListener('click', () => {
       state.nodesView = !state.nodesView;
@@ -831,6 +1020,10 @@ async function boot() {
     const sel = q.get('sel');
     select(sel && state.byKey.has(sel) ? sel : null);
     if (q.get('tour') === TOUR.id) startTour(Number(q.get('tstep')) || 0);
+    // ?full=1 goes through the button rather than the API: a page load
+    // carries no user activation, so a real request would be refused, and the
+    // button's own fallback covers the viewport anyway.
+    if (q.get('full') === '1') $('cm-fullscreen').click();
 
     // For the harness: the partition and the bundles as data, not scraped
     // back out of the DOM.

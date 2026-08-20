@@ -34,6 +34,9 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
   try {
     localStorage.removeItem('v6502.program');
     localStorage.removeItem('v6502.clock');
+    // A persisted arrangement or console is a hidden input to every assertion.
+    localStorage.removeItem('v6502.chipmap.layout');
+    localStorage.removeItem('v6502.chipmap.console');
     const sch = await (await fetch('schematic.json')).json();
 
     await load('chipmap.html');
@@ -430,9 +433,95 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
        && !d3.getElementById('cm-svg').classList.contains('has-sel')
        && !d3.querySelector('.cm-box.sel'),
        'panel or selection survived the exit');
+    // --- the boxes drag, snapped, kept, and Tidy gives the layout back -------
+    await load('chipmap.html');
+    const d4 = f.contentDocument;
+    const w4 = f.contentWindow;
+    for (let i = 0; i < 2000 && !w4.__chipmap; i++) await sleep(50);
+    const CELL2 = 13;
+    const dragBox = (key, px, py) => {
+      const box = d4.querySelector(`.cm-box[data-key="${key}"]`);
+      const svg4 = d4.getElementById('cm-svg');
+      const r = box.getBoundingClientRect();
+      const o = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+      const ev = (type, x, y) => new w4.PointerEvent(type, {
+        bubbles: true, pointerId: 1, clientX: x, clientY: y,
+      });
+      box.dispatchEvent(ev('pointerdown', o.clientX, o.clientY));
+      w4.dispatchEvent(ev('pointermove', o.clientX + px / 2, o.clientY + py / 2));
+      w4.dispatchEvent(ev('pointermove', o.clientX + px, o.clientY + py));
+      w4.dispatchEvent(ev('pointerup', o.clientX + px, o.clientY + py));
+      return svg4;
+    };
+    dragBox('alu:bit3', 60, 40);
+    const boxEl = d4.querySelector('.cm-box[data-key="alu:bit3"]');
+    const tf = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(boxEl.getAttribute('transform') || '');
+    ok('a drag moves the box, snapped to the node grid’s cell',
+       !!tf && (Number(tf[1]) % CELL2 === 0) && (Number(tf[2]) % CELL2 === 0)
+       && (Number(tf[1]) !== 0 || Number(tf[2]) !== 0),
+       boxEl.getAttribute('transform') || 'no transform');
+    {
+      const groups4 = w4.__chipmap.groups;
+      const bundles4 = w4.__chipmap.bundles;
+      const gi = groups4.findIndex((g) => g.key === 'alu:bit3');
+      const g = groups4[gi];
+      const bd = bundles4.find((b) => b.a === gi || b.b === gi);
+      const line = d4.querySelector(`.cm-bd[data-b="${bd.i}"]`);
+      const end = bd.a === gi ? ['x1', 'y1'] : ['x2', 'y2'];
+      const want = [g.x + Number(tf[1]) + g.w / 2, g.y + Number(tf[2]) + g.h / 2];
+      ok('its bundles follow the box',
+         Math.abs(Number(line.getAttribute(end[0])) - want[0]) < 0.01
+         && Math.abs(Number(line.getAttribute(end[1])) - want[1]) < 0.01,
+         `${line.getAttribute(end[0])},${line.getAttribute(end[1])} vs ${want}`);
+      ok('a real drag does not select the box', !boxEl.classList.contains('sel'));
+      ok('the arrangement is kept', !!localStorage.getItem('v6502.chipmap.layout'));
+    }
+    await load('chipmap.html');
+    for (let i = 0; i < 2000 && !f.contentWindow.__chipmap; i++) await sleep(50);
+    const d5 = f.contentDocument;
+    ok('a moved box still carries its offset across a second page load',
+       /translate\(/.test(d5.querySelector('.cm-box[data-key="alu:bit3"]').getAttribute('transform') || ''),
+       d5.querySelector('.cm-box[data-key="alu:bit3"]').getAttribute('transform') || 'none');
+    d5.getElementById('cm-tidy').click();
+    await sleep(30);
+    ok('Tidy gives the derived layout back and forgets the arrangement',
+       !d5.querySelector('.cm-box[data-key="alu:bit3"]').getAttribute('transform')
+       && !localStorage.getItem('v6502.chipmap.layout'));
+
+    // --- the study view: fullscreen with the floating console ----------------
+    d5.getElementById('cm-fullscreen').click();
+    let con = d5.querySelector('#view .console');
+    for (let i = 0; i < 100 && !con.classList.contains('immersive'); i++) await sleep(50);
+    const cr = con.getBoundingClientRect();
+    const win = f.contentWindow;
+    ok('fullscreen covers the viewport (the faux path, headless has no activation)',
+       con.classList.contains('solo')
+       && Math.abs(cr.width - win.innerWidth) < 2 && Math.abs(cr.height - win.innerHeight) < 2,
+       `${cr.width}x${cr.height} vs ${win.innerWidth}x${win.innerHeight}`);
+    ok('the console floats over the stage with the card borrowed into it',
+       !!d5.querySelector('#cm-sp-panel .cm-card'));
+    const tourTab = d5.querySelector('#cm-strip .sp-icon[data-tab="tour"]');
+    tourTab.click();
+    await sleep(30);
+    ok('the Tour drawer holds the tour’s own elements',
+       !!d5.querySelector('#cm-sp-panel #cmt-start'));
+    const stepSolo = d5.getElementById('cm-solo-step');
+    const h4 = f.contentWindow.__chipmap.machine.halfCycle();
+    stepSolo.click();
+    await sleep(30);
+    ok('the strip’s transport steps the same chip',
+       f.contentWindow.__chipmap.machine.halfCycle() === h4 + 1);
+    d5.getElementById('cm-solo-exit').click();
+    for (let i = 0; i < 100 && con.classList.contains('immersive'); i++) await sleep(50);
+    ok('leaving puts every borrowed element back',
+       !con.classList.contains('solo')
+       && d5.getElementById('cm-card').parentElement.classList.contains('console')
+       && d5.getElementById('cmt-start').parentElement.classList.contains('console-bar'));
   } catch (e) {
     results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e));
   }
+  localStorage.removeItem('v6502.chipmap.layout');
+  localStorage.removeItem('v6502.chipmap.console');
   const lines = results.filter((r) => r.startsWith('PASS') || r.startsWith('FAIL'));
   document.title = lines.length && lines.every((r) => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILURES';
   document.body.insertAdjacentHTML('beforeend', '<pre id="out">' + results.join('\n') + '</pre>');

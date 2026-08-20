@@ -69,8 +69,55 @@
           <span class="mono muted" id="cm-head"></span>
           <span class="mono muted" id="cm-zoom">1.0×</span>
           <button class="btn" type="button" id="cm-nodes" aria-pressed="true">Nodes</button>
+          <button class="btn" type="button" id="cm-tidy"
+                  title="Put every box back where the layout derives it">Tidy</button>
           <button class="btn" type="button" id="cm-home">Fit</button>
           <button class="btn btn-primary" type="button" id="cmt-start">Tour one instruction</button>
+          <button class="btn btn-icon" type="button" id="cm-fullscreen"
+                  aria-label="Fullscreen workbench" title="Fullscreen">⛶</button>
+        </div>
+        <!-- The study view's console: the workbench's strip and drawer
+             (solo-palette.js), shown only in fullscreen. The drawers BORROW
+             the page's own elements, so the console cannot disagree with the
+             page about what a box holds. -->
+        <div class="solo-palette" id="cm-palette" data-open="card">
+          <div class="sp-strip" id="cm-strip">
+            <div class="sp-grip" title="Drag to move the console" aria-hidden="true">⠿</div>
+            <button class="sp-icon" type="button" data-tab="card"
+                    aria-label="The selection" title="The selection: the clicked box, live">▣</button>
+            <button class="sp-icon" type="button" data-tab="tour"
+                    aria-label="The tour" title="The tour: one instruction, container by container">≡</button>
+            <button class="sp-icon" type="button" data-tab="view"
+                    aria-label="View" title="View: nodes, tidy, fit">⊕</button>
+            <span class="sp-strip-sep" aria-hidden="true"></span>
+            <button id="cm-solo-back" class="sp-icon" type="button"
+                    aria-label="Back one half-cycle" title="Back">◀</button>
+            <button id="cm-solo-run" class="sp-icon solo-run" type="button"
+                    aria-label="Run" title="Run">▶</button>
+            <button id="cm-solo-step" class="sp-icon" type="button"
+                    aria-label="Forward one half-cycle" title="Step">▶❙</button>
+            <button id="cm-solo-reset" class="sp-icon" type="button"
+                    aria-label="Reset" title="Reset: power-cycle the chip">⟲</button>
+            <span class="sp-strip-sep" aria-hidden="true"></span>
+            <button id="cm-solo-exit" class="sp-icon sp-exit" type="button"
+                    aria-label="Leave fullscreen" title="Leave (esc)">✕</button>
+          </div>
+          <div class="sp-drawer" id="cm-drawer">
+            <div class="sp-drawer-head">
+              <span class="sp-title" id="cm-drawer-title">The selection</span>
+              <span class="solo-clock mono" id="cm-solo-clock"></span>
+              <select id="cm-solo-speed" class="solo-clock-select"
+                      aria-label="Simulated clock rate"></select>
+              <button id="cm-collapse" class="solo-btn" type="button"
+                      aria-label="Close the drawer" title="Close">✕</button>
+            </div>
+            <div class="sp-panel" id="cm-sp-panel" role="tabpanel"></div>
+            <p class="sp-hint">
+              drag a box to rearrange it, Tidy puts the layout back · drag
+              empty ground to pan, pinch or scroll to zoom · click a box or a
+              glyph
+            </p>
+          </div>
         </div>
         <div class="cmt-panel" id="cmt-panel" hidden>
           <div class="cmt-cols">
@@ -149,7 +196,10 @@
         The boxes open. Each container's members sit snapped to a grid inside
         it, in a stated order: a name carrying a bit index sorts by stem then
         bit, so a byte reads left to right from bit 0; other names follow
-        alphabetically; the unnamed come last in die order. A square is a node
+        alphabetically; the unnamed come last in die order. The boxes also
+        drag: your own arrangement, snapped to the same grid, kept across
+        visits, and given back by Tidy in one press; the derived layout stays
+        the page's claim, and a moved box is yours. A square is a node
         that holds switches, filled while its switches conduct and empty while
         they are open circuit; everything else is a dot, lit while it is high
         and ringed when it changed at the last half-cycle. Clicking a glyph

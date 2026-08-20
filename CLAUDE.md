@@ -32,7 +32,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, the special bus with its lines by measured direction, the store-data pipeline as the detect and the two latches the timing readout names, the ready logic as the receiver, the master and its re-timed copies, the program counter's own storage with its six lines, the 52-latch pipeline file, and the SYNC generator. Twenty-five kinds; the clustering arc is complete. |
-| Chip map | The whole chip as one schematic: the tracer's derivations made disjoint into 132 groups covering every node once, columns by measured pin distance, die order within a column, 534 counted bundles, live off the running chip, every box linking to its container on the tracer. And a guided tour: ADC walked across the map container by container, every authored claim checked live. The boxes open into node grids: every member snapped in a stated order, squares for the switch-holders, filled while they conduct. |
+| Chip map | The whole chip as one schematic: the tracer's derivations made disjoint into 132 groups covering every node once, columns by measured pin distance, die order within a column, 534 counted bundles, live off the running chip, every box linking to its container on the tracer. And a guided tour: ADC walked across the map container by container, every authored claim checked live. The boxes open into node grids: every member snapped in a stated order, squares for the switch-holders, filled while they conduct. The boxes drag (snapped, kept, Tidy restores), and fullscreen is the workbench's study view with the floating console. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -1775,6 +1775,26 @@ somebody chose, and at the container level it stops being true.
   snap arithmetic and the a0..a7 order, compares a sampled square and dot
   against its own chip, and pins that the ringed glyphs are exactly the
   changed nodes after one paired step.
+- **The boxes drag, and the reader's arrangement is theirs.** A drag that
+  starts on a box moves the box (empty ground still pans, the click slop
+  still selects); the offset snaps to the node grid's own cell on release,
+  every bundle it anchors follows live, and the arrangement persists under
+  `v6502.chipmap.layout`. **Tidy** gives the derived layout back in one press
+  and forgets it. The page's prose says the split out loud: the derived
+  layout stays the page's claim, a moved box is the reader's. The harness
+  drives a real pointer drag, checks the snap arithmetic and the bundle
+  endpoints, reloads to see it kept, and clears the key first because a
+  persisted arrangement is a hidden input to every assertion after it.
+- **Fullscreen is the workbench's study view, floating console included**,
+  from the same two shared modules as the tracer (`fullscreen.js`,
+  `solo-palette.js`), so a phone gets the same fallback and Escape leaves the
+  same way. Three drawers that BORROW the page's own elements (the card; the
+  tour's start button and panel; the view controls: Nodes, Tidy, Fit, zoom),
+  the transport on the strip driving the one store, the clock select and the
+  half-cycle readout in the drawer head, configuration under
+  `v6502.chipmap.console`. `?full=1` clicks the button rather than calling
+  the API. Borrowed into a drawer, the tour's two-column grid collapses to
+  one (`.sp-panel .cmt-cols`).
 - **The tour: one instruction, container by container** (`chipmap-tour.js`,
   the button on the map's own console bar, `?tour=adc&tstep=N`). ADC, because
   it is the site's star witness. The authored half is its own file and

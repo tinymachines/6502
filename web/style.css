@@ -3383,3 +3383,18 @@ body.no-scroll #bench { z-index: 70; }
 .cm-sw { fill: none; stroke: color-mix(in srgb, var(--foreground) 55%, transparent); stroke-width: 1.2; }
 .cm-sw.on { fill: var(--accent); stroke: var(--accent); }
 .cm-nd.mv, .cm-sw.mv { stroke: var(--gold); stroke-width: 1.6; }
+
+/* The chip map's study view: the drawing covers the viewport and the
+   controls ride on the floating console, the tracer's arrangement. */
+.console.solo > .console-bar, .console.solo > .bk-foot,
+.console.solo > .cm-card, .console.solo > .cmt-panel { display: none; }
+.console.solo .cm-stage {
+  flex: 1; min-height: 0; position: relative;
+  border: 0; border-radius: 0;
+}
+.console.solo #cm-svg { height: 100%; }
+/* Borrowed into a drawer, the page's own elements shed their page framing. */
+.sp-panel .cm-card { border-top: 0; padding: 0.2rem 0; }
+.sp-panel .cmt-panel { border-top: 0; padding: 0.2rem 0; }
+.sp-panel .cmt-cols { grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
+.sp-panel .cmt-src { max-height: 9rem; overflow: auto; }
