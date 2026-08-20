@@ -39,6 +39,8 @@ import { chipGroups, KIND_LABEL } from './chip-groups.js';
 import { centroids } from './die-centroids.js';
 import { el } from './sch-draw.js';
 import { SLUGS } from './block-notes.js';
+import { assemble } from './asm.js';
+import { TOUR, readerOf } from './chipmap-tour.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -57,6 +59,8 @@ const state = {
   view: null, home: null, // viewBox
   prev: null,             // last painted levels
   sel: null,              // selected group key, or null
+  tour: null,             // {h0, lastStep} while the guided tour is running
+  reader: null,           // readerOf(machine), built once
 };
 
 // ---------------------------------------------------------------------------
@@ -254,6 +258,7 @@ function paint() {
   }
   state.prev = levels;
   paintCardLive();
+  paintTour();
   const head = $('cm-head');
   const text = `half-cycle ${m.halfCycle()} · ${m.clk0() ? 'φ1' : 'φ2'}`
     + `${m.sync() ? ' · sync' : ''}`;
@@ -405,6 +410,156 @@ function paintCardLive() {
 }
 
 // ---------------------------------------------------------------------------
+// The guided tour: one instruction, container by container
+// ---------------------------------------------------------------------------
+//
+// The authored half is chipmap-tour.js and is labelled as such; everything
+// this panel shows beside it is measured on this machine: every check is a
+// function evaluated live, and the moved list is the change set grouped by
+// the partition. The tour takes over the chip the way the Lab does: it
+// replaces the loaded program and power-cycles, so it never starts on its
+// own; it waits for the button, or ?tour=.
+
+/** Frame the subject and its partners, padded, at the home aspect. */
+function frameGroups(gis) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const i of gis) {
+    const g = state.groups[i];
+    x0 = Math.min(x0, g.x); y0 = Math.min(y0, g.y);
+    x1 = Math.max(x1, g.x + g.w); y1 = Math.max(y1, g.y + g.h);
+  }
+  const pad = 60;
+  let w = Math.max(700, x1 - x0 + pad * 2);
+  let h = (state.home[3] / state.home[2]) * w;
+  if (h < y1 - y0 + pad * 2) { h = y1 - y0 + pad * 2; w = (state.home[2] / state.home[3]) * h; }
+  w = Math.min(w, state.home[2]); h = Math.min(h, state.home[3]);
+  setView([(x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - h / 2, w, h]);
+}
+
+function loadTheProgram(i) {
+  const m = state.machine;
+  state.program = i;
+  m.load(LOAD_ADDR, new Uint8Array(PROGRAMS[i].bytes));
+  m.setResetVector(LOAD_ADDR);
+  m.powerCycle();
+  state.prev = null;
+}
+
+function startTour(stepIx = 0) {
+  const m = state.machine;
+  const img = assemble(TOUR.source);
+  const at = img.labels.get(TOUR.target);
+  if (at == null) throw new Error(`tour: no label "${TOUR.target}"`);
+  m.load(img.org, new Uint8Array(img.bytes));
+  m.setResetVector(img.org);
+  m.powerCycle();
+  // Offsets are from the instruction's own opcode fetch, found by running
+  // until sync with its address on the bus, never a remembered half-cycle.
+  let guard = 0;
+  while (!(m.sync() && m.lastFetchAddr() === at)) {
+    if (guard++ > 20000) throw new Error('tour: never fetched the instruction');
+    m.halfStep();
+  }
+  state.tour = { h0: m.halfCycle(), lastStep: -1 };
+  state.prev = null;
+  $('cmt-start').hidden = true;
+  $('cmt-panel').hidden = false;
+  $('cmt-src').textContent = TOUR.source;
+  tourGoTo(TOUR.steps[Math.max(0, Math.min(TOUR.steps.length - 1, stepIx))].at);
+}
+
+function exitTour() {
+  state.tour = null;
+  $('cmt-panel').hidden = true;
+  $('cmt-start').hidden = false;
+  loadTheProgram(state.program);
+  select(null);
+  setView(state.home.slice());
+  paint();
+}
+
+/**
+ * Land on offset `at` showing what the LAST half-cycle changed: run to at-1,
+ * snapshot, step, paint. The tracer's ?step= learnt this rule the hard way.
+ * Backward is the rewind, bounded by its keyframes like everywhere else.
+ */
+function tourGoTo(at) {
+  const m = state.machine;
+  while (m.halfCycle() - state.tour.h0 > at - 1) {
+    const before = m.halfCycle();
+    m.stepBack();
+    if (m.halfCycle() === before) break;
+  }
+  while (m.halfCycle() - state.tour.h0 < at - 1) m.halfStep();
+  state.prev = m.nodeLevels();
+  if (m.halfCycle() - state.tour.h0 === at - 1) m.halfStep();
+  paint();
+}
+
+function tourStep(dir) {
+  const k = state.machine.halfCycle() - state.tour.h0;
+  const st = dir > 0
+    ? TOUR.steps.find((x) => x.at > k)
+    : [...TOUR.steps].reverse().find((x) => x.at < k);
+  if (st) tourGoTo(st.at);
+}
+
+/** The tour panel, painted from the machine on every paint. */
+function paintTour() {
+  if (!state.tour) return;
+  const m = state.machine;
+  const k = m.halfCycle() - state.tour.h0;
+  const ix = TOUR.steps.findIndex((st) => st.at === k);
+  const head = $('cmt-head');
+  if (ix < 0) {
+    const text = `off the path at ${k >= 0 ? '+' : ''}${k} half-cycles: `
+      + 'Back and Next rejoin the walkthrough';
+    if (head.textContent !== text) head.textContent = text;
+    if (state.tour.lastStep !== -1) {
+      state.tour.lastStep = -1;
+      $('cmt-title').textContent = '';
+      $('cmt-note').textContent = '';
+      $('cmt-checks').replaceChildren();
+    }
+  } else {
+    const st = TOUR.steps[ix];
+    const text = `step ${ix + 1} of ${TOUR.steps.length} · ${st.at ? `+${st.at}` : 'the fetch'}`
+      + ` half-cycle${st.at === 1 ? '' : 's'} from the opcode fetch`;
+    if (head.textContent !== text) head.textContent = text;
+    // Selection, framing and the prose move only when the step does.
+    if (state.tour.lastStep !== ix) {
+      state.tour.lastStep = ix;
+      $('cmt-title').textContent = st.title;
+      $('cmt-note').textContent = st.note;
+      select(st.subject);
+      const gi = state.groups.findIndex((g) => g.key === st.subject);
+      frameGroups([gi, ...state.partners[gi].slice(0, 6).map((p) => p.i)]);
+    }
+    // The checks are re-evaluated on every paint: a claim the chip has
+    // stopped satisfying goes red on its own.
+    const host = $('cmt-checks');
+    host.replaceChildren();
+    const r = state.reader;
+    for (const c of st.checks) {
+      const held = c.fn(r) === true;
+      const p = document.createElement('p');
+      p.className = `cmt-check ${held ? 'held' : 'broke'}`;
+      const mark = document.createElement('span');
+      mark.className = 'cmt-mark';
+      mark.textContent = held ? '\u2713' : '\u2717';
+      p.append(mark, ` ${c.claim}`);
+      host.append(p);
+    }
+  }
+  const movers = state.groups.filter((g) => g.mvNow > 0)
+    .sort((a, b) => b.mvNow - a.mvNow).slice(0, 6);
+  const mv = movers.length
+    ? `moved at this edge: ${movers.map((g) => `${g.label} ${g.mvNow}`).join(' \u00b7 ')}`
+    : 'nothing moved at this edge';
+  if ($('cmt-moved').textContent !== mv) $('cmt-moved').textContent = mv;
+}
+
+// ---------------------------------------------------------------------------
 // Camera: a viewBox and nothing else, the die graph's own arrangement
 // ---------------------------------------------------------------------------
 
@@ -533,15 +688,15 @@ async function boot() {
     // it, exactly the block pages' arrangement.
     const m = new Machine();
     state.machine = m;
-    const loadProgram = (i) => {
-      state.program = i;
-      m.load(LOAD_ADDR, new Uint8Array(PROGRAMS[i].bytes));
-      m.setResetVector(LOAD_ADDR);
-      m.powerCycle();
-      state.prev = null;
-    };
-    loadProgram(selectedProgram(location.search));
-    setupProgramNav({ onChange: (i) => { setSelectedProgram(i); loadProgram(i); paint(); } });
+    state.reader = readerOf(m);
+    loadTheProgram(selectedProgram(location.search));
+    // Choosing a program leaves the tour: the tour's program is its own.
+    setupProgramNav({ onChange: (i) => {
+      setSelectedProgram(i);
+      if (state.tour) { state.tour = null; $('cmt-panel').hidden = true; $('cmt-start').hidden = false; }
+      loadTheProgram(i);
+      paint();
+    } });
     setupChipNav({
       step: () => { m.halfStep(); paint(); },
       back: () => { m.stepBack(); paint(); },
@@ -551,8 +706,15 @@ async function boot() {
     paint();
     requestAnimationFrame(tick);
 
-    const sel = new URLSearchParams(location.search).get('sel');
+    $('cmt-start').addEventListener('click', () => startTour());
+    $('cmt-next').addEventListener('click', () => tourStep(+1));
+    $('cmt-back').addEventListener('click', () => tourStep(-1));
+    $('cmt-exit').addEventListener('click', exitTour);
+
+    const q = new URLSearchParams(location.search);
+    const sel = q.get('sel');
     select(sel && state.byKey.has(sel) ? sel : null);
+    if (q.get('tour') === TOUR.id) startTour(Number(q.get('tstep')) || 0);
 
     // For the harness: the partition and the bundles as data, not scraped
     // back out of the DOM.

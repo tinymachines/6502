@@ -629,6 +629,7 @@ def main() -> None:
                           where="chip-groups.js")
     b.emit("chip-groups.js", cg.encode())
 
+    b.copy_hashed("chipmap-tour.js")
     cm = b.read("chipmap.js").decode()
     for original, resolved in [
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
@@ -640,6 +641,8 @@ def main() -> None:
         ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
         ("./block-notes.js", "./" + b.ref("block-notes.js")),
+        ("./asm.js", "./" + b.ref("asm.js")),
+        ("./chipmap-tour.js", "./" + b.ref("chipmap-tour.js")),
     ]:
         cm = replace_once(cm, f"'{original}'", f"'{resolved}'", where="chipmap.js")
     for original in ["schematic.json", "blocks.json", "timing.json", "layout.bin"]:

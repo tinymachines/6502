@@ -3357,3 +3357,20 @@ body.no-scroll #bench { z-index: 70; }
   padding: 0.1rem 0.55rem; margin: 0 0.15rem 0.25rem 0; cursor: pointer;
 }
 .cm-pill:hover { border-color: var(--gold); color: var(--gold); }
+
+/* The chip map's guided tour panel, inside the map's own console. */
+.cmt-panel { border-top: 1px solid var(--line); padding: 0.8rem 1rem; }
+.cmt-cols { display: grid; grid-template-columns: minmax(11rem, 16rem) minmax(0, 1fr); gap: 1.2rem; }
+@media (max-width: 52rem) { .cmt-cols { grid-template-columns: minmax(0, 1fr); } }
+.cmt-src {
+  margin: 0; padding: 0.6rem 0.8rem; font-size: 0.78rem; line-height: 1.5;
+  border: 1px solid var(--line); border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--space) 70%, #000); overflow-x: auto;
+}
+.cmt-body h3 { margin: 0.1rem 0 0.35rem; }
+.cmt-body p { margin: 0 0 0.5rem; }
+.cmt-check { display: flex; gap: 0.45rem; font-size: 0.85rem; margin: 0 0 0.25rem; }
+.cmt-check.held .cmt-mark { color: var(--mint); font-weight: 700; }
+.cmt-check.broke { color: var(--hot); }
+.cmt-check.broke .cmt-mark { color: var(--hot); font-weight: 700; }
+.cmt-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>tour probe</title></head>
+<body><pre id="out">running…</pre>
+<script type="module">
+import init, { Machine } from './pkg/v6502_wasm.js';
+import { assemble } from './asm.js';
+import { chipGroups } from './chip-groups.js';
+
+const SRC = `        .org $0200
+start:  clc
+        lda #$40
+        adc #$02
+        jmp start
+`;
+
+(async () => {
+  await init();
+  const [sch, blocks, timing] = await Promise.all(
+    ['schematic.json', 'blocks.json', 'timing.json'].map((f) => fetch(f).then((r) => r.json())));
+  const { groups } = chipGroups(sch, blocks, timing);
+  const m = new Machine();
+  const img = assemble(SRC);
+  m.load(img.org, new Uint8Array(img.bytes));
+  m.setResetVector(img.org);
+  m.powerCycle();
+  // address of the ADC: org + clc(1) + lda(2)
+  const at = img.org + 3;
+  let guard = 0;
+  while (!(m.sync() && m.lastFetchAddr() === at)) {
+    if (guard++ > 20000) throw new Error('never fetched adc');
+    m.halfStep();
+  }
+  const nid = (n) => m.nodeId(n);
+  const watch = ['dpc9_DBADD', 'dpc8_nDBADD', 'dpc11_SBADD', 'dpc17_SUMS',
+                 'dpc20_ADDSB06', 'dpc23_SBAC', 'op-T0-adc/sbc', 'op-T+-adc/sbc', 'fetch', 'sync'];
+  const bus = (stem) => {
+    let v = 0, bits = 0;
+    for (let i = 0; i < 8; i++) { const id = nid(`${stem}${i}`); if (id < 0) continue; bits++; if (m.isNodeHigh(id)) v |= 1 << i; }
+    return bits ? v.toString(16).padStart(2, '0') : '--';
+  };
+  let prev = m.nodeLevels().slice();
+  const rows = [];
+  for (let k = 0; k <= 9; k++) {
+    if (k) { m.halfStep(); }
+    const lv = m.nodeLevels();
+    const moved = [];
+    for (const g of groups) {
+      let c = 0;
+      for (const n of g.nodes) if (lv[n] !== prev[n]) c++;
+      if (c) moved.push([g.key, c]);
+    }
+    moved.sort((a, b) => b[1] - a[1]);
+    rows.push({
+      k, h: m.halfCycle(), phase: m.clk0() ? 'p1' : 'p2', sync: m.sync(), t: m.timingStates(),
+      a: bus('a'), pd: bus('pd'), ir: m.ir().toString(16), idb: bus('idb'), sb: bus('sb'),
+      alua: bus('alua'), alub: bus('alub'), alu: bus('alu'), p: bus('p'),
+      hi: watch.filter((w) => { const id = nid(w); return id >= 0 && m.isNodeHigh(id); }),
+      moved: moved.slice(0, 6).map(([key, c]) => `${key}:${c}`),
+    });
+    prev = lv.slice();
+  }
+  document.getElementById('out').textContent = JSON.stringify(rows, null, 1);
+  document.title = 'PROBE DONE';
+})().catch((e) => { document.getElementById('out').textContent = 'ERR ' + e.message; document.title = 'PROBE ERR'; });
+</script></body></html>

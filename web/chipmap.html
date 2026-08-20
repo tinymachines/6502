@@ -69,6 +69,24 @@
           <span class="mono muted" id="cm-head"></span>
           <span class="mono muted" id="cm-zoom">1.0×</span>
           <button class="btn" type="button" id="cm-home">Fit</button>
+          <button class="btn btn-primary" type="button" id="cmt-start">Tour one instruction</button>
+        </div>
+        <div class="cmt-panel" id="cmt-panel" hidden>
+          <div class="cmt-cols">
+            <pre class="mono cmt-src" id="cmt-src" aria-label="The program the tour runs"></pre>
+            <div class="cmt-body">
+              <p class="mono muted" id="cmt-head"></p>
+              <h3 id="cmt-title"></h3>
+              <p id="cmt-note"></p>
+              <div id="cmt-checks"></div>
+              <p class="mono muted" id="cmt-moved"></p>
+              <p class="cmt-nav">
+                <button class="btn" type="button" id="cmt-back">Back</button>
+                <button class="btn btn-primary" type="button" id="cmt-next">Next</button>
+                <button class="btn btn-ghost" type="button" id="cmt-exit">Leave the tour</button>
+              </p>
+            </div>
+          </div>
         </div>
         <div class="dg-stage cm-stage">
           <svg id="cm-svg" role="img"
@@ -77,6 +95,32 @@
         <div class="cm-card" id="cm-card"></div>
         <p class="bk-foot muted" id="cm-caption"></p>
       </div>
+    </section>
+
+    <section class="wrap sec bp-prose" id="tour">
+      <div class="sec-head">
+        <p class="eyebrow">Authored, checked live</p>
+        <h2>The tour is two registers, and the page says which is which</h2>
+      </div>
+      <p>
+        The tour walks ADC across the map, one authored sentence per step. The
+        narration was written from a per-half-cycle dump of that exact program
+        on the engine, and it is the weaker register: prose goes quietly wrong,
+        because nothing re-reads it. So every claim it makes rides beside a
+        check the page evaluates on the running chip at that step, the moved
+        list under it is the change set grouped by the partition, and the
+        harness re-evaluates every check on a chip of its own. If the
+        narration and the silicon ever disagree, the tick goes red on the page
+        rather than in a footnote.
+      </p>
+      <p>
+        The steps are offsets from the instruction's own opcode fetch, found
+        by running until sync with its address on the bus; the address comes
+        from the assembler's label. The header transport keeps working during
+        the tour, and stepping off the authored path says so and offers the
+        way back, because the panel reads the machine rather than counting its
+        own clicks.
+      </p>
     </section>
 
     <section class="wrap sec bp-prose" id="layout">

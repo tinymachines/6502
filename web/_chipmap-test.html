@@ -21,6 +21,8 @@ iframe{width:1400px;height:900px;border:0}pre{padding:1rem;white-space:pre-wrap}
 import { registerLogic } from './register-logic.js';
 import { decimalCorrection } from './decimal-correction.js';
 import { PACKAGE, direction, pinFacts } from './pins.js';
+import { assemble } from './asm.js';
+import { TOUR, readerOf } from './chipmap-tour.js';
 
 const results = [];
 const ok = (name, cond, detail = '') => results.push(`${cond ? 'PASS' : 'FAIL'} ${name}${cond ? '' : ' :: ' + detail}`);
@@ -271,6 +273,86 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
        d2.querySelector('.cm-box.sel')?.dataset.key || 'nothing selected');
     ok('and its card reads the byte off the chip', /reads \$[0-9A-F]{2}/.test(d2.getElementById('cm-card').textContent),
        d2.getElementById('cm-card').textContent.slice(0, 160));
+    // --- the tour: every authored claim, on a chip of this harness's own ----
+    //
+    // The narration is the weaker register, so each step's checks are
+    // re-evaluated here against an independent machine running the tour's own
+    // program, the Lab-test arrangement. Offsets are from the instruction's
+    // fetch, found by sync and the assembler's label, never remembered.
+    {
+      const tm = new Machine();
+      const img = assemble(TOUR.source);
+      tm.load(img.org, new Uint8Array(img.bytes));
+      tm.setResetVector(img.org);
+      tm.powerCycle();
+      const at = img.labels.get(TOUR.target);
+      ok('the tour anchors to a label the program defines', at != null, TOUR.target);
+      let guard = 0;
+      while (!(tm.sync() && tm.lastFetchAddr() === at) && guard++ < 20000) tm.halfStep();
+      ok('the tour instruction is fetched', guard < 20000);
+      const h0 = tm.halfCycle();
+      const r = readerOf(tm);
+      let claimsOk = true, claimsWhy = '';
+      for (const st of TOUR.steps) {
+        while (tm.halfCycle() - h0 < st.at) tm.halfStep();
+        for (const c of st.checks) {
+          if (c.fn(r) !== true) { claimsOk = false; claimsWhy = `step +${st.at}: ${c.claim}`; }
+        }
+      }
+      ok('every authored claim holds on this harness’s own chip', claimsOk, claimsWhy);
+    }
+
+    // The page's tour, driven through its own controls.
+    await load('chipmap.html?tour=adc');
+    const d3 = f.contentDocument;
+    const w3 = f.contentWindow;
+    for (let i = 0; i < 2000 && !w3.__chipmap; i++) await sleep(50);
+    for (let i = 0; i < 200 && d3.getElementById('cmt-panel').hidden; i++) await sleep(50);
+    ok('?tour= starts the tour', !d3.getElementById('cmt-panel').hidden);
+    ok('...on step 1, with its subject selected',
+       /step 1 of/.test(d3.getElementById('cmt-head').textContent)
+       && !!d3.querySelector(`.cm-box.sel[data-key="${TOUR.steps[0].subject}"]`),
+       d3.getElementById('cmt-head').textContent);
+    let stepsOk = true, stepsWhy = '';
+    for (let i = 1; i < TOUR.steps.length; i++) {
+      d3.getElementById('cmt-next').click();
+      await sleep(30);
+      const head = d3.getElementById('cmt-head').textContent;
+      const st = TOUR.steps[i];
+      if (!head.startsWith(`step ${i + 1} of`)) { stepsOk = false; stepsWhy = `after ${i} clicks: "${head}"`; break; }
+      if (!d3.querySelector(`.cm-box.sel[data-key="${st.subject}"]`)) { stepsOk = false; stepsWhy = `${st.subject} not selected`; break; }
+      const broke = [...d3.querySelectorAll('.cmt-check.broke')];
+      if (broke.length) { stepsOk = false; stepsWhy = `step ${i + 1} shows a broken check: ${broke[0].textContent}`; break; }
+      if (!/moved at this edge:/.test(d3.getElementById('cmt-moved').textContent)) { stepsOk = false; stepsWhy = 'no measured moved list'; break; }
+    }
+    ok('Next walks every step, each subject selected, every check held, the moved list measured', stepsOk, stepsWhy);
+    d3.getElementById('cmt-back').click();
+    await sleep(30);
+    ok('Back rewinds to the previous step',
+       d3.getElementById('cmt-head').textContent.startsWith(`step ${TOUR.steps.length - 1} of`),
+       d3.getElementById('cmt-head').textContent);
+    // The header transport keeps working, and leaving the path says so. From
+    // step 5 (+5), one header step lands on +6, which is still authored, so
+    // it takes two to leave the path: +7 is between nothing and the tour has
+    // to say so rather than show the nearest prose.
+    const step3 = [...d3.querySelectorAll('.nav-tbtn')].find((b) => b.title === 'One half-cycle');
+    step3.click(); step3.click();
+    await sleep(30);
+    ok('header steps off the authored path say so',
+       /off the path/.test(d3.getElementById('cmt-head').textContent),
+       d3.getElementById('cmt-head').textContent);
+    d3.getElementById('cmt-back').click();
+    await sleep(30);
+    ok('and Back rejoins the walkthrough',
+       /^step \d+ of/.test(d3.getElementById('cmt-head').textContent),
+       d3.getElementById('cmt-head').textContent);
+    d3.getElementById('cmt-exit').click();
+    await sleep(30);
+    ok('leaving the tour restores the page: panel hidden, selection cleared',
+       d3.getElementById('cmt-panel').hidden
+       && !d3.getElementById('cm-svg').classList.contains('has-sel')
+       && !d3.querySelector('.cm-box.sel'),
+       'panel or selection survived the exit');
   } catch (e) {
     results.push('FAIL threw :: ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e));
   }

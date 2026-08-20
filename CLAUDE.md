@@ -32,7 +32,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Lab | Four instructions followed opcode → decode PLA → bus → register. |
 | Trace | Any of the 256 opcodes, half-cycle by half-cycle, with the wires that are one wire. |
 | Tracer | The whole circuit on one screen at its die positions, lit live and re-marked at every half-cycle with everything that moved, beside the code, the registers and a bit-by-bit watch of the latches and buses. Fourteen kinds of container over it: blocks, buses, gate clusters, decode stages, control lines, pins, the timing chain as cells, the clock generator, the interrupt logic as what each pin reaches, the branch logic split where the wiring splits it, the decimal correction as everything its names are wired into, the registers S, A, X and Y as the die builds them with the lines that move each, the program counter's incrementer as what lies between the counter and its next value, the status register as a container per flag with its logic, the address latches as a chain of seven a bit with their load lines and the constant generators, the ALU read bit by bit with its inputs, ends and line groups, the data latch, the output register, the bus and the read/write control, the instruction register with its predecode, load path and predecoder, the special bus with its lines by measured direction, the store-data pipeline as the detect and the two latches the timing readout names, the ready logic as the receiver, the master and its re-timed copies, the program counter's own storage with its six lines, the 52-latch pipeline file, and the SYNC generator. Twenty-five kinds; the clustering arc is complete. |
-| Chip map | The whole chip as one schematic: the tracer's derivations made disjoint into 132 groups covering every node once, columns by measured pin distance, die order within a column, 534 counted bundles, live off the running chip, every box linking to its container on the tracer. |
+| Chip map | The whole chip as one schematic: the tracer's derivations made disjoint into 132 groups covering every node once, columns by measured pin distance, die order within a column, 534 counted bundles, live off the running chip, every box linking to its container on the tracer. And a guided tour: ADC walked across the map container by container, every authored claim checked live. |
 | Exploded | The die pulled apart: 3 layers, 12 blocks, and the static logic. |
 | Blocks | One page per functional block: what crosses its edge, and the circuit inside it. Twelve pages, one document. |
 | Schematic | 1160 gates recognised from the switch network. Walk a signal both ways, with the islands you came from still on screen and a console for the chip's I/O, memory and stack. |
@@ -435,7 +435,7 @@ primer's stray-digit scan exists for exactly that reason.
 
 ### Development harnesses in `web/`
 
-Thirty-two harnesses plus two probes, all prefixed `_` and **never shipped** —
+Thirty-three harnesses plus three probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.
@@ -501,6 +501,13 @@ _ports-test.html       # the block bench's Ports drawer: the filter filters, a
 _csp-test.html         # every page, with its deep links, booted under the LIVE
                        # Content Security Policy: zero violations reported, and
                        # the policy proven to reach a framed page first
+_chipmap-test.html     # the chip map: partition complete and disjoint, every
+                       # bundle recounted and every column recomputed from the
+                       # raw arrays, the ownership joints pinned by name, and
+                       # the tour's every authored claim re-run on its own chip
+_tour-probe.html       # per-half-cycle dump of the tour's program: buses,
+                       # control lines, and the change set grouped by the
+                       # partition. Run it before editing any tour prose.
 _graph-test.html       # graph.json against the files it was written from: names,
                        # blocks, roles, centroids (via die-centroids.js), gate and
                        # switch edges vs schematic.json, transistor kinds recounted
@@ -1751,6 +1758,35 @@ somebody chose, and at the container level it stops being true.
   bit this page first and was already documented against.
 - The hero types no counts: the statbar and caption carry the numbers, filled
   from the derivation, so the prose cannot go stale when a derivation moves.
+- **The tour: one instruction, container by container** (`chipmap-tour.js`,
+  the button on the map's own console bar, `?tour=adc&tstep=N`). ADC, because
+  it is the site's star witness. The authored half is its own file and
+  labelled, written from `_tour-probe.html`'s per-half-cycle dump of the
+  tour's exact program; every claim rides beside a check function the page
+  evaluates live on the running chip (`readerOf`, shared with the harness so
+  a claim cannot mean two things), and the moved list under the prose is the
+  change set grouped by the partition, measured per edge. The measured story:
+  the opcode lands and `op-T0-adc/sbc` fires at +2; the operands load under
+  `DBADD`/`SBADD` at +4 with `op-T+-adc/sbc` high while sync is already high
+  for the next fetch; **at +5 the adder holds `$42` and A still reads `$40`**
+  (the subject is `regs:a`, so the card's byte is the accumulator's own
+  storage saying so); at +6 `SBAC` writes it back while IR already holds the
+  JMP.
+  - **It takes over the chip the way the Lab does**: replaces the program,
+    power-cycles, runs to the instruction's own fetch found by `sync` and the
+    assembler's label, and never starts on its own. Leaving reloads the
+    site's program and puts the camera home. Choosing a program leaves the
+    tour.
+  - **Every landing shows what the last half-cycle changed**: `tourGoTo` runs
+    to N-1, snapshots, steps once, paints, which is the tracer's `?step=`
+    rule; without it the first paint said "nothing moved at this edge".
+  - **The panel reads the machine, never counts its own clicks**, so the
+    header transport keeps working during the tour: an offset between
+    authored steps says "off the path" and Back/Next rejoin. The harness had
+    to step the header TWICE to leave the path, because from +5 one
+    half-cycle lands on +6, which is authored.
+  - Each step selects its subject group and frames it with its heaviest
+    partners (`frameGroups`, capped and held to the home aspect).
 - `_chipmap-test.html`: the partition complete and disjoint against its own
   universe, the ownership joints by name, stages and pins re-derived in full,
   every bundle recounted, every column recomputed, boxes non-intersecting,
