@@ -71,6 +71,12 @@
           <button class="btn" type="button" id="cm-nodes" aria-pressed="true">Nodes</button>
           <button class="btn" type="button" id="cm-tidy"
                   title="Put every box back where the layout derives it">Tidy</button>
+          <button class="btn" type="button" id="cm-save"
+                  title="Save your arrangement: container key, x and y offset">Save</button>
+          <button class="btn" type="button" id="cm-load-btn"
+                  title="Load a saved arrangement">Load</button>
+          <input type="file" id="cm-load" accept="application/json,.json" hidden>
+          <span class="mono muted" id="cm-io-note"></span>
           <button class="btn" type="button" id="cm-home">Fit</button>
           <button class="btn btn-primary" type="button" id="cmt-start">Tour one instruction</button>
           <button class="btn btn-icon" type="button" id="cm-fullscreen"
@@ -199,7 +205,10 @@
         alphabetically; the unnamed come last in die order. The boxes also
         drag: your own arrangement, snapped to the same grid, kept across
         visits, and given back by Tidy in one press; the derived layout stays
-        the page's claim, and a moved box is yours. A square is a node
+        the page's claim, and a moved box is yours. Save writes the
+        arrangement as one small file, a container key to its x and y offset
+        and nothing else; Load applies one, skipping and counting anything it
+        does not recognise. A square is a node
         that holds switches, filled while its switches conduct and empty while
         they are open circuit; everything else is a dot, lit while it is high
         and ringed when it changed at the last half-cycle. Clicking a glyph

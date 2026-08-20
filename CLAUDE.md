@@ -1785,6 +1785,17 @@ somebody chose, and at the container level it stops being true.
   drives a real pointer drag, checks the snap arithmetic and the bundle
   endpoints, reloads to see it kept, and clears the key first because a
   persisted arrangement is a hidden input to every assertion after it.
+  - **Save and Load move the arrangement as a file**: one object, a container
+    key to its `[dx, dy]` in drawing units, nothing else (`layoutJSON()`, the
+    same shape as the localStorage key). Load validates rather than trusts: an
+    unknown key or a malformed offset is skipped and counted in the note
+    beside the buttons, an offset is snapped to the cell, and a file that is
+    not a layout applies nothing and says so. The harness loads through the
+    REAL file input via a `DataTransfer`, because a load path tested by
+    calling the function would never notice the input unwired; it saves a
+    dragged arrangement, tidies, loads it back with two junk entries mixed
+    in, and asserts the box returns to the saved offset with exactly the junk
+    skipped. Both buttons ride into the View drawer in fullscreen.
 - **Fullscreen is the workbench's study view, floating console included**,
   from the same two shared modules as the tracer (`fullscreen.js`,
   `solo-palette.js`), so a phone gets the same fallback and Escape leaves the

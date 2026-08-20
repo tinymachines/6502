@@ -736,7 +736,7 @@ const noop = () => {};
 const PANELS = {
   card: (host) => { returnAll(); borrow(host, 'cm-card'); return noop; },
   tour: (host) => { returnAll(); borrow(host, 'cmt-start', 'cmt-panel'); return noop; },
-  view: (host) => { returnAll(); borrow(host, 'cm-nodes', 'cm-tidy', 'cm-home', 'cm-zoom'); return noop; },
+  view: (host) => { returnAll(); borrow(host, 'cm-nodes', 'cm-tidy', 'cm-save', 'cm-load-btn', 'cm-home', 'cm-zoom', 'cm-io-note'); return noop; },
 };
 const TAB_NAMES = { card: 'The selection', tour: 'The tour', view: 'View' };
 
@@ -917,16 +917,90 @@ function setupCamera() {
   $('cm-tidy').addEventListener('click', () => {
     state.offsets.clear();
     saveOffsets();
-    state.groups.forEach((g, gi) => {
-      state.boxEls[gi].removeAttribute('transform');
+    placeAll();
+    ioNote('the derived layout');
+  });
+}
+
+/** Re-place every box and every bundle from the current offsets. */
+function placeAll() {
+  state.groups.forEach((g, gi) => {
+    const o = offsetOf(g);
+    if (o.dx || o.dy) state.boxEls[gi].setAttribute('transform', `translate(${o.dx} ${o.dy})`);
+    else state.boxEls[gi].removeAttribute('transform');
+  });
+  for (const bd of state.bundles) {
+    const line = state.bundleEls[bd.i];
+    const [ax, ay] = centerOf(state.groups[bd.a]);
+    const [bx, by] = centerOf(state.groups[bd.b]);
+    line.setAttribute('x1', ax); line.setAttribute('y1', ay);
+    line.setAttribute('x2', bx); line.setAttribute('y2', by);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Save and load: the arrangement as a file
+// ---------------------------------------------------------------------------
+//
+// The format is exactly what the page already keeps: one object, a container
+// key to its [dx, dy] offset in drawing units, nothing else. A loaded file is
+// validated rather than trusted: an unknown key is skipped and counted, an
+// offset is snapped to the node grid's cell, and the note says what happened
+// rather than leaving a silently half-applied file looking like a bug.
+
+/** The arrangement as the file's own text: {"kind:id": [dx, dy], ...}. */
+function layoutJSON() {
+  const out = {};
+  for (const [k, o] of state.offsets) if (o.dx || o.dy) out[k] = [o.dx, o.dy];
+  return JSON.stringify(out, null, 1);
+}
+
+function ioNote(text) {
+  const n = $('cm-io-note');
+  if (n) n.textContent = text;
+}
+
+function applyLayout(raw) {
+  let data;
+  try { data = JSON.parse(raw); } catch { ioNote('not JSON: nothing applied'); return; }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    ioNote('not a layout object: nothing applied');
+    return;
+  }
+  const next = new Map();
+  let applied = 0, skipped = 0;
+  for (const [k, v] of Object.entries(data)) {
+    const okShape = Array.isArray(v) && v.length === 2 && v.every(Number.isFinite);
+    if (!state.byKey.has(k) || !okShape) { skipped++; continue; }
+    next.set(k, {
+      dx: Math.round(v[0] / CELL) * CELL,
+      dy: Math.round(v[1] / CELL) * CELL,
     });
-    for (const bd of state.bundles) {
-      const line = state.bundleEls[bd.i];
-      const [ax, ay] = centerOf(state.groups[bd.a]);
-      const [bx, by] = centerOf(state.groups[bd.b]);
-      line.setAttribute('x1', ax); line.setAttribute('y1', ay);
-      line.setAttribute('x2', bx); line.setAttribute('y2', by);
-    }
+    applied++;
+  }
+  state.offsets = next;
+  saveOffsets();
+  placeAll();
+  ioNote(`${applied} box${applied === 1 ? '' : 'es'} placed`
+    + (skipped ? `, ${skipped} unknown entr${skipped === 1 ? 'y' : 'ies'} skipped` : ''));
+}
+
+function setupLayoutIO() {
+  $('cm-save').addEventListener('click', () => {
+    const blob = new Blob([layoutJSON()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'chipmap-layout.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    ioNote(`saved ${state.offsets.size} offset${state.offsets.size === 1 ? '' : 's'}`);
+  });
+  $('cm-load-btn').addEventListener('click', () => $('cm-load').click());
+  $('cm-load').addEventListener('change', async () => {
+    const file = $('cm-load').files[0];
+    if (!file) return;
+    applyLayout(await file.text());
+    $('cm-load').value = '';
   });
 }
 
@@ -960,6 +1034,7 @@ async function boot() {
     rebuild();
     setupCamera();
     setupConsole();
+    setupLayoutIO();
     $('cm-nodes').setAttribute('aria-pressed', String(state.nodesView));
     $('cm-nodes').addEventListener('click', () => {
       state.nodesView = !state.nodesView;
@@ -1027,7 +1102,7 @@ async function boot() {
 
     // For the harness: the partition and the bundles as data, not scraped
     // back out of the DOM.
-    window.__chipmap = { groups: state.groups, bundles: state.bundles, stats: r.stats, machine: m };
+    window.__chipmap = { groups: state.groups, bundles: state.bundles, stats: r.stats, machine: m, layoutJSON };
 
     $('cm-boot').hidden = true;
     $('cm-main').hidden = false;

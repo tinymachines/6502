@@ -440,18 +440,17 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
     for (let i = 0; i < 2000 && !w4.__chipmap; i++) await sleep(50);
     const CELL2 = 13;
     const dragBox = (key, px, py) => {
-      const box = d4.querySelector(`.cm-box[data-key="${key}"]`);
-      const svg4 = d4.getElementById('cm-svg');
+      const doc = f.contentDocument, win = f.contentWindow;
+      const box = doc.querySelector(`.cm-box[data-key="${key}"]`);
       const r = box.getBoundingClientRect();
       const o = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
-      const ev = (type, x, y) => new w4.PointerEvent(type, {
+      const ev = (type, x, y) => new win.PointerEvent(type, {
         bubbles: true, pointerId: 1, clientX: x, clientY: y,
       });
       box.dispatchEvent(ev('pointerdown', o.clientX, o.clientY));
-      w4.dispatchEvent(ev('pointermove', o.clientX + px / 2, o.clientY + py / 2));
-      w4.dispatchEvent(ev('pointermove', o.clientX + px, o.clientY + py));
-      w4.dispatchEvent(ev('pointerup', o.clientX + px, o.clientY + py));
-      return svg4;
+      win.dispatchEvent(ev('pointermove', o.clientX + px / 2, o.clientY + py / 2));
+      win.dispatchEvent(ev('pointermove', o.clientX + px, o.clientY + py));
+      win.dispatchEvent(ev('pointerup', o.clientX + px, o.clientY + py));
     };
     dragBox('alu:bit3', 60, 40);
     const boxEl = d4.querySelector('.cm-box[data-key="alu:bit3"]');
@@ -487,6 +486,49 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
     ok('Tidy gives the derived layout back and forgets the arrangement',
        !d5.querySelector('.cm-box[data-key="alu:bit3"]').getAttribute('transform')
        && !localStorage.getItem('v6502.chipmap.layout'));
+
+    // --- save and load: the arrangement as a file -----------------------------
+    //
+    // The file is the format the page states: container key to [dx, dy].
+    // Loaded through the REAL file input via a DataTransfer, because a load
+    // path tested by calling the function would never notice the input
+    // unwired. Unknown keys are skipped and counted, never applied.
+    dragBox('regs:a', 80, 55);
+    await sleep(30);
+    const savedText = f.contentWindow.__chipmap.layoutJSON();
+    const savedObj = JSON.parse(savedText);
+    const tfA = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(
+      d5.querySelector('.cm-box[data-key="regs:a"]').getAttribute('transform'));
+    ok('the saved file is the container key and its snapped offset, nothing else',
+       Array.isArray(savedObj['regs:a'])
+       && savedObj['regs:a'][0] === Number(tfA[1]) && savedObj['regs:a'][1] === Number(tfA[2])
+       && Object.values(savedObj).every((v) => Array.isArray(v) && v.length === 2),
+       savedText.slice(0, 120));
+    d5.getElementById('cm-tidy').click();
+    await sleep(30);
+    ok('Tidy clears it before the load',
+       !d5.querySelector('.cm-box[data-key="regs:a"]').getAttribute('transform'));
+    {
+      const withJunk = { ...savedObj, 'no:such-container': [13, 13], 'alu:bit3': 'garbage' };
+      const dt = new f.contentWindow.DataTransfer();
+      dt.items.add(new f.contentWindow.File([JSON.stringify(withJunk)],
+        'chipmap-layout.json', { type: 'application/json' }));
+      const input = d5.getElementById('cm-load');
+      input.files = dt.files;
+      input.dispatchEvent(new f.contentWindow.Event('change', { bubbles: true }));
+      await sleep(200);
+    }
+    ok('Load puts the arrangement back through the real file input',
+       d5.querySelector('.cm-box[data-key="regs:a"]').getAttribute('transform')
+         === `translate(${savedObj['regs:a'][0]} ${savedObj['regs:a'][1]})`,
+       d5.querySelector('.cm-box[data-key="regs:a"]').getAttribute('transform') || 'none');
+    ok('...skipping and counting what it does not recognise',
+       /2 unknown entries skipped/.test(d5.getElementById('cm-io-note').textContent),
+       d5.getElementById('cm-io-note').textContent);
+    ok('a loaded arrangement is kept like a dragged one',
+       JSON.parse(localStorage.getItem('v6502.chipmap.layout') || '{}')['regs:a'] !== undefined);
+    d5.getElementById('cm-tidy').click();
+    await sleep(30);
 
     // --- the study view: fullscreen with the floating console ----------------
     d5.getElementById('cm-fullscreen').click();
