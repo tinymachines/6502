@@ -100,7 +100,7 @@ def _engine(lines: list[str]) -> dict:
 API_PAGE = Path(__file__).resolve().parent / "api.html"
 
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def api_page() -> FileResponse:
     """The API reference, in the site's own design language. The generated
     /docs and /redoc stay beside it; this page is the one that explains the

@@ -132,6 +132,40 @@ server {
         try_files $uri $uri/ $uri/index.html =404;
     }
 
+    # 6502 as a service: the stateless API, proxied to a local uvicorn run by
+    # 6502-api.service (deploy/6502-api.service). Everything else on this
+    # vhost is static files; this is the one application process, and it holds
+    # no state -- the client's Machine object is the session -- so a restart
+    # or a second instance loses nothing.
+    #
+    # These locations DO declare add_header, so per the rule at the top they
+    # declare the COMPLETE set: the moment one add_header appears, every
+    # inherited server-level header is discarded. The CSP differs from the
+    # site's on purpose and cannot be shared with it: api.html is one
+    # self-contained file carrying its own inline <style>, and the generated
+    # /api/docs and /api/redoc load Swagger UI and ReDoc from jsdelivr with
+    # inline bootstrap scripts (ReDoc also runs a blob: worker and pulls
+    # Google Fonts). None of that survives the site's `style-src 'self'`.
+    # The API's own responses are JSON, where the CSP is inert either way.
+    #
+    # uvicorn runs with --root-path /api, which is what makes the generated
+    # docs ask for /api/openapi.json rather than /openapi.json; the trailing
+    # slashes on both sides of proxy_pass strip the prefix on the way in.
+    location = /api { return 301 /api/; }
+    location /api/ {
+        proxy_pass http://127.0.0.1:6502/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://fastapi.tiangolo.com; connect-src 'self'; worker-src blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        # Every response reflects the state POSTed a moment ago; caching any
+        # of it would hand one client another client's machine.
+        add_header Cache-Control "no-store" always;
+    }
+
     # `$uri.html` lets every page answer to its bare path: /schematic serves
     # schematic.html, and so on for the other entry points. The extension form
     # keeps working, so no existing link breaks.

@@ -99,7 +99,7 @@ footer a { color: var(--muted); }
   <div class="wrap">
     <div class="wordmark">6502 <span>as a service</span></div>
     <nav>
-      <a href="/docs">interactive /docs</a>
+      <a href="docs">interactive /docs</a>
       <a href="https://6502.tinymachines.ai">the simulator</a>
       <a href="https://github.com/tinymachines/6502">source</a>
     </nav>
@@ -138,7 +138,7 @@ footer a { color: var(--muted); }
 #    .org, the reset vector aimed at it, and the chip power-cycled through
 #    its real reset sequence. The machine comes back standing at its first
 #    opcode fetch.</span>
-curl -s localhost:6502/v1/boot -H <span class="s">'content-type: application/json'</span> -d <span class="s">'{
+curl -s https://6502.tinymachines.ai/api/v1/boot -H <span class="s">'content-type: application/json'</span> -d <span class="s">'{
   "rom": { "source": "        .org $0200\nstart:  LDA #$2E\n        STA $80\n        LDA #$14\n        STA $81\nsum:    CLC\n        LDA $80\n        ADC $81\n        STA $82\n        JMP start" }
 }'</span> &gt; m0.json
 
@@ -146,7 +146,7 @@ curl -s localhost:6502/v1/boot -H <span class="s">'content-type: application/jso
 python3 -c <span class="s">'import json; m = json.load(open("m0.json"));
 print(json.dumps({"machine": m["machine"], "half_cycles": 41,
                   "trace": True, "watch": ["sync", "sb0"]}))'</span> |
-  curl -s localhost:6502/v1/step -H <span class="s">'content-type: application/json'</span> -d @- &gt; m1.json
+  curl -s https://6502.tinymachines.ai/api/v1/step -H <span class="s">'content-type: application/json'</span> -d @- &gt; m1.json
 
 <span class="c"># 3. Read the answer out of the silicon: A holds $42 (0x42 = 66), and
 #    $2E + $14 = $42 sits in memory at $0082.</span>
@@ -393,7 +393,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     exactly as fast as a learning tool needs to be.
   </p>
   <p>
-    <a href="/docs">Swagger UI</a> and <a href="/redoc">ReDoc</a> are
+    <a href="docs">Swagger UI</a> and <a href="redoc">ReDoc</a> are
     generated from the same Pydantic models that validate every request, so
     they cannot drift from the behaviour.
   </p>

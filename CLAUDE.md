@@ -743,10 +743,13 @@ toggles transistors and can change connectivity before the later node is reached
 
 ## 6502 as a service (`halfwave`, `service/`)
 
-The chip over HTTP, one half-cycle at a time, for a learning site that will
-launch under its own property: **only the engine and a reference service live
-in this repository**. `service/README.md` is the handbook for whoever builds
-the site.
+The chip over HTTP, one half-cycle at a time. **Live at
+<https://6502.tinymachines.ai/api/>** (the page, with /docs and /redoc
+beside it), run by `deploy/6502-api.service` behind an `/api/` proxy
+location in the site's nginx config. The learning site itself will launch
+under its own property: **only the engine and this reference service live in
+this repository**, and `service/README.md` is the handbook for whoever
+builds it.
 
 **The server is stateless, and the state model is the whole design.** A
 machine's entire mutable state is `ChipState`'s four bitsets (value, pullup,
@@ -803,6 +806,19 @@ state that decodes to the wrong chip is worse than one that is rejected.
   when tracing, both in `/v1/meta`. `until="instruction"` on a JAM opcode
   returns `completed: false` at the cap — the honest answer, since twelve
   opcodes never reach another fetch.
+- **The `/api/` nginx location declares the COMPLETE header set, and must.**
+  This config's own top comment is the rule: one `add_header` in a location
+  discards every inherited one, so the proxy location restates HSTS,
+  nosniff, referrer policy and Cache-Control (`no-store`: every response
+  reflects the state just POSTed) beside a CSP of its own. The CSP cannot be
+  the site's: api.html carries an inline `<style>` and the generated /docs
+  and /redoc load Swagger UI and ReDoc from jsdelivr with inline bootstrap
+  scripts and a blob: worker, none of which survives `style-src 'self'`.
+  uvicorn runs with `--root-path /api`, which is what makes the generated
+  docs ask for `/api/openapi.json`.
+- **The unit sets `NODE` and `HALFWAVE_BIN` by absolute path**, because the
+  assembler bridge under systemd would otherwise find `/usr/bin/node` (v12):
+  the exact trap that once cost a deploy, avoided this time by design.
 - **`service/api.html` is the API reference, served at `/`, and the test
   holds it to the app**: every route the app serves must be named on the
   page, and every number it states (caps, blob lengths, node counts) is
@@ -4671,6 +4687,7 @@ Live on this box. Entirely static; there is no application process.
 |---|---|
 | Deploy script | `deploy/deploy.sh` |
 | systemd unit | `deploy/6502-deploy.service` → `/etc/systemd/system/` |
+| API service | `deploy/6502-api.service` → `/etc/systemd/system/`, enabled: uvicorn on 127.0.0.1:6502 behind the `/api/` proxy location |
 | nginx site | `deploy/6502.tinymachines.ai.nginx` → `sites-available/` (symlinked) |
 | Served from | `/var/www/6502.tinymachines.ai/current` (symlink into `releases/`) |
 

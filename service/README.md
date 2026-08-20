@@ -1,5 +1,7 @@
 # 6502 as a service
 
+**Live at <https://6502.tinymachines.ai/api/>.**
+
 A transistor-level MOS 6502 over HTTP, one half-cycle at a time. Nothing here
 models 6502 behaviour: every request settles the real 3510-switch network and
 every register in every response is read back out of its own storage nodes.
@@ -30,6 +32,12 @@ run does. `test_service.py` proves the same through the HTTP surface.
 | `test_service.py` | 13 tests, end to end. |
 
 ## Run
+
+In production it is `deploy/6502-api.service` (uvicorn on 127.0.0.1:6502,
+`--root-path /api`) behind the site nginx's `/api/` proxy location; both
+carry comments on the traps they step around (systemd's node is v12, and an
+nginx location with any `add_header` discards every inherited one, so the
+/api/ location declares the complete set with its own CSP). Locally:
 
 ```bash
 # The engine (once):

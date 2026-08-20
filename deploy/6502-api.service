@@ -1,0 +1,40 @@
+# 6502 as a service: the stateless API behind https://6502.tinymachines.ai/api
+#
+# One uvicorn on 127.0.0.1:6502, proxied by the site's nginx config. The
+# service holds no state (the client's Machine object is the session), so
+# restarting it mid-anything loses nothing.
+#
+# Two Environment lines are load-bearing, both for the same documented trap:
+# systemd's PATH is /usr/local/sbin:...:/snap/bin and nothing else, so
+# "whatever the shell finds" is not what this unit finds.
+#   - NODE: /usr/bin/node on this box is v12, which cannot parse the
+#     assembler bridge. Same failure that once cost a deploy; point at a
+#     real node explicitly.
+#   - HALFWAVE_BIN: the engine binary, by absolute path. Rebuild it with
+#     `cargo build --release -p v6502-sim --bin halfwave` before restarting
+#     after engine changes.
+#
+# --root-path /api is what makes the generated /docs ask for
+# /api/openapi.json once it is behind the proxy.
+#
+# Install:
+#   sudo cp deploy/6502-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now 6502-api
+
+[Unit]
+Description=6502 as a service (stateless transistor-level API)
+After=network.target
+
+[Service]
+Type=simple
+User=bisenbek
+WorkingDirectory=/home/bisenbek/projects/tinymachines/6502
+Environment=HALFWAVE_BIN=/home/bisenbek/projects/tinymachines/6502/target/release/halfwave
+Environment=NODE=/mnt/nom01/envs/.nvm/versions/node/v24.0.1/bin/node
+ExecStart=/usr/bin/python3 -m uvicorn app:app --app-dir service --host 127.0.0.1 --port 6502 --root-path /api
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
