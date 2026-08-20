@@ -698,6 +698,9 @@ function exportRecording(download = true) {
     units: state.bp.units.map((u) => u.name),
     controls: state.bp.links.map((l) => l.control),
     terms: state.termNodes.map((n, i) => state.dec.rows[i].name || `#${n}`),
+    build: { commit: state.buildInfo?.commit ?? null,
+             committed: state.buildInfo?.committed ?? null,
+             exported: new Date().toISOString() },
     instructions: state.segs.map((s) => ({ start: s.start, end: s.end, label: s.label, at: s.fetch, op: s.op,
                                            gap: s.gap || 0 })),
   });
@@ -739,6 +742,14 @@ async function boot() {
     state.bp = bp;
     state.sch = sch;
     state.dec = dec;
+    // The deploy stamp, for the export's `build` block. Best effort: absent
+    // in development, and a missing stamp must not cost the page. Resolved
+    // against this module's URL the way version-footer.js does, because the
+    // file is never hashed and never enters the worker's precache.
+    fetch(new URL('build-info.json', import.meta.url))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((info) => { state.buildInfo = info; })
+      .catch(() => { state.buildInfo = null; });
     state.m = new Machine();
     state.drawer = createDraw(sch);
     const byName = new Map(sch.names.map((n, i) => [n, i]).filter(([n]) => n));

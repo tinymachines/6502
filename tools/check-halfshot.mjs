@@ -74,6 +74,17 @@ const v1 = file.version === 1;
 check(file.version === 1 || file.version === 2, `version is ${file.version}`);
 if (v1) note('version 1: rails and the last frame are reported, not failed');
 check(v1 || (file.encoding && typeof file.encoding.levels === 'string'), 'version 2 carries an encoding block');
+// The build stamp is optional (older files predate it) but must be well
+// formed when present: `exported` a real timestamp, `commit` a string or
+// null. A stamp that does not parse is worse than none.
+if (file.build != null) {
+  check(typeof file.build === 'object', 'build is an object');
+  check(!Number.isNaN(Date.parse(file.build.exported)), `build.exported parses (${file.build.exported})`);
+  check(file.build.commit === null || typeof file.build.commit === 'string', 'build.commit is a string or null');
+  note(`build: ${file.build.commit ?? 'no commit (dev export)'} exported ${file.build.exported}`);
+} else {
+  note('no build stamp (an export from before the stamp existed)');
+}
 check(Number.isInteger(file.nodes) && file.nodes > 0, `nodes is ${file.nodes}`);
 check(file.rails && Number.isInteger(file.rails.vss) && Number.isInteger(file.rails.vcc), 'rails declared');
 check(file.rails && file.rails.vss === 558 && file.rails.vcc === 657,

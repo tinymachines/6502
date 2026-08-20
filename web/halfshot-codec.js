@@ -66,6 +66,13 @@
 //                     64 KiB of memory as it then stood.
 //   instructions      Frame ranges grouped by the opcode fetch that began them.
 
+// A file also carries `build` when the exporting page knows it: the deployed
+// commit and its date from build-info.json (null in development, where the
+// stamp may not exist) and `exported`, the moment the file was written. It
+// answers "which build made this" in one field: a reader once lost a round
+// trip to a stale re-upload that was byte-identical to the previous file.
+// Optional so old files stay valid; still version 2.
+
 export const FORMAT = 'v6502.halfshot';
 export const VERSION = 2;
 
@@ -162,6 +169,7 @@ export function encode(frames, meta) {
   return {
     format: FORMAT, version: VERSION,
     encoding: ENCODING,
+    build: meta.build || null,
     program: meta.program,
     nodes: meta.nodes,
     rails: { vss: meta.vss, vcc: meta.vcc },

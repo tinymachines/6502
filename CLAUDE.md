@@ -3313,6 +3313,14 @@ the same cursor; running paces through the frames at the clock rate.
     visual6502's own. The harness now decodes frame 0 by hand rather than
     through the codec and pins all three, and `check-halfshot.mjs` does the
     same on a file after the fact.
+  - **The file carries a `build` stamp** (`commit`, `committed`, `exported`),
+    asked for by the same reader after a stale re-upload cost a round trip:
+    "which build made this" is one field now. The page reads the deploy's
+    build-info.json best-effort (null commit in development is a valid
+    stamp), the codec stays a leaf by taking it through `meta`, the file
+    stays version 2 because the field is optional, and `check-halfshot.mjs`
+    validates the shape when present rather than requiring it of older
+    files.
   - **The same reader found the rail bug**, which nothing on the site could
     have: see "One deliberate departure" under the simulation model. The
     export declared `rails.vcc: 657` and 657 toggled. Version 1 files carry

@@ -292,5 +292,8 @@ half of §2.5, are live:
   suite asserts it agrees with the object form column for column and is
   at least 3x smaller; measured on a 10-row watch trace it is ~8x.
 
-Still open from the list: §1.3 (halfshot build stamp) and §2.5's `fields`
-parameter (rows shipped instead).
+§1.3 shipped in the same round: halfshot exports now carry `build`
+(`commit`, `committed`, `exported`), optional so old files stay valid,
+validated by `check-halfshot.mjs` when present, asserted on the real page's
+export by `_halfshot-test.html`. Still open from the list: only §2.5's
+`fields` parameter (rows shipped instead).

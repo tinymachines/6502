@@ -373,6 +373,14 @@ f.addEventListener('load', async () => {
       units: bp.units.map((u) => u.name), controls: bp.links.map((l) => l.control), terms: [],
       instructions: st.segs.map((s) => ({ start: s.start, end: s.end, label: s.label, at: s.fetch, op: s.op })),
     });
+    // The REAL page's export (not this harness's own encode call, whose meta
+    // carries no build) must be stamped: which deploy made it, and when it
+    // was written. commit is null in development, where build-info.json may
+    // not exist, and that is a valid stamp.
+    const stamped = H.exportRecording(false);
+    ok('the export carries a build stamp with a timestamp that parses',
+       !!stamped.build && !Number.isNaN(Date.parse(stamped.build.exported))
+       && (stamped.build.commit === null || typeof stamped.build.commit === 'string'));
     ok('the file names the instructions the strip groups by',
        file.instructions.length === st.segs.length && file.instructions[1].label === st.segs[1].label
        && file.instructions.every((s, i) => i === 0 || s.start === file.instructions[i - 1].end + 1));
