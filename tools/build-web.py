@@ -643,6 +643,8 @@ def main() -> None:
         ("./block-notes.js", "./" + b.ref("block-notes.js")),
         ("./asm.js", "./" + b.ref("asm.js")),
         ("./chipmap-tour.js", "./" + b.ref("chipmap-tour.js")),
+        ("./fullscreen.js", "./" + b.ref("fullscreen.js")),
+        ("./solo-palette.js", "./" + b.ref("solo-palette.js")),
     ]:
         cm = replace_once(cm, f"'{original}'", f"'{resolved}'", where="chipmap.js")
     for original in ["schematic.json", "blocks.json", "timing.json", "layout.bin"]:
