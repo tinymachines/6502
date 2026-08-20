@@ -269,9 +269,16 @@ def test_nodes_lists_every_resolvable_name(client):
     total = sum(len(g) for g in res["groups"].values())
     assert total == res["count"], "groups partition the count"
     assert "sync" in res["groups"]["pins"]
-    assert "dpc23_SBAC" in res["groups"]["decode"]
+    # The dpc* lines are decode's outputs but the datapath's controls, and
+    # they are filed by what they operate: a learner hunting the datapath
+    # finds them, and the count is the measured one.
+    assert "dpc23_SBAC" in res["groups"]["datapath"]
+    assert len(res["groups"]["datapath"]) == 49
+    assert all(n.startswith("dpc") for n in res["groups"]["datapath"])
+    assert "op-T0-lda" in res["groups"]["decode"]
     assert "sb0" in res["groups"]["buses"]
     assert "vcc" in res["groups"]["rails"]
+    assert "49" in client.get("/").text, "page states the datapath group's count"
     # A name discovered here is accepted by watch.
     name = sorted(res["groups"]["decode"])[0]
     boot = boot_add(client, watch=[name])
@@ -340,9 +347,25 @@ def test_rows_trace_carries_the_same_information(client):
         names = set(o["tstates"].split("+")) - {""}
         got = {f"T{i}" for i in range(6) if r["tstates"] >> i & 1}
         assert got == names
-    # The point of the format: it is much smaller on the wire.
+    # The point of the format, held to the page's own measured claim: the
+    # page says 3.7x on this exact shape (45 half-cycles, 2 watches), so
+    # re-measure it there rather than on this test's short trace.
     import json as _json
     assert len(_json.dumps(tr)) < len(_json.dumps(objs["trace"])) / 3
+    o45 = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 45, "trace": True,
+              "watch": ["sync", "dpc23_SBAC"]},
+    ).json()
+    r45 = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 45, "trace": True,
+              "watch": ["sync", "dpc23_SBAC"], "format": "rows"},
+    ).json()
+    ratio = len(_json.dumps(o45["trace"])) / len(_json.dumps(r45["trace_rows"]))
+    assert 3.2 < ratio < 4.2, f"page claims 3.7x on this shape; measured {ratio:.1f}x"
+    page = client.get("/").text
+    assert "3.7x" in page and "7.5x" in page
 
 
 def test_cors_is_open_for_any_origin(client):

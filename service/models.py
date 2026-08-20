@@ -197,7 +197,10 @@ class StepRequest(BaseModel):
 
 class TraceRows(BaseModel):
     """The trace as columnar integer rows: the same information as the
-    object form at about a tenth of the bytes. Encodings, stated: clk0 and
+    object form in fewer bytes. Measured, not estimated: 3.7x smaller on a
+    45-half-cycle trace watching 2 nodes, 7.5x on 133 half-cycles watching
+    22, because the watch list packs to one integer however long it grows.
+    Encodings, stated: clk0 and
     sync are 0/1; phase is 1 or 2; rw is 0 for read, 1 for write; tstates is
     a bitmask, bit n for Tn (T1 meaning the T1x/T+ state); hidden is 0 none,
     1 T1, 2 VEC0, 3 T6; store_data is 0 none, 1 SD1, 2 SD2; a fetch that has

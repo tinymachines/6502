@@ -142,7 +142,8 @@ _GROUP_RULES: list[tuple[str, re.Pattern]] = [
     ("pins", re.compile(r"(ab\d+|db\d|rw|sync|clk0|clk1out|clk2out|res|irq|nmi|rdy|so)$")),
     ("registers", re.compile(r"((not)?(a|x|y|s|ir|idl|pcl|pch|pclp|pchp)\d|dor\d|notdor\d|p\d|Pout\d)$")),
     ("buses", re.compile(r"((not)?(sb|idb|adl|adh|alua|alub|alu)\d|dasb\d|abl\d|abh\d)$")),
-    ("decode", re.compile(r"(dpc.*|op-.*|PD-.*|irline3|ONEBYTE|fetch|clearIR)$")),
+    ("datapath", re.compile(r"dpc.*")),
+    ("decode", re.compile(r"(op-.*|PD-.*|irline3|ONEBYTE|fetch|clearIR)$")),
     ("timing", re.compile(r"(clock1|clock2|t2|t3|t4|t5|VEC0|VEC1|cclk|cp1|pipe.*)$")),
 ]
 

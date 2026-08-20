@@ -188,9 +188,13 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     <p>
       Every name <code>watch</code> accepts, with its node id, grouped:
       <code>rails</code>, <code>pins</code>, <code>registers</code>,
-      <code>buses</code>, <code>decode</code>, <code>timing</code>,
-      <code>other</code>. The grouping is a reading of the names, an authored
-      convenience; the names and ids are the die's own. <strong>832 names
+      <code>buses</code>, <code>datapath</code>, <code>decode</code>,
+      <code>timing</code>, <code>other</code>. The grouping is a reading of
+      the names, an authored convenience; the names and ids are the die's
+      own. <code>datapath</code> is the 49 <code>dpc*</code> lines: decode's
+      outputs, but what they <em>operate</em> is the datapath's switches
+      (<code>dpc23_SBAC</code> opens the special bus into A), so they are
+      filed where somebody hunting "how do I watch the datapath" will look. <strong>832 names
       resolve</strong>: the die's table carries 846 raw entries, 12 of them
       duplicate keys, and 2 of the 834 that remain are the bit-5 sentinels
       <code>p5</code> and <code>Pout5</code>, naming storage the 6502 does
@@ -251,7 +255,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
       <tr><td><code>max_half_cycles</code></td><td>bound for <code>until</code> and <code>until_pc</code>, default 200. A JAM opcode never reaches another fetch; the response says <code>completed: false</code> at the bound rather than hanging</td></tr>
       <tr><td><code>watch</code></td><td>node names, read at the end and at every traced step (see <code>/v1/nodes</code> for all of them). An unknown name is a 400, not a silently absent key</td></tr>
       <tr><td><code>trace</code></td><td>if true, one <a href="#observation">Observation</a> per half-cycle</td></tr>
-      <tr><td><code>format</code></td><td><code>"objects"</code> (default) or <code>"rows"</code>: the trace as columnar integer rows in <code>trace_rows</code>, the same information at about a tenth of the bytes. The encodings are stated in the response model and in <a href="#encoding">Encodings</a></td></tr>
+      <tr><td><code>format</code></td><td><code>"objects"</code> (default) or <code>"rows"</code>: the trace as columnar integer rows in <code>trace_rows</code>, the same information in fewer bytes. Measured: 3.7x smaller on a 45-half-cycle trace watching 2 nodes, 7.5x on 133 half-cycles watching 22, the ratio growing with the watch list because it packs to one integer. Encodings are stated in the response model and in <a href="#encoding">Encodings</a></td></tr>
     </table>
   </div>
 </section>
