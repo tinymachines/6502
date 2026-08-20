@@ -4710,6 +4710,7 @@ Live on this box. Entirely static; there is no application process.
 | Deploy script | `deploy/deploy.sh` |
 | systemd unit | `deploy/6502-deploy.service` → `/etc/systemd/system/` |
 | API service | `deploy/6502-api.service` → `/etc/systemd/system/`, enabled: uvicorn on 127.0.0.1:6502 behind the `/api/` proxy location |
+| Halfwave Lab | <https://halfwave.tinymachines.ai> — `deploy/halfwave.tinymachines.ai.nginx` + `deploy/halfwave-deploy.sh`: `docs/halfwave-lab.html` served as index.html (packaging later), with its own `/api/` proxy to the same engine, so the page's `location.origin + "/api"` resolution just works. DNS in both split-horizon views; cert via the same webroot flow |
 | nginx site | `deploy/6502.tinymachines.ai.nginx` → `sites-available/` (symlinked) |
 | Served from | `/var/www/6502.tinymachines.ai/current` (symlink into `releases/`) |
 

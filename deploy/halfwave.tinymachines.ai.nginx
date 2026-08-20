@@ -1,0 +1,82 @@
+# halfwave.tinymachines.ai -- the Halfwave Lab, a consumer of the 6502 API.
+#
+# One self-contained HTML file (docs/halfwave-lab.html in the 6502 repo),
+# served as index.html for now; packaging comes later. The page resolves its
+# API at location.origin + /api, so this vhost carries the same /api/ proxy
+# as 6502.tinymachines.ai, pointed at the same local uvicorn
+# (6502-api.service): the two origins share one stateless engine, which
+# statelessness makes free.
+#
+# Publish with deploy/halfwave-deploy.sh. Install as
+# sites-available/halfwave.tinymachines.ai.nginx (the .nginx suffix is what
+# sites-enabled links to; the bare name would be a second, unread file).
+
+server {
+    server_name halfwave.tinymachines.ai;
+    listen 80;
+    listen [::]:80;
+
+    location /.well-known/acme-challenge/ { root /var/www/html; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    server_name halfwave.tinymachines.ai;
+
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    ssl_certificate     /etc/letsencrypt/live/halfwave.tinymachines.ai/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/halfwave.tinymachines.ai/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    root /var/www/halfwave.tinymachines.ai;
+    index index.html;
+
+    access_log /var/log/nginx/halfwave.access.log;
+    error_log  /var/log/nginx/halfwave.error.log;
+
+    # The page is one file carrying its own inline style and script, and it
+    # pulls three font families from Google Fonts; the CSP says exactly that
+    # and nothing more. connect-src stays 'self' because the API is
+    # same-origin through the proxy below; a reader passing ?api= to point
+    # the page elsewhere is stepping outside this policy on purpose.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Cache-Control "no-cache" always;
+
+    # The same API the 6502 site proxies, one engine behind both origins.
+    # These locations declare add_header and therefore restate the COMPLETE
+    # set (nginx discards every inherited header the moment one appears);
+    # the CSP here differs from the page's because /api/ also serves the
+    # generated /docs and /redoc, which load Swagger UI and ReDoc from
+    # jsdelivr. See deploy/6502.tinymachines.ai.nginx for the long form of
+    # every one of these comments.
+    location = /api { return 301 /api/; }
+    location = /api/v1/nodes {
+        proxy_pass http://127.0.0.1:6502/v1/nodes;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Cache-Control "public, max-age=86400" always;
+    }
+    location /api/ {
+        proxy_pass http://127.0.0.1:6502/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://fastapi.tiangolo.com; connect-src 'self'; worker-src blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Cache-Control "no-store" always;
+    }
+}
