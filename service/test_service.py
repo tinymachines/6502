@@ -181,6 +181,36 @@ def test_step_wants_exactly_one_of_count_or_until(client):
     assert r.status_code == 422
 
 
+def test_the_api_page_documents_what_the_service_does(client):
+    """The reference page is held to the app, not trusted: it must name
+    every route the app actually serves, and every number it states about
+    the engine and the wire format must be the real one. A docs page that
+    can drift is the prose failure this project keeps finding."""
+    r = client.get("/")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    page = r.text
+
+    # Every route the app serves is named on the page.
+    from fastapi.routing import APIRoute
+    for route in app.routes:
+        if isinstance(route, APIRoute) and route.path != "/":
+            assert route.path in page, f"page does not mention {route.path}"
+
+    # The stated numbers are the measured ones.
+    meta = client.get("/v1/meta").json()
+    assert str(meta["max_step"]) in page
+    assert str(meta["max_traced"]) in page
+    assert str(meta["nodes"]) in page
+    assert str(meta["transistors"]) in page
+    from models import HEX_NODE_CHARS, HEX_TRANS_CHARS
+    assert f"{HEX_NODE_CHARS} hex chars" in page
+    assert f"{HEX_TRANS_CHARS} hex chars" in page
+
+    # House style: no em dashes in anything shipped.
+    assert "\u2014" not in page
+
+
 def test_memory_stays_sparse_and_fill_is_honoured(client):
     # A fill of $EA (NOP) and no rom: the chip executes NOPs from wherever
     # the fill's reset vector sends it ($EAEA), and no page ever differs

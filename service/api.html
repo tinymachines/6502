@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>6502 as a service · API</title>
+<meta name="description" content="A transistor-level MOS 6502 over HTTP, one half-cycle at a time. The API reference.">
+<style>
+:root {
+  --space: #0b1120; --surface: #131c2f; --subtle: #1a2740; --line: #3d5573;
+  --foreground: #eaf2ff; --muted: #9fb3cc; --accent: #22d3ee;
+  --accent-foreground: #06121f; --gold: #7dd3fc; --mint: #5eead4;
+  --warn: #fb7185; --hot: #ffd08a;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace;
+  --hard: 5px 5px 0 rgba(2, 6, 16, .5);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--space); color: var(--foreground);
+  font-family: var(--font-sans); line-height: 1.6; font-size: 16px;
+}
+.wrap { max-width: 52rem; margin: 0 auto; padding: 0 1.25rem; }
+header.top {
+  border-bottom: 2px solid var(--line); padding: .8rem 0;
+  display: flex; align-items: baseline; gap: 1rem;
+}
+header.top .wrap { display: flex; align-items: baseline; gap: 1rem; width: 100%; }
+.wordmark { font-weight: 900; letter-spacing: .02em; }
+.wordmark span { color: var(--accent); }
+header.top nav { margin-left: auto; display: flex; gap: 1.1rem; font-size: .88rem; }
+header.top a { color: var(--muted); text-decoration: none; }
+header.top a:hover { color: var(--accent); }
+.eyebrow {
+  font-family: var(--font-mono); font-size: .72rem; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--accent); margin: 0 0 .4rem;
+}
+.eyebrow::after {
+  content: ""; display: block; width: 4.5rem; height: 2px; margin-top: .45rem;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+h1 { font-weight: 900; font-size: clamp(1.7rem, 4.5vw, 2.5rem); line-height: 1.15; margin: .2rem 0 .8rem; }
+h2 { font-weight: 900; font-size: 1.35rem; margin: 0 0 .75rem; }
+h3 { font-size: 1.02rem; margin: 1.4rem 0 .4rem; }
+section { padding-top: clamp(2.2rem, 6vw, 3.6rem); }
+section:last-of-type { padding-bottom: 4rem; }
+p, li { color: var(--muted); }
+p strong, li strong { color: var(--foreground); }
+a { color: var(--gold); }
+code {
+  font-family: var(--font-mono); font-size: .86em; color: var(--mint);
+  background: var(--subtle); padding: .08em .35em; border-radius: 3px;
+}
+pre {
+  background: var(--surface); border: 2px solid var(--line); box-shadow: var(--hard);
+  padding: .9rem 1rem; overflow-x: auto; font-size: .8rem; line-height: 1.55;
+  border-radius: 4px;
+}
+pre code { background: none; padding: 0; color: var(--foreground); }
+pre .c { color: var(--muted); }
+pre .k { color: var(--accent); }
+pre .s { color: var(--mint); }
+table {
+  border-collapse: collapse; width: 100%; font-size: .86rem; margin: .6rem 0 1rem;
+}
+th, td { text-align: left; padding: .42rem .6rem; border-bottom: 1px solid var(--subtle); vertical-align: top; }
+th { color: var(--foreground); font-size: .78rem; letter-spacing: .05em; text-transform: uppercase; }
+td { color: var(--muted); }
+td code { white-space: nowrap; }
+.endpoint {
+  border: 2px solid var(--line); background: var(--surface); box-shadow: var(--hard);
+  border-radius: 4px; padding: 1rem 1.15rem 1.1rem; margin: 1.1rem 0;
+}
+.endpoint h3 { margin: 0 0 .5rem; font-family: var(--font-mono); font-size: .95rem; }
+.method {
+  display: inline-block; font-family: var(--font-mono); font-size: .72rem; font-weight: 700;
+  padding: .12rem .5rem; border-radius: 3px; margin-right: .55rem; vertical-align: 1px;
+  background: var(--accent); color: var(--accent-foreground);
+}
+.method.get { background: var(--mint); }
+.note {
+  border-left: 3px solid var(--gold); padding: .55rem .9rem; margin: 1rem 0;
+  background: var(--subtle); border-radius: 0 4px 4px 0; font-size: .92rem;
+}
+.note p { margin: .2rem 0; }
+footer {
+  border-top: 2px solid var(--line); padding: 1rem 0 1.4rem;
+  font-family: var(--font-mono); font-size: .72rem; color: var(--muted);
+}
+footer a { color: var(--muted); }
+/* Tables carry nowrap code cells, so on a phone they scroll inside
+   themselves rather than pushing the page wide. */
+@media (max-width: 40rem) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="wordmark">6502 <span>as a service</span></div>
+    <nav>
+      <a href="/docs">interactive /docs</a>
+      <a href="https://6502.tinymachines.ai">the simulator</a>
+      <a href="https://github.com/tinymachines/6502">source</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section id="top">
+  <p class="eyebrow">API reference</p>
+  <h1>A transistor-level MOS 6502 over HTTP, one half-cycle at a time.</h1>
+  <p>
+    Nothing behind this API models 6502 behaviour. Every request settles a
+    network of <strong>3510 transistors and 1725 nodes</strong>, the same
+    engine the <a href="https://6502.tinymachines.ai">visual explorer</a>
+    runs, verified bit-exact against the original visual6502 simulation.
+    Every register in every response is read back out of its own storage
+    nodes on the die; every cycle count is emergent.
+  </p>
+  <p>
+    <strong>The server is stateless.</strong> Each request carries the whole
+    machine in a <code>Machine</code> object: the chip's four state bitsets
+    (about 2&nbsp;KB of hex) plus a sparse 64&nbsp;KiB memory. Each response
+    carries the whole machine back. Your copy of that object is the session.
+    Save it to a file, diff two of them, or hand one to somebody else
+    mid-instruction; any server instance can pick any of them up. Resuming
+    from a serialized machine is proven bit-exact over every node at every
+    half-cycle.
+  </p>
+</section>
+
+<section id="quickstart">
+  <p class="eyebrow">Three requests</p>
+  <h2>Assemble, boot, step</h2>
+<pre><code><span class="c"># 1. Boot a program. The source is assembled, laid into memory at its
+#    .org, the reset vector aimed at it, and the chip power-cycled through
+#    its real reset sequence. The machine comes back standing at its first
+#    opcode fetch.</span>
+curl -s localhost:6502/v1/boot -H <span class="s">'content-type: application/json'</span> -d <span class="s">'{
+  "rom": { "source": "        .org $0200\nstart:  LDA #$2E\n        STA $80\n        LDA #$14\n        STA $81\nsum:    CLC\n        LDA $80\n        ADC $81\n        STA $82\n        JMP start" }
+}'</span> &gt; m0.json
+
+<span class="c"># 2. Step 41 half-cycles, tracing every one and watching two named wires.</span>
+python3 -c <span class="s">'import json; m = json.load(open("m0.json"));
+print(json.dumps({"machine": m["machine"], "half_cycles": 41,
+                  "trace": True, "watch": ["sync", "sb0"]}))'</span> |
+  curl -s localhost:6502/v1/step -H <span class="s">'content-type: application/json'</span> -d @- &gt; m1.json
+
+<span class="c"># 3. Read the answer out of the silicon: A holds $42 (0x42 = 66), and
+#    $2E + $14 = $42 sits in memory at $0082.</span>
+python3 -c <span class="s">'import json; r = json.load(open("m1.json"));
+print(hex(r["observe"]["a"]), r["observe"]["flags"]);
+print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code></pre>
+  <p>
+    To keep going, POST <code>m1.json</code>'s <code>machine</code> back to
+    <code>/v1/step</code>. Stepping 20 and then 21 half-cycles across two
+    requests is byte-identical to stepping 41 in one; the test suite pins it.
+  </p>
+</section>
+
+<section id="endpoints">
+  <p class="eyebrow">Endpoints</p>
+  <h2>Five routes, one idea</h2>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/healthz</h3>
+    <p>Liveness. Returns <code>{"ok": true}</code>.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/meta</h3>
+    <p>What the engine is and where its edges are.</p>
+    <table>
+      <tr><th>field</th><th>value</th></tr>
+      <tr><td><code>chip</code></td><td><code>"mos6502"</code></td></tr>
+      <tr><td><code>nodes</code></td><td>1725</td></tr>
+      <tr><td><code>transistors</code></td><td>3510</td></tr>
+      <tr><td><code>max_step</code></td><td>200000 half-cycles per request; shard longer runs</td></tr>
+      <tr><td><code>max_traced</code></td><td>10000 half-cycles per request when <code>trace</code> is on</td></tr>
+      <tr><td><code>encoding</code></td><td>the bitset wire encoding, stated (see <a href="#encoding">Encodings</a>)</td></tr>
+    </table>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method">POST</span>/v1/assemble</h3>
+    <p>
+      Assemble source without running it. The assembler is the site's own
+      (<code>web/asm.js</code>), which inverts the disassembler's opcode
+      table, so there is exactly one opinion in this project about what a
+      line of assembly means.
+    </p>
+    <p><strong>Request</strong> is a <a href="#rom">Rom</a>. <strong>Response</strong> is an
+    <a href="#assembleresponse">AssembleResponse</a>: the bytes, the label
+    table, and a listing with an address and bytes per line.
+    <strong>Errors</strong>: 422 with <code>{"error", "line"}</code> naming
+    the offending line.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method">POST</span>/v1/boot</h3>
+    <p>
+      Start a machine. With a <code>rom</code>, the source is assembled and
+      laid over <code>memory</code> at its org, and <code>reset_vector</code>
+      defaults to that org. The chip is then power-cycled through the 6502's
+      real reset sequence and returned standing at its first opcode fetch
+      (<code>sync</code> high, PC at the vector, <code>half_cycle</code> 0).
+    </p>
+    <table>
+      <tr><th>request field</th><th></th></tr>
+      <tr><td><code>rom</code></td><td>optional <a href="#rom">Rom</a></td></tr>
+      <tr><td><code>memory</code></td><td>optional <a href="#memory">SparseMemory</a>, default all zeroes</td></tr>
+      <tr><td><code>reset_vector</code></td><td>optional 0..65535; without it and without a rom, the chip runs whatever $FFFC points at, exactly like the silicon</td></tr>
+      <tr><td><code>watch</code></td><td>optional list of node names to read in the observation</td></tr>
+    </table>
+    <p><strong>Response</strong> is a <a href="#stepresponse">StepResponse</a>
+    with <code>stepped: 0</code> and, when a rom was supplied, the
+    <code>assembled</code> listing.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method">POST</span>/v1/step</h3>
+    <p>
+      Advance a machine. Give <strong>exactly one</strong> of
+      <code>half_cycles</code> or <code>until: "instruction"</code>; supplying
+      both or neither is a 422.
+    </p>
+    <table>
+      <tr><th>request field</th><th></th></tr>
+      <tr><td><code>machine</code></td><td>the <a href="#machine">Machine</a> from the previous response, unchanged or edited</td></tr>
+      <tr><td><code>half_cycles</code></td><td>1..200000: advance exactly this many clock phases</td></tr>
+      <tr><td><code>until</code></td><td><code>"instruction"</code>: run to the next opcode fetch (<code>sync</code> high, <code>clk0</code> low)</td></tr>
+      <tr><td><code>max_half_cycles</code></td><td>bound for <code>until</code>, default 200. A JAM opcode never reaches another fetch; the response says <code>completed: false</code> at the bound rather than hanging</td></tr>
+      <tr><td><code>watch</code></td><td>node names, read at the end and at every traced step. An unknown name is a 400, not a silently absent key</td></tr>
+      <tr><td><code>trace</code></td><td>if true, one <a href="#observation">Observation</a> per half-cycle</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="objects">
+  <p class="eyebrow">Objects</p>
+  <h2>The shapes that travel</h2>
+
+  <h3 id="machine">Machine</h3>
+  <p>
+    The unit of statelessness: <code>{"state": ChipState, "memory":
+    SparseMemory}</code>. POST it back to continue exactly where the last
+    response left off.
+  </p>
+
+  <h3 id="chipstate">ChipState</h3>
+  <table>
+    <tr><th>field</th><th></th></tr>
+    <tr><td><code>version</code></td><td>1</td></tr>
+    <tr><td><code>half_cycle</code></td><td>clock phases since reset. The chip does work on both edges, so this, not the cycle, is the fundamental unit</td></tr>
+    <tr><td><code>last_fetch</code></td><td><code>{"addr", "opcode"}</code> of the most recent opcode fetch, or null. Bookkeeping for disassembly, not silicon: IR alone cannot locate the operand bytes, because PC has moved past them</td></tr>
+    <tr><td><code>value</code></td><td>every node's logic level: 432 hex chars</td></tr>
+    <tr><td><code>pullup</code></td><td>per-node pullup state: 432 hex chars. Mutable, not a netlist constant; driving the data bus works by flipping the pull on db0..db7</td></tr>
+    <tr><td><code>pulldown</code></td><td>per-node pulldown state: 432 hex chars</td></tr>
+    <tr><td><code>trans_on</code></td><td>every transistor's conducting state: 878 hex chars</td></tr>
+  </table>
+  <p>
+    A blob of the wrong length, a non-hex character, or a set bit in the
+    padding past the last node is <strong>refused</strong> (422 at the model
+    boundary, 400 at the engine): a state that decodes to the wrong chip is
+    worse than one that is rejected.
+  </p>
+
+  <h3 id="memory">SparseMemory</h3>
+  <p>
+    64&nbsp;KiB as <code>{"fill": "00", "pages": {"02": "&lt;512 hex
+    chars&gt;"}}</code>: a background byte plus only the 256-byte pages that
+    differ from it. Keys are the page number in hex (<code>"00".."ff"</code>,
+    so page <code>"02"</code> starts at $0200). Responses are canonical: a
+    page that is all fill is dropped, because "fill everywhere except the
+    listed pages" is the entire meaning. Set <code>fill</code> to
+    <code>"ea"</code> and an empty machine executes NOPs.
+  </p>
+
+  <h3 id="rom">Rom</h3>
+  <p>
+    A program as <strong>source</strong>, not bytes: <code>{"source":
+    "...", "org": 512}</code> (org optional, default $0200, and a
+    <code>.org</code> directive in the source wins). Labels, forward
+    references, <code>.byte</code>/<code>.word</code> data and comments are
+    the assembler's; the <a href="https://6502.tinymachines.ai/programs">programs
+    page</a> shows the dialect.
+  </p>
+
+  <h3 id="assembleresponse">AssembleResponse</h3>
+  <table>
+    <tr><th>field</th><th></th></tr>
+    <tr><td><code>org, end, size</code></td><td>where the image starts and ends, and its byte count. A gap left by <code>.org</code> is filled with $00, not skipped: it is memory the chip fetches through</td></tr>
+    <tr><td><code>bytes</code></td><td>the image as hex</td></tr>
+    <tr><td><code>labels</code></td><td>name to address</td></tr>
+    <tr><td><code>listing</code></td><td>per source line: <code>{"n", "text", "label", "addr", "bytes"}</code>, with addr and bytes null on lines that emit nothing</td></tr>
+  </table>
+
+  <h3 id="observation">Observation</h3>
+  <p>
+    What a learner reads off the chip at one instant. All of it is read out
+    of the silicon; none of it is modelled.
+  </p>
+  <table>
+    <tr><th>field</th><th></th></tr>
+    <tr><td><code>half_cycle, cycle</code></td><td>where in time this reading was taken</td></tr>
+    <tr><td><code>clk0</code></td><td>the clock input pin's level</td></tr>
+    <tr><td><code>phase</code></td><td><code>"phi1"</code> or <code>"phi2"</code>: the internal phase, read from the on-die clock generator, which lags the pin</td></tr>
+    <tr><td><code>addr, data, rw, sync</code></td><td>the external bus. <code>sync</code> is high during an opcode fetch</td></tr>
+    <tr><td><code>pc, a, x, y, s, p, ir</code></td><td>the registers, each read from its own storage nodes. P bit 5 reads as 1: no storage node exists for it, same as real silicon. S out of power-on is whatever its nodes came up as; reset only decrements it by three</td></tr>
+    <tr><td><code>flags</code></td><td>P as <code>nv-BdIzC</code>, uppercase where set</td></tr>
+    <tr><td><code>tstates</code></td><td>the timing chain, e.g. <code>"T0+T1"</code>. More than one can be active: the chain overlaps the tail of one instruction with the head of the next</td></tr>
+    <tr><td><code>hidden</code></td><td><code>"T1"</code>, <code>"VEC0"</code>, <code>"T6"</code> or "": the timing bits that never reach the decode PLA</td></tr>
+    <tr><td><code>store_data</code></td><td><code>"SD1"</code>, <code>"SD2"</code> or "": the store-data pipeline, active in a store's or read-modify-write's data cycles</td></tr>
+    <tr><td><code>fetch</code></td><td>the last opcode fetch, for disassembly</td></tr>
+    <tr><td><code>watch</code></td><td>each watched node name to its level. Any of the 846 named nodes on the die works: <code>sync</code>, <code>sb0</code>, <code>cclk</code>, <code>dpc17_SUMS</code>, ...</td></tr>
+  </table>
+
+  <h3 id="stepresponse">StepResponse</h3>
+  <table>
+    <tr><th>field</th><th></th></tr>
+    <tr><td><code>machine</code></td><td>the whole machine, after. POST it back to continue</td></tr>
+    <tr><td><code>observe</code></td><td>an Observation at the final half-cycle</td></tr>
+    <tr><td><code>stepped</code></td><td>half-cycles actually advanced</td></tr>
+    <tr><td><code>completed</code></td><td>for <code>until</code>: whether the next fetch was reached before <code>max_half_cycles</code>. False is an answer, not a failure: twelve opcodes (the JAMs) never finish</td></tr>
+    <tr><td><code>trace</code></td><td>with <code>trace: true</code>, one Observation per half-cycle</td></tr>
+    <tr><td><code>assembled</code></td><td>on boot with a rom: the AssembleResponse</td></tr>
+  </table>
+</section>
+
+<section id="encoding">
+  <p class="eyebrow">Encodings</p>
+  <h2>The bits on the wire</h2>
+  <p>
+    A bitset is lowercase hex of its bytes: <strong>bit i of the set is byte
+    i/8, LSB first within the byte</strong>. Node numbering is visual6502's
+    own, so node 0 is bit 0 of byte 0. The node sets (1725 bits) pack to 216
+    bytes, 432 hex chars; the transistor set (3510 bits) to 439 bytes, 878
+    chars. The same convention the simulator's halfshot export uses.
+  </p>
+  <p>
+    Memory pages are 256 bytes as 512 hex chars, plain byte order. All hex
+    is accepted case-insensitively and returned lowercase.
+  </p>
+</section>
+
+<section id="errors">
+  <p class="eyebrow">Errors</p>
+  <h2>Refusals, never guesses</h2>
+  <table>
+    <tr><th>status</th><th>meaning</th></tr>
+    <tr><td>400</td><td>the engine refused: an unknown watch name, a count over <code>max_step</code>, a malformed state blob that passed shape validation</td></tr>
+    <tr><td>422</td><td>the request shape: a truncated hex blob, both or neither of <code>half_cycles</code>/<code>until</code>, or an assembly error (with the line number in <code>detail</code>)</td></tr>
+  </table>
+</section>
+
+<section id="demo">
+  <p class="eyebrow">What to run first</p>
+  <h2>The result that is in no register</h2>
+  <p>
+    Boot the add program from the quick start and step through the ADC with
+    <code>trace</code> on. In the tail of the instruction the sum
+    <strong>exists and is in no register</strong>: it sits in the ALU's hold
+    register while A still reads the old value, and transfers during the
+    <em>next</em> instruction's fetch. Watch <code>dpc17_SUMS</code> (the
+    adder's sum select) and read <code>a</code> across those half-cycles and
+    you can see the overlap happen. Every behavioural emulator hides this;
+    it falls out of this one because nothing here knows what ADC is
+    supposed to do.
+  </p>
+  <div class="note">
+    <p>
+      The interactive companion: <a href="https://6502.tinymachines.ai/lab?lab=adc&amp;step=4">the
+      Lab's ADC walkthrough</a> shows the same moment on the die, and
+      <a href="https://6502.tinymachines.ai/trace">the Trace</a> does it for
+      any of the 256 opcodes.
+    </p>
+  </div>
+</section>
+
+<section id="about">
+  <p class="eyebrow">Behind the API</p>
+  <h2>What answers a request</h2>
+  <p>
+    A pool of warm engine processes (<code>halfwave</code>, Rust, zero
+    dependencies), each holding the parsed netlist and one constructed
+    machine. A request overwrites the machine's entire state with yours,
+    settles the network the requested number of half-cycles, and hands the
+    state back; nothing survives between requests. One warm instance runs
+    about 28,000 half-cycles a second, which is a simulated 6502 at roughly
+    14&nbsp;kHz: three orders of magnitude slower than the real part, and
+    exactly as fast as a learning tool needs to be.
+  </p>
+  <p>
+    <a href="/docs">Swagger UI</a> and <a href="/redoc">ReDoc</a> are
+    generated from the same Pydantic models that validate every request, so
+    they cannot drift from the behaviour.
+  </p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    Simulation code MIT · die data CC BY-NC-SA 3.0, Greg James / visual6502.org ·
+    <a href="https://6502.tinymachines.ai/talk">where the die data came from</a>
+  </div>
+</footer>
+
+</body>
+</html>

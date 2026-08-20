@@ -25,7 +25,8 @@ run does. `test_service.py` proves the same through the HTTP surface.
 | `asm-bridge.mjs` | The assembler: `web/asm.js` over stdin/stdout. There is one assembler in this project and this is how the service uses it rather than growing a second one. |
 | `models.py` | The public shapes (Pydantic): `Machine`, `ChipState`, `SparseMemory`, `Rom`, `Observation`. |
 | `engine.py` | The pool of warm engine processes. |
-| `app.py` | FastAPI: the four endpoints. |
+| `app.py` | FastAPI: the endpoints. |
+| `api.html` | The API reference page, served at `/`. The test suite holds it to the app: every route named, every stated number the measured one. `/docs` and `/redoc` are generated beside it from the same models. |
 | `test_service.py` | 13 tests, end to end. |
 
 ## Run

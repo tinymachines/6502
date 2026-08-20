@@ -20,8 +20,10 @@ The flow a learner follows:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from assembler import AssemblyError, assemble
 from engine import EngineError, Pool
@@ -93,6 +95,17 @@ def _engine(lines: list[str]) -> dict:
         return pool.request(lines)
     except EngineError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+API_PAGE = Path(__file__).resolve().parent / "api.html"
+
+
+@app.get("/", include_in_schema=False)
+def api_page() -> FileResponse:
+    """The API reference, in the site's own design language. The generated
+    /docs and /redoc stay beside it; this page is the one that explains the
+    ideas (statelessness, the state object, what an observation is)."""
+    return FileResponse(API_PAGE, media_type="text/html")
 
 
 @app.get("/healthz")

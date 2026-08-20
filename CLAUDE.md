@@ -803,6 +803,12 @@ state that decodes to the wrong chip is worse than one that is rejected.
   when tracing, both in `/v1/meta`. `until="instruction"` on a JAM opcode
   returns `completed: false` at the cap — the honest answer, since twelve
   opcodes never reach another fetch.
+- **`service/api.html` is the API reference, served at `/`, and the test
+  holds it to the app**: every route the app serves must be named on the
+  page, and every number it states (caps, blob lengths, node counts) is
+  compared against `/v1/meta` and the model constants, so the page cannot
+  drift the way prose does. `/docs` and `/redoc` are generated beside it
+  from the same Pydantic models.
 - **`Cpu::set_last_fetch` exists for restore and nothing else.** The fetch
   is bookkeeping for disassembly, not silicon, so it travels beside the
   bitsets rather than being lost on every hop.
