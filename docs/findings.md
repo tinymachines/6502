@@ -289,11 +289,26 @@ half of §2.5, are live:
 - CORS `*` via middleware; OPTIONS preflight answers 200.
 - `format: "rows"`: the trace as columnar integer rows (`{cols,
   watch_names, rows}`), stated encodings, watch packed to a bitmask. The
-  suite asserts it agrees with the object form column for column and is
-  at least 3x smaller; measured on a 10-row watch trace it is ~8x.
+  suite asserts it agrees with the object form column for column; measured
+  3.7x smaller at 45 half-cycles with 2 watches and 7.5x at 133 with 22,
+  the ratio growing with the watch list.
 
 §1.3 shipped in the same round: halfshot exports now carry `build`
 (`commit`, `committed`, `exported`), optional so old files stay valid,
 validated by `check-halfshot.mjs` when present, asserted on the real page's
 export by `_halfshot-test.html`. Still open from the list: only §2.5's
 `fields` parameter (rows shipped instead).
+
+### 5.5 The second round of tweaks, and the Lab's adoption (2026-08-20, later)
+
+The rows compression claim is stated as the measured band above (it said
+"about a tenth"; the reviewer measured 6.4x and was right to object), held
+by a test that re-measures the 45/2 shape and asserts the page's figures.
+The 49 `dpc*` lines moved out of `decode` into their own `datapath` group
+on `/v1/nodes`, filed by what they operate rather than what drives them;
+partition still sums to 832, count pinned. Both in commit 0ac7b66.
+
+The checked-in Lab (`halfwave-lab.html`) now consumes the new surface:
+`format: "rows"` for its traces, and the `alu`/`sb`/`adl`/`adh` fields,
+with an ALU-op readout and a stale-value treatment for a bus reading that
+is no longer driven.
