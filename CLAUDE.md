@@ -1825,6 +1825,22 @@ somebody chose, and at the container level it stops being true.
       reached 31,000 units out. Wired boxes get 0.08 of it; a bundleless box
       has only gravity to answer to and gets 0.6. The harness pins the free
       cloud under 6000 units across, an order of magnitude inside the bug.
+    - **Boxes never settle overlapping.** One light separation pass per
+      iteration keeps the core honest while the springs work; the settle
+      relaxes intersecting pairs apart along the smaller penetration axis
+      until none remain, with a clearance one unit wider than the snap can
+      steal back, so a settled arrangement can touch but never stack. The
+      separation runs ONLY when the optimizer was actually running: a reader
+      grabbing a box in their own overlapping arrangement must not have the
+      neighbours shoved aside by the grab.
+    - **The page carries a key and a solved-ness section** (`#colours`,
+      `#solved`): the key is drawn with the drawing's own classes so it
+      cannot drift, its sample values live in `.cm-key`-scoped CSS because an
+      inline `style=` attribute is exactly what the live CSP refuses, and the
+      harness asserts both. **The key's samples share the drawing's classes
+      on purpose, so every harness query about the drawing is scoped to
+      `#cm-svg`**: unscoped, the box count came back 134 for 132 groups,
+      which is the schematic key's own documented trap replayed.
     - **The force balance was tuned against measurements, not taste**: with
       the attraction floor at 0.15 the crowd pressure of 132 mutually
       repelling boxes stretched the weakly-wired tail to ~8000 units; the

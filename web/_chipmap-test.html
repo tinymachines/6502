@@ -207,7 +207,7 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
        groups.filter((g) => g.kind === 'pins' && g.id !== 'output' && g.id !== 'neither').every((g) => g.colIx === 0));
 
     // --- the drawing: every group a box, and no two boxes intersect ----------
-    const boxes = [...d.querySelectorAll('.cm-box')];
+    const boxes = [...d.querySelectorAll('#cm-svg .cm-box')];
     ok('every group is drawn as a box, once', boxes.length === groups.length
        && new Set(boxes.map((b) => b.dataset.key)).size === groups.length,
        `${boxes.length} boxes for ${groups.length} groups`);
@@ -254,8 +254,8 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
     {
       const myControls = new Set(sch.switches.map(([c]) => c));
       myControls.delete(sch.vss); myControls.delete(sch.vcc);
-      const sq = [...d.querySelectorAll('.cm-sw')].map((e) => Number(e.dataset.n));
-      const dots = [...d.querySelectorAll('.cm-nd')].map((e) => Number(e.dataset.n));
+      const sq = [...d.querySelectorAll('#cm-svg .cm-sw')].map((e) => Number(e.dataset.n));
+      const dots = [...d.querySelectorAll('#cm-svg .cm-nd')].map((e) => Number(e.dataset.n));
       ok('every node is drawn as a glyph, once',
          sq.length + dots.length === universe.size
          && new Set([...sq, ...dots]).size === universe.size,
@@ -279,10 +279,10 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
       const cclk = sch.names.indexOf('cclk');
       const lv = m.nodeLevels();
       ok('a square is filled exactly while its switches conduct',
-         d.querySelector(`.cm-sw[data-n="${cclk}"]`).classList.contains('on') === (lv[cclk] > 0));
+         d.querySelector(`#cm-svg .cm-sw[data-n="${cclk}"]`).classList.contains('on') === (lv[cclk] > 0));
       const dotN = dots[0];
       ok('a dot is lit exactly while its node is high',
-         d.querySelector(`.cm-nd[data-n="${dotN}"]`).classList.contains('on') === (lv[dotN] > 0));
+         d.querySelector(`#cm-svg .cm-nd[data-n="${dotN}"]`).classList.contains('on') === (lv[dotN] > 0));
       // One paired step: the ringed glyphs are exactly the changed nodes.
       const before = m.nodeLevels();
       stepBtn.click(); m.halfStep();
@@ -290,19 +290,19 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
       const after = m.nodeLevels();
       let myMoved = 0;
       for (const n of universe) if (after[n] !== before[n]) myMoved++;
-      const rung = d.querySelectorAll('.cm-sw.mv, .cm-nd.mv').length;
+      const rung = d.querySelectorAll('#cm-svg .cm-sw.mv, #cm-svg .cm-nd.mv').length;
       ok('the ringed glyphs are exactly the nodes that changed at the edge',
          rung === myMoved, `${rung} ringed vs ${myMoved} changed`);
       // The toggle folds the grids away and brings them back.
       d.getElementById('cm-nodes').click();
       await sleep(30);
       ok('the Nodes button folds the grids away',
-         d.querySelectorAll('[data-n]').length === 0
-         && d.querySelectorAll('.cm-box').length === groups.length);
+         d.querySelectorAll('#cm-svg [data-n]').length === 0
+         && d.querySelectorAll('#cm-svg .cm-box').length === groups.length);
       d.getElementById('cm-nodes').click();
       await sleep(30);
       ok('...and brings them back',
-         d.querySelectorAll('.cm-sw, .cm-nd').length === universe.size);
+         d.querySelectorAll('#cm-svg .cm-sw, #cm-svg .cm-nd').length === universe.size);
       // A glyph click names its node on the card.
       const g0 = d.querySelector('.cm-box[data-key="regs:a"] .cm-nd, .cm-box[data-key="regs:a"] .cm-sw');
       g0.dispatchEvent(new f.contentWindow.MouseEvent('click', { bubbles: true }));
@@ -313,6 +313,20 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
          d.getElementById('cm-card').textContent.slice(0, 160));
       d.getElementById('cm-svg').dispatchEvent(new f.contentWindow.MouseEvent('click', { bubbles: true }));
       await sleep(30);
+    }
+
+    // --- the key: drawn with the drawing's own classes ------------------------
+    {
+      const key = d.getElementById('cm-key');
+      ok('the page carries a key', !!key && key.querySelectorAll('.cm-key-row').length >= 6);
+      const want = ['.cm-nd', '.cm-nd.on', '.cm-sw', '.cm-sw.on', '.cm-nd.mv',
+                    '.cm-box .cm-bg', '.cm-box .cm-hi', '.cm-box.mv',
+                    '.cm-bd', '.cm-bd.cm-bd-sw', '.cm-bd.open', '.cm-bd.fired'];
+      const missing2 = want.filter((sel) => !key.querySelector(sel));
+      ok('every key sample is built from the drawing’s own classes',
+         missing2.length === 0, missing2.join(' '));
+      ok('and the key writes no inline style, which the live CSP would refuse',
+         !key.querySelector('[style]'));
     }
 
     // --- the walk: click, card, deep link ------------------------------------
@@ -351,8 +365,8 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
     await load('chipmap.html?nodes=0');
     const d2b = f.contentDocument;
     for (let i = 0; i < 2000 && !f.contentWindow.__chipmap; i++) await sleep(50);
-    ok('?nodes=0 arrives folded', d2b.querySelectorAll('[data-n]').length === 0
-       && d2b.querySelectorAll('.cm-box').length > 0);
+    ok('?nodes=0 arrives folded', d2b.querySelectorAll('#cm-svg [data-n]').length === 0
+       && d2b.querySelectorAll('#cm-svg .cm-box').length > 0);
     // --- the tour: every authored claim, on a chip of this harness's own ----
     //
     // The narration is the weaker register, so each step's checks are
@@ -542,7 +556,7 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
     const stretchOf = () => {
       const gs = f.contentWindow.__chipmap.groups;
       const bs = f.contentWindow.__chipmap.bundles;
-      const boxes5 = [...f.contentDocument.querySelectorAll('.cm-box')];
+      const boxes5 = [...f.contentDocument.querySelectorAll('#cm-svg .cm-box')];
       const c = gs.map((g, i) => {
         const tfm = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(boxes5[i].getAttribute('transform') || '');
         const dx = tfm ? Number(tfm[1]) : 0, dy = tfm ? Number(tfm[2]) : 0;
@@ -555,7 +569,7 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
     d5.getElementById('cm-scramble').click();
     await sleep(60);
     {
-      const tfs = [...d5.querySelectorAll('.cm-box')].map((b) => b.getAttribute('transform') || '');
+      const tfs = [...d5.querySelectorAll('#cm-svg .cm-box')].map((b) => b.getAttribute('transform') || '');
       const moved5 = tfs.filter((t) => /translate\((?!0 0\))/.test(t)).length;
       const snapped5 = tfs.every((t) => {
         const m2 = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(t);
@@ -579,7 +593,7 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
        sAfter < sBefore * 0.9, `${Math.round(sAfter / 1000)}k vs ${Math.round(sBefore / 1000)}k scrambled`);
     {
       const gs = f.contentWindow.__chipmap.groups;
-      const boxes5 = [...d5.querySelectorAll('.cm-box')];
+      const boxes5 = [...d5.querySelectorAll('#cm-svg .cm-box')];
       const sane = gs.every((g, i) => {
         const tfm = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(boxes5[i].getAttribute('transform') || '');
         const dx = tfm ? Number(tfm[1]) : 0, dy = tfm ? Number(tfm[2]) : 0;
@@ -613,13 +627,31 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
         ok('Fit frames wherever the boxes actually are',
            vx <= bx0 && vy <= by0 && vx + vw >= bx1 && vy + vh >= by1,
            `view ${vx},${vy} ${vw}x${vh} vs bbox ${bx0},${by0}..${bx1},${by1}`);
+        // The settle de-overlaps: intersecting pairs are pushed apart with a
+        // clearance the snap cannot steal back, so touching is legal and
+        // stacking is not.
+        let stacked = null;
+        const rects = gs.map((g, i) => {
+          const tfm = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(boxes5[i].getAttribute('transform') || '');
+          const dx = tfm ? Number(tfm[1]) : 0, dy = tfm ? Number(tfm[2]) : 0;
+          return [g.x + dx, g.y + dy, g.w, g.h];
+        });
+        for (let i = 0; i < rects.length && !stacked; i++) {
+          for (let j = i + 1; j < rects.length; j++) {
+            const [ax, ay, aw, ah] = rects[i], [bx, by, bw, bh] = rects[j];
+            if (ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah) {
+              stacked = `${gs[i].key} ~ ${gs[j].key}`; break;
+            }
+          }
+        }
+        ok('no two boxes settle overlapping', !stacked, stacked || '');
       }
       ok('...and kept like a dragged one', !!localStorage.getItem('v6502.chipmap.layout'));
     }
     d5.getElementById('cm-tidy').click();
     await sleep(30);
     ok('Tidy still gives the derived layout back after the physics',
-       ![...d5.querySelectorAll('.cm-box')].some((b) => b.getAttribute('transform')));
+       ![...d5.querySelectorAll('#cm-svg .cm-box')].some((b) => b.getAttribute('transform')));
 
     // --- the study view: fullscreen with the floating console ----------------
     d5.getElementById('cm-fullscreen').click();

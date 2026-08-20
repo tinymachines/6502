@@ -1023,12 +1023,49 @@ function scramble() {
   ioNote(`scrambled: stretch ${fmtStretch(stretchNow())}`);
 }
 
+/**
+ * Push intersecting boxes apart along the smaller penetration axis, half the
+ * overlap each, relaxed over passes until clean or the budget runs out.
+ * `gap` is the clearance to enforce; the settle uses one bigger than the
+ * snap can steal back (two boxes snap at most half a cell each toward each
+ * other), so a settled arrangement can touch but never overlap.
+ */
+function separate(pts, passes, gap) {
+  const groups = state.groups;
+  const n = groups.length;
+  let any = true;
+  for (let p = 0; p < passes && any; p++) {
+    any = false;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const ax = pts[i][0] - groups[i].w / 2, ay = pts[i][1] - groups[i].h / 2;
+        const bx = pts[j][0] - groups[j].w / 2, by = pts[j][1] - groups[j].h / 2;
+        const ox = Math.min(ax + groups[i].w, bx + groups[j].w) - Math.max(ax, bx) + gap;
+        const oy = Math.min(ay + groups[i].h, by + groups[j].h) - Math.max(ay, by) + gap;
+        if (ox <= 0 || oy <= 0) continue;
+        any = true;
+        if (ox < oy) {
+          const dir = pts[i][0] < pts[j][0] ? -1 : 1;
+          pts[i][0] += (dir * ox) / 2; pts[j][0] -= (dir * ox) / 2;
+        } else {
+          const dir = pts[i][1] < pts[j][1] ? -1 : 1;
+          pts[i][1] += (dir * oy) / 2; pts[j][1] -= (dir * oy) / 2;
+        }
+      }
+    }
+  }
+  return !any;
+}
+
 function stopOptimize(settle) {
-  if (annealTimer !== null) { clearTimeout(annealTimer); annealTimer = null; }
+  const wasRunning = annealTimer !== null;
+  if (wasRunning) { clearTimeout(annealTimer); annealTimer = null; }
   const btn = $('cm-opt');
   if (btn) { btn.textContent = 'Optimize'; btn.classList.remove('on'); }
   if (settle) {
-    setCenters(state.groups.map((g) => centerOf(g)), true);
+    const pts = state.groups.map((g) => centerOf(g));
+    if (wasRunning) separate(pts, 300, CELL + 1);
+    setCenters(pts, true);
     saveOffsets();
   }
 }
@@ -1100,13 +1137,13 @@ function optimize() {
           pts[i][1] += (disp[i][1] / d) * move;
         }
       }
+      separate(pts, 1, 2);
       temp *= 0.985;
     }
     setCenters(pts, false);
     fitContent();
     ioNote(`optimizing ${step} of ${STEPS}: stretch ${fmtStretch(stretchNow())}, was ${fmtStretch(was)}`);
     if (step >= STEPS || temp < 0.5) {
-      annealTimer = null;
       stopOptimize(true);
       ioNote(`settled after ${step} steps: stretch ${fmtStretch(stretchNow())}, was ${fmtStretch(was)}`);
       return;

@@ -3398,3 +3398,21 @@ body.no-scroll #bench { z-index: 70; }
 .sp-panel .cmt-panel { border-top: 0; padding: 0.2rem 0; }
 .sp-panel .cmt-cols { grid-template-columns: minmax(0, 1fr); gap: 0.6rem; }
 .sp-panel .cmt-src { max-height: 9rem; overflow: auto; }
+
+/* The chip map's key: drawn with the drawing's own classes, on the page's
+   own background so the resting states read as they do on the stage. */
+.cm-key { display: grid; gap: 0.35rem; margin: 1rem 0; }
+.cm-key-row {
+  display: flex; align-items: center; gap: 0.8rem;
+  font-size: 0.85rem; color: var(--muted);
+}
+/* The samples' live values, scoped: an inline style attribute would be the
+   exact CSP violation the tracer shipped with once. */
+.cm-key .cm-hi { fill-opacity: 0.35; }
+.cm-key .cm-bd { opacity: 0.5; }
+.cm-key .cm-bd.open, .cm-key .cm-bd.fired { opacity: 0.9; }
+.cm-key-row svg {
+  flex: 0 0 auto; width: 3.4rem; height: 1.1rem; overflow: visible;
+  background: color-mix(in srgb, var(--space) 70%, #000);
+  border: 1px solid var(--line); border-radius: 0.25rem;
+}

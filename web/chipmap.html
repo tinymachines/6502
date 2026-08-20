@@ -224,7 +224,10 @@
         because a container with no bundles at all feels pure repulsion and
         would otherwise accelerate away for as long as the cooling lets it.
         Measured before the gravity existed: one reached thirty-one thousand
-        units out. The note reports the
+        units out. And boxes never settle overlapping: intersecting pairs are
+        pushed apart along the smaller penetration axis, over and over until
+        none remain, with a clearance the snap cannot steal back, so a
+        settled arrangement can touch but never stack. The note reports the
         stretch, the sum over bundles of weight times centre distance,
         before and after;
         that number is the measurement, and whether the result reads better
@@ -243,6 +246,69 @@
         this site keeps, because a switch joins two wires without either
         causing the other. Nothing is thresholded away; a one-edge bundle is
         simply faint.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="colours">
+      <div class="sec-head">
+        <p class="eyebrow">One convention</p>
+        <h2>Cyan is high right now, gold is just changed</h2>
+      </div>
+      <p>
+        Every colour on this page is one of two claims, and they are the same
+        two claims every drawing on this site makes. The key below is drawn
+        with the drawing's own classes, so it cannot drift from what it
+        documents.
+      </p>
+      <div class="cm-key" id="cm-key">
+        <div class="cm-key-row"><svg viewBox="0 0 28 14" aria-hidden="true"><circle class="cm-nd" cx="8" cy="7" r="2.8"/><circle class="cm-nd on" cx="20" cy="7" r="2.8"/></svg>
+          <span>a dot is a node: dim while low, cyan while high</span></div>
+        <div class="cm-key-row"><svg viewBox="0 0 28 14" aria-hidden="true"><rect class="cm-sw" x="4.5" y="3.5" width="7" height="7"/><rect class="cm-sw on" x="16.5" y="3.5" width="7" height="7"/></svg>
+          <span>a square is a node that holds switches: empty while they are open circuit, filled while they conduct</span></div>
+        <div class="cm-key-row"><svg viewBox="0 0 28 14" aria-hidden="true"><circle class="cm-nd on mv" cx="8" cy="7" r="2.8"/><rect class="cm-sw mv" x="16.5" y="3.5" width="7" height="7"/></svg>
+          <span>a gold ring is a node that changed at the last half-cycle</span></div>
+        <div class="cm-key-row"><svg viewBox="0 0 44 14" aria-hidden="true"><g class="cm-box"><rect class="cm-bg" x="2" y="1" width="40" height="12" rx="2"/><rect class="cm-hi" x="2" y="1" width="40" height="12" rx="2"/></g></svg>
+          <span>a box fills with the share of its members high right now</span></div>
+        <div class="cm-key-row"><svg viewBox="0 0 44 14" aria-hidden="true"><g class="cm-box mv"><rect class="cm-bg" x="2" y="1" width="40" height="12" rx="2"/></g></svg>
+          <span>a gold border is a box in which something moved</span></div>
+        <div class="cm-key-row"><svg viewBox="0 0 44 14" aria-hidden="true"><line class="cm-bd" x1="2" y1="7" x2="20" y2="7" stroke-width="2"/><line class="cm-bd cm-bd-sw" x1="24" y1="7" x2="42" y2="7" stroke-width="2"/></svg>
+          <span>a faint line is a bundle of gate edges; a brighter one carries switches</span></div>
+        <div class="cm-key-row"><svg viewBox="0 0 44 14" aria-hidden="true"><line class="cm-bd cm-bd-sw open" x1="2" y1="7" x2="20" y2="7" stroke-width="2"/><line class="cm-bd fired" x1="24" y1="7" x2="42" y2="7" stroke-width="2"/></svg>
+          <span>solid cyan is a bundle held open by a control line; gold is one whose gate output just moved</span></div>
+      </div>
+      <p>
+        Run the chip at the slowest clock and the moving lights read in order:
+        the decode-term boxes light stage by stage, because a term named for a
+        T-state fires in that state, which is the measurement the
+        <a href="decode">decode</a> and <a href="timing">timing</a> pages
+        record. The clock generator is the one box that is always ringed,
+        because all of its nodes move at every half-cycle, which is what a
+        clock generator is.
+      </p>
+    </section>
+
+    <section class="wrap sec bp-prose" id="solved">
+      <div class="sec-head">
+        <p class="eyebrow">Three strengths of claim</p>
+        <h2>How much of each box is solved</h2>
+      </div>
+      <p>
+        Membership is solved outright: every box is a measured closure or cone
+        from the switch network, and every node is in exactly one. The
+        circuitry inside is solved at the gate level: the static gates are
+        recognised from the NMOS structure itself, and the
+        <a href="schematic">workbench</a> will draw any of them. The meaning
+        is solved where the die's names and the derivations reach: what each
+        register line loads, which wire SYNC really is, why the NMI path
+        touches exactly the address bit that tells its vector apart.
+      </p>
+      <p>
+        Two honest gaps remain, and the boxes carry them rather than hiding
+        them: the pipeUNK latches, named by the original reverse engineers for
+        precisely what they could not yet name, and the unnamed static gates,
+        which are identified as gates and attributed to the block they drive
+        but not individually storied. That is the map's remaining dark matter,
+        and it is drawn in the same grid as everything else.
       </p>
     </section>
 
