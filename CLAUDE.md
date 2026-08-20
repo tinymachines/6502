@@ -47,6 +47,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. Full Wayback sweep complete: 24,429 URLs, 3.01 GB. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
+| Service | 6502 as a service: the `halfwave` stateless engine binary plus a FastAPI reference implementation in `service/`. Proven bit-exact across serialize/resume hops. Launches under a separate site property; only the engine lives here. |
 
 Known gaps, all deliberate:
 
@@ -119,9 +120,9 @@ running under systemd's environment, not yours** — check the version, do not
 assume the binary.
 
 ```bash
-cargo test --workspace              # 87 tests: netlist, functional, golden,
-                                    # rewind, blueprint, pla, decode, blocks,
-                                    # interrupts
+cargo test --workspace              # 91 tests: netlist, functional, golden,
+                                    # rewind, state, blueprint, pla, decode,
+                                    # blocks, interrupts
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p halfphi --test chips         # the 6502, the 6800 and the Z80,
                                            # through identical calls. SKIPS without
@@ -134,6 +135,12 @@ cargo run --release -p v6502-sim --example trace   # per-half-cycle state dump
 cargo run --release -p v6502-sim --example activity # how much of the chip moves
                                     # per half-cycle. Run this before designing
                                     # anything that wants to draw "what changed".
+
+# 6502 as a service: the stateless engine, and its HTTP reference implementation
+cargo build --release -p v6502-sim --bin halfwave   # the warm engine process
+cargo test -p v6502-sim --test state                # snapshot/restore, bit-exact
+python3 -m pytest service/test_service.py -q        # the service, end to end
+uvicorn app:app --app-dir service --port 6502       # run it
 
 # Regenerate the oracle (5 MB, gitignored; required by the golden test)
 node tools/golden-trace/gen.js --steps 3000
@@ -733,6 +740,72 @@ transistors, and each toggle queues more work. ~900 node recalcs per half-cycle,
 Optimisation ideas, none applied: the obvious one — skipping nodes already covered
 by a group processed this round — is **not** safe, because applying a group
 toggles transistors and can change connectivity before the later node is reached.
+
+## 6502 as a service (`halfwave`, `service/`)
+
+The chip over HTTP, one half-cycle at a time, for a learning site that will
+launch under its own property: **only the engine and a reference service live
+in this repository**. `service/README.md` is the handbook for whoever builds
+the site.
+
+**The server is stateless, and the state model is the whole design.** A
+machine's entire mutable state is `ChipState`'s four bitsets (value, pullup,
+pulldown, trans_on) plus the half-cycle counter, the fetch bookkeeping and
+memory: the same fact the keyframed rewind already relied on, turned into a
+wire format. Every request carries all of it in; every response carries all
+of it back out. `crates/v6502-sim/src/state.rs` owns the codec (lowercase
+hex, bit i of a set in byte i/8 LSB-first, the halfshot convention, node
+numbering visual6502's own; node sets 216 bytes, the transistor set 439) and
+it **refuses** a wrong-length blob or a set bit in the padding, because a
+state that decodes to the wrong chip is worse than one that is rejected.
+
+- **`tests/state.rs` is the licence for the whole idea**: restore into a
+  FRESH machine (never reset, standing in for another process on another
+  day) and run 600 half-cycles in lockstep against the original, comparing
+  `state_string` — every node, every half-cycle. And three serialize/resume
+  hops of 41 land exactly where one straight run of 123 does. The snapshot
+  in that test goes **through the wire format**, not through `Clone`, so
+  what is proven is what travels.
+- **`halfwave` parses no JSON, and that is the workspace's zero-dependency
+  rule holding.** Requests are a line protocol (`BOOT`/`STEP n`/`RUN max` +
+  `STATE`/`FILL`/`PAGE`/`WATCH`/`TRACE`, ending `GO`) read with
+  `split_whitespace` and `from_str_radix`, which have nothing in them to be
+  wrong about; responses are one hand-written JSON line, the emission style
+  every export binary already uses. The asymmetry is the point: parse
+  simple, emit rich. A malformed line errors the whole block but still
+  consumes to `GO`, so one bad request cannot desynchronise the stream, and
+  never kills the process.
+- **Warm means the netlist, not the session.** The binary parses the netlist
+  once and keeps one constructed machine; each request overwrites all four
+  bitsets and all 64 KiB. The Python `Pool` is N such processes behind
+  per-worker locks, round-robin, respawned on death. `HALFWAVE_BIN`,
+  `HALFWAVE_POOL`.
+- **There is one assembler and the service does not grow a second one.**
+  `/v1/assemble` shells to node running `service/asm-bridge.mjs`, which
+  imports `web/asm.js` — the assembler that inverts the disassembler's
+  table. A Python port would be the copy that drifts. An `AsmError` comes
+  back as a 422 with the line number, never a crash.
+- **Memory is sparse and canonical**: a fill byte plus only the 256-byte
+  pages that differ from it, both directions. A supplied page that turns out
+  to be all fill is dropped on the way back, because "fill everywhere except
+  the listed pages" is the entire meaning. The engine expands to a flat
+  64 KiB at the boundary; `FlatMemory` journalling is off (the service never
+  rewinds; the client re-POSTs an old machine instead, which is what
+  statelessness is for).
+- **A `Rom` is source, not bytes.** Boot lays the assembled program over
+  memory at its org and aims the reset vector there unless told otherwise,
+  then `power_cycle()`s through the real reset sequence; the machine comes
+  back standing at its first opcode fetch. The test suite pins the
+  assembled bytes against a hand-assembled copy written out longhand — the
+  same duplicated-on-purpose arrangement `_asm-test.html` uses, because an
+  expectation derived from the assembler under test proves nothing.
+- **Caps are stated, not silent**: 200,000 half-cycles per request, 10,000
+  when tracing, both in `/v1/meta`. `until="instruction"` on a JAM opcode
+  returns `completed: false` at the cap — the honest answer, since twelve
+  opcodes never reach another fetch.
+- **`Cpu::set_last_fetch` exists for restore and nothing else.** The fetch
+  is bookkeeping for disassembly, not silicon, so it travels beside the
+  bitsets rather than being lost on every hop.
 
 ## The reference (`extern/visual6502/`)
 

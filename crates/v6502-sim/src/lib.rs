@@ -38,6 +38,7 @@
 pub mod bus;
 pub mod cpu;
 pub mod history;
+pub mod state;
 pub mod timing;
 
 pub use v6502_netlist::{mos6502, Netlist, NodeId, TransId};

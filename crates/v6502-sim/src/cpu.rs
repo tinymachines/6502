@@ -198,6 +198,13 @@ impl<B: Bus> Cpu<B> {
         self.last_fetch
     }
 
+    /// Overwrite the fetch bookkeeping, for state restoration. The fetch is
+    /// not silicon: it is the latched (address, opcode) pair a disassembler
+    /// wants, so restoring a snapshot has to bring it along.
+    pub fn set_last_fetch(&mut self, f: Option<Fetch>) {
+        self.last_fetch = f;
+    }
+
     pub fn engine(&self) -> &Engine {
         &self.engine
     }

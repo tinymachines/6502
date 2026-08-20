@@ -1,0 +1,457 @@
+//! 6502 as a service: the engine end of it.
+//!
+//!     cargo run --release -p v6502-sim --bin halfwave
+//!
+//! A warm, resident, STATELESS chip. The netlist is parsed once at startup and
+//! one machine is kept constructed; every request carries the entire state in
+//! (four hex bitsets, a half-cycle count, the memory image) and the response
+//! carries the entire state back out. Nothing survives between requests, which
+//! is what lets any number of these sit behind a load balancer and lets a
+//! session live in the client's hands. `tests/state.rs` proves the round trip
+//! bit-exact over every node at every half-cycle.
+//!
+//! The wire protocol is deliberately not JSON on the way IN: this workspace
+//! has no dependencies, and a hand-written JSON parser would be a second thing
+//! that can be wrong about strings. Requests are lines -- a verb, hex blobs,
+//! whitespace -- parsed with `split_whitespace` and `from_str_radix`, which
+//! have nothing in them to get wrong. Responses are one hand-written JSON line
+//! each, the same emission style as every export binary.
+//!
+//! Request: one block of lines, terminated by `GO`.
+//!
+//!     META                        ask who I am (counts, limits, encoding)
+//!     BOOT                        power-cycle into the supplied memory
+//!     VEC <hex4>                  (with BOOT) write the reset vector first
+//!     STEP <n>                    advance n half-cycles from STATE
+//!     RUN <max>                   advance to the next opcode fetch, capped
+//!     STATE <value> <pullup> <pulldown> <trans_on> <half_cycle> <fetch|->
+//!     FILL <hex2>                 memory background byte (default 00)
+//!     PAGE <hex2> <512 hex>       one 256-byte page over the fill
+//!     WATCH <name> [name...]     node names to read out (repeatable)
+//!     TRACE                       record an observation per half-cycle
+//!     GO
+//!
+//! Exactly one verb (META | BOOT | STEP | RUN) per block. The response is one
+//! JSON object: `{"ok":true, "state":..., "memory":..., "observe":...}` or
+//! `{"ok":false, "error":"..."}`. A malformed block gets an error, never a
+//! guess, and never kills the process.
+
+use std::fmt::Write as _;
+use std::io::{BufRead, Write};
+use std::sync::Arc;
+
+use v6502_netlist::{mos6502, NodeId};
+use v6502_sim::bus::FlatMemory;
+use v6502_sim::cpu::{Cpu, Fetch, ReadWrite};
+use v6502_sim::state::{restore, snapshot, MachineState};
+use v6502_sim::timing::{Hidden, Phase, StoreData};
+
+/// Hard ceiling on half-cycles per request, so a request cannot wedge the
+/// worker. Stated in META so clients can shard long runs.
+const MAX_STEP: u64 = 200_000;
+/// Ceiling when TRACE is on: each traced half-cycle is a response line entry.
+const MAX_TRACED: u64 = 10_000;
+
+struct Request {
+    verb: Option<String>,
+    arg: Option<u64>,
+    vec: Option<u16>,
+    state: Option<[String; 6]>,
+    fill: u8,
+    pages: Vec<(u8, Vec<u8>)>,
+    watch: Vec<String>,
+    trace: bool,
+}
+
+impl Request {
+    fn empty() -> Self {
+        Request {
+            verb: None,
+            arg: None,
+            vec: None,
+            state: None,
+            fill: 0,
+            pages: Vec::new(),
+            watch: Vec::new(),
+            trace: false,
+        }
+    }
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if (c as u32) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
+    if !s.len().is_multiple_of(2) {
+        return Err(format!("odd hex length {}", s.len()));
+    }
+    (0..s.len() / 2)
+        .map(|i| {
+            u8::from_str_radix(&s[i * 2..i * 2 + 2], 16)
+                .map_err(|_| format!("bad hex byte at {}", i * 2))
+        })
+        .collect()
+}
+
+/// One observation as flat JSON: the architectural and microarchitectural
+/// state a learner reads off the running chip, plus any watched nodes.
+fn obs_json(cpu: &Cpu<FlatMemory>, watch: &[(String, NodeId)]) -> String {
+    let o = cpu.observe();
+    let mut s = String::with_capacity(320);
+    let _ = write!(
+        s,
+        "{{\"half_cycle\":{},\"cycle\":{},\"clk0\":{},\"phase\":\"{}\",\
+         \"addr\":{},\"data\":{},\"rw\":\"{}\",\"sync\":{},\
+         \"pc\":{},\"a\":{},\"x\":{},\"y\":{},\"s\":{},\"p\":{},\"ir\":{},\"flags\":\"{}\",\
+         \"tstates\":\"{}\",\"hidden\":\"{}\",\"store_data\":\"{}\"",
+        o.half_cycle,
+        o.cycle,
+        o.clk0,
+        match o.phase {
+            Phase::Phi1 => "phi1",
+            Phase::Phi2 => "phi2",
+        },
+        o.bus.addr,
+        o.bus.data,
+        match o.bus.rw {
+            ReadWrite::Read => "read",
+            ReadWrite::Write => "write",
+        },
+        o.bus.sync,
+        o.regs.pc,
+        o.regs.a,
+        o.regs.x,
+        o.regs.y,
+        o.regs.s,
+        o.regs.p,
+        o.regs.ir,
+        o.regs.flags_string(),
+        o.timing.active(),
+        match o.timing.hidden {
+            Hidden::T1 => "T1",
+            Hidden::Vec0 => "VEC0",
+            Hidden::T6 => "T6",
+            Hidden::None => "",
+        },
+        match o.timing.store_data {
+            StoreData::Sd1 => "SD1",
+            StoreData::Sd2 => "SD2",
+            StoreData::None => "",
+        },
+    );
+    match cpu.last_fetch() {
+        Some(f) => {
+            let _ = write!(s, ",\"fetch\":{{\"addr\":{},\"opcode\":{}}}", f.addr, f.opcode);
+        }
+        None => s.push_str(",\"fetch\":null"),
+    }
+    if !watch.is_empty() {
+        s.push_str(",\"watch\":{");
+        for (i, (name, id)) in watch.iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            let _ = write!(s, "\"{}\":{}", json_escape(name), cpu.engine().is_high(*id));
+        }
+        s.push('}');
+    }
+    s.push('}');
+    s
+}
+
+fn state_json(cpu: &Cpu<FlatMemory>) -> String {
+    let st = snapshot(cpu);
+    let [v, pu, pd, t] = st.chip_hex();
+    let fetch = match st.last_fetch {
+        Some(f) => format!("{{\"addr\":{},\"opcode\":{}}}", f.addr, f.opcode),
+        None => "null".into(),
+    };
+    format!(
+        "{{\"version\":1,\"half_cycle\":{},\"last_fetch\":{},\
+         \"value\":\"{}\",\"pullup\":\"{}\",\"pulldown\":\"{}\",\"trans_on\":\"{}\"}}",
+        st.half_cycle, fetch, v, pu, pd, t
+    )
+}
+
+/// Memory back out as fill plus the pages that differ from it. Canonical:
+/// a supplied page that turned out to be all-fill is dropped, because
+/// "fill everywhere except the listed pages" is the whole meaning.
+fn memory_json(cpu: &Cpu<FlatMemory>, fill: u8) -> String {
+    let mem = cpu.bus.as_slice();
+    let mut s = format!("{{\"fill\":\"{fill:02x}\",\"pages\":{{");
+    let mut first = true;
+    for page in 0..=255u16 {
+        let chunk = &mem[(page as usize) * 256..(page as usize + 1) * 256];
+        if chunk.iter().all(|&b| b == fill) {
+            continue;
+        }
+        if !first {
+            s.push(',');
+        }
+        first = false;
+        let _ = write!(s, "\"{page:02x}\":\"");
+        for &b in chunk {
+            let _ = write!(s, "{b:02x}");
+        }
+        s.push('"');
+    }
+    s.push_str("}}");
+    s
+}
+
+fn err(msg: &str) -> String {
+    format!("{{\"ok\":false,\"error\":\"{}\"}}", json_escape(msg))
+}
+
+fn handle(cpu: &mut Cpu<FlatMemory>, req: &Request) -> String {
+    let verb = match &req.verb {
+        Some(v) => v.as_str(),
+        None => return err("no verb (META, BOOT, STEP or RUN) before GO"),
+    };
+
+    if verb == "META" {
+        return format!(
+            "{{\"ok\":true,\"meta\":{{\"chip\":\"mos6502\",\"nodes\":1725,\"transistors\":3510,\
+             \"max_step\":{MAX_STEP},\"max_traced\":{MAX_TRACED},\
+             \"encoding\":\"lowercase hex; bit i of a set is byte i/8, LSB first; \
+node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 bytes\"}}}}"
+        );
+    }
+
+    // Resolve watches before touching the chip: an unknown name is the
+    // caller's typo and must be an error, not a silently absent key.
+    let mut watch: Vec<(String, NodeId)> = Vec::new();
+    for name in &req.watch {
+        match cpu.engine().netlist().node(name) {
+            Some(id) => watch.push((name.clone(), id)),
+            None => return err(&format!("unknown node name {name:?}")),
+        }
+    }
+
+    // Memory: fill everywhere, then the pages.
+    let mut image = vec![req.fill; 65536];
+    for (page, bytes) in &req.pages {
+        image[(*page as usize) * 256..(*page as usize + 1) * 256].copy_from_slice(bytes);
+    }
+
+    match verb {
+        "BOOT" => {
+            cpu.bus.set_journalling(false);
+            cpu.bus.load(0, &image);
+            if let Some(v) = req.vec {
+                cpu.bus.set_reset_vector(v);
+            }
+            cpu.power_cycle();
+        }
+        "STEP" | "RUN" => {
+            let st = match &req.state {
+                Some(s) => s,
+                None => return err("STEP/RUN needs a STATE line"),
+            };
+            let n = match req.arg {
+                Some(n) if n <= MAX_STEP => n,
+                Some(n) => return err(&format!("{n} half-cycles exceeds max_step {MAX_STEP}")),
+                None => return err("STEP/RUN needs a count"),
+            };
+            if req.trace && n > MAX_TRACED {
+                return err(&format!("{n} traced half-cycles exceeds max_traced {MAX_TRACED}"));
+            }
+            let half_cycle: u64 = match st[4].parse() {
+                Ok(h) => h,
+                Err(_) => return err(&format!("bad half_cycle {:?}", st[4])),
+            };
+            let fetch = if st[5] == "-" {
+                None
+            } else if st[5].len() == 6 {
+                let addr = u16::from_str_radix(&st[5][..4], 16);
+                let op = u8::from_str_radix(&st[5][4..], 16);
+                match (addr, op) {
+                    (Ok(addr), Ok(opcode)) => Some(Fetch { addr, opcode }),
+                    _ => return err(&format!("bad fetch {:?}", st[5])),
+                }
+            } else {
+                return err(&format!("bad fetch {:?} (want - or 6 hex chars)", st[5]));
+            };
+            let ms = match MachineState::from_hex(
+                1725, 3510, &st[0], &st[1], &st[2], &st[3], half_cycle, fetch,
+            ) {
+                Ok(ms) => ms,
+                Err(e) => return err(&e),
+            };
+            cpu.bus.set_journalling(false);
+            cpu.bus.load(0, &image);
+            restore(cpu, &ms);
+
+            let mut trace = String::new();
+            if req.trace {
+                trace.push_str(",\"trace\":[");
+            }
+            let mut stepped = 0u64;
+            let mut completed = true;
+            for i in 0..n {
+                cpu.half_step();
+                stepped += 1;
+                if req.trace {
+                    if i > 0 {
+                        trace.push(',');
+                    }
+                    trace.push_str(&obs_json(cpu, &watch));
+                }
+                // RUN stops at the next opcode fetch: sync high with clk0 low,
+                // the same boundary `step_instruction` uses.
+                if verb == "RUN" && cpu.sync() && !cpu.clk0() {
+                    break;
+                }
+            }
+            if verb == "RUN" && !(cpu.sync() && !cpu.clk0()) {
+                completed = false; // hit the cap first: a JAM, or the cap is low
+            }
+            if req.trace {
+                trace.push(']');
+            }
+            return format!(
+                "{{\"ok\":true,\"stepped\":{},\"completed\":{},\"state\":{},\"memory\":{},\"observe\":{}{}}}",
+                stepped,
+                completed,
+                state_json(cpu),
+                memory_json(cpu, req.fill),
+                obs_json(cpu, &watch),
+                trace
+            );
+        }
+        v => return err(&format!("unknown verb {v:?}")),
+    }
+
+    // BOOT falls through to here.
+    format!(
+        "{{\"ok\":true,\"stepped\":0,\"completed\":true,\"state\":{},\"memory\":{},\"observe\":{}}}",
+        state_json(cpu),
+        memory_json(cpu, req.fill),
+        obs_json(cpu, &watch)
+    )
+}
+
+fn main() {
+    let netlist = Arc::new(mos6502());
+    let mut cpu = Cpu::new(netlist, FlatMemory::new()).expect("6502 signals resolve");
+    cpu.bus.set_journalling(false);
+
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    let mut req = Request::empty();
+    let mut bad: Option<String> = None;
+
+    for line in stdin.lock().lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => break,
+        };
+        let mut parts = line.split_whitespace();
+        let Some(word) = parts.next() else { continue };
+        let r = &mut req;
+        let result: Result<bool, String> = (|| match word {
+            "GO" => Ok(true),
+            "META" | "BOOT" => {
+                if r.verb.is_some() {
+                    return Err("more than one verb in a block".into());
+                }
+                r.verb = Some(word.into());
+                Ok(false)
+            }
+            "STEP" | "RUN" => {
+                if r.verb.is_some() {
+                    return Err("more than one verb in a block".into());
+                }
+                r.verb = Some(word.into());
+                r.arg = Some(
+                    parts
+                        .next()
+                        .ok_or("STEP/RUN needs a count")?
+                        .parse()
+                        .map_err(|_| "bad count")?,
+                );
+                Ok(false)
+            }
+            "VEC" => {
+                let v = parts.next().ok_or("VEC needs a hex address")?;
+                r.vec = Some(u16::from_str_radix(v, 16).map_err(|_| format!("bad VEC {v:?}"))?);
+                Ok(false)
+            }
+            "STATE" => {
+                let f: Vec<&str> = parts.collect();
+                if f.len() != 6 {
+                    return Err(format!("STATE wants 6 fields, got {}", f.len()));
+                }
+                r.state = Some([
+                    f[0].into(),
+                    f[1].into(),
+                    f[2].into(),
+                    f[3].into(),
+                    f[4].into(),
+                    f[5].into(),
+                ]);
+                Ok(false)
+            }
+            "FILL" => {
+                let v = parts.next().ok_or("FILL needs a hex byte")?;
+                r.fill = u8::from_str_radix(v, 16).map_err(|_| format!("bad FILL {v:?}"))?;
+                Ok(false)
+            }
+            "PAGE" => {
+                let p = parts.next().ok_or("PAGE needs a page number")?;
+                let page = u8::from_str_radix(p, 16).map_err(|_| format!("bad page {p:?}"))?;
+                let hexs = parts.next().ok_or("PAGE needs 512 hex chars")?;
+                let bytes = hex_bytes(hexs)?;
+                if bytes.len() != 256 {
+                    return Err(format!("page {p} is {} bytes, want 256", bytes.len()));
+                }
+                r.pages.push((page, bytes));
+                Ok(false)
+            }
+            "WATCH" => {
+                for name in parts {
+                    r.watch.push(name.into());
+                }
+                Ok(false)
+            }
+            "TRACE" => {
+                r.trace = true;
+                Ok(false)
+            }
+            w => Err(format!("unknown line {w:?}")),
+        })();
+
+        match result {
+            Ok(false) => {}
+            Ok(true) => {
+                let response = match bad.take() {
+                    Some(e) => err(&e),
+                    None => handle(&mut cpu, &req),
+                };
+                let _ = writeln!(out, "{response}");
+                let _ = out.flush();
+                req = Request::empty();
+            }
+            Err(e) => {
+                // Remember the first fault; still consume to GO so one bad
+                // line cannot desynchronise the stream.
+                if bad.is_none() {
+                    bad = Some(e);
+                }
+            }
+        }
+    }
+}
