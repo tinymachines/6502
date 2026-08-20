@@ -47,6 +47,10 @@ const $ = (id) => document.getElementById(id);
 // Layout constants: presentation, not measurement. The columns and the order
 // within them are the measured part.
 const COLW = 190, BOXW = 148, VGAP = 12, PAD = 40;
+// The node grid inside an opened box: a fixed number of cells across, sized
+// so the widest group still fits the box. Presentation; the ORDER within the
+// grid is the stated rule in orderMembers().
+const GRID_COLS = 10, CELL = 13, GRID_PAD = 9, LABEL_H = 26;
 
 const state = {
   sch: null, blocks: null, timing: null,
@@ -61,6 +65,12 @@ const state = {
   sel: null,              // selected group key, or null
   tour: null,             // {h0, lastStep} while the guided tour is running
   reader: null,           // readerOf(machine), built once
+  nodesView: true,        // boxes opened into grids of their member nodes
+  controls: null,         // Set of nodes that hold at least one switch
+  pos: null,              // die centroids, kept for the in-grid ordering
+  nodeEls: null,          // node id -> its glyph, in the nodes view
+  rung: new Set(),        // the glyphs ringed at the last paint
+  pickedNode: null,       // a clicked glyph, shown on the card
 };
 
 // ---------------------------------------------------------------------------
@@ -99,12 +109,42 @@ const median = (xs) => {
   return s.length ? s[Math.floor(s.length / 2)] : Infinity;
 };
 
+/**
+ * The order of a group's members on its grid, stated: a name carrying a bit
+ * index sorts by stem then bit, so a byte reads left to right from bit 0; any
+ * other name sorts after them alphabetically; the unnamed come last in die
+ * order, top of the die first. Nothing is placed by hand.
+ */
+function orderMembers(g) {
+  const key = (n) => {
+    const nm = state.sch.names[n];
+    if (nm) {
+      const m = /^(.*?)(\d+)$/.exec(nm);
+      if (m) return [0, m[1], Number(m[2]), 0];
+      return [1, nm, 0, 0];
+    }
+    const p = state.pos.get(n);
+    return [2, '', p ? p.y : 1e9, p ? p.x : 1e9];
+  };
+  return g.nodes.slice().sort((a, b) => {
+    const ka = key(a), kb = key(b);
+    for (let i = 0; i < 4; i++) {
+      if (ka[i] < kb[i]) return -1;
+      if (ka[i] > kb[i]) return 1;
+    }
+    return a - b;
+  });
+}
+
 function buildLayout(pos) {
   const dist = pinDistance();
   for (const g of state.groups) {
     g.col = median(g.nodes.map((n) => dist.get(n)).filter((d) => d !== undefined));
     g.medY = median(g.nodes.map((n) => pos.get(n)?.y).filter((y) => y !== undefined));
-    g.h = Math.max(28, Math.round(16 + 3.4 * Math.sqrt(g.nodes.length)));
+    g.order = orderMembers(g);
+    g.h = state.nodesView
+      ? LABEL_H + Math.ceil(g.nodes.length / GRID_COLS) * CELL + GRID_PAD
+      : Math.max(28, Math.round(16 + 3.4 * Math.sqrt(g.nodes.length)));
     g.w = BOXW;
   }
   // Compress the distances to consecutive columns; a group none of whose
@@ -193,6 +233,17 @@ function buildBundles() {
 
 const trim = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+/** Lay out for the current view, draw, and re-home the camera. */
+function rebuild() {
+  const dims = buildLayout(state.pos);
+  state.nodeEls = state.nodesView ? new Array(state.sch.names.length).fill(null) : null;
+  state.rung = new Set();
+  state.home = [0, 0, dims.W, dims.H];
+  drawAll();
+  setView(state.home.slice());
+  return dims;
+}
+
 function drawAll() {
   const svg = $('cm-svg');
   svg.replaceChildren();
@@ -219,6 +270,21 @@ function drawAll() {
       .textContent = trim(g.label, 22);
     el('title', {}, box).textContent =
       `${g.label} · ${KIND_LABEL[g.kind]} · ${g.nodes.length} node${g.nodes.length === 1 ? '' : 's'}`;
+    if (state.nodesView) {
+      g.order.forEach((n, i) => {
+        const cx = g.x + GRID_PAD + (i % GRID_COLS) * CELL + CELL / 2;
+        const cy = g.y + LABEL_H + Math.floor(i / GRID_COLS) * CELL + CELL / 2 - 3;
+        // A square is a node that holds switches: filled while they conduct,
+        // empty while they are open circuit. Everything else is a dot.
+        const glyph = state.controls.has(n)
+          ? el('rect', { x: cx - 3.5, y: cy - 3.5, width: 7, height: 7, class: 'cm-sw', 'data-n': n }, box)
+          : el('circle', { cx, cy, r: 2.8, class: 'cm-nd', 'data-n': n }, box);
+        el('title', {}, glyph).textContent =
+          `${state.sch.names[n] || `unnamed ${n}`}`
+          + (state.controls.has(n) ? ` · holds ${state.sch.switches.filter(([c]) => c === n).length} switch(es)` : '');
+        state.nodeEls[n] = glyph;
+      });
+    }
   }
 }
 
@@ -237,17 +303,30 @@ function paint() {
   const prev = state.prev;
   const svg = $('cm-svg');
   const boxes = svg.querySelectorAll('.cm-box');
+  const els = state.nodeEls;
+  const rungNow = new Set();
   state.groups.forEach((g, gi) => {
     let hi = 0, mv = 0;
     for (const n of g.nodes) {
-      if (levels[n] > 0) hi++;
-      if (prev && levels[n] !== prev[n]) mv++;
+      const on = levels[n] > 0;
+      const changed = prev ? levels[n] !== prev[n] : false;
+      if (on) hi++;
+      if (changed) mv++;
+      if (els) {
+        const e = els[n];
+        if (e && (!prev || changed)) e.classList.toggle('on', on);
+        if (e && changed) { e.classList.add('mv'); rungNow.add(e); }
+      }
     }
     g.hiNow = hi; g.mvNow = mv;
     const box = boxes[gi];
     box.style.setProperty('--hi', (0.5 * hi / g.nodes.length).toFixed(3));
     box.classList.toggle('mv', mv > 0);
   });
+  if (els) {
+    for (const e of state.rung) if (!rungNow.has(e)) e.classList.remove('mv');
+    state.rung = rungNow;
+  }
   for (const line of svg.querySelectorAll('.cm-bd')) {
     const bd = state.bundles[Number(line.dataset.b)];
     let open = false, fired = false;
@@ -326,6 +405,10 @@ function byteOf(g, levels) {
 }
 
 function select(key) {
+  if (state.pickedNode != null) {
+    const g = key ? state.byKey.get(key) : null;
+    if (!g || !g.nodes.includes(state.pickedNode)) state.pickedNode = null;
+  }
   state.sel = key;
   const svg = $('cm-svg');
   const gi = key ? state.groups.findIndex((g) => g.key === key) : -1;
@@ -367,6 +450,14 @@ function paintCard() {
   live.className = 'mono muted';
   live.id = 'cm-card-live';
   card.append(live);
+  if (state.pickedNode != null && g.nodes.includes(state.pickedNode)) {
+    const n = state.pickedNode;
+    const nd = document.createElement('p');
+    nd.className = 'mono muted';
+    nd.id = 'cm-card-node';
+    nd.dataset.n = n;
+    card.append(nd);
+  }
   const parts = state.partners[gi].slice(0, 10);
   if (parts.length) {
     const row = document.createElement('p');
@@ -398,7 +489,7 @@ function paintCard() {
   paintCardLive();
 }
 
-/** The card's live line, rewritten on every paint rather than rebuilt. */
+/** The card's live lines, rewritten on every paint rather than rebuilt. */
 function paintCardLive() {
   const live = document.getElementById('cm-card-live');
   if (!live || !state.sel || !state.prev) return;
@@ -407,6 +498,17 @@ function paintCardLive() {
   const text = `${g.hiNow ?? 0} high now · ${g.mvNow ?? 0} moved at the last half-cycle`
     + (byte ? ` · reads ${byte}` : '');
   if (live.textContent !== text) live.textContent = text;
+  const nd = document.getElementById('cm-card-node');
+  if (nd) {
+    const n = Number(nd.dataset.n);
+    const held = state.controls.has(n)
+      ? (state.prev[n] > 0 ? 'its switches conduct' : 'its switches are open circuit')
+      : (state.prev[n] > 0 ? 'high' : 'low');
+    const sw = state.controls.has(n) ? state.sch.switches.filter(([c]) => c === n).length : 0;
+    const t = `node ${state.sch.names[n] || `unnamed ${n}`}: ${held}`
+      + (sw ? ` (${sw} switch${sw === 1 ? '' : 'es'})` : '');
+    if (nd.textContent !== t) nd.textContent = t;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -633,6 +735,8 @@ function setupCamera() {
   window.addEventListener('pointercancel', release);
   svg.addEventListener('click', (e) => {
     if (moved > 8) return;
+    const n = e.target.dataset && e.target.dataset.n;
+    state.pickedNode = n !== undefined && n !== '' && n != null ? Number(n) : null;
     const t = e.target.closest('.cm-box');
     select(t ? t.dataset.key : null);
   });
@@ -659,23 +763,35 @@ async function boot() {
     const r = chipGroups(sch, blocks, timing);
     state.groups = r.groups;
     state.byKey = new Map(r.groups.map((g) => [g.key, g]));
+    state.controls = new Set(sch.switches.map(([c]) => c));
+    state.controls.delete(sch.vss); state.controls.delete(sch.vcc);
     const { pos } = centroids(buf);
-    const dims = buildLayout(pos);
+    state.pos = pos;
+    state.nodesView = new URLSearchParams(location.search).get('nodes') !== '0';
     const edge = buildBundles();
-    state.home = [0, 0, dims.W, dims.H];
-    drawAll();
-    setView(state.home.slice());
+    rebuild();
     setupCamera();
+    $('cm-nodes').setAttribute('aria-pressed', String(state.nodesView));
+    $('cm-nodes').addEventListener('click', () => {
+      state.nodesView = !state.nodesView;
+      $('cm-nodes').setAttribute('aria-pressed', String(state.nodesView));
+      rebuild();
+      paint();
+      select(state.sel);
+    });
 
     const switches = state.bundles.reduce((a, b) => a + b.switches, 0);
     const gates = state.bundles.reduce((a, b) => a + b.gates, 0);
+    const cols = new Set(state.groups.map((g) => g.colIx)).size;
     $('cm-caption').textContent =
       `${r.groups.length} groups over ${r.stats.kinds} kinds, covering all `
       + `${r.stats.universe} nodes exactly once. ${state.bundles.length} bundles `
       + `carrying ${gates} gate edges and ${switches} switches between groups; `
       + `${edge.internalGates} gate edges and ${edge.internalSwitches} switches `
-      + `stay inside one. ${dims.columns} columns of pin distance`
-      + (dims.unreachedCols ? ', the last for what the pins never reach.' : '.');
+      + `stay inside one. ${cols} columns of pin distance, the last for what `
+      + `the pins never reach. In the node view a square holds switches, `
+      + `filled while they conduct; a byte reads left to right from bit 0, `
+      + `the unnamed follow in die order.`;
 
     // .statbar is a flex row written for plain strings; b/span pairs run
     // together there, which is already documented against it.

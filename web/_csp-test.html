@@ -50,7 +50,7 @@ const f = document.getElementById('f');
 const ALL = ['index.html', 'programs', 'primer', 'trace', 'tracer', 'tracer?step=40&block=alu&collapse=blocks,stage:T0&bus=sb&full=1',
              'halfshot', 'exploded', 'block', 'block?b=alu',
              'schematic', 'schematic?signal=dpc3_SBX&block=alu&solo=1&ports=feedsIn:1', 'blueprint', 'blockdiagram',
-             'diegraph', 'chipmap', 'chipmap?sel=alu:bit3', 'chipmap?tour=adc&tstep=5', 'pinout', 'decode', 'timing', 'talk', 'designer'];
+             'diegraph', 'chipmap', 'chipmap?sel=alu:bit3', 'chipmap?tour=adc&tstep=5', 'chipmap?nodes=0', 'pinout', 'decode', 'timing', 'talk', 'designer'];
 const q = new URLSearchParams(location.search);
 const PAGES = q.get('pages') ? q.get('pages').split(';') : ALL;
 

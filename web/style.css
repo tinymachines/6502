@@ -3374,3 +3374,12 @@ body.no-scroll #bench { z-index: 70; }
 .cmt-check.broke { color: var(--hot); }
 .cmt-check.broke .cmt-mark { color: var(--hot); font-weight: 700; }
 .cmt-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* The chip map's opened boxes: member nodes snapped to a grid. A square holds
+   switches (filled while they conduct); a dot is any other node, lit while
+   high, ringed while it just changed. */
+.cm-nd { fill: color-mix(in srgb, var(--muted) 40%, transparent); stroke: none; }
+.cm-nd.on { fill: var(--accent); }
+.cm-sw { fill: none; stroke: color-mix(in srgb, var(--foreground) 55%, transparent); stroke-width: 1.2; }
+.cm-sw.on { fill: var(--accent); stroke: var(--accent); }
+.cm-nd.mv, .cm-sw.mv { stroke: var(--gold); stroke-width: 1.6; }

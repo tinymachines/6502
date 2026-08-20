@@ -240,6 +240,78 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
     }
     ok('a box’s fill is the share of its members high on this harness’s chip', hiOk, hiWhy);
 
+    // --- the opened boxes: the node grids ------------------------------------
+    //
+    // The glyph rule is re-derived: a square is exactly a node that controls
+    // at least one switch, and everything drawn is exactly the universe. The
+    // grid is asserted as a grid (snapped positions), the stated order is
+    // checked on a byte group (bit 0 leftmost), and the live fill of a sample
+    // square and dot is compared against this harness's chip, which is in
+    // step with the page's.
+    {
+      const myControls = new Set(sch.switches.map(([c]) => c));
+      myControls.delete(sch.vss); myControls.delete(sch.vcc);
+      const sq = [...d.querySelectorAll('.cm-sw')].map((e) => Number(e.dataset.n));
+      const dots = [...d.querySelectorAll('.cm-nd')].map((e) => Number(e.dataset.n));
+      ok('every node is drawn as a glyph, once',
+         sq.length + dots.length === universe.size
+         && new Set([...sq, ...dots]).size === universe.size,
+         `${sq.length} squares + ${dots.length} dots vs ${universe.size}`);
+      ok('a square is exactly a node that holds switches',
+         sq.every((n) => myControls.has(n)) && dots.every((n) => !myControls.has(n))
+         && sq.length === [...myControls].filter((n) => universe.has(n)).length,
+         `${sq.filter((n) => !myControls.has(n)).length} wrong squares, ${dots.filter((n) => myControls.has(n)).length} wrong dots`);
+      const gA = groups.find((g) => g.key === 'regs:a');
+      const glyphsA = [...d.querySelectorAll('.cm-box[data-key="regs:a"] [data-n]')];
+      const aBits = [...Array(8).keys()].map((i) => sch.names.indexOf(`a${i}`));
+      ok('a byte group reads left to right from bit 0',
+         glyphsA.slice(0, 8).map((e) => Number(e.dataset.n)).join() === aBits.join(),
+         glyphsA.slice(0, 8).map((e) => sch.names[e.dataset.n] || e.dataset.n).join(' '));
+      const CELL = 13, GRID_PAD = 9;
+      const cxOf = (e) => e.tagName === 'rect' ? Number(e.getAttribute('x')) + 3.5 : Number(e.getAttribute('cx'));
+      const snapped = glyphsA.every((e, i) =>
+        Math.abs(cxOf(e) - (gA.x + GRID_PAD + (i % 10) * CELL + CELL / 2)) < 0.01);
+      ok('the grid is a grid: every glyph snapped to its cell', snapped);
+      // Live: the sample glyphs read this harness's chip.
+      const cclk = sch.names.indexOf('cclk');
+      const lv = m.nodeLevels();
+      ok('a square is filled exactly while its switches conduct',
+         d.querySelector(`.cm-sw[data-n="${cclk}"]`).classList.contains('on') === (lv[cclk] > 0));
+      const dotN = dots[0];
+      ok('a dot is lit exactly while its node is high',
+         d.querySelector(`.cm-nd[data-n="${dotN}"]`).classList.contains('on') === (lv[dotN] > 0));
+      // One paired step: the ringed glyphs are exactly the changed nodes.
+      const before = m.nodeLevels();
+      stepBtn.click(); m.halfStep();
+      await sleep(30);
+      const after = m.nodeLevels();
+      let myMoved = 0;
+      for (const n of universe) if (after[n] !== before[n]) myMoved++;
+      const rung = d.querySelectorAll('.cm-sw.mv, .cm-nd.mv').length;
+      ok('the ringed glyphs are exactly the nodes that changed at the edge',
+         rung === myMoved, `${rung} ringed vs ${myMoved} changed`);
+      // The toggle folds the grids away and brings them back.
+      d.getElementById('cm-nodes').click();
+      await sleep(30);
+      ok('the Nodes button folds the grids away',
+         d.querySelectorAll('[data-n]').length === 0
+         && d.querySelectorAll('.cm-box').length === groups.length);
+      d.getElementById('cm-nodes').click();
+      await sleep(30);
+      ok('...and brings them back',
+         d.querySelectorAll('.cm-sw, .cm-nd').length === universe.size);
+      // A glyph click names its node on the card.
+      const g0 = d.querySelector('.cm-box[data-key="regs:a"] .cm-nd, .cm-box[data-key="regs:a"] .cm-sw');
+      g0.dispatchEvent(new f.contentWindow.MouseEvent('click', { bubbles: true }));
+      await sleep(30);
+      ok('clicking a glyph selects its group and names the node',
+         !!d.querySelector('.cm-box.sel[data-key="regs:a"]')
+         && /node a0:/.test(d.getElementById('cm-card').textContent),
+         d.getElementById('cm-card').textContent.slice(0, 160));
+      d.getElementById('cm-svg').dispatchEvent(new f.contentWindow.MouseEvent('click', { bubbles: true }));
+      await sleep(30);
+    }
+
     // --- the walk: click, card, deep link ------------------------------------
     const box = d.querySelector('.cm-box[data-key="chain:T3"]');
     box.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
@@ -273,6 +345,11 @@ const load = (src) => new Promise((r) => { f.addEventListener('load', r, { once:
        d2.querySelector('.cm-box.sel')?.dataset.key || 'nothing selected');
     ok('and its card reads the byte off the chip', /reads \$[0-9A-F]{2}/.test(d2.getElementById('cm-card').textContent),
        d2.getElementById('cm-card').textContent.slice(0, 160));
+    await load('chipmap.html?nodes=0');
+    const d2b = f.contentDocument;
+    for (let i = 0; i < 2000 && !f.contentWindow.__chipmap; i++) await sleep(50);
+    ok('?nodes=0 arrives folded', d2b.querySelectorAll('[data-n]').length === 0
+       && d2b.querySelectorAll('.cm-box').length > 0);
     // --- the tour: every authored claim, on a chip of this harness's own ----
     //
     // The narration is the weaker register, so each step's checks are
