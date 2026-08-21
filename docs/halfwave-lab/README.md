@@ -140,9 +140,17 @@ with `.e.on`.
 **Bits tiles into section boxes, two columns on a phone**, and the lane goes vertical to make
 room. The sections are ordered so each row pairs like with like -- OFF-CHIP beside REGISTERS,
 INTERNAL beside ADDER, IN beside OUT -- and row-mates stretch to a common height rather than
-sizing to their own content, so the three rows are level. `align-items: start` was sizing each
-box to its own lanes, which put a seven-lane section beside a one-lane one at two different
-heights on a shared top edge. Measured first: side by side, a name plus eight cells plus the hex needs 158px against
+sizing to their own content, so the rows are level. `align-items: start` was sizing each box
+to its own lanes, which put a seven-lane section beside a one-lane one at two different
+heights on a shared top edge.
+
+**The grid is uniform at every width**, because a 16-bit lane stacks into its two bytes
+everywhere rather than only on a phone. The two sections holding one (AB, PC) used to span
+the whole grid, which made the desktop layout two full-width rows and a tiled remainder. The
+column count is pinned rather than left to `auto-fill`: six sections tile evenly as 2x3 or
+3x2 and no other way, and auto-fill gave 4+2 at 1200px and 5+1 at 1440 -- uniform boxes in a
+ragged rectangle. Two columns below 980px, three above, measured at seven widths: every row
+complete, every row level, no box overflowing its column. Measured first: side by side, a name plus eight cells plus the hex needs 158px against
 the 141 a half column has at 390px, and shrinking the pieces lands exactly on the limit at
 one width and over it at the next. Stacked (name and value on one line, bits under them) it
 needs only the 78px the cells occupy and fits at 320px with room to spare. A 16-bit lane

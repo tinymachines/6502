@@ -271,12 +271,20 @@ select{
 .rd.addr{color:var(--addr)} .rd.data{color:var(--data)} .rd.alu{color:var(--alu)}
 
 /* ---------- bit lanes ---------- */
-.bitgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));align-items:stretch}
+.bitgrid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
+@media(min-width:980px){.bitgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .bsecbox{
   border:1px solid var(--rule);border-radius:3px;background:var(--panel2);
   padding:7px 9px 8px;display:grid;gap:2px;align-content:start;min-width:0;
 }
-.bsecbox.wide{grid-column:1/-1}
+/* A lane may wrap: a 16-bit value stacks into its two bytes, and a tag
+   that will not fit beside the hex drops to a line of its own. Without
+   this the two sections holding a 16-bit lane had to span the whole grid,
+   which is what made the desktop layout two full-width rows and a tiled
+   remainder instead of one uniform grid. */
+.bl{flex-wrap:wrap}
+.bl.w16 .bits{flex-wrap:wrap;width:102px}
+.bl.w16 .bits .gap{flex:1 0 100%;width:auto;height:2px}
 .bsec{
   font-family:var(--disp);font-size:9px;font-weight:700;letter-spacing:.16em;
   text-transform:uppercase;color:var(--dim);padding:0 0 4px;
@@ -316,9 +324,8 @@ select{
 @media(max-width:620px){
   body{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
   .bc{width:8px;height:13px}
-  .bitgrid{grid-template-columns:1fr 1fr;gap:7px}
+  .bitgrid{gap:7px}
   .bsecbox{padding:6px 7px 7px}
-  .bsecbox.wide{grid-column:auto}
   .bl{
     display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 6px;
     align-items:center;min-height:0;padding:2px 0;
@@ -328,10 +335,8 @@ select{
   .bh{width:auto;text-align:right;font-size:10px}
   .bits{grid-column:1/-1;padding-top:1px}
   .btag{grid-column:1/-1;justify-self:start;margin-top:2px}
-  /* A 16-bit lane is two bytes stacked, which is how they are named anyway
-     (ADH/ADL, PCH/PCL). The half-byte gap becomes the line break. */
-  .bl.w16 .bits{flex-wrap:wrap;width:78px}
-  .bl.w16 .bits .gap{flex:1 0 100%;width:auto;height:2px}
+  /* the cells are smaller here, so the stacked byte is narrower */
+  .bl.w16 .bits{width:78px}
   .bl.pins{display:block}
   .bl.pins .bn{display:block;padding-bottom:3px}
 }
@@ -1479,9 +1484,9 @@ function renderBits(o,p){
     /* One box per section, the shape the Decode tab already uses. As a
        flat list the widest lane set the width of everything and a phone
        got one column with a sideways scroll; as boxes the sections tile,
-       and the two that hold a 16-bit lane say so and take the full row. */
-    const wide=rows.some(r=>r[2]===16)?" wide":"";
-    h+=`<div class="bsecbox${wide}"><div class="bsec">${sec}</div>`;
+       every box the same width, because a 16-bit lane stacks rather than
+       claiming a row of its own. */
+    h+=`<div class="bsecbox"><div class="bsec">${sec}</div>`;
     for(const [name,get,w,kind,tag] of rows){
       if(get===null){
         h+=`<div class="bl pins"><span class="bn">${name}</span><span class="ptags">${tag(o)}</span></div>`;
