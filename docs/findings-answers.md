@@ -213,3 +213,26 @@ a script resource); and every headless one-shot load exits before the
 async install completes, so worker verification needs a browser kept
 alive (CDP) rather than --dump-dom, whose persistent-profile mode hangs,
 as the 6502 docs already warn.
+
+## 6. The diagram batch: Timeline, Decode, Memory (2026-08-21)
+
+Three new tabs, all drawn from data the API already served:
+
+- **Timeline**: instructions as bars against time on alternating lanes,
+  cells coloured by T-state, and the overlap drawn AS overlap: the T+
+  half-cycles at the start of the next bar are painted back onto the
+  previous instruction's lane, because they are that instruction still
+  finishing. The site's thesis, finally horizontal.
+- **Decode**: all 132 PLA terms as beads, grouped by the T-state their
+  names carry, lit per half-cycle. The names come from /v1/nodes' decode
+  group, appended to the trace watch list (the hex bitset takes the 157
+  total names without blinking, which is what issue 01's fix bought).
+  At STA's T2 the firing pills read op-store, op-sta/cmp, op-T2-mem-zp:
+  the instruction being decoded, named by the silicon.
+- **Memory**: the footprint (touched addresses against time, reads cool,
+  writes warm, click to seek) and a by-page access grid.
+
+The demo capture carries the decode terms too, so all three work offline.
+Verified with the self-driving instrumented build: 132 beads with 6 firing
+at the ADC writeback, both canvases painted (pixel-counted), 2 pages and
+21 addresses in the footprint, click-to-seek landing where clicked.

@@ -50,11 +50,17 @@ def main():
             base + path, json.dumps(body).encode(), {"content-type": "application/json"})
         return json.load(urllib.request.urlopen(req))
 
+    # The decode terms ride along, exactly as the live page fetches them:
+    # the /v1/nodes decode group, sorted, appended to the control-line watch.
+    nodes = json.load(urllib.request.urlopen(base + "nodes"))
+    decode = sorted(nodes["groups"]["decode"])
+    watch = WATCH + decode
+
     boot = post("boot", {"rom": {"source": SRC}, "watch": WATCH})
     a = post("step", {"machine": boot["machine"], "half_cycles": HALF_CYCLES,
-                      "trace": True, "format": "rows", "watch": WATCH})["trace_rows"]
+                      "trace": True, "format": "rows", "watch": watch})["trace_rows"]
     assert len(a["rows"]) == HALF_CYCLES
-    assert a["watch_names"] == WATCH, "watch order is not as requested"
+    assert a["watch_names"] == watch, "watch order is not as requested"
     assert a.get("watch_encoding") == "hex", "expected the hex watch bitset"
     for col in ("abl", "abh", "pclp", "pchp", "idl", "alua"):
         assert col in a["cols"], f"missing latch column {col}"

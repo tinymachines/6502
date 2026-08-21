@@ -254,6 +254,25 @@ select{
   .bl{gap:5px}
 }
 
+/* ---------- timeline, decode, memory ---------- */
+#tl,#memtime{display:block;width:100%;background:#0D131C}
+.tlnote{font-family:var(--mono);font-size:10px;color:var(--dim);padding:7px 12px}
+.decgrid{display:flex;gap:14px;flex-wrap:wrap;padding:4px 0}
+.decstage{min-width:70px}
+.dechead{font-family:var(--disp);font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--dim);padding-bottom:4px}
+.decbeads{display:grid;grid-template-columns:repeat(6,12px);gap:3px}
+.bead{width:12px;height:12px;border-radius:2px;background:#1A2331;border:1px solid #232E3D;padding:0;cursor:default}
+.bead.on{background:var(--alu);border-color:var(--alu);box-shadow:0 0 6px color-mix(in srgb,var(--alu) 60%,transparent)}
+.decfire{display:flex;gap:6px;flex-wrap:wrap;padding-top:10px}
+.decfire .ln{cursor:default}
+#memmap{display:grid;gap:10px}
+.mrow .ma{font-family:var(--mono);font-size:10px;color:var(--dim);padding-bottom:3px}
+.mcells{display:grid;grid-template-columns:repeat(64,1fr);gap:1px}
+.mc{aspect-ratio:1;background:#161E2B;border-radius:1px}
+.mc.rd{background:color-mix(in srgb,var(--addr) 45%,#161E2B)}
+.mc.wr{background:color-mix(in srgb,var(--data) 55%,#161E2B)}
+.mc.now{outline:1.5px solid var(--glow);outline-offset:-1px}
+
 /* ---------- narration ---------- */
 .tell{padding:14px 16px;border-top:1px solid var(--rule);background:var(--panel2)}
 .tell .lede{font-size:15.5px;line-height:1.55;color:var(--bright);margin:0}
@@ -344,6 +363,9 @@ select{
   <button class="tab" role="tab" id="t-story" aria-controls="p-story" aria-selected="false">Story</button>
   <button class="tab" role="tab" id="t-lat"  aria-controls="p-lat"  aria-selected="false">Latches</button>
   <button class="tab" role="tab" id="t-bits" aria-controls="p-bits" aria-selected="false">Bits</button>
+  <button class="tab" role="tab" id="t-time" aria-controls="p-time" aria-selected="false">Timeline</button>
+  <button class="tab" role="tab" id="t-dec"  aria-controls="p-dec"  aria-selected="false">Decode</button>
+  <button class="tab" role="tab" id="t-mem"  aria-controls="p-mem"  aria-selected="false">Memory</button>
   <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
   <button class="tab" role="tab" id="t-state" aria-controls="p-state" aria-selected="false">State</button>
   <button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
@@ -417,6 +439,56 @@ select{
     </div>
   </section>
 
+  <section role="tabpanel" id="p-time" aria-labelledby="t-time" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">Instructions against time — and where they overlap</h2>
+        <span class="eyebrow" id="tlpos"></span>
+      </div>
+      <div class="pb" style="padding:10px 12px 4px"><canvas id="tl" aria-label="Instruction timeline"></canvas></div>
+      <p class="tlnote">Each bar is one instruction, fetch to fetch, its cells
+      coloured by T-state. The glowing inset past a bar's end is that
+      instruction still finishing: its T+ half-cycles run inside the NEXT
+      instruction's fetch, which is where an ADC's sum finally reaches A.
+      Click anywhere to go there.</p>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p-dec" aria-labelledby="t-dec" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">The decode PLA — which product terms are firing</h2>
+        <span class="eyebrow" id="deccount"></span>
+      </div>
+      <div class="pb">
+        <div class="decgrid" id="decgrid"></div>
+        <div class="decfire" id="decfire"></div>
+        <p class="note" id="decnote">Every bead is one of the PLA's product
+        terms, watched on the die by its own name and grouped by the T-state
+        its name carries. The lit set IS the instruction being decoded: the
+        opcode's bits select the rows, the timing chain gates when each may
+        fire, and everything the datapath does follows from which of these
+        are high.</p>
+      </div>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p-mem" aria-labelledby="t-mem" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">The footprint — every address this trace touched</h2>
+        <span class="eyebrow" id="mempos"></span>
+      </div>
+      <div class="pb" style="padding:10px 12px 4px"><canvas id="memtime" aria-label="Accesses over time"></canvas></div>
+      <p class="tlnote">Time runs left to right, one column per half-cycle;
+      each touched address is a row. Reads cool, writes warm. Click to go.</p>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2 class="eyebrow">By page — reads cool, writes warm</h2></div>
+      <div class="pb"><div id="memmap"></div></div>
+    </div>
+  </section>
+
   <section role="tabpanel" id="p-sig" aria-labelledby="t-sig" hidden>
     <div class="two">
       <div class="panel">
@@ -486,6 +558,11 @@ const WATCH = ["dpc38_PCLADL","dpc32_PCHADH","dpc25_SBDB","dpc23_SBAC","dpc9_DBA
   "dpc33_PCHDB","dpc1_SBY","dpc3_SBX","dpc6_SBS","dpc27_SBADH","dpc17_SUMS","dpc12_0ADD","clk1out","clk2out","rdy"];
 const SHORT = WATCH.map(w => w.split("_")[1]);
 const IX = {}; SHORT.forEach((s,i)=>IX[s]=i);
+/* The decode PLA's product terms, by name, from /v1/nodes (the API's own
+   discovery route). Loaded once at live boot and appended to the watch
+   list; the hex watch bitset carries any number of names. Empty when the
+   trace predates them, and the Decode tab says so. */
+let DECODE_NAMES=[];
 
 /* human-readable label + which path each line belongs to */
 const LINEMETA = {
@@ -917,6 +994,7 @@ function render(){
   $("#scrub").value=i;
   $("#tlab").textContent=`${i} / ${F.length-1}`;
   drawStrip();
+  paintExtras();
 }
 
 /* ---- the layer under the block diagram ---- */
@@ -1011,13 +1089,17 @@ function insLabel(fa){
   if(t===undefined) return fa<0?"\u2014":hx(fa,4);
   return t.replace(/^\s*[A-Za-z_][\w]*:\s*/,"").trim()||hx(fa,4);
 }
-function buildLane(){
+function laneGroups(){
   const groups=[]; let g=null;
   for(let n=0;n<F.length;n++){
     const sync=F[n][CI.sync], ph=F[n][CI.phase];
     if(sync&&ph===1||!g){ g={fa:F[n][CI.fetch_addr],from:n,idx:[]}; groups.push(g); }
     g.idx.push(n);
   }
+  return groups;
+}
+function buildLane(){
+  const groups=laneGroups();
   $("#lane").innerHTML=groups.map(gr=>
     `<div class="ins" data-from="${gr.from}"><div class="il">${insLabel(gr.fa)}</div><div class="cells">`
     +gr.idx.map(n=>`<button class="cell${F[n][CI.phase]===2?" ph2":""}${F[n][CI.rw]===1?" wr":""}" data-n="${n}" aria-label="half-cycle ${F[n][CI.half_cycle]}"></button>`).join("")
@@ -1035,6 +1117,138 @@ function markLane(){
   const L=$("#lane"), r=el.getBoundingClientRect(), lr=L.getBoundingClientRect();
   if(r.left<lr.left+30) L.scrollLeft+=r.left-lr.left-70;
   else if(r.right>lr.right-30) L.scrollLeft+=r.right-lr.right+70;
+}
+
+/* ---- the timeline: instructions against time, overlap drawn as overlap ---- */
+const TCOL={0:"#4FBFD4",1:"#7C9BC4",2:"#5CC8A8",3:"#B8A85C",4:"#E0A24B",5:"#E06A96"};
+function drawTimeline(){
+  const cv=$("#tl"); if(!F.length||!cv.clientWidth) return;
+  const groups=laneGroups();
+  /* Room for a label row above lane A and below lane B, so nothing clips. */
+  const w=cv.clientWidth, RH=20, GAP=8, LBL=13, PAD=3,
+        yA=PAD+LBL, yB=yA+RH+GAP, H=yB+RH+LBL+PAD;
+  const dpr=devicePixelRatio||1;
+  cv.width=w*dpr; cv.height=H*dpr; cv.style.height=H+"px";
+  const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,H);
+  const X=n=>PAD+(w-2*PAD)*n/F.length, CW=(w-2*PAD)/F.length;
+  const glow=getComputedStyle(document.documentElement).getPropertyValue("--glow").trim()||"#E8A05C";
+  groups.forEach((gr,k)=>{
+    const y=(k%2)?yB:yA;
+    for(const n of gr.idx){
+      const t=F[n][CI.tstates]; let c="#1B2534";
+      for(let b=0;b<6;b++) if(t>>b&1){ c=TCOL[b]; break; }
+      g.fillStyle=c; g.globalAlpha=F[n][CI.sync]?1:.5;
+      g.fillRect(X(n),y,Math.max(CW-.6,.8),RH);
+    }
+    g.globalAlpha=1;
+    /* The tail: T+ half-cycles at the START of the next bar are THIS
+       instruction still finishing. Drawn on this bar's own lane, so the
+       overlap reads as overlap. */
+    const next=groups[k+1];
+    if(next) for(const n of next.idx){
+      if(!(F[n][CI.tstates]>>1&1)) break;
+      g.fillStyle=glow;
+      g.fillRect(X(n),y+4,Math.max(CW-.6,.8),RH-8);
+    }
+    if(CW*gr.idx.length>30){
+      g.fillStyle="#9AABC0"; g.font="9px monospace";
+      g.fillText(insLabel(gr.fa),X(gr.idx[0])+1,(k%2)?yB+RH+10:yA-4);
+    }
+  });
+  g.strokeStyle="#EAF1F8"; g.beginPath(); g.moveTo(X(i)+CW/2,0); g.lineTo(X(i)+CW/2,H); g.stroke();
+  $("#tlpos").textContent=`h ${F[i][CI.half_cycle]}`;
+  cv.onclick=e=>{ const r=cv.getBoundingClientRect(); go(Math.round((e.clientX-r.left-PAD)/(w-2*PAD)*F.length)); };
+}
+
+/* ---- the decode PLA: the terms as beads, grouped by the stage their name carries ---- */
+let DECBUILT=null;
+function decStage(n){
+  const m=/^#?op-T(\+|[0-5])/.exec(n);
+  return m?("T"+m[1]):"any";
+}
+function decNames(){
+  return WNAMES.filter(n=>!WATCH.includes(n));
+}
+function buildDecode(){
+  const names=decNames();
+  const key=names.join(",");
+  if(key===DECBUILT) return; DECBUILT=key;
+  if(!names.length){
+    $("#decgrid").innerHTML="";
+    $("#deccount").textContent="no terms in this trace";
+    return;
+  }
+  const stages={};
+  for(const n of names) (stages[decStage(n)]=stages[decStage(n)]||[]).push(n);
+  const order=["T0","T+","T2","T3","T4","T5","any"];
+  $("#decgrid").innerHTML=order.filter(st=>stages[st]).map(st=>
+    `<div class="decstage"><div class="dechead">${st} · ${stages[st].length}</div>`
+    +`<div class="decbeads">${stages[st].map(n=>`<span class="bead" data-t="${n}" title="${n}"></span>`).join("")}</div></div>`).join("");
+}
+function paintDecode(o){
+  buildDecode();
+  const lit=[];
+  for(const el of document.querySelectorAll(".bead")){
+    const v=on(o,el.dataset.t);
+    el.classList.toggle("on",v); if(v) lit.push(el.dataset.t);
+  }
+  $("#deccount").textContent=decNames().length?(lit.length?`${lit.length} firing`:"none firing"):"no terms in this trace";
+  $("#decfire").innerHTML=lit.sort().map(n=>`<span class="ln alu on"><i></i>${n}</span>`).join("");
+}
+
+/* ---- the memory footprint ---- */
+let MEMACC=null;
+function memIndex(){
+  const acc=[], addrs=new Map();
+  for(let n=0;n<F.length;n++){
+    const a=F[n][CI.addr], wr=F[n][CI.rw]===1;
+    acc.push({n,a,wr});
+    if(!addrs.has(a)) addrs.set(a,{rd:0,wr:0});
+    addrs.get(a)[wr?"wr":"rd"]++;
+  }
+  const sorted=[...addrs.keys()].sort((x,y)=>x-y);
+  const rank=new Map(sorted.map((a,k)=>[a,k]));
+  MEMACC={acc,addrs,sorted,rank};
+}
+function drawMemory(){
+  if(!MEMACC||!F.length) return;
+  const cv=$("#memtime"); if(!cv.clientWidth) return;
+  const {acc,addrs,sorted,rank}=MEMACC;
+  const w=cv.clientWidth, PAD=4, RH=Math.max(3,Math.min(9,140/sorted.length)),
+        H=PAD*2+sorted.length*RH;
+  const dpr=devicePixelRatio||1;
+  cv.width=w*dpr; cv.height=H*dpr; cv.style.height=H+"px";
+  const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,H);
+  const X=n=>PAD+(w-2*PAD)*n/F.length, CW=Math.max((w-2*PAD)/F.length,1);
+  for(const {n,a,wr} of acc){
+    g.fillStyle=wr?"#E06A96":"#3E93A6";
+    g.fillRect(X(n),PAD+rank.get(a)*RH,CW,Math.max(RH-1,2));
+  }
+  g.strokeStyle="#EAF1F8"; g.beginPath(); g.moveTo(X(i)+CW/2,0); g.lineTo(X(i)+CW/2,H); g.stroke();
+  const cur=acc[i];
+  $("#mempos").textContent=cur?`${cur.wr?"write":"read"} ${hx(cur.a,4)} · ${sorted.length} addresses`:"";
+  cv.onclick=e=>{ const r=cv.getBoundingClientRect(); go(Math.round((e.clientX-r.left-PAD)/(w-2*PAD)*F.length)); };
+  const pages=[...new Set(sorted.map(a=>a>>8))];
+  $("#memmap").innerHTML=pages.map(pg=>{
+    let cells="";
+    for(let c=0;c<64;c++){
+      const base=(pg<<8)+c*4;
+      let cls="", now=false;
+      for(let b=0;b<4;b++){
+        const st=addrs.get(base+b);
+        if(st) cls=st.wr?"wr":(cls||"rd");
+        if(cur&&cur.a===base+b) now=true;
+      }
+      cells+=`<span class="mc ${cls}${now?" now":""}" title="${hx(base,4)}"></span>`;
+    }
+    return `<div class="mrow"><div class="ma">page ${hx(pg,2)} · ${hx(pg<<8,4)}..${hx((pg<<8)|255,4)}</div><div class="mcells">${cells}</div></div>`;
+  }).join("");
+}
+function paintExtras(){
+  const o=obs(i); if(!o) return;
+  if(!$("#p-time").hidden) drawTimeline();
+  if(!$("#p-dec").hidden) paintDecode(o);
+  if(!$("#p-mem").hidden) drawMemory();
 }
 
 /* ---- scope: Figure 3.4 redrawn from the recording ---- */
@@ -1138,11 +1352,11 @@ try{ if(localStorage.getItem("hw.scopeFolded")==="1") setScopeFolded(true); }cat
 function drawStrip(){ markLane(); if(scopeFolded) paintScopeStrip(); else drawScope(); }
 /* ---------- transport ---------- */
 function go(n){ i=Math.max(0,Math.min(F.length-1,n)); render(); }
-function reload(){ buildLane(); $("#scrub").max=Math.max(0,F.length-1); }
+function reload(){ buildLane(); memIndex(); DECBUILT=null; $("#scrub").max=Math.max(0,F.length-1); }
 function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][CI.sync]&&F[n][CI.phase]===1) return go(n); go(F.length-1); }
 
 /* tabs */
-const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
+const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-time","p-time"],["t-dec","p-dec"],["t-mem","p-mem"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
 function showTab(id){
   for(const [t,p] of TABS){
     const sel=t===id;
@@ -1150,6 +1364,7 @@ function showTab(id){
     $("#"+p).hidden=!sel;
   }
   drawStrip();
+  paintExtras();
 }
 for(const [t] of TABS) $("#"+t).onclick=()=>showTab(t);
 buildLatches();
@@ -1177,7 +1392,7 @@ addEventListener("keydown",e=>{
   else if(e.key==="ArrowDown"&&e.shiftKey){e.preventDefault();nextFetch();}
   else if(e.key===" "){e.preventDefault();$("#b-play").click();}
 });
-addEventListener("resize",drawStrip);
+addEventListener("resize",()=>{drawStrip();paintExtras();});
 $("#preset").onchange=e=>loadPreset(+e.target.value);
 
 /* ---------- API ---------- */
@@ -1202,7 +1417,7 @@ function showListing(a){
    they are first-class rows columns now (findings issue 03), so the merge
    went the way its own comment predicted. */
 async function fetchTrace(machine,n){
-  const a=await post("step",{machine,half_cycles:n,trace:true,watch:WATCH,format:"rows"});
+  const a=await post("step",{machine,half_cycles:n,trace:true,watch:WATCH.concat(DECODE_NAMES),format:"rows"});
   return {machine:a.machine,cols:a.trace_rows.cols,watch_names:a.trace_rows.watch_names,rows:a.trace_rows.rows};
 }
 
@@ -1251,6 +1466,10 @@ function useDemo(reason){
     return;
   }
   LIVE=true;
+  try{
+    const r=await fetch(API+"/v1/nodes");
+    if(r.ok){ const nn=await r.json(); DECODE_NAMES=Object.keys(nn.groups.decode).sort(); }
+  }catch(e){ /* the Decode tab degrades honestly without them */ }
   $("#scrub").max=0;
   await boot();
 })();</script>

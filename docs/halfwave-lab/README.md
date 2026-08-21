@@ -54,6 +54,21 @@ own first-class fields.
 off-chip → in → internal → adder → registers → out. Bits that flipped this
 half-cycle get a ring; lanes that did not move dim out.
 
+**Timeline** — instructions as bars against time, alternating lanes, cells
+coloured by T-state, and the overlap drawn as overlap: an instruction's T+
+half-cycles glow inside the next instruction's fetch, which is where an ADC's
+sum finally reaches A. Click to seek.
+
+**Decode** — the PLA's product terms as beads, watched on the die by name
+(fetched from `/v1/nodes`' decode group and appended to the trace's watch
+list), grouped by the T-state their name carries. The lit set IS the
+instruction being decoded, and the firing pills name it: at STA's T2 you read
+`op-store`, `op-sta/cmp`, `op-T2-mem-zp` straight off the silicon.
+
+**Memory** — the footprint: every touched address as a row against time,
+reads cool, writes warm, click to seek; below it each touched page as a
+64-cell grid shaded by access type.
+
 **Signals** — all 22 datapath control lines, and the external bus.
 
 **State** — registers and zero page.
