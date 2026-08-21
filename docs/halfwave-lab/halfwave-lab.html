@@ -60,19 +60,11 @@ header{
 
 /* ---------- clock badge ---------- */
 .clockbar{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
-.phasepill{
-  display:inline-flex;align-items:center;gap:6px;
-  border:1px solid var(--glow);border-radius:2px;padding:3px 8px;
-  font-family:var(--mono);font-size:11px;font-weight:600;color:var(--glow);
-  background:color-mix(in srgb,var(--glow) 12%,transparent);transition:.18s;white-space:nowrap;
-}
-.phasepill .dot{width:6px;height:6px;border-radius:50%;background:var(--glow)}
 /* Tabular digits and a reserved width: the counter grows h 0 -> h 9999
-   without moving anything beside it. Same for the phase pill and the
-   scrubber label; a header that jumps on every half-cycle is unreadable. */
+   without moving anything beside it. Same for the scrubber label; a header
+   that jumps on every half-cycle is unreadable. */
 .pos{font-family:var(--mono);font-size:11.5px;color:var(--mid);white-space:nowrap;
      font-variant-numeric:tabular-nums;min-width:15ch;text-align:right}
-#pilltxt{display:inline-block;min-width:86px}
 .pos b{color:var(--bright);font-weight:600}
 .conn{font-family:var(--mono);font-size:10.5px;padding:3px 7px;border:1px solid var(--rule);border-radius:2px;color:var(--dim);white-space:nowrap}
 .conn.live{color:var(--addr);border-color:color-mix(in srgb,var(--addr) 45%,var(--rule))}
@@ -135,7 +127,7 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
   background:none;border:1px solid var(--rule);border-radius:2px;padding:2px 7px;cursor:pointer;
 }
 .scopetgl:hover{color:var(--text);border-color:var(--mid)}
-.scopestrip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:2px 0}
+.scopestrip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:2px 0;flex:1;justify-content:flex-end}
 .sch{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;white-space:nowrap}
 .sbox{width:11px;height:12px;border-radius:1px;border:1px solid currentColor;background:none;opacity:.55}
 .sbox.hi{background:currentColor;opacity:1}
@@ -322,7 +314,6 @@ select{
   <div class="clockbar">
     <span class="conn" id="conn">checking…</span>
     <span class="pos" id="pos">h <b>0</b> · cyc <b>0</b></span>
-    <span class="phasepill" id="pill"><span class="dot"></span><span id="pilltxt">φ1</span></span>
   </div>
 </header>
 
@@ -851,7 +842,6 @@ function render(){
   if(!o) return;
 
   document.documentElement.style.setProperty("--glow", o.ph2?"var(--phi2)":"var(--phi1)");
-  $("#pilltxt").textContent = o.ph2?"φ2 · evaluate":"φ1 · setup";
   $("#pos").innerHTML = `h <b>${o.h}</b> · cycle <b>${o.cyc}</b>`;
   $("#tstate").textContent = o.t + (o.hid?" · "+o.hid:"") + (o.sd?" · "+o.sd:"");
 
