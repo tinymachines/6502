@@ -271,7 +271,7 @@ select{
 .rd.addr{color:var(--addr)} .rd.data{color:var(--data)} .rd.alu{color:var(--alu)}
 
 /* ---------- bit lanes ---------- */
-.bitgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));align-items:start}
+.bitgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));align-items:stretch}
 .bsecbox{
   border:1px solid var(--rule);border-radius:3px;background:var(--panel2);
   padding:7px 9px 8px;display:grid;gap:2px;align-content:start;min-width:0;
@@ -1451,8 +1451,14 @@ const LANES=[
        `<span class="btag" style="color:${on(o,"rdy")?"var(--dim)":"var(--data)"}">RDY ${on(o,"rdy")?"high":"LOW"}</span>`,
        `<span class="btag" style="color:${o.ph2?"var(--phi2)":"var(--phi1)"}">${o.ph2?"\u03c62":"\u03c61"}</span>`
      ].join(" ")]]],
-  ["IN",[
-    ["IDL", o=>o.idl,  8,"data", null]]],
+  ["REGISTERS",[
+    ["A",   o=>o.a,    8,"rg", o=>on(o,"SBAC")?"SB\u2192A":null],
+    ["X",   o=>o.x,    8,"rg", o=>on(o,"SBX")?"SB\u2192X":null],
+    ["Y",   o=>o.y,    8,"rg", o=>on(o,"SBY")?"SB\u2192Y":null],
+    ["S",   o=>o.s,    8,"rg", o=>on(o,"SBS")?"SB\u2192S":null],
+    ["IR",  o=>o.ir,   8,"rg", o=>o.sync?"holding previous":null],
+    ["P",   o=>o.p,    8,"rg", null],
+    ["PC",  o=>o.pc,  16,"addr",null]]],
   ["INTERNAL",[
     ["IDB", o=>o.idb,  8,"data", null],
     ["SB",  o=>o.sb,   8,"data", null],
@@ -1462,14 +1468,8 @@ const LANES=[
     ["ALUA",o=>o.alua, 8,"alu", o=>on(o,"SBADD")?"SB\u2192a":on(o,"0ADD")?"0\u2192a":null],
     ["ALUB",o=>o.alub, 8,"alu", o=>on(o,"DBADD")?"DB\u2192b":on(o,"ADLADD")?"ADL\u2192b":null],
     ["ALU", o=>o.alu,  8,"alu", o=>on(o,"ADDSB")?"\u2192SB":null]]],
-  ["REGISTERS",[
-    ["A",   o=>o.a,    8,"rg", o=>on(o,"SBAC")?"SB\u2192A":null],
-    ["X",   o=>o.x,    8,"rg", o=>on(o,"SBX")?"SB\u2192X":null],
-    ["Y",   o=>o.y,    8,"rg", o=>on(o,"SBY")?"SB\u2192Y":null],
-    ["S",   o=>o.s,    8,"rg", o=>on(o,"SBS")?"SB\u2192S":null],
-    ["IR",  o=>o.ir,   8,"rg", o=>o.sync?"holding previous":null],
-    ["P",   o=>o.p,    8,"rg", null],
-    ["PC",  o=>o.pc,  16,"addr",null]]],
+  ["IN",[
+    ["IDL", o=>o.idl,  8,"data", null]]],
   ["OUT",[
     ["DOR", o=>o.dor,  8,"data", o=>o.wr?"onto the pins":null]]]
 ];

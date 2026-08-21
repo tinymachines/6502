@@ -138,7 +138,11 @@ separately from the line it belongs to and these lines already change colour and
 with `.e.on`.
 
 **Bits tiles into section boxes, two columns on a phone**, and the lane goes vertical to make
-room. Measured first: side by side, a name plus eight cells plus the hex needs 158px against
+room. The sections are ordered so each row pairs like with like -- OFF-CHIP beside REGISTERS,
+INTERNAL beside ADDER, IN beside OUT -- and row-mates stretch to a common height rather than
+sizing to their own content, so the three rows are level. `align-items: start` was sizing each
+box to its own lanes, which put a seven-lane section beside a one-lane one at two different
+heights on a shared top edge. Measured first: side by side, a name plus eight cells plus the hex needs 158px against
 the 141 a half column has at 390px, and shrinking the pieces lands exactly on the limit at
 one width and over it at the next. Stacked (name and value on one line, bits under them) it
 needs only the 78px the cells occupy and fits at 320px with room to spare. A 16-bit lane
