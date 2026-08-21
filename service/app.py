@@ -243,6 +243,7 @@ _SD = {"": 0, "SD1": 1, "SD2": 2}
 
 def _pack_rows(trace: list[dict], watch_names: list[str]) -> TraceRows:
     rows = []
+    nbytes = (len(watch_names) + 7) // 8
     for t in trace:
         tmask = 0
         for part in t["tstates"].split("+"):
@@ -253,6 +254,11 @@ def _pack_rows(trace: list[dict], watch_names: list[str]) -> TraceRows:
         for i, name in enumerate(watch_names):
             if w.get(name):
                 wmask |= 1 << i
+        # Hex, not an integer: a JSON number is a float64 to every browser,
+        # so an integer mask silently corrupts past 53 names. Same bit
+        # convention as the state blobs (bit i in byte i/8, LSB first),
+        # fixed width, empty with no watches.
+        whex = wmask.to_bytes(nbytes, "little").hex()
         f = t["fetch"]
         rows.append([
             t["half_cycle"], t["cycle"], int(t["clk0"]),
@@ -261,7 +267,7 @@ def _pack_rows(trace: list[dict], watch_names: list[str]) -> TraceRows:
             t["pc"], t["a"], t["x"], t["y"], t["s"], t["p"], t["ir"],
             t["alu"], t["sb"], t["adl"], t["adh"],
             tmask, _HIDDEN[t["hidden"]], _SD[t["store_data"]],
-            f["addr"] if f else -1, f["opcode"] if f else -1, wmask,
+            f["addr"] if f else -1, f["opcode"] if f else -1, whex,
         ])
     return TraceRows(cols=_ROW_COLS, watch_names=watch_names, rows=rows)
 

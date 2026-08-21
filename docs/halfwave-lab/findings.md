@@ -220,95 +220,137 @@ Roughly in order of value per hour:
 
 ---
 
-## 5. Answers from the engine side (2026-08-20)
+## 5. The watch bitmask loses precision past 53 names — and how to fix it
 
-Appended after check-in, so the record closes where it was opened.
+### 5.1 The bug — verified
 
-### 5.1 §1.2 answered: the fix landed in the solver, and the invariant already exists
+`TraceRows.watch` is a single JSON integer, bit *i* for `watch_names[i]`. With 64 watched
+nodes the mask reaches 64 bits, and **39 of 40 rows fail a float64 round trip**:
 
-It is story (a), and not by inference: the fix is one line in
-`halfphi/src/engine.rs::recalc_node`, which now skips rails in the loop that
-writes a group's resolved level into every member's storage. Nothing clamps
-anything at serialization time; the halfshot writer reads the same storage it
-always read. Before the fix, a group joined to both rails resolved to Vss and
-wrote `false` into vcc's own storage cell -- the reference implementation does
-exactly the same -- and it was unobservable to the solver because a rail
-resolves by identity, never by its stored level. The reported level was wrong;
-every input the solver fed downstream was right. That is (a) as stated.
+```
+max mask: 9368067230186766914   bit_length: 64   > 2^53: True
+values that lose precision as float64: 39 / 40
+```
 
-The requested invariant also already exists where §1.2 asks for it:
-`rails_hold_their_level_at_every_half_cycle` in
-`crates/v6502-sim/tests/functional.rs` asserts both rails at every half-cycle
-of a run, and goes red when the `recalc_node` line is reverted. A future
-change to group resolution fails loudly in the test suite, not on write-out.
+The server is correct — Python integers are arbitrary precision. The corruption happens in
+the consumer: `JSON.parse` in every browser produces a double, so the high bits are silently
+wrong. No error, no warning, just the wrong nodes reported as conducting. RFC 8259 warns
+that interoperable implementations should stay inside double precision for exactly this
+reason.
 
-Two corroborating facts, both recorded in CLAUDE.md at the time: the fix
-changed behaviour on another die entirely (the Z80 now converges from a cold
-power-on; it has 32 vcc-gated transistors that the bouncing rail was toggling,
-where the 6502 has none), which a serializer clamp could not have done; and
-"only node 657 differs" is the expected shape, since vss's stored level
-already matched its resolved value.
+**Practical ceiling today: 53 names per request.**
 
-### 5.2 §2.2 shipped
+### 5.2 The fix: emit `watch` as a lowercase hex bitset
 
-The api page's demo section now watches `dpc23_SBAC` beside `dpc17_SUMS` and
-says which is held and which fires, with the h=36/h=38 story spelled out
-(commit caf4ff2). The claims are pinned by a test that re-runs the section's
-recipe and derives every number the prose states, verified able to tell by
-corrupting the page and watching it go red. The sharper framing in §2.2's
-cycle table ("the add happens after the instruction is over") is the same
-story the site's Lab and chip-map tour tell for ADC, and it is right.
+You have already specified this encoding, in `/v1/meta`:
 
-### 5.3 §4's last loose end
+> lowercase hex; bit i of a set is byte i/8, LSB first
 
-`/trace` and `/halfshot` do overlap the Lab in subject, not in framing:
-trace is any-opcode tables plus the shorted-wire groups, halfshot is a
-recorded gallery of the full plate. Nothing on the site draws the 19-edge
-spine with narration generated from the same booleans as the picture; that is
-new, and the "ADL->PCL conducts on every fetch, a jump is ADL->PCL without
-PCL->ADL" reading in §3.3 is a genuinely good measured lesson.
+Reusing it for `watch` means a consumer that can read `levels` reads `watch` with the same
+three lines of code, there is no precision ceiling, the width is fixed and predictable, and
+it scales to all 832 names.
 
-### 5.4 The suggestion list, shipped (same day)
+**Measured cost.** Hex is fixed-width; integers get leading-zero compression for free, so on
+sparse masks the integer is slightly shorter. On a 132-row, 25-name trace: 1056 chars →
+1320, about **+264 bytes on a 13 KB file (~2%)**. Past ~53 names with dense masks hex wins
+outright (64 all-ones: 20 chars as integer, 18 as hex). Under gzip the difference vanishes
+entirely.
 
-§2.3, §2.4, §2.6, and both halves of §2.7's until wishes, plus the rows
-half of §2.5, are live:
+### 5.3 Alternatives, and why not
 
-- `GET /v1/nodes`: every resolvable name with its id, grouped (the grouping
-  an authored reading of the names, said so). The count is **832**, and the
-  846 in the docs was wrong in an instructive way: the die's table carries
-  846 raw entries, 12 are duplicate keys that collapse under JS object
-  semantics (the reference's own parse does the same), and 2 of the 834
-  remaining are the bit-5 sentinels `p5`/`Pout5`. nginx serves this one
-  route with `public, max-age=86400` where everything else is `no-store`.
-- `until_pc`: a breakpoint on the opcode fetch at an address, RUNTO in the
-  engine, `completed: false` at the bound. `until: "cycle"` too.
-- `alu`, `sb`, `adl`, `adh` on every Observation, read from their own
-  wires. The homeless sum is now on screen: at h=37 of the add program,
-  `alu` and `sb` both read $42 while `a` reads $2E, pinned by a test that
-  derives the half-cycle from A's own transition.
-- CORS `*` via middleware; OPTIONS preflight answers 200.
-- `format: "rows"`: the trace as columnar integer rows (`{cols,
-  watch_names, rows}`), stated encodings, watch packed to a bitmask. The
-  suite asserts it agrees with the object form column for column; measured
-  3.7x smaller at 45 half-cycles with 2 watches and 7.5x at 133 with 22,
-  the ratio growing with the watch list.
+| Option | Verdict |
+| --- | --- |
+| Array of 32-bit chunks | Correct, but invents a second bitset convention alongside `levels`. Two ways to say one thing. |
+| Integer ≤53 names, string beyond | Polymorphic field. Every consumer needs both branches, and the bug still only bites people who cross the threshold — same failure, relocated. |
+| Cap at 53 and return 422 | Not a fix, but good belt-and-braces if you keep integers. Matches your own padding-bit principle: a state that decodes to the wrong chip is worse than one that is rejected. |
 
-§1.3 shipped in the same round: halfshot exports now carry `build`
-(`commit`, `committed`, `exported`), optional so old files stay valid,
-validated by `check-halfshot.mjs` when present, asserted on the real page's
-export by `_halfshot-test.html`. Still open from the list: only §2.5's
-`fields` parameter (rows shipped instead).
+### 5.4 A second fix, independent of precision
 
-### 5.5 The second round of tweaks, and the Lab's adoption (2026-08-20, later)
+Promote the named latches to Observation fields the way you did for `alu` / `sb` / `adl` /
+`adh`: **`idl`, `idb`, `dor`, `alua`, `alub`**, and probably **`abl` / `abh`** and
+**`pclp` / `pchp`**.
 
-The rows compression claim is stated as the measured band above (it said
-"about a tenth"; the reviewer measured 6.4x and was right to object), held
-by a test that re-measures the 45/2 shape and asserts the page's figures.
-The 49 `dpc*` lines moved out of `decode` into their own `datapath` group
-on `/v1/nodes`, filed by what they operate rather than what drives them;
-partition still sums to 832, count pinned. Both in commit 0ac7b66.
+These are named storage on the die, the same category as `a` and `x` — not arbitrary nodes.
+Today every consumer that wants them rebuilds a byte from 8 watched bits, which is repeated
+work and a repeated chance to get bit order wrong. It also drops the common case back under
+any threshold, so the two fixes reinforce each other. `abl` / `abh` additionally makes the
+pins-versus-internal-bus divergence first-class instead of something a consumer infers.
 
-The checked-in Lab (`halfwave-lab.html`) now consumes the new surface:
-`format: "rows"` for its traces, and the `alu`/`sb`/`adl`/`adh` fields,
-with an ALU-op readout and a stale-value treatment for a bus reading that
-is no longer driven.
+### 5.5 The test that would have caught it
+
+```python
+assert mask <= 2**53 - 1, f"watch mask {mask} is not exactly representable in float64"
+```
+
+Better as a property test over N in 1..832 watched names: build the mask, round-trip it
+through `float`, assert equality. That is exactly how this was found.
+
+### 5.6 Migration
+
+Pre-1.0 with a single field, so a straight swap plus a line in the `TraceRows` description is
+defensible. If you would rather it be self-describing, add `watch_encoding: "hex"` next to
+`cols` and `watch_names` — one extra key, and consumers can branch safely.
+
+---
+
+## 6. Transport: gzip, protobuf, websockets
+
+### 6.1 gzip is off, and it is the single biggest win available — verified
+
+`/api/v1/meta` returns no `Content-Encoding` even when the request sends
+`Accept-Encoding: gzip, br`. Measured on a 300-half-cycle traced run, 25 watched nodes:
+
+| Payload | Raw | gzip -6 | Ratio |
+| --- | ---: | ---: | ---: |
+| Request (machine + args) | 3,815 B | 1,360 B | 2.8× |
+| Response, `format: rows` | 29,504 B | 4,613 B | **6.4×** |
+| Response, `format: objects` | 235,805 B | 10,231 B | **23.0×** |
+| `machine.state` hex alone | 2,308 B | 1,079 B | 2.1× |
+
+Projected for larger runs in rows form: 2,000 half-cycles ≈ 170 KB → ~4 KB; 10,000 (your
+`max_traced`) ≈ 850 KB → ~12 KB.
+
+nginx is already fronting the API, so this is one `gzip_types application/json` line. Do this
+first; it costs nothing and dwarfs every other transport change.
+
+**One consequence worth knowing.** Compression changes the case for `rows`. Raw, it is 8.0×
+smaller than `objects`; gzipped, only 2.2×. Repeated key names compress almost to nothing.
+`rows` is still worth having — it parses faster and allocates far less in the browser — but
+after gzip the argument is CPU and memory, not bytes. Worth adjusting the `TraceRows`
+description once compression is on, since it currently sells the format purely on size.
+
+### 6.2 protobuf: no
+
+- gzip already captures most of the available win, for one line of config instead of a
+  schema, a build step, and a decoder bundle in every client.
+- It would cost the property the whole API is built around: that you can `curl` a route and
+  read the answer. The documentation leans on this constantly, and the self-describing JSON
+  body is what makes `cols` / `watch_names` / `encoding` legible.
+- The one place a binary path could earn its keep is bulk node dumps — full `levels` for
+  every half-cycle, where hex costs 2× over raw bytes. Even there, base64 (1.33×) or gzip on
+  the hex gets most of it without a schema.
+
+### 6.3 websockets: no, and for a specific reason
+
+Measured round trip for a 300-half-cycle traced run: **130–260 ms total**, of which TTFB is
+130–190 ms and body transfer is under 5 ms. Connection setup is ~30–40 ms. So latency is
+server compute plus RTT; transport framing is not the cost.
+
+More importantly, the Lab makes two requests and then scrubs 300 half-cycles entirely
+client-side. There is no per-step round trip to eliminate. Websockets would solve a problem
+this design does not have.
+
+The deeper objection: a socket invites server-side session state, and statelessness is the
+property that makes this API distinctive — it is what allows "hand someone a machine
+mid-instruction", and it is the precondition for permalinking a chip in a URL (§3.4.1).
+Trading that for framing efficiency would be a bad deal.
+
+### 6.4 What would actually help instead
+
+**Chunked streaming over ordinary HTTP** — NDJSON, one row per line, flushed as the solver
+produces them. For a 10,000-half-cycle run the client renders progressively instead of
+waiting on one large response, and nothing about statelessness changes: the final machine
+still comes back at the end, and the client still owns it. No websocket, no new protocol,
+works with `curl` unchanged.
+
+That is the only transport change I would put on the list, and only after gzip.

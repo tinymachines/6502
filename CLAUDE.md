@@ -818,8 +818,15 @@ state that decodes to the wrong chip is worse than one that is rejected.
   (h=37 of the add program: alu and sb read $42 while A reads $2E, pinned
   by a test deriving the half-cycle from A's own transition); CORS `*`
   (stateless, so open on purpose); and `format: "rows"` (the trace as
-  columnar integer rows with stated encodings, asserted to agree with the
-  object form column for column and be at least 3x smaller).
+  columnar rows with stated encodings, asserted to agree with the object
+  form column for column; the measured figures on the page are held to a
+  band by the test). Two transport rounds later: `watch` is a lowercase
+  HEX bitset (`watch_encoding: "hex"`), because a JSON integer is a
+  float64 to every browser and silently corrupts past 53 watched names,
+  found by a consumer watching 64 and pinned by a regression that requires
+  a mask past 2^53; and the API locations gzip
+  (`gzip_types application/json` per location, since the global
+  gzip_types is commented out and covers only text/html).
 - **The `/api/` nginx location declares the COMPLETE header set, and must.**
   This config's own top comment is the rule: one `add_header` in a location
   discards every inherited one, so the proxy location restates HSTS,
@@ -4710,7 +4717,7 @@ Live on this box. Entirely static; there is no application process.
 | Deploy script | `deploy/deploy.sh` |
 | systemd unit | `deploy/6502-deploy.service` → `/etc/systemd/system/` |
 | API service | `deploy/6502-api.service` → `/etc/systemd/system/`, enabled: uvicorn on 127.0.0.1:6502 behind the `/api/` proxy location |
-| Halfwave Lab | <https://halfwave.tinymachines.ai> — `deploy/halfwave.tinymachines.ai.nginx` + `deploy/halfwave-deploy.sh`: `docs/halfwave-lab.html` served as index.html (packaging later), with its own `/api/` proxy to the same engine, so the page's `location.origin + "/api"` resolution just works. DNS in both split-horizon views; cert via the same webroot flow |
+| Halfwave Lab | <https://halfwave.tinymachines.ai> — `deploy/halfwave.tinymachines.ai.nginx` + `deploy/halfwave-deploy.sh`: the reviewer's package at `docs/halfwave-lab/` (template + `build.sh`, reproducible byte for byte), its built `halfwave-lab.html` served as index.html, with its own `/api/` proxy to the same engine so `location.origin + "/api"` just works. DNS in both split-horizon views; cert via the same webroot flow. Engine-side answers live in `docs/findings-answers.md`, NOT in the package's findings.md, which the reviewer's export tool overwrites wholesale |
 | nginx site | `deploy/6502.tinymachines.ai.nginx` → `sites-available/` (symlinked) |
 | Served from | `/var/www/6502.tinymachines.ai/current` (symlink into `releases/`) |
 

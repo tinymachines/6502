@@ -255,7 +255,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
       <tr><td><code>max_half_cycles</code></td><td>bound for <code>until</code> and <code>until_pc</code>, default 200. A JAM opcode never reaches another fetch; the response says <code>completed: false</code> at the bound rather than hanging</td></tr>
       <tr><td><code>watch</code></td><td>node names, read at the end and at every traced step (see <code>/v1/nodes</code> for all of them). An unknown name is a 400, not a silently absent key</td></tr>
       <tr><td><code>trace</code></td><td>if true, one <a href="#observation">Observation</a> per half-cycle</td></tr>
-      <tr><td><code>format</code></td><td><code>"objects"</code> (default) or <code>"rows"</code>: the trace as columnar integer rows in <code>trace_rows</code>, the same information in fewer bytes. Measured: 3.7x smaller on a 45-half-cycle trace watching 2 nodes, 7.5x on 133 half-cycles watching 22, the ratio growing with the watch list because it packs to one integer. Encodings are stated in the response model and in <a href="#encoding">Encodings</a></td></tr>
+      <tr><td><code>format</code></td><td><code>"objects"</code> (default) or <code>"rows"</code>: the trace as columnar rows in <code>trace_rows</code>, the same information in fewer bytes. Measured on the trace payload alone (the machine, identical under both formats, excluded): 3.7x smaller at 45 half-cycles watching 2 nodes, 7.5x at 133 watching 22. Gzipped the two forms nearly converge, so rows earns its keep as parse time and allocation. Encodings in the response model and in <a href="#encoding">Encodings</a></td></tr>
     </table>
   </div>
 </section>
@@ -369,16 +369,31 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
   <h3>The rows trace</h3>
   <p>
     With <code>format: "rows"</code>, <code>trace_rows</code> carries
-    <code>{cols, watch_names, rows}</code>: one integer row per half-cycle,
-    columns named by <code>cols</code>. Encodings, stated: <code>clk0</code>
-    and <code>sync</code> are 0/1; <code>phase</code> is 1 or 2;
-    <code>rw</code> is 0 read, 1 write; <code>tstates</code> is a bitmask,
-    bit n for Tn (bit 1 meaning the T+/T1x state); <code>hidden</code> is
-    0 none, 1 T1, 2 VEC0, 3 T6; <code>store_data</code> is 0 none, 1 SD1,
-    2 SD2; a fetch that has not happened is addr -1, opcode -1;
-    <code>watch</code> is a bitmask over <code>watch_names</code>, bit i for
-    name i. The flags string is dropped because it derives from
-    <code>p</code>.
+    <code>{cols, watch_names, watch_encoding, rows}</code>: one row per
+    half-cycle, columns named by <code>cols</code>. Encodings, stated:
+    <code>clk0</code> and <code>sync</code> are 0/1; <code>phase</code> is
+    1 or 2; <code>rw</code> is 0 read, 1 write; <code>tstates</code> is a
+    bitmask, bit n for Tn (bit 1 meaning the T+/T1x state);
+    <code>hidden</code> is 0 none, 1 T1, 2 VEC0, 3 T6;
+    <code>store_data</code> is 0 none, 1 SD1, 2 SD2; a fetch that has not
+    happened is addr -1, opcode -1. The flags string is dropped because it
+    derives from <code>p</code>.
+  </p>
+  <p>
+    <code>watch</code> is a <strong>lowercase hex bitset</strong> over
+    <code>watch_names</code>, the same convention as the state blobs (bit i
+    in byte i/8, LSB first), fixed width of ceil(names/8) bytes, an empty
+    string with no watches; <code>watch_encoding: "hex"</code> says so on
+    the wire. Hex and not an integer because a JSON number is a float64 to
+    every browser: past 53 names an integer mask silently corrupts with no
+    error anywhere, which a consumer watching 64 names found. A reader that
+    can decode the state blobs decodes <code>watch</code> with the same
+    three lines.
+  </p>
+  <p>
+    Responses are gzipped when the client accepts it, which shrinks both
+    trace forms by an order of magnitude and narrows the gap between them:
+    repeated key names compress to almost nothing.
   </p>
 </section>
 

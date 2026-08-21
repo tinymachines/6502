@@ -1,0 +1,140 @@
+# Engine-side answers to the Lab's findings
+
+The reviewer's tool exports `halfwave-lab/findings.md` wholesale, so answers
+appended there get clobbered on every export (it happened once). This file
+is the engine side of the conversation, and nothing overwrites it. Section
+references like §1.2 point into the findings file as it stood at the time.
+
+## 1. First round (2026-08-20)
+
+Appended after check-in, so the record closes where it was opened.
+
+### 1.1 §1.2 answered: the fix landed in the solver, and the invariant already exists
+
+It is story (a), and not by inference: the fix is one line in
+`halfphi/src/engine.rs::recalc_node`, which now skips rails in the loop that
+writes a group's resolved level into every member's storage. Nothing clamps
+anything at serialization time; the halfshot writer reads the same storage it
+always read. Before the fix, a group joined to both rails resolved to Vss and
+wrote `false` into vcc's own storage cell -- the reference implementation does
+exactly the same -- and it was unobservable to the solver because a rail
+resolves by identity, never by its stored level. The reported level was wrong;
+every input the solver fed downstream was right. That is (a) as stated.
+
+The requested invariant also already exists where §1.2 asks for it:
+`rails_hold_their_level_at_every_half_cycle` in
+`crates/v6502-sim/tests/functional.rs` asserts both rails at every half-cycle
+of a run, and goes red when the `recalc_node` line is reverted. A future
+change to group resolution fails loudly in the test suite, not on write-out.
+
+Two corroborating facts, both recorded in CLAUDE.md at the time: the fix
+changed behaviour on another die entirely (the Z80 now converges from a cold
+power-on; it has 32 vcc-gated transistors that the bouncing rail was toggling,
+where the 6502 has none), which a serializer clamp could not have done; and
+"only node 657 differs" is the expected shape, since vss's stored level
+already matched its resolved value.
+
+### 1.2 §2.2 shipped
+
+The api page's demo section now watches `dpc23_SBAC` beside `dpc17_SUMS` and
+says which is held and which fires, with the h=36/h=38 story spelled out
+(commit caf4ff2). The claims are pinned by a test that re-runs the section's
+recipe and derives every number the prose states, verified able to tell by
+corrupting the page and watching it go red. The sharper framing in §2.2's
+cycle table ("the add happens after the instruction is over") is the same
+story the site's Lab and chip-map tour tell for ADC, and it is right.
+
+### 1.3 §4's last loose end
+
+`/trace` and `/halfshot` do overlap the Lab in subject, not in framing:
+trace is any-opcode tables plus the shorted-wire groups, halfshot is a
+recorded gallery of the full plate. Nothing on the site draws the 19-edge
+spine with narration generated from the same booleans as the picture; that is
+new, and the "ADL->PCL conducts on every fetch, a jump is ADL->PCL without
+PCL->ADL" reading in §3.3 is a genuinely good measured lesson.
+
+### 1.4 The suggestion list, shipped (same day)
+
+§2.3, §2.4, §2.6, and both halves of §2.7's until wishes, plus the rows
+half of §2.5, are live:
+
+- `GET /v1/nodes`: every resolvable name with its id, grouped (the grouping
+  an authored reading of the names, said so). The count is **832**, and the
+  846 in the docs was wrong in an instructive way: the die's table carries
+  846 raw entries, 12 are duplicate keys that collapse under JS object
+  semantics (the reference's own parse does the same), and 2 of the 834
+  remaining are the bit-5 sentinels `p5`/`Pout5`. nginx serves this one
+  route with `public, max-age=86400` where everything else is `no-store`.
+- `until_pc`: a breakpoint on the opcode fetch at an address, RUNTO in the
+  engine, `completed: false` at the bound. `until: "cycle"` too.
+- `alu`, `sb`, `adl`, `adh` on every Observation, read from their own
+  wires. The homeless sum is now on screen: at h=37 of the add program,
+  `alu` and `sb` both read $42 while `a` reads $2E, pinned by a test that
+  derives the half-cycle from A's own transition.
+- CORS `*` via middleware; OPTIONS preflight answers 200.
+- `format: "rows"`: the trace as columnar integer rows (`{cols,
+  watch_names, rows}`), stated encodings, watch packed to a bitmask. The
+  suite asserts it agrees with the object form column for column; measured
+  3.7x smaller at 45 half-cycles with 2 watches and 7.5x at 133 with 22,
+  the ratio growing with the watch list.
+
+§1.3 shipped in the same round: halfshot exports now carry `build`
+(`commit`, `committed`, `exported`), optional so old files stay valid,
+validated by `check-halfshot.mjs` when present, asserted on the real page's
+export by `_halfshot-test.html`. Still open from the list: only §2.5's
+`fields` parameter (rows shipped instead).
+
+### 1.5 The second round of tweaks, and the Lab's adoption (2026-08-20, later)
+
+The rows compression claim is stated as the measured band above (it said
+"about a tenth"; the reviewer measured 6.4x and was right to object), held
+by a test that re-measures the 45/2 shape and asserts the page's figures.
+The 49 `dpc*` lines moved out of `decode` into their own `datapath` group
+on `/v1/nodes`, filed by what they operate rather than what drives them;
+partition still sums to 832, count pinned. Both in commit 0ac7b66.
+
+The checked-in Lab (`halfwave-lab.html`) now consumes the new surface:
+`format: "rows"` for its traces, and the `alu`/`sb`/`adl`/`adh` fields,
+with an ALU-op readout and a stale-value treatment for a bus reading that
+is no longer driven.
+
+## 2. The transport round (2026-08-20, the packaged findings and issues/)
+
+The package (`halfwave-lab/`) arrived with eight filed issues. Dispositions:
+
+- **01 watch bitmask precision: shipped.** `watch` is a lowercase hex bitset
+  now (bit i in byte i/8, LSB first: the state blobs' own convention),
+  fixed width, with `watch_encoding: "hex"` on the wire as §5.6 suggested.
+  The regression test watches the 64 names from the issue and requires a
+  mask past 2^53 before checking every bit of every row against the object
+  form. The Lab template gained a dual-mode `wbit()` (hex or legacy
+  integer, for its packed demo) and was rebuilt and redeployed; the fix
+  also removes the 32-bit ceiling its own `>>` reads had.
+- **02 gzip: shipped, both origins.** One stanza in each of the four API
+  proxy locations (`gzip_types application/json`, level 5, min 860). A
+  40-row 64-watch rows response is 2,417 bytes on the wire. The static
+  halfwave index was already covered by the global text/html default.
+- **03 promote latch fields: accepted, next round.** Same discipline as
+  alu/sb/adl/adh: named storage read from its own wires.
+- **04 TraceRows docs: shipped.** The boundary is stated ("measured on the
+  trace payload alone; the machine, identical under both formats, is
+  excluded") and the size claim carries the gzip caveat: gzipped the forms
+  nearly converge, and rows earns its keep as parse time and allocation.
+- **05 NDJSON streaming: deferred, on the issue's own numbers.** TTFB is
+  server compute, transfer is under 5 ms, and a batching consumer has no
+  per-step round trip to eliminate. The stateless answer to progressive
+  rendering already exists: shard the run into smaller /v1/step slices and
+  render as each machine returns; that is streaming with no new protocol,
+  and it parallelises across workers, which one chunked response cannot.
+  Revisit if a consumer genuinely needs a single 10,000-row response drawn
+  as it computes.
+- **06 rail fix location: closed by §1.1 above.** Solver, one line, and the
+  invariant is `rails_hold_their_level_at_every_half_cycle`, red without it.
+- **07 export build stamp: closed, shipped earlier** (commit 5c17f44), with
+  the validator checking the shape when present.
+- **08 export invariants in CI: covered where the checks live.** Every
+  invariant on the list is asserted by `tools/check-halfshot.mjs` (rails
+  untouched by deltas, replay clean, h/ph/clk0 structure, open==controls,
+  padding, even frame count ending phi2) or the Rust suite
+  (contested_groups, nonconvergent_settles). CI itself is this repo's
+  documented deliberate gap; the checks run by hand and in the deploy.

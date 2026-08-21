@@ -15,7 +15,7 @@ the same way, canonically (a supplied page that is all fill is dropped).
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -196,21 +196,30 @@ class StepRequest(BaseModel):
 
 
 class TraceRows(BaseModel):
-    """The trace as columnar integer rows: the same information as the
-    object form in fewer bytes. Measured, not estimated: 3.7x smaller on a
-    45-half-cycle trace watching 2 nodes, 7.5x on 133 half-cycles watching
-    22, because the watch list packs to one integer however long it grows.
-    Encodings, stated: clk0 and
-    sync are 0/1; phase is 1 or 2; rw is 0 for read, 1 for write; tstates is
-    a bitmask, bit n for Tn (T1 meaning the T1x/T+ state); hidden is 0 none,
-    1 T1, 2 VEC0, 3 T6; store_data is 0 none, 1 SD1, 2 SD2; a fetch that has
-    not happened is addr -1 and opcode -1; watch is a bitmask over
-    watch_names, bit i for name i. The flags string is dropped: it derives
-    from p."""
+    """The trace as columnar rows: the same information as the object form
+    in fewer bytes. Measured on the trace payload alone (the machine,
+    identical under both formats, is excluded): 3.7x smaller at 45
+    half-cycles watching 2 nodes, 7.5x at 133 watching 22. Gzipped, the
+    two forms nearly converge, because repeated key names compress away;
+    rows then earns its keep as parse time and allocation rather than
+    bytes.
+
+    Encodings, stated: clk0 and sync are 0/1; phase is 1 or 2; rw is 0 for
+    read, 1 for write; tstates is a bitmask, bit n for Tn (T1 meaning the
+    T1x/T+ state); hidden is 0 none, 1 T1, 2 VEC0, 3 T6; store_data is 0
+    none, 1 SD1, 2 SD2; a fetch that has not happened is addr -1 and
+    opcode -1. watch is a lowercase HEX bitset over watch_names (bit i in
+    byte i/8, LSB first: the convention /v1/meta states for the state
+    blobs), fixed width of ceil(names/8) bytes, an empty string with no
+    watches. Hex and not an integer because a JSON number is a float64 to
+    every browser: past 53 names an integer mask silently corrupts, found
+    by a consumer watching 64. watch_encoding says so on the wire. The
+    flags string is dropped: it derives from p."""
 
     cols: list[str]
     watch_names: list[str]
-    rows: list[list[int]]
+    watch_encoding: Literal["hex"] = "hex"
+    rows: list[list[Union[int, str]]]
 
 
 class StepResponse(BaseModel):

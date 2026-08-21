@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SRC=docs/halfwave-lab.html
+SRC=docs/halfwave-lab/halfwave-lab.html
 ROOT=/var/www/halfwave.tinymachines.ai
 
 # The page must be the consumer we think it is: self-contained (no local

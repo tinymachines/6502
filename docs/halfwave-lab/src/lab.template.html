@@ -29,41 +29,102 @@ h1,h2,h3{margin:0;font-family:var(--disp);font-weight:600}
 button,input,textarea,select{font:inherit;color:inherit}
 
 /* ---------- structural ---------- */
-.wrap{max-width:1500px;margin:0 auto;padding:0 18px 132px}
+.wrap{max-width:1500px;margin:0 auto;padding:0 14px 40px}
 header{
-  display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
-  padding:20px 0 16px;border-bottom:1px solid var(--rule);margin-bottom:18px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:10px 0 8px;border-bottom:1px solid var(--rule);
 }
-.brand{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-.02em;color:var(--bright)}
+.brand{font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:-.01em;color:var(--bright);white-space:nowrap}
 .brand em{font-style:normal;color:var(--glow);transition:color .18s}
-.tag{font-family:var(--sans);font-size:13px;color:var(--dim);flex:1 1 260px}
+.tag{font-size:12px;color:var(--dim);flex:1 1 auto;min-width:0}
+@media(max-width:860px){.tag{display:none}}
 .eyebrow{
   font-family:var(--disp);font-size:10px;font-weight:700;letter-spacing:.16em;
   text-transform:uppercase;color:var(--dim);
 }
-.grid{display:grid;grid-template-columns:290px minmax(0,1fr) 264px;gap:16px;align-items:start}
-@media(max-width:1180px){.grid{grid-template-columns:1fr;}}
 .panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px}
 .panel > .ph{
   display:flex;align-items:center;justify-content:space-between;gap:8px;
-  padding:9px 12px;border-bottom:1px solid var(--rule);
+  padding:8px 12px;border-bottom:1px solid var(--rule);
 }
 .panel > .pb{padding:12px}
+.panel + .panel{margin-top:12px}
 
 /* ---------- clock badge ---------- */
-.clockbar{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}
+.clockbar{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
 .phasepill{
-  display:inline-flex;align-items:center;gap:8px;
-  border:1px solid var(--glow);border-radius:2px;padding:5px 11px;
-  font-family:var(--mono);font-size:12px;font-weight:600;color:var(--glow);
-  background:color-mix(in srgb,var(--glow) 12%,transparent);transition:.18s;
+  display:inline-flex;align-items:center;gap:6px;
+  border:1px solid var(--glow);border-radius:2px;padding:3px 8px;
+  font-family:var(--mono);font-size:11px;font-weight:600;color:var(--glow);
+  background:color-mix(in srgb,var(--glow) 12%,transparent);transition:.18s;white-space:nowrap;
 }
-.phasepill .dot{width:7px;height:7px;border-radius:50%;background:var(--glow)}
-.pos{font-family:var(--mono);font-size:12px;color:var(--mid);white-space:nowrap}
+.phasepill .dot{width:6px;height:6px;border-radius:50%;background:var(--glow)}
+.pos{font-family:var(--mono);font-size:11.5px;color:var(--mid);white-space:nowrap}
 .pos b{color:var(--bright);font-weight:600}
-.conn{font-family:var(--mono);font-size:11px;padding:4px 8px;border:1px solid var(--rule);border-radius:2px;color:var(--dim)}
+.conn{font-family:var(--mono);font-size:10.5px;padding:3px 7px;border:1px solid var(--rule);border-radius:2px;color:var(--dim);white-space:nowrap}
 .conn.live{color:var(--addr);border-color:color-mix(in srgb,var(--addr) 45%,var(--rule))}
 .conn.demo{color:var(--alu);border-color:color-mix(in srgb,var(--alu) 45%,var(--rule))}
+
+/* ---------- player (sticky, top) ---------- */
+.player{
+  position:sticky;top:0;z-index:30;margin:0 -14px;padding:8px 14px 6px;
+  background:color-mix(in srgb,var(--ground) 95%,#000);
+  border-bottom:1px solid var(--rule);backdrop-filter:blur(8px);
+}
+.prow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tbtn{
+  background:var(--panel);border:1px solid var(--rule);border-radius:2px;
+  padding:6px 9px;font-family:var(--mono);font-size:11.5px;cursor:pointer;color:var(--mid);
+  min-height:32px;white-space:nowrap;
+}
+.tbtn:hover:not(:disabled){color:var(--bright);border-color:var(--glow)}
+.tbtn:disabled{opacity:.35;cursor:not-allowed}
+.tbtn.play{min-width:62px;color:var(--bright)}
+#scrub{flex:1 1 140px;min-width:110px;accent-color:var(--glow);height:26px}
+.strip{width:100%;height:20px;display:block;background:var(--panel2);border:1px solid var(--rule);border-radius:2px;cursor:pointer;margin-top:6px}
+.tlab{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap}
+
+/* ---------- instruction lane + scope ---------- */
+.scopewrap{margin-top:10px;overflow:hidden}
+.lane{
+  display:flex;gap:5px;padding:7px 8px;overflow-x:auto;
+  border-bottom:1px solid var(--rule);background:var(--panel2);
+  scrollbar-width:thin;-webkit-overflow-scrolling:touch;
+}
+.ins{flex:0 0 auto;border:1px solid var(--rule);border-radius:2px;background:#131A24;padding:3px 4px 4px}
+.ins.here{border-color:var(--glow);background:color-mix(in srgb,var(--glow) 10%,#131A24)}
+.ins .il{
+  font-family:var(--mono);font-size:10px;color:var(--dim);
+  padding:0 2px 3px;white-space:nowrap;letter-spacing:-.01em;
+}
+.ins.here .il{color:var(--bright)}
+.ins .cells{display:flex;gap:2px}
+.cell{
+  width:9px;height:13px;border-radius:1px;background:#243040;cursor:pointer;border:none;padding:0;
+}
+.cell.ph2{background:#1B2534}
+.cell.wr{background:var(--data);opacity:.55}
+.cell.now{background:var(--glow)}
+#scope{display:block;width:100%;height:auto;background:#0D131C}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:2px;margin:12px 0 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  flex:0 0 auto;background:transparent;border:1px solid transparent;border-bottom:none;
+  border-radius:3px 3px 0 0;padding:8px 14px;cursor:pointer;
+  font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--dim);min-height:36px;
+}
+.tab:hover{color:var(--text)}
+.tab[aria-selected="true"]{
+  color:var(--bright);background:var(--panel);
+  border-color:var(--rule);position:relative;top:1px;
+}
+.tabwrap{border-top:1px solid var(--rule);padding-top:12px}
+[role="tabpanel"][hidden]{display:none}
+.two{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:1000px){.two{grid-template-columns:1fr 300px}}
 
 /* ---------- editor rail ---------- */
 textarea#src{
@@ -91,7 +152,8 @@ select{
 
 /* ---------- datapath stage ---------- */
 .stage{border-top:2px solid var(--glow);transition:border-color .18s}
-#map{display:block;width:100%;height:auto}
+.mapwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+#map{display:block;width:100%;min-width:500px;max-width:860px;margin:0 auto;height:auto}
 .bx rect{fill:var(--panel2);stroke:var(--rule);stroke-width:1}
 .bx text.n{font-family:var(--disp);font-size:9.5px;font-weight:700;letter-spacing:.08em;fill:var(--mid)}
 .bx text.v{font-family:var(--mono);font-size:12.5px;font-weight:600;fill:var(--dim)}
@@ -108,6 +170,68 @@ select{
 @keyframes flow{to{stroke-dashoffset:-24}}
 .elab{font-family:var(--mono);font-size:8.5px;fill:var(--dim);opacity:0;letter-spacing:.02em}
 .elab.on{opacity:.95}
+
+/* ---------- stage: diagram beside its narration ---------- */
+.stagegrid{display:grid;grid-template-columns:1fr}
+.stageside{display:flex;flex-direction:column;min-width:0}
+@media(min-width:1060px){
+  .stagegrid{grid-template-columns:minmax(0,1fr) 400px}
+  .stageside{border-left:1px solid var(--rule)}
+  .stageside .readout{border-top:none;border-bottom:1px solid var(--rule)}
+  .stageside .tell{border-top:none;flex:1}
+  .mapwrap{display:flex;align-items:center;justify-content:center}
+  #map{max-width:none;min-width:0;width:100%;height:min(46vh,460px)}
+}
+@media(min-width:1400px){ .stagegrid{grid-template-columns:minmax(0,1fr) 460px} }
+
+/* ---------- readout strip ---------- */
+.readout{
+  display:flex;flex-wrap:wrap;gap:5px;padding:9px 12px;
+  border-top:1px solid var(--rule);background:#111823;
+}
+.rd{
+  font-family:var(--mono);font-size:11.5px;padding:3px 7px;border-radius:2px;
+  border:1px solid var(--rule);background:var(--panel2);color:var(--dim);white-space:nowrap;
+}
+.rd b{font-weight:600;color:var(--text);margin-left:5px}
+.rd.chg{border-color:var(--glow)}
+.rd.chg b{color:var(--bright)}
+.rd.addr{color:var(--addr)} .rd.data{color:var(--data)} .rd.alu{color:var(--alu)}
+
+/* ---------- bit lanes ---------- */
+.bitgrid{display:grid;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.bsec{
+  font-family:var(--disp);font-size:9px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--dim);padding:9px 0 3px;
+}
+.bsec:first-child{padding-top:0}
+.bl{display:flex;align-items:center;gap:8px;min-height:19px}
+.bn{
+  font-family:var(--mono);font-size:10.5px;color:var(--mid);
+  width:46px;flex:none;text-align:right;
+}
+.bits{display:flex;gap:2px}
+.bits .gap{width:6px}
+.bc{
+  width:11px;height:15px;border-radius:1px;
+  background:#1A2331;border:1px solid #232E3D;
+}
+.bc.on{background:currentColor;border-color:currentColor}
+.bc.flip{box-shadow:0 0 0 1.5px var(--glow)}
+.bh{font-family:var(--mono);font-size:11px;color:var(--text);width:46px;flex:none}
+.btag{
+  font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:2px;
+  border:1px solid currentColor;opacity:.9;white-space:nowrap;
+}
+.bl.addr{color:var(--addr)} .bl.data{color:var(--data)}
+.bl.alu{color:var(--alu)}  .bl.rg{color:#8FA3BC}
+.bl.idle{opacity:.42}
+@media(max-width:620px){
+  .bc{width:8px;height:13px}
+  .bn{width:38px;font-size:9.5px}
+  .bh{width:40px;font-size:10px}
+  .bl{gap:5px}
+}
 
 /* ---------- narration ---------- */
 .tell{padding:14px 16px;border-top:1px solid var(--rule);background:var(--panel2)}
@@ -134,6 +258,7 @@ select{
 
 /* ---------- registers / memory side ---------- */
 .regs{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+@media(min-width:620px){.regs{grid-template-columns:repeat(4,1fr)}.reg.wide{grid-column:span 2}}
 .reg{background:var(--panel2);border:1px solid var(--rule);border-radius:2px;padding:7px 9px}
 .reg .k{font-family:var(--disp);font-size:9.5px;font-weight:700;letter-spacing:.12em;color:var(--dim)}
 .reg .v{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--text);margin-top:1px}
@@ -152,23 +277,6 @@ select{
 .lline.here{border-left-color:var(--glow);background:color-mix(in srgb,var(--glow) 14%,transparent)}
 .lline.here b,.lline.here{color:var(--bright)}
 
-/* ---------- transport ---------- */
-.transport{
-  position:fixed;left:0;right:0;bottom:0;z-index:20;
-  background:color-mix(in srgb,var(--ground) 94%,#000);
-  border-top:1px solid var(--rule);backdrop-filter:blur(8px);
-}
-.tin{max-width:1500px;margin:0 auto;padding:9px 18px 11px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.tbtn{
-  background:var(--panel);border:1px solid var(--rule);border-radius:2px;
-  padding:6px 9px;font-family:var(--mono);font-size:11.5px;cursor:pointer;color:var(--mid);
-}
-.tbtn:hover:not(:disabled){color:var(--bright);border-color:var(--glow)}
-.tbtn:disabled{opacity:.35;cursor:not-allowed}
-.tbtn.play{min-width:64px;color:var(--bright)}
-#scrub{flex:1 1 220px;min-width:160px;accent-color:var(--glow);height:22px}
-.strip{width:100%;height:22px;display:block;background:var(--panel2);border:1px solid var(--rule);border-radius:2px;cursor:pointer}
-.tlab{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media(prefers-reduced-motion:reduce){.e.on{animation:none}*{transition:none!important}}
 </style>
@@ -177,107 +285,130 @@ select{
 <div class="wrap">
 
 <header>
-  <div>
-    <div class="brand">Halfwave <em>Lab</em></div>
-    <div class="eyebrow" style="margin-top:3px">Notebook for a transistor-level 6502</div>
-  </div>
-  <p class="tag">Write a program, assemble it, and walk the chip one half-cycle at a time. Every value here is read out of a storage node on the die.</p>
+  <div class="brand">Halfwave <em>Lab</em></div>
+  <p class="tag">A 6502, half a clock phase at a time. Every value is read out of a storage node on the die.</p>
   <div class="clockbar">
     <span class="conn" id="conn">checking…</span>
-    <span class="pos" id="pos">h <b>0</b> · cycle <b>0</b></span>
+    <span class="pos" id="pos">h <b>0</b> · cyc <b>0</b></span>
     <span class="phasepill" id="pill"><span class="dot"></span><span id="pilltxt">φ1</span></span>
   </div>
 </header>
 
-<div class="grid">
-
-  <!-- ============ LEFT RAIL ============ -->
-  <div>
-    <section class="panel">
-      <div class="ph"><h2 class="eyebrow">Program</h2><span class="eyebrow" id="asmlen"></span></div>
-      <div class="pb">
-        <select id="preset" aria-label="Load an example program"></select>
-        <p class="note" id="presetnote" style="margin-top:8px"></p>
-        <textarea id="src" spellcheck="false" aria-label="6502 assembly source"></textarea>
-        <div class="row">
-          <button class="btn go" id="run">Assemble &amp; boot</button>
-          <button class="btn" id="more" disabled>Run 200 more</button>
-        </div>
-        <p class="err" id="err" hidden></p>
-        <p class="note" id="hint"></p>
-      </div>
-    </section>
-
-    <section class="panel" style="margin-top:16px">
-      <div class="ph"><h2 class="eyebrow">Listing</h2></div>
-      <div class="pb"><div class="mem" id="listing"></div></div>
-    </section>
+<!-- ============ PLAYER ============ -->
+<div class="player">
+  <div class="prow">
+    <button class="tbtn" id="b-reset" title="Back to the first half-cycle">⏮ reset</button>
+    <button class="tbtn" id="b-hb" title="Back one half-cycle (←)">◄ ½</button>
+    <button class="tbtn play" id="b-play" title="Play / pause (space)">▶ play</button>
+    <button class="tbtn" id="b-hf" title="Forward one half-cycle (→)">½ ►</button>
+    <button class="tbtn" id="b-cf" title="Next full cycle (shift + →)">cyc ►</button>
+    <button class="tbtn" id="b-if" title="Next opcode fetch (shift + ↓)">op ►</button>
+    <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Half-cycle position">
+    <span class="tlab" id="tlab">0 / 0</span>
   </div>
+</div>
 
-  <!-- ============ CENTER STAGE ============ -->
-  <div>
-    <section class="panel stage" id="stage">
+<!-- ============ LANE + SCOPE ============ -->
+<div class="panel scopewrap">
+  <div class="lane" id="lane" role="group" aria-label="Instructions, one cell per half-cycle"></div>
+  <canvas id="scope" aria-label="Clock phases, RDY, SYNC and timing states"></canvas>
+</div>
+
+<!-- ============ TABS ============ -->
+<div class="tabs" role="tablist" aria-label="Panels">
+  <button class="tab" role="tab" id="t-map"  aria-controls="p-map"  aria-selected="true">Datapath</button>
+  <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
+  <button class="tab" role="tab" id="t-state" aria-controls="p-state" aria-selected="false">State</button>
+  <button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
+</div>
+
+<div class="tabwrap">
+
+  <section role="tabpanel" id="p-map" aria-labelledby="t-map">
+    <div class="panel stage" id="stage">
       <div class="ph">
         <h2 class="eyebrow">The datapath, right now</h2>
         <span class="eyebrow"><span id="aluop" style="color:var(--alu)"></span> <span id="tstate"></span></span>
       </div>
-      <div class="pb" style="padding:6px 10px 2px">
-        <svg id="map" viewBox="0 0 540 336" role="img" aria-label="Live 6502 datapath diagram"></svg>
+      <div class="stagegrid">
+        <div class="pb mapwrap" style="padding:6px 10px 2px">
+          <svg id="map" viewBox="0 0 540 336" role="img" aria-label="Live 6502 datapath diagram"></svg>
+        </div>
+        <div class="stageside">
+          <div class="readout" id="readout"></div>
+          <div class="tell">
+            <p class="lede" id="lede">Boot a program to begin.</p>
+            <ul id="beats"></ul>
+          </div>
+        </div>
       </div>
-      <div class="tell">
-        <p class="lede" id="lede">Boot a program to begin.</p>
-        <ul id="beats"></ul>
-      </div>
-    </section>
-
-    <section class="panel" style="margin-top:16px">
+    </div>
+    <div class="panel">
       <div class="ph">
-        <h2 class="eyebrow">Pass transistors — what is conducting</h2>
-        <span class="eyebrow" id="lncount"></span>
+        <h2 class="eyebrow">Inside the boxes — every line, every latch</h2>
+        <span class="eyebrow" id="chain"></span>
       </div>
-      <div class="pb"><div class="lines" id="lines"></div>
-        <p class="note">The diagram above and the sentence below it are generated from these same 22 booleans, so the picture cannot disagree with the words.</p>
-      </div>
-    </section>
-  </div>
+      <div class="pb"><div class="bitgrid" id="bits"></div></div>
+    </div>
+  </section>
 
-  <!-- ============ RIGHT SIDE ============ -->
-  <div>
-    <section class="panel">
+  <section role="tabpanel" id="p-sig" aria-labelledby="t-sig" hidden>
+    <div class="two">
+      <div class="panel">
+        <div class="ph">
+          <h2 class="eyebrow">Pass transistors — what is conducting</h2>
+          <span class="eyebrow" id="lncount"></span>
+        </div>
+        <div class="pb">
+          <div class="lines" id="lines"></div>
+          <p class="note">The datapath diagram and its narration are generated from these same booleans, so the picture cannot disagree with the words.</p>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:0">
+        <div class="ph"><h2 class="eyebrow">External bus</h2></div>
+        <div class="pb"><div class="regs" id="busbox"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p-state" aria-labelledby="t-state" hidden>
+    <div class="panel">
       <div class="ph"><h2 class="eyebrow">Registers</h2></div>
       <div class="pb"><div class="regs" id="regs"></div></div>
-    </section>
-
-    <section class="panel" style="margin-top:16px">
-      <div class="ph"><h2 class="eyebrow">External bus</h2></div>
-      <div class="pb"><div class="regs" id="busbox"></div></div>
-    </section>
-
-    <section class="panel" style="margin-top:16px">
+    </div>
+    <div class="panel">
       <div class="ph"><h2 class="eyebrow">Zero page</h2><span class="eyebrow">$0080–$00BF</span></div>
       <div class="pb"><div class="mem" id="zp"></div></div>
-    </section>
-  </div>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p-prog" aria-labelledby="t-prog" hidden>
+    <div class="two">
+      <div class="panel">
+        <div class="ph"><h2 class="eyebrow">Program</h2><span class="eyebrow" id="asmlen"></span></div>
+        <div class="pb">
+          <select id="preset" aria-label="Load an example program"></select>
+          <p class="note" id="presetnote" style="margin-top:8px"></p>
+          <textarea id="src" spellcheck="false" aria-label="6502 assembly source"></textarea>
+          <div class="row">
+            <button class="btn go" id="run">Assemble &amp; boot</button>
+            <button class="btn" id="more" disabled>Run 200 more</button>
+          </div>
+          <p class="err" id="err" hidden></p>
+          <p class="note" id="hint"></p>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:0">
+        <div class="ph"><h2 class="eyebrow">Listing</h2></div>
+        <div class="pb"><div class="mem" id="listing"></div></div>
+      </div>
+    </div>
+  </section>
+
 </div>
 </div>
 
-<!-- ============ TRANSPORT ============ -->
-<div class="transport">
-  <div class="tin">
-    <button class="tbtn" id="b-hb" title="Back one half-cycle (←)">◄ ½</button>
-    <button class="tbtn play" id="b-play" title="Play / pause (space)">▶ play</button>
-    <button class="tbtn" id="b-hf" title="Forward one half-cycle (→)">½ ►</button>
-    <button class="tbtn" id="b-cf" title="Next full cycle (shift + →)">cycle ►</button>
-    <button class="tbtn" id="b-if" title="Next opcode fetch (shift + ↓)">next opcode ►</button>
-    <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Half-cycle position">
-    <span class="tlab" id="tlab">0 / 0</span>
-  </div>
-  <div class="tin" style="padding-top:0">
-    <canvas class="strip" id="strip" height="22" aria-label="Timeline: opcode fetches and bus activity"></canvas>
-  </div>
-</div>
-
-<script id="demo" type="application/json">{"cols":["half_cycle","cycle","clk0","phase","addr","data","rw","sync","pc","a","x","y","s","p","ir","alu","sb","adl","adh","tstates","hidden","store_data","fetch_addr","fetch_opcode","watch"],"watch_names":["dpc38_PCLADL","dpc32_PCHADH","dpc25_SBDB","dpc23_SBAC","dpc9_DBADD","dpc11_SBADD","dpc10_ADLADD","dpc21_ADDADL","dpc20_ADDSB06","dpc19_ADDSB7","dpc40_ADLPCL","dpc39_PCLPCL","dpc31_PCHPCH","dpc30_ADHPCH","dpc37_PCLDB","dpc33_PCHDB","dpc1_SBY","dpc3_SBX","dpc6_SBS","dpc27_SBADH","dpc17_SUMS","dpc12_0ADD"],"rows":[[1,0,1,2,512,169,0,1,512,170,0,0,253,54,0,1,1,1,2,2,1,0,512,169,1049351],[2,1,0,1,513,46,0,0,513,170,0,0,253,54,169,1,1,1,2,5,0,0,512,169,1058615],[3,1,1,2,513,46,0,0,513,170,0,0,253,54,169,2,255,2,2,5,0,0,512,169,1048583],[4,2,0,1,514,133,0,1,514,46,0,0,253,52,169,2,46,2,2,2,1,0,514,133,1057855],[5,2,1,2,514,133,0,1,514,46,0,0,253,52,169,92,92,3,2,2,1,0,514,133,1049351],[6,3,0,1,515,128,0,0,515,46,0,0,253,52,133,92,92,3,2,4,0,0,514,133,1058615],[7,3,1,2,515,128,0,0,515,46,0,0,253,52,133,184,255,255,0,4,0,0,514,133,1048576],[8,4,0,1,128,128,1,0,516,46,0,0,253,52,133,184,255,128,0,1,0,0,514,133,1054816],[9,4,1,2,128,46,1,0,516,46,0,0,253,52,133,127,255,4,2,1,0,0,514,133,1048579],[10,5,0,1,516,169,0,1,516,46,0,0,253,52,133,127,46,4,2,2,1,0,516,169,1057843],[11,5,1,2,516,169,0,1,516,46,0,0,253,52,133,92,92,5,2,2,1,0,516,169,1049351],[12,6,0,1,517,20,0,0,517,46,0,0,253,52,169,92,92,5,2,5,0,0,516,169,1058615],[13,6,1,2,517,20,0,0,517,46,0,0,253,52,169,184,255,6,2,5,0,0,516,169,1048583],[14,7,0,1,518,133,0,1,518,20,0,0,253,52,169,184,20,6,2,2,1,0,518,133,1057855],[15,7,1,2,518,133,0,1,518,20,0,0,253,52,169,40,40,7,2,2,1,0,518,133,1049351],[16,8,0,1,519,129,0,0,519,20,0,0,253,52,133,40,40,7,2,4,0,0,518,133,1058615],[17,8,1,2,519,129,0,0,519,20,0,0,253,52,133,80,255,255,0,4,0,0,518,133,1048576],[18,9,0,1,129,129,1,0,520,20,0,0,253,52,133,80,255,129,0,1,0,0,518,133,1054816],[19,9,1,2,129,20,1,0,520,20,0,0,253,52,133,128,255,8,2,1,0,0,518,133,1048579],[20,10,0,1,520,24,0,1,520,20,0,0,253,52,133,128,20,8,2,2,1,0,520,24,1057843],[21,10,1,2,520,24,0,1,520,20,0,0,253,52,133,40,40,9,2,2,1,0,520,24,1049351],[22,11,0,1,521,165,0,0,521,20,0,0,253,52,24,40,40,9,2,5,0,0,520,24,1058615],[23,11,1,2,521,165,0,0,521,20,0,0,253,52,24,80,255,9,2,5,0,0,520,24,1048579],[24,12,0,1,521,165,0,1,521,20,0,0,253,52,24,80,255,9,2,2,1,0,521,165,1057843],[25,12,1,2,521,165,0,1,521,20,0,0,253,52,24,254,254,10,2,2,1,0,521,165,1049351],[26,13,0,1,522,128,0,0,522,20,0,0,253,52,165,254,254,10,2,4,0,0,521,165,1058615],[27,13,1,2,522,128,0,0,522,20,0,0,253,52,165,252,255,255,0,4,0,0,521,165,1048576],[28,14,0,1,128,46,0,0,523,20,0,0,253,52,165,252,255,128,0,1,0,0,521,165,1054816],[29,14,1,2,128,46,0,0,523,20,0,0,253,52,165,127,255,11,2,1,0,0,521,165,1048583],[30,15,0,1,523,101,0,1,523,46,0,0,253,52,165,127,46,11,2,2,1,0,523,101,1057855],[31,15,1,2,523,101,0,1,523,46,0,0,253,52,165,92,92,12,2,2,1,0,523,101,1049351],[32,16,0,1,524,129,0,0,524,46,0,0,253,52,101,92,92,12,2,4,0,0,523,101,1058615],[33,16,1,2,524,129,0,0,524,46,0,0,253,52,101,184,255,255,0,4,0,0,523,101,1048576],[34,17,0,1,129,20,0,0,525,46,0,0,253,52,101,184,255,129,0,1,0,0,523,101,1054816],[35,17,1,2,129,20,0,0,525,46,0,0,253,52,101,128,255,13,2,1,0,0,523,101,1048579],[36,18,0,1,525,133,0,1,525,46,0,0,253,52,101,128,46,13,2,2,1,0,525,133,1057843],[37,18,1,2,525,133,0,1,525,46,0,0,253,52,101,66,66,14,2,2,1,0,525,133,1049351],[38,19,0,1,526,130,0,0,526,66,0,0,253,52,133,66,66,14,2,4,0,0,525,133,1058623],[39,19,1,2,526,130,0,0,526,66,0,0,253,52,133,132,255,255,0,4,0,0,525,133,1048576],[40,20,0,1,130,130,1,0,527,66,0,0,253,52,133,132,255,130,0,1,0,0,525,133,1054816],[41,20,1,2,130,66,1,0,527,66,0,0,253,52,133,129,255,15,2,1,0,0,525,133,1048579],[42,21,0,1,527,76,0,1,527,66,0,0,253,52,133,129,66,15,2,2,1,0,527,76,1057843],[43,21,1,2,527,76,0,1,527,66,0,0,253,52,133,132,132,16,2,2,1,0,527,76,1049351],[44,22,0,1,528,0,0,0,528,66,0,0,253,52,76,132,132,16,2,4,0,0,527,76,1058615],[45,22,1,2,528,0,0,0,528,66,0,0,253,52,76,8,255,17,2,4,0,0,527,76,1048579],[46,23,0,1,529,2,0,0,529,66,0,0,253,52,76,8,255,17,2,1,0,0,527,76,3154963],[47,23,1,2,529,2,0,0,529,66,0,0,253,52,76,0,255,0,255,1,0,0,527,76,1048704],[48,24,0,1,512,169,0,1,512,66,0,0,253,52,76,0,255,0,2,2,1,0,512,169,3155088],[49,24,1,2,512,169,0,1,512,66,0,0,253,52,76,2,2,1,2,2,1,0,512,169,1049351],[50,25,0,1,513,46,0,0,513,66,0,0,253,52,169,2,2,1,2,5,0,0,512,169,3155735],[51,25,1,2,513,46,0,0,513,66,0,0,253,52,169,2,255,2,2,5,0,0,512,169,1048583],[52,26,0,1,514,133,0,1,514,46,0,0,253,52,169,2,46,2,2,2,1,0,514,133,1057855],[53,26,1,2,514,133,0,1,514,46,0,0,253,52,169,92,92,3,2,2,1,0,514,133,1049351],[54,27,0,1,515,128,0,0,515,46,0,0,253,52,133,92,92,3,2,4,0,0,514,133,1058615],[55,27,1,2,515,128,0,0,515,46,0,0,253,52,133,184,255,255,0,4,0,0,514,133,1048576],[56,28,0,1,128,128,1,0,516,46,0,0,253,52,133,184,255,128,0,1,0,0,514,133,1054816],[57,28,1,2,128,46,1,0,516,46,0,0,253,52,133,127,255,4,2,1,0,0,514,133,1048579],[58,29,0,1,516,169,0,1,516,46,0,0,253,52,133,127,46,4,2,2,1,0,516,169,1057843],[59,29,1,2,516,169,0,1,516,46,0,0,253,52,133,92,92,5,2,2,1,0,516,169,1049351],[60,30,0,1,517,20,0,0,517,46,0,0,253,52,169,92,92,5,2,5,0,0,516,169,1058615],[61,30,1,2,517,20,0,0,517,46,0,0,253,52,169,184,255,6,2,5,0,0,516,169,1048583],[62,31,0,1,518,133,0,1,518,20,0,0,253,52,169,184,20,6,2,2,1,0,518,133,1057855],[63,31,1,2,518,133,0,1,518,20,0,0,253,52,169,40,40,7,2,2,1,0,518,133,1049351],[64,32,0,1,519,129,0,0,519,20,0,0,253,52,133,40,40,7,2,4,0,0,518,133,1058615],[65,32,1,2,519,129,0,0,519,20,0,0,253,52,133,80,255,255,0,4,0,0,518,133,1048576],[66,33,0,1,129,129,1,0,520,20,0,0,253,52,133,80,255,129,0,1,0,0,518,133,1054816],[67,33,1,2,129,20,1,0,520,20,0,0,253,52,133,128,255,8,2,1,0,0,518,133,1048579],[68,34,0,1,520,24,0,1,520,20,0,0,253,52,133,128,20,8,2,2,1,0,520,24,1057843],[69,34,1,2,520,24,0,1,520,20,0,0,253,52,133,40,40,9,2,2,1,0,520,24,1049351],[70,35,0,1,521,165,0,0,521,20,0,0,253,52,24,40,40,9,2,5,0,0,520,24,1058615],[71,35,1,2,521,165,0,0,521,20,0,0,253,52,24,80,255,9,2,5,0,0,520,24,1048579],[72,36,0,1,521,165,0,1,521,20,0,0,253,52,24,80,255,9,2,2,1,0,521,165,1057843],[73,36,1,2,521,165,0,1,521,20,0,0,253,52,24,254,254,10,2,2,1,0,521,165,1049351],[74,37,0,1,522,128,0,0,522,20,0,0,253,52,165,254,254,10,2,4,0,0,521,165,1058615],[75,37,1,2,522,128,0,0,522,20,0,0,253,52,165,252,255,255,0,4,0,0,521,165,1048576],[76,38,0,1,128,46,0,0,523,20,0,0,253,52,165,252,255,128,0,1,0,0,521,165,1054816],[77,38,1,2,128,46,0,0,523,20,0,0,253,52,165,127,255,11,2,1,0,0,521,165,1048583],[78,39,0,1,523,101,0,1,523,46,0,0,253,52,165,127,46,11,2,2,1,0,523,101,1057855],[79,39,1,2,523,101,0,1,523,46,0,0,253,52,165,92,92,12,2,2,1,0,523,101,1049351],[80,40,0,1,524,129,0,0,524,46,0,0,253,52,101,92,92,12,2,4,0,0,523,101,1058615],[81,40,1,2,524,129,0,0,524,46,0,0,253,52,101,184,255,255,0,4,0,0,523,101,1048576],[82,41,0,1,129,20,0,0,525,46,0,0,253,52,101,184,255,129,0,1,0,0,523,101,1054816],[83,41,1,2,129,20,0,0,525,46,0,0,253,52,101,128,255,13,2,1,0,0,523,101,1048579],[84,42,0,1,525,133,0,1,525,46,0,0,253,52,101,128,46,13,2,2,1,0,525,133,1057843],[85,42,1,2,525,133,0,1,525,46,0,0,253,52,101,66,66,14,2,2,1,0,525,133,1049351],[86,43,0,1,526,130,0,0,526,66,0,0,253,52,133,66,66,14,2,4,0,0,525,133,1058623],[87,43,1,2,526,130,0,0,526,66,0,0,253,52,133,132,255,255,0,4,0,0,525,133,1048576],[88,44,0,1,130,130,1,0,527,66,0,0,253,52,133,132,255,130,0,1,0,0,525,133,1054816],[89,44,1,2,130,66,1,0,527,66,0,0,253,52,133,129,255,15,2,1,0,0,525,133,1048579],[90,45,0,1,527,76,0,1,527,66,0,0,253,52,133,129,66,15,2,2,1,0,527,76,1057843],[91,45,1,2,527,76,0,1,527,66,0,0,253,52,133,132,132,16,2,2,1,0,527,76,1049351],[92,46,0,1,528,0,0,0,528,66,0,0,253,52,76,132,132,16,2,4,0,0,527,76,1058615],[93,46,1,2,528,0,0,0,528,66,0,0,253,52,76,8,255,17,2,4,0,0,527,76,1048579],[94,47,0,1,529,2,0,0,529,66,0,0,253,52,76,8,255,17,2,1,0,0,527,76,3154963],[95,47,1,2,529,2,0,0,529,66,0,0,253,52,76,0,255,0,255,1,0,0,527,76,1048704],[96,48,0,1,512,169,0,1,512,66,0,0,253,52,76,0,255,0,2,2,1,0,512,169,3155088],[97,48,1,2,512,169,0,1,512,66,0,0,253,52,76,2,2,1,2,2,1,0,512,169,1049351],[98,49,0,1,513,46,0,0,513,66,0,0,253,52,169,2,2,1,2,5,0,0,512,169,3155735],[99,49,1,2,513,46,0,0,513,66,0,0,253,52,169,2,255,2,2,5,0,0,512,169,1048583],[100,50,0,1,514,133,0,1,514,46,0,0,253,52,169,2,46,2,2,2,1,0,514,133,1057855],[101,50,1,2,514,133,0,1,514,46,0,0,253,52,169,92,92,3,2,2,1,0,514,133,1049351],[102,51,0,1,515,128,0,0,515,46,0,0,253,52,133,92,92,3,2,4,0,0,514,133,1058615],[103,51,1,2,515,128,0,0,515,46,0,0,253,52,133,184,255,255,0,4,0,0,514,133,1048576],[104,52,0,1,128,128,1,0,516,46,0,0,253,52,133,184,255,128,0,1,0,0,514,133,1054816],[105,52,1,2,128,46,1,0,516,46,0,0,253,52,133,127,255,4,2,1,0,0,514,133,1048579],[106,53,0,1,516,169,0,1,516,46,0,0,253,52,133,127,46,4,2,2,1,0,516,169,1057843],[107,53,1,2,516,169,0,1,516,46,0,0,253,52,133,92,92,5,2,2,1,0,516,169,1049351],[108,54,0,1,517,20,0,0,517,46,0,0,253,52,169,92,92,5,2,5,0,0,516,169,1058615],[109,54,1,2,517,20,0,0,517,46,0,0,253,52,169,184,255,6,2,5,0,0,516,169,1048583],[110,55,0,1,518,133,0,1,518,20,0,0,253,52,169,184,20,6,2,2,1,0,518,133,1057855],[111,55,1,2,518,133,0,1,518,20,0,0,253,52,169,40,40,7,2,2,1,0,518,133,1049351],[112,56,0,1,519,129,0,0,519,20,0,0,253,52,133,40,40,7,2,4,0,0,518,133,1058615],[113,56,1,2,519,129,0,0,519,20,0,0,253,52,133,80,255,255,0,4,0,0,518,133,1048576],[114,57,0,1,129,129,1,0,520,20,0,0,253,52,133,80,255,129,0,1,0,0,518,133,1054816],[115,57,1,2,129,20,1,0,520,20,0,0,253,52,133,128,255,8,2,1,0,0,518,133,1048579],[116,58,0,1,520,24,0,1,520,20,0,0,253,52,133,128,20,8,2,2,1,0,520,24,1057843],[117,58,1,2,520,24,0,1,520,20,0,0,253,52,133,40,40,9,2,2,1,0,520,24,1049351],[118,59,0,1,521,165,0,0,521,20,0,0,253,52,24,40,40,9,2,5,0,0,520,24,1058615],[119,59,1,2,521,165,0,0,521,20,0,0,253,52,24,80,255,9,2,5,0,0,520,24,1048579],[120,60,0,1,521,165,0,1,521,20,0,0,253,52,24,80,255,9,2,2,1,0,521,165,1057843],[121,60,1,2,521,165,0,1,521,20,0,0,253,52,24,254,254,10,2,2,1,0,521,165,1049351],[122,61,0,1,522,128,0,0,522,20,0,0,253,52,165,254,254,10,2,4,0,0,521,165,1058615],[123,61,1,2,522,128,0,0,522,20,0,0,253,52,165,252,255,255,0,4,0,0,521,165,1048576],[124,62,0,1,128,46,0,0,523,20,0,0,253,52,165,252,255,128,0,1,0,0,521,165,1054816],[125,62,1,2,128,46,0,0,523,20,0,0,253,52,165,127,255,11,2,1,0,0,521,165,1048583],[126,63,0,1,523,101,0,1,523,46,0,0,253,52,165,127,46,11,2,2,1,0,523,101,1057855],[127,63,1,2,523,101,0,1,523,46,0,0,253,52,165,92,92,12,2,2,1,0,523,101,1049351],[128,64,0,1,524,129,0,0,524,46,0,0,253,52,101,92,92,12,2,4,0,0,523,101,1058615],[129,64,1,2,524,129,0,0,524,46,0,0,253,52,101,184,255,255,0,4,0,0,523,101,1048576],[130,65,0,1,129,20,0,0,525,46,0,0,253,52,101,184,255,129,0,1,0,0,523,101,1054816],[131,65,1,2,129,20,0,0,525,46,0,0,253,52,101,128,255,13,2,1,0,0,523,101,1048579],[132,66,0,1,525,133,0,1,525,46,0,0,253,52,101,128,46,13,2,2,1,0,525,133,1057843]],"mem":{"fill":"00","pages":{"02":"a92e8580a914858118a580658185824c000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","ff":"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000"}},"asm":{"org":512,"end":529,"size":18,"bytes":"a92e8580a914858118a580658185824c0002","labels":{"start":512,"sum":520},"listing":[{"n":1,"text":"        .org $0200","label":null,"addr":512,"bytes":null},{"n":2,"text":"start:  LDA #$2E","label":"start","addr":512,"bytes":"a92e"},{"n":3,"text":"        STA $80","label":null,"addr":514,"bytes":"8580"},{"n":4,"text":"        LDA #$14","label":null,"addr":516,"bytes":"a914"},{"n":5,"text":"        STA $81","label":null,"addr":518,"bytes":"8581"},{"n":6,"text":"sum:    CLC","label":"sum","addr":520,"bytes":"18"},{"n":7,"text":"        LDA $80","label":null,"addr":521,"bytes":"a580"},{"n":8,"text":"        ADC $81","label":null,"addr":523,"bytes":"6581"},{"n":9,"text":"        STA $82","label":null,"addr":525,"bytes":"8582"},{"n":10,"text":"        JMP start","label":null,"addr":527,"bytes":"4c0002"}]},"src":"        .org $0200\nstart:  LDA #$2E\n        STA $80\n        LDA #$14\n        STA $81\nsum:    CLC\n        LDA $80\n        ADC $81\n        STA $82\n        JMP start"}</script>
+<script id="demo" type="application/json">__DEMO__</script>
 <script>
 "use strict";
 const $ = s => document.querySelector(s);
@@ -287,8 +418,12 @@ const hx = (v,n=2) => "$"+v.toString(16).toUpperCase().padStart(n,"0");
 const WATCH = ["dpc38_PCLADL","dpc32_PCHADH","dpc25_SBDB","dpc23_SBAC","dpc9_DBADD",
   "dpc11_SBADD","dpc10_ADLADD","dpc21_ADDADL","dpc20_ADDSB06","dpc19_ADDSB7",
   "dpc40_ADLPCL","dpc39_PCLPCL","dpc31_PCHPCH","dpc30_ADHPCH","dpc37_PCLDB",
-  "dpc33_PCHDB","dpc1_SBY","dpc3_SBX","dpc6_SBS","dpc27_SBADH","dpc17_SUMS","dpc12_0ADD"];
+  "dpc33_PCHDB","dpc1_SBY","dpc3_SBX","dpc6_SBS","dpc27_SBADH","dpc17_SUMS","dpc12_0ADD","clk1out","clk2out","rdy"];
 const SHORT = WATCH.map(w => w.split("_")[1]);
+/* Second request: the latches and internal bus, one watch per bit. Kept in its
+   own call because a rows watch mask past 53 names exceeds JS safe integers. */
+const FAM = ["idb","idl","dor","alua","alub"];
+const WATCH2 = FAM.flatMap(f => [0,1,2,3,4,5,6,7].map(i => f+i));
 const IX = {}; SHORT.forEach((s,i)=>IX[s]=i);
 
 /* human-readable label + which path each line belongs to */
@@ -418,12 +553,13 @@ function obs(n){
     wr:g("rw")===1,sync:g("sync")===1,pc:g("pc"),a:g("a"),x:g("x"),y:g("y"),s:g("s"),
     p:g("p"),ir:g("ir"),alu:g("alu"),sb:g("sb"),adl:g("adl"),adh:g("adh"),
     t:tsTxt(g("tstates")),hid:HID[g("hidden")],sd:SD[g("store_data")],
-    fa:g("fetch_addr"),w:g("watch")};
+    fa:g("fetch_addr"),w:g("watch"),
+    idb:g("idb"),idl:g("idl"),dor:g("dor"),alua:g("alua"),alub:g("alub")};
 }
 const bit = (o,full) => { const n=WNAMES.indexOf(full); return n<0?false:!!(o.w&(1<<n)); };
 const on = (o,name) => {
   if(name==="ADDSB") return on(o,"ADDSB06")||on(o,"ADDSB7");
-  const full=WNAMES.find(x=>x.split("_")[1]===name);
+  const full=WNAMES.find(x=>x.split("_")[1]===name)||(WNAMES.includes(name)?name:null);
   return full?bit(o,full):false;
 };
 const intAddr = o => (o.adh<<8)|o.adl;
@@ -448,7 +584,7 @@ const intAddr = o => (o.adh<<8)|o.adl;
   }
   svg.innerHTML=s;
 
-  $("#lines").innerHTML = SHORT.map(n=>{
+  $("#lines").innerHTML = SHORT.filter(n=>LINEMETA[n]).map(n=>{
     const m=LINEMETA[n]||[n,"alu"];
     return `<span class="ln ${m[1]}" data-ln="${n}"><i></i>${m[0]}</span>`;
   }).join("");
@@ -570,6 +706,15 @@ function render(){
   document.querySelector('[data-bx="ABUS"]').classList.toggle("stale", intAddr(o)!==o.addr);
   $("#aluop").textContent=aluOp(o)||"";
 
+  /* readout strip — the values the diagram may have scrolled off */
+  const RD=[["AB",hx(o.addr,4),"addr"],["ADH",hx(o.adh),"addr"],["ADL",hx(o.adl),"addr"],
+            ["DB",hx(o.data),"data"],["SB",hx(o.sb),"data"],["ALU",hx(o.alu),"alu"],
+            ["PC",hx(o.pc,4),""],["IR",hx(o.ir),""]];
+  const PV=p?{AB:hx(p.addr,4),ADH:hx(p.adh),ADL:hx(p.adl),DB:hx(p.data),SB:hx(p.sb),
+              ALU:hx(p.alu),PC:hx(p.pc,4),IR:hx(p.ir)}:{};
+  $("#readout").innerHTML=RD.map(([k,v,c])=>
+    `<span class="rd ${c} ${PV[k]&&PV[k]!==v?"chg":""}">${k}<b>${v}</b></span>`).join("");
+
   /* narration */
   const {lede,beats}=narrate(o,p);
   $("#lede").innerHTML=lede;
@@ -598,10 +743,76 @@ function render(){
 
   for(const el of document.querySelectorAll(".lline"))
     el.classList.toggle("here", +el.dataset.addr===o.fa);
+  renderBits(o,p);
   renderZP();
   $("#scrub").value=i;
   $("#tlab").textContent=`${i} / ${F.length-1}`;
   drawStrip();
+}
+
+/* ---- the layer under the block diagram ---- */
+const LANES=[
+  ["OFF-CHIP",[
+    ["AB",  o=>o.addr,16,"addr", o=>o.sync?"opcode fetch":null],
+    ["DB",  o=>o.data, 8,"data", o=>o.wr?"CPU driving":"memory driving"],
+    ["PINS", null, 0, "", o=>[
+       `<span class="btag" style="color:${o.wr?"var(--data)":"var(--dim)"}">R/W ${o.wr?"WRITE":"read"}</span>`,
+       `<span class="btag" style="color:${o.sync?"var(--addr)":"var(--dim)"}">SYNC ${o.sync?"high":"low"}</span>`,
+       `<span class="btag" style="color:${on(o,"rdy")?"var(--dim)":"var(--data)"}">RDY ${on(o,"rdy")?"high":"LOW"}</span>`,
+       `<span class="btag" style="color:${o.ph2?"var(--phi2)":"var(--phi1)"}">${o.ph2?"\u03c62":"\u03c61"}</span>`
+     ].join(" ")]]],
+  ["IN",[
+    ["IDL", o=>o.idl,  8,"data", null]]],
+  ["INTERNAL",[
+    ["IDB", o=>o.idb,  8,"data", null],
+    ["SB",  o=>o.sb,   8,"data", null],
+    ["ADH", o=>o.adh,  8,"addr", null],
+    ["ADL", o=>o.adl,  8,"addr", null]]],
+  ["ADDER",[
+    ["ALUA",o=>o.alua, 8,"alu", o=>on(o,"SBADD")?"SB\u2192a":on(o,"0ADD")?"0\u2192a":null],
+    ["ALUB",o=>o.alub, 8,"alu", o=>on(o,"DBADD")?"DB\u2192b":on(o,"ADLADD")?"ADL\u2192b":null],
+    ["ALU", o=>o.alu,  8,"alu", o=>on(o,"ADDSB")?"\u2192SB":null]]],
+  ["REGISTERS",[
+    ["A",   o=>o.a,    8,"rg", o=>on(o,"SBAC")?"SB\u2192A":null],
+    ["X",   o=>o.x,    8,"rg", o=>on(o,"SBX")?"SB\u2192X":null],
+    ["Y",   o=>o.y,    8,"rg", o=>on(o,"SBY")?"SB\u2192Y":null],
+    ["S",   o=>o.s,    8,"rg", o=>on(o,"SBS")?"SB\u2192S":null],
+    ["IR",  o=>o.ir,   8,"rg", o=>o.sync?"holding previous":null],
+    ["P",   o=>o.p,    8,"rg", null],
+    ["PC",  o=>o.pc,  16,"addr",null]]],
+  ["OUT",[
+    ["DOR", o=>o.dor,  8,"data", o=>o.wr?"onto the pins":null]]]
+];
+function renderBits(o,p){
+  let h="";
+  for(const [sec,rows] of LANES){
+    h+=`<div class="bsec">${sec}</div>`;
+    for(const [name,get,w,kind,tag] of rows){
+      if(get===null){
+        h+=`<div class="bl"><span class="bn">${name}</span>${tag(o)}</div>`;
+        continue;
+      }
+      const v=get(o), pv=p?get(p):null, idle=(pv!==null&&pv===v);
+      let cells="";
+      for(let b=w-1;b>=0;b--){
+        const on1=(v>>b)&1, fl=pv!==null&&(((v^pv)>>b)&1);
+        cells+=`<span class="bc${on1?" on":""}${fl?" flip":""}"></span>`;
+        if(w===16&&b===8) cells+='<span class="gap"></span>';
+      }
+      const t=tag?tag(o):null;
+      h+=`<div class="bl ${kind}${idle?" idle":""}"><span class="bn">${name}</span>`
+        +`<span class="bits">${cells}</span>`
+        +`<span class="bh">${hx(v,w/4)}</span>`
+        +(t?`<span class="btag">${t}</span>`:"")+`</div>`;
+    }
+  }
+  $("#bits").innerHTML=h;
+  const stage=on(o,"SBAC")?"ALU \u2192 SB \u2192 A"
+    : on(o,"ADDSB")?"ALU \u2192 SB"
+    : (on(o,"DBADD")||on(o,"ADLADD"))?"IDB \u2192 ALUA / ALUB"
+    : (p&&p.idl!==o.idl)?"DB \u2192 IDL"
+    : (p&&p.idb!==o.idb)?"IDL \u2192 IDB":"";
+  $("#chain").textContent=stage;
 }
 
 /* zero page, reconstructed from boot memory + every write up to here */
@@ -624,31 +835,134 @@ function renderZP(){
   $("#zp").innerHTML=s;
 }
 
-/* timeline strip: a tick per half-cycle, opcode fetches marked */
-function drawStrip(){
-  const cv=$("#strip"); const w=cv.clientWidth||600; cv.width=w;
-  const g=cv.getContext("2d"); g.clearRect(0,0,w,22);
-  const n=F.length; if(!n) return; const px=w/n;
-  for(let k=0;k<n;k++){
-    const r=F[k]; const x=k*px;
-    g.fillStyle = r[CI.rw]===1 ? "#E06A96" : r[CI.sync] ? "#4FBFD4" : (r[CI.phase]===2 ? "#2C3849" : "#212B39");
-    const big=r[CI.sync]||r[CI.rw]===1; g.fillRect(x,big?2:8,Math.max(px,.6),big?18:8);
+/* ---- instruction lane: one block per instruction, one cell per half-cycle ---- */
+let LISTING={};
+function insLabel(fa){
+  const t=LISTING[fa];
+  if(t===undefined) return fa<0?"\u2014":hx(fa,4);
+  return t.replace(/^\s*[A-Za-z_][\w]*:\s*/,"").trim()||hx(fa,4);
+}
+function buildLane(){
+  const groups=[]; let g=null;
+  for(let n=0;n<F.length;n++){
+    const sync=F[n][CI.sync], ph=F[n][CI.phase];
+    if(sync&&ph===1||!g){ g={fa:F[n][CI.fetch_addr],from:n,idx:[]}; groups.push(g); }
+    g.idx.push(n);
   }
-  g.fillStyle="#EAF1F8"; g.fillRect(Math.min(i*px,w-2),0,2,22);
+  $("#lane").innerHTML=groups.map(gr=>
+    `<div class="ins" data-from="${gr.from}"><div class="il">${insLabel(gr.fa)}</div><div class="cells">`
+    +gr.idx.map(n=>`<button class="cell${F[n][CI.phase]===2?" ph2":""}${F[n][CI.rw]===1?" wr":""}" data-n="${n}" aria-label="half-cycle ${F[n][CI.half_cycle]}"></button>`).join("")
+    +`</div></div>`).join("");
+  $("#lane").onclick=e=>{ const c=e.target.closest(".cell"); if(c) go(+c.dataset.n); };
+}
+function markLane(){
+  const cur=$("#lane").querySelector(".cell.now");
+  if(cur) cur.classList.remove("now");
+  const el=$("#lane").querySelector(`.cell[data-n="${i}"]`);
+  if(!el) return;
+  el.classList.add("now");
+  for(const b of $("#lane").querySelectorAll(".ins.here")) b.classList.remove("here");
+  const blk=el.closest(".ins"); if(blk) blk.classList.add("here");
+  const L=$("#lane"), r=el.getBoundingClientRect(), lr=L.getBoundingClientRect();
+  if(r.left<lr.left+30) L.scrollLeft+=r.left-lr.left-70;
+  else if(r.right>lr.right-30) L.scrollLeft+=r.right-lr.right+70;
 }
 
+/* ---- scope: Figure 3.4 redrawn from the recording ---- */
+const CH=[["\u03c61","clk1out","phi1"],["\u03c62","clk2out","phi2"],["RDY","rdy","dim"],
+          ["SYNC",null,"addr"],["T0",null,"t"],["T1",null,"t"],["T2",null,"t"],
+          ["T3",null,"t"],["T4",null,"t"],["T5",null,"t"]];
+const span = () => innerWidth<700?16:32;
+const CHCOL={phi1:"#7C9BC4",phi2:"#E8A05C",dim:"#6D7C8F",addr:"#4FBFD4",t:"#3E93A6"};
+/* One watch bit out of a rows mask. The API's watch_encoding is "hex":
+   a lowercase hex bitset, bit i in byte i/8, LSB first (the state blobs'
+   own convention), which is exact at any width -- a JSON integer is a
+   float64 past 2^53 and a JS >> is 32-bit, so the old integer mask was
+   doubly capped. A plain number is still accepted for the packed demo. */
+function wbit(m,i){
+  if(typeof m==="string") return m?(parseInt(m.substr((i>>3)*2,2),16)>>(i&7))&1:0;
+  return (m>>i)&1;
+}
+function chVal(n,c){
+  const r=F[n]; if(!r) return null;
+  if(c[1]!==null){ const w=WNAMES.indexOf(c[1]); return w<0?null:wbit(r[CI.watch],w); }
+  if(c[0]==="SYNC") return r[CI.sync]?1:0;
+  return (r[CI.tstates]>>(+c[0][1]))&1;
+}
+function drawScope(){
+  const cv=$("#scope"); const w=cv.clientWidth||700;
+  const SPAN=span();
+  const RH=12, GAP=6, PAD=7, LAB=30, H=PAD*2+CH.length*(RH+GAP)-GAP;
+  const dpr=devicePixelRatio||1;
+  cv.width=w*dpr; cv.height=H*dpr; cv.style.height=H+"px";
+  const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,H);
+  if(!F.length) return;
+  const start=Math.max(0,Math.min(F.length-SPAN,i-(SPAN>>1)));
+  const x0=LAB+4, cw=(w-x0-6)/SPAN;
+  /* cycle rules */
+  g.strokeStyle="#1C2634"; g.lineWidth=1;
+  for(let k=0;k<=SPAN;k++){
+    const n=start+k; if(n<F.length&&F[n]&&F[n][CI.phase]!==1) continue;
+    const x=Math.round(x0+k*cw)+.5;
+    g.beginPath(); g.moveTo(x,PAD-2); g.lineTo(x,H-PAD+2); g.stroke();
+  }
+  CH.forEach((c,r)=>{
+    const yTop=PAD+r*(RH+GAP), yBot=yTop+RH-2, col=CHCOL[c[2]];
+    g.font='9px "IBM Plex Mono",monospace'; g.fillStyle="#6D7C8F"; g.textAlign="right";
+    g.fillText(c[0],LAB,yBot);
+    g.strokeStyle=col; g.lineWidth=1.4; g.beginPath();
+    let prev=null;
+    for(let k=0;k<SPAN;k++){
+      const n=start+k, v=chVal(n,c); if(v===null) continue;
+      const y=v?yTop:yBot, x=x0+k*cw;
+      if(prev===null) g.moveTo(x,y); else { if(prev!==v) g.lineTo(x,y); else g.lineTo(x,y); }
+      if(prev!==null&&prev!==v){ /* vertical edge already drawn by lineTo */ }
+      g.lineTo(x+cw,y); prev=v;
+    }
+    g.stroke();
+  });
+  /* cursor */
+  const cx=Math.round(x0+(i-start)*cw)+.5;
+  g.strokeStyle="#F2C14E"; g.lineWidth=1;
+  g.beginPath(); g.moveTo(cx,PAD-4); g.lineTo(cx,H-PAD+4); g.stroke();
+}
+$("#scope").onclick=e=>{
+  const SPAN=span(), r=$("#scope").getBoundingClientRect();
+  const LAB=30, x0=LAB+4, cw=(r.width-x0-6)/SPAN;
+  const start=Math.max(0,Math.min(F.length-SPAN,i-(SPAN>>1)));
+  go(start+Math.floor((e.clientX-r.left-x0)/cw));
+};
+
+function drawStrip(){ markLane(); drawScope(); }
 /* ---------- transport ---------- */
 function go(n){ i=Math.max(0,Math.min(F.length-1,n)); render(); }
+function reload(){ buildLane(); $("#scrub").max=Math.max(0,F.length-1); }
 function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][CI.sync]&&F[n][CI.phase]===1) return go(n); go(F.length-1); }
+
+/* tabs */
+const TABS=[["t-map","p-map"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
+function showTab(id){
+  for(const [t,p] of TABS){
+    const sel=t===id;
+    $("#"+t).setAttribute("aria-selected",sel?"true":"false");
+    $("#"+p).hidden=!sel;
+  }
+  drawStrip();
+}
+for(const [t] of TABS) $("#"+t).onclick=()=>showTab(t);
+showTab("t-map");
+
+$("#b-reset").onclick=()=>{ stopPlay(); go(0); };
 $("#b-hb").onclick=()=>go(i-1); $("#b-hf").onclick=()=>go(i+1);
 $("#b-cf").onclick=()=>go(i+2); $("#b-if").onclick=nextFetch;
 $("#scrub").oninput=e=>go(+e.target.value);
+function stopPlay(){ if(timer){clearInterval(timer);timer=null;} $("#b-play").textContent="▶ play"; }
 $("#b-play").onclick=()=>{
-  if(timer){clearInterval(timer);timer=null;$("#b-play").textContent="▶ play";return;}
+  if(timer){stopPlay();return;}
   $("#b-play").textContent="❚❚ pause";
-  timer=setInterval(()=>{ if(i>=F.length-1){clearInterval(timer);timer=null;$("#b-play").textContent="▶ play";return;} go(i+1); },170);
+  timer=setInterval(()=>{ if(i>=F.length-1){stopPlay();return;} go(i+1); },170);
 };
-$("#strip").onclick=e=>{ const r=e.target.getBoundingClientRect(); go(Math.round((e.clientX-r.left)/r.width*(F.length-1))); };
 addEventListener("keydown",e=>{
   if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   if(e.key==="ArrowRight"){e.preventDefault();go(i+(e.shiftKey?2:1));}
@@ -669,6 +983,7 @@ async function post(path,body){
 
 
 function showListing(a){
+  LISTING={}; for(const l of a.listing) if(l.addr!==null&&l.bytes) LISTING[l.addr]=l.text||"";
   $("#asmlen").textContent=`${a.size} bytes @ ${hx(a.org,4)}`;
   $("#listing").innerHTML=a.listing.filter(l=>l.addr!==null).map(l=>
     `<div class="lline" data-addr="${l.addr}"><span class="a">${hx(l.addr,4)}</span>  <b>${
@@ -676,15 +991,34 @@ function showListing(a){
       (l.text||"").trim().replace(/</g,"&lt;")}</div>`).join("");
 }
 
+async function fetchTrace(machine,n){
+  const [a,b]=await Promise.all([
+    post("step",{machine,half_cycles:n,trace:true,watch:WATCH,format:"rows"}),
+    post("step",{machine,half_cycles:n,trace:true,watch:WATCH2,format:"rows"})
+  ]);
+  return merge(a,b);
+}
+function merge(a,b){
+  const ta=a.trace_rows, tb=b.trace_rows;
+  const ci={}; tb.cols.forEach((c,n)=>ci[c]=n);
+  const nm=tb.watch_names;
+  const idx=FAM.map(f=>[0,1,2,3,4,5,6,7].map(i=>nm.indexOf(f+i)));
+  const rows=ta.rows.map((r,n)=>{
+    const m=tb.rows[n][ci.watch];
+    return r.concat(idx.map(bits=>bits.reduce((v,p,k)=>v|(wbit(m,p)<<k),0)));
+  });
+  return {machine:a.machine,cols:ta.cols.concat(FAM),watch_names:ta.watch_names,rows};
+}
+
 async function boot(){
   const btn=$("#run"); btn.disabled=true; btn.textContent="assembling…"; $("#err").hidden=true;
   try{
     const b=await post("boot",{rom:{source:$("#src").value},watch:WATCH});
-    const s=await post("step",{machine:b.machine,half_cycles:300,trace:true,watch:WATCH,format:"rows"});
-    setCols(s.trace_rows.cols,s.trace_rows.watch_names);
-    F=s.trace_rows.rows;
+    const s=await fetchTrace(b.machine,300);
+    setCols(s.cols,s.watch_names);
+    F=s.rows;
     MEM0=b.machine.memory; MACH=s.machine;
-    showListing(b.assembled);
+    showListing(b.assembled); reload();
     $("#more").disabled=false; $("#hint").textContent="Arrow keys step. Shift+→ jumps a full cycle.";
     go(0);
   }catch(e){ $("#err").hidden=false; $("#err").textContent=e.message; }
@@ -694,9 +1028,9 @@ $("#run").onclick=boot;
 $("#more").onclick=async()=>{
   const btn=$("#more"); btn.disabled=true; btn.textContent="running…";
   try{
-    const s=await post("step",{machine:MACH,half_cycles:200,trace:true,watch:WATCH,format:"rows"});
-    F=F.concat(s.trace_rows.rows); MACH=s.machine;
-    $("#scrub").max=F.length-1; render();
+    const s=await fetchTrace(MACH,200);
+    F=F.concat(s.rows); MACH=s.machine;
+    reload(); render();
   }catch(e){ $("#err").hidden=false; $("#err").textContent=e.message; }
   finally{ btn.disabled=false; btn.textContent="Run 200 more"; }
 };
@@ -705,11 +1039,11 @@ $("#more").onclick=async()=>{
 function useDemo(reason){
   const d=JSON.parse($("#demo").textContent);
   setCols(d.cols,d.watch_names); F=d.rows; MEM0=d.mem; $("#src").value=d.src; $("#presetnote").textContent=PRESETS[0].note;
-  showListing(d.asm);
+  showListing(d.asm); reload();
   $("#conn").className="conn demo"; $("#conn").textContent="packed trace";
   $("#hint").textContent=reason;
   $("#more").disabled=true; $("#run").disabled=true;
-  $("#scrub").max=F.length-1; go(0);
+  go(0);
 }
 (async()=>{
   let meta=null;

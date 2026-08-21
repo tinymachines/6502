@@ -333,6 +333,7 @@ def test_rows_trace_carries_the_same_information(client):
     assert rows["trace"] is None and rows["trace_rows"] is not None
     tr = rows["trace_rows"]
     assert tr["watch_names"] == ["sync", "dpc23_SBAC"]
+    assert tr["watch_encoding"] == "hex"
     assert len(tr["rows"]) == 10
     cols = tr["cols"]
     for o, row in zip(objs["trace"], tr["rows"]):
@@ -341,17 +342,20 @@ def test_rows_trace_carries_the_same_information(client):
         assert r["a"] == o["a"] and r["pc"] == o["pc"] and r["alu"] == o["alu"]
         assert r["clk0"] == int(o["clk0"])
         assert r["rw"] == (0 if o["rw"] == "read" else 1)
-        assert (r["watch"] & 1 != 0) == o["watch"]["sync"]
-        assert (r["watch"] & 2 != 0) == o["watch"]["dpc23_SBAC"]
+        wbyte = int(r["watch"], 16) if r["watch"] else 0
+        assert (wbyte & 1 != 0) == o["watch"]["sync"]
+        assert (wbyte & 2 != 0) == o["watch"]["dpc23_SBAC"]
         # The tstates bitmask decodes to the same set the string names.
         names = set(o["tstates"].split("+")) - {""}
         got = {f"T{i}" for i in range(6) if r["tstates"] >> i & 1}
         assert got == names
     # The point of the format, held to the page's own measured claim: the
-    # page says 3.7x on this exact shape (45 half-cycles, 2 watches), so
-    # re-measure it there rather than on this test's short trace.
+    # page says 3.7x on the 45-half-cycle shape, re-measured below. This
+    # short 10-row trace amortises the cols header badly and only clears
+    # about 3x, which is why the band is asserted on the page's shape and
+    # this line asks merely for "much smaller".
     import json as _json
-    assert len(_json.dumps(tr)) < len(_json.dumps(objs["trace"])) / 3
+    assert len(_json.dumps(tr)) < len(_json.dumps(objs["trace"])) / 2.5
     o45 = client.post(
         "/v1/step",
         json={"machine": res["machine"], "half_cycles": 45, "trace": True,
@@ -366,6 +370,38 @@ def test_rows_trace_carries_the_same_information(client):
     assert 3.2 < ratio < 4.2, f"page claims 3.7x on this shape; measured {ratio:.1f}x"
     page = client.get("/").text
     assert "3.7x" in page and "7.5x" in page
+
+
+def test_watch_survives_past_53_names(client):
+    """The findings' precision bug, made a regression: a JSON integer is a
+    float64 to every browser, so an integer watch mask silently corrupts
+    past 53 names. watch is a hex bitset now (bit i in byte i/8, LSB
+    first, the state blobs' own convention), and this test watches 64
+    names, requires at least one row's mask to exceed 2^53 so the
+    regression is actually exercised, and checks every bit of every row
+    against the object form."""
+    names = [f"{stem}{i}" for stem in
+             ("idb", "idl", "dor", "alua", "alub", "pclp", "pchp", "abl")
+             for i in range(8)]
+    res = boot_add(client)
+    objs = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 40, "trace": True,
+              "watch": names},
+    ).json()
+    rows = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 40, "trace": True,
+              "watch": names, "format": "rows"},
+    ).json()
+    tr = rows["trace_rows"]
+    wi = tr["cols"].index("watch")
+    assert all(len(row[wi]) == 16 for row in tr["rows"]), "8 bytes, fixed width"
+    masks = [int.from_bytes(bytes.fromhex(row[wi]), "little") for row in tr["rows"]]
+    assert any(m > 2**53 for m in masks), "the trace must exercise the float64 ceiling"
+    for o, m in zip(objs["trace"], masks):
+        for i, name in enumerate(names):
+            assert bool(m >> i & 1) == o["watch"][name], f"bit {i} ({name})"
 
 
 def test_cors_is_open_for_any_origin(client):
