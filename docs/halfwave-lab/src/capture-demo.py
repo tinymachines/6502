@@ -5,9 +5,10 @@ The packed demo is deliberately a *saved API response*, not a hand-made fixture:
 the same parser reads it and the live path, so a serialisation change cannot make
 the two drift apart.
 
-Two step calls are merged because a `rows` watch mask past 53 names exceeds JS
-safe integers (see issues/01). If idl/idb/dor/alua/alub ever become first-class
-Observation fields (issues/03), the second call and the merge below can go.
+One step call: the latches became first-class Observation fields and rows
+columns (issues/03 shipped), so the second 40-watch call and the merge this
+file used to carry went the way their comment predicted. The watch mask is a
+hex bitset now (issues/01 shipped), which the Lab's wbit() decodes.
 
     python3 src/capture-demo.py [--api https://6502.tinymachines.ai/api]
 """
@@ -34,8 +35,6 @@ WATCH = [
     "dpc33_PCHDB", "dpc1_SBY", "dpc3_SBX", "dpc6_SBS", "dpc27_SBADH",
     "dpc17_SUMS", "dpc12_0ADD", "clk1out", "clk2out", "rdy",
 ]
-FAM = ["idb", "idl", "dor", "alua", "alub"]      # one watch per bit, 40 names
-WATCH2 = [f"{f}{i}" for f in FAM for i in range(8)]
 HALF_CYCLES = 132
 
 
@@ -52,27 +51,18 @@ def main():
         return json.load(urllib.request.urlopen(req))
 
     boot = post("boot", {"rom": {"source": SRC}, "watch": WATCH})
-    common = {"machine": boot["machine"], "half_cycles": HALF_CYCLES,
-              "trace": True, "format": "rows"}
-    a = post("step", dict(common, watch=WATCH))["trace_rows"]
-    b = post("step", dict(common, watch=WATCH2))["trace_rows"]
+    a = post("step", {"machine": boot["machine"], "half_cycles": HALF_CYCLES,
+                      "trace": True, "format": "rows", "watch": WATCH})["trace_rows"]
+    assert len(a["rows"]) == HALF_CYCLES
+    assert a["watch_names"] == WATCH, "watch order is not as requested"
+    assert a.get("watch_encoding") == "hex", "expected the hex watch bitset"
+    for col in ("abl", "abh", "pclp", "pchp", "idl", "alua"):
+        assert col in a["cols"], f"missing latch column {col}"
 
-    for n, name in enumerate(WATCH2):
-        assert b["watch_names"][n] == name, "watch order is not as requested"
-    assert len(a["rows"]) == len(b["rows"]) == HALF_CYCLES
-
-    ci = {c: i for i, c in enumerate(b["cols"])}
-    idx = [[b["watch_names"].index(f"{f}{i}") for i in range(8)] for f in FAM]
-    rows = [
-        r + [sum(((b["rows"][n][ci["watch"]] >> p) & 1) << k for k, p in enumerate(bits))
-             for bits in idx]
-        for n, r in enumerate(a["rows"])
-    ]
-
-    json.dump({"cols": a["cols"] + FAM, "watch_names": a["watch_names"], "rows": rows,
+    json.dump({"cols": a["cols"], "watch_names": a["watch_names"], "rows": a["rows"],
                "mem": boot["machine"]["memory"], "asm": boot["assembled"], "src": SRC},
               open(args.out, "w"), separators=(",", ":"))
-    print(f"wrote {args.out}: {len(rows)} rows, {len(a['cols']) + len(FAM)} cols, "
+    print(f"wrote {args.out}: {len(a['rows'])} rows, {len(a['cols'])} cols, "
           f"{os.path.getsize(args.out):,} bytes")
 
 

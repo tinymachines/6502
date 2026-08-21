@@ -46,6 +46,16 @@ the words. Below it, "inside the boxes": every bus and latch as individual bits,
 off-chip → in → internal → adder → registers → out. Bits that flipped this half-cycle get a
 ring; lanes that did not move dim out.
 
+**Latches** — the thirteen pieces of named storage as their own diagram: the PC
+primes waiting for write-back, the address latches feeding the pins, the input
+data latch, the adder's inputs and hold register, the data output register. A
+box lights when its value moved at this half-cycle; the values are the API's
+own first-class fields.
+
+**Half-cycle** — the generated narration at full width, beside a before → after
+table of every value and the list of conducting lines. Nothing is authored per
+instruction: every sentence derives from the same booleans the diagrams draw.
+
 **Signals** — all 22 datapath control lines, and the external bus.
 
 **State** — registers and zero page.

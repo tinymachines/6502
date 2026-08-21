@@ -153,3 +153,23 @@ high for the next fetch; at h=37 the sum is real in `alu` and on `sb`
 while A still reads $2E and `idl` already holds the next opcode ($85, STA);
 at h=38 A takes it. "The add happens after the instruction is over," now
 visible field by field, and the api page's demo section walks exactly that.
+
+## 4. Two new tabs, and the bug adding them caught (2026-08-21)
+
+The Lab gained a **Latches** tab (the thirteen named-storage fields as their
+own diagram, boxes lit by movement, drawn from the promoted fields) and a
+**Half-cycle** tab (the generated narration at full width, a before/after
+table of every value, and the conducting lines), both after Datapath. With
+issue 03's fields native, the Lab's second 40-watch request and its merge
+went the way the capturer's own comment predicted: one call now, and the
+demo is recaptured from the live API so the packed and live paths are the
+same shape again (hex watch included).
+
+The catch on the way in: `bit()` still read the watch mask as an integer
+(`o.w & (1<<n)`), so since the hex switch every control-line read on the
+live path had been silently false: dark edges, empty narration beats, a
+perfect-looking page. The redeploy check after the hex change had verified
+only the connection badge, which is the dead-overlay mistake the simulator's
+own docs warn about. Fixed with the same wbit() the other two call sites
+got, and the deploy verification now asserts lit edges and a non-trivial
+narration, which is the check that fails when an overlay dies.
