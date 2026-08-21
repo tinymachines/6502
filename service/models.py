@@ -202,6 +202,24 @@ class StepRequest(BaseModel):
     watch: list[str] = Field(default_factory=list)
     trace: bool = False
     format: Literal["objects", "rows"] = "objects"
+    pins: dict[str, int] = Field(
+        default_factory=dict,
+        description="input pins to drive before stepping: res, irq, nmi, "
+        "rdy, so, each to 0 or 1. LEVELS, not assertions: four of the five "
+        "are active low, so 0 asserts them. The drive lives in the "
+        "machine's own pull state, so a pin stays where it was put across "
+        "requests until set again.",
+    )
+
+    @field_validator("pins")
+    @classmethod
+    def _pins(cls, v: dict[str, int]) -> dict[str, int]:
+        for k, lvl in v.items():
+            if k not in ("res", "irq", "nmi", "rdy", "so"):
+                raise ValueError(f"unknown pin {k!r} (res, irq, nmi, rdy, so)")
+            if lvl not in (0, 1):
+                raise ValueError(f"pin {k} wants 0 or 1, got {lvl}")
+        return v
 
 
 class TraceRows(BaseModel):

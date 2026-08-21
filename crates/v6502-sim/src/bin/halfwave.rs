@@ -30,6 +30,7 @@
 //!     FILL <hex2>                 memory background byte (default 00)
 //!     PAGE <hex2> <512 hex>       one 256-byte page over the fill
 //!     WATCH <name> [name...]     node names to read out (repeatable)
+//!     PIN <name> <0|1>            drive an input pin (res irq nmi rdy so)
 //!     TRACE                       record an observation per half-cycle
 //!     GO
 //!
@@ -59,6 +60,7 @@ struct Request {
     arg: Option<u64>,
     target: Option<u16>,
     vec: Option<u16>,
+    pins: Vec<(String, bool)>,
     state: Option<[String; 6]>,
     fill: u8,
     pages: Vec<(u8, Vec<u8>)>,
@@ -73,6 +75,7 @@ impl Request {
             arg: None,
             target: None,
             vec: None,
+            pins: Vec::new(),
             state: None,
             fill: 0,
             pages: Vec::new(),
@@ -371,9 +374,28 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                 Ok(ms) => ms,
                 Err(e) => return err(&e),
             };
+            for (name, _) in &req.pins {
+                if !matches!(name.as_str(), "res" | "irq" | "nmi" | "rdy" | "so") {
+                    return err(&format!("unknown pin {name:?} (res, irq, nmi, rdy, so)"));
+                }
+            }
             cpu.bus.set_journalling(false);
             cpu.bus.load(0, &image);
             restore(cpu, &ms);
+            // Pins are LEVELS, not interpretations: four of the five are
+            // active low, so 0 asserts them. The drive is a pull on the pad
+            // node, which lives in the state bitsets, so a pin stays where
+            // it was put across requests until set again.
+            for (name, level) in &req.pins {
+                match name.as_str() {
+                    "res" => cpu.set_res(*level),
+                    "irq" => cpu.set_irq(*level),
+                    "nmi" => cpu.set_nmi(*level),
+                    "rdy" => cpu.set_rdy(*level),
+                    "so" => cpu.set_so(*level),
+                    _ => unreachable!("validated above"),
+                }
+            }
 
             let mut trace = String::new();
             if req.trace {
@@ -522,6 +544,16 @@ fn main() {
                     return Err(format!("page {p} is {} bytes, want 256", bytes.len()));
                 }
                 r.pages.push((page, bytes));
+                Ok(false)
+            }
+            "PIN" => {
+                let name = parts.next().ok_or("PIN needs a name")?.to_string();
+                let level = match parts.next() {
+                    Some("0") => false,
+                    Some("1") => true,
+                    _ => return Err("PIN needs a level of 0 or 1".into()),
+                };
+                r.pins.push((name, level));
                 Ok(false)
             }
             "WATCH" => {

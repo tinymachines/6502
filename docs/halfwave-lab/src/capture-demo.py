@@ -54,7 +54,9 @@ def main():
     # the /v1/nodes decode group, sorted, appended to the control-line watch.
     nodes = json.load(urllib.request.urlopen(base + "nodes"))
     decode = sorted(nodes["groups"]["decode"])
-    watch = WATCH + decode
+    adder = ["alucin", "C01", "C12", "C23", "C34", "C45", "C56", "C67",
+             "C78", "alucout", "aluvout"]
+    watch = WATCH + adder + decode
 
     boot = post("boot", {"rom": {"source": SRC}, "watch": WATCH})
     a = post("step", {"machine": boot["machine"], "half_cycles": HALF_CYCLES,

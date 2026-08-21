@@ -830,6 +830,24 @@ state that decodes to the wrong chip is worse than one that is rejected.
   latches are first-class observation fields (alu, alua, alub, sb, idb,
   idl, dor, adl, adh, abl, abh, pclp, pchp), each held by a test to equal
   the byte rebuilt from watching its own 8 bits.
+- **`pins` drives the input pins** (`res irq nmi rdy so`, levels not
+  assertions: four are active low). The drive is a pull on the pad node,
+  which lives in the state bitsets, so a pin stays where it was put across
+  requests until set again: the suite pins that a machine carrying `rdy`
+  low stays stalled with no `pins` field in the next request. It also
+  unlocks the interrupt story the API could not tell: `irq` low with I
+  clear vectors through `$FFFE`, and the test reads the pushed P off the
+  stack to show B clear (an IRQ, not a BRK) with the return address the
+  assembler's own label table names.
+- **A finding the service surfaced: JSR parks its target in the stack
+  pointer.** During JSR's push cycles S does not read a stack pointer at
+  all, it reads the LOW BYTE OF THE CALL TARGET: the chip stashes the new
+  PCL in S while the address latches are busy pushing the return address.
+  Found by a consumer's stack view looking broken, pinned in
+  `service/test_service.py` across two subroutines at different addresses
+  so the value is shown to track the call rather than being one
+  coincidental byte. No behavioural emulator shows this; S is meant to
+  step down smoothly.
 - **The `/api/` nginx location declares the COMPLETE header set, and must.**
   This config's own top comment is the rule: one `add_header` in a location
   discards every inherited one, so the proxy location restates HSTS,

@@ -236,3 +236,29 @@ The demo capture carries the decode terms too, so all three work offline.
 Verified with the self-driving instrumented build: 132 beads with 6 firing
 at the ADC writeback, both canvases painted (pixel-counted), 2 pages and
 21 addresses in the footprint, click-to-seek landing where clicked.
+
+## 7. Pin control, the adder, the stack, and what the stack found (2026-08-21)
+
+`StepRequest.pins` drives `res irq nmi rdy so` (levels, not assertions).
+The drive is a pull on the pad node and therefore lives in the state
+bitsets, so a pin stays where it was put across requests: the suite pins a
+machine that stays stalled with `rdy` low and no `pins` field in the next
+request, and the interrupt sequence reaching a handler through `$FFFE`
+with B clear on the pushed P. That was the one 6502 story the API could
+not tell.
+
+Two Lab tabs on top of it: **Adder** (ALUA/ALUB/carry/SUM as bit rows, the
+carry row read from the die's own `alucin`/`C01..C78`/`alucout` rather than
+computed) and **Stack** (page $01 with S marked and pushes highlighted,
+plus a subroutine preset to fill it).
+
+The stack tab immediately found something. Its pointer kept wandering into
+the middle of the page mid-JSR, which looked like a bug in the tab and is
+not: **during JSR's push cycles S holds the low byte of the call target**,
+because the chip parks the new PCL there while the address latches are busy
+pushing the return address. Verified across two subroutines at $0211 and
+$0219 (S reads $11 and $19 respectively, tracking the call), pinned in the
+service suite off the assembler's own label table, and the tab now explains
+it where it measurably happens: the note fires on exactly the 25 parked
+half-cycles of the preset's run and on no others, the pointer tag is
+suppressed while S is not a pointer.

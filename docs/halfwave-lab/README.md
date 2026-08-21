@@ -65,9 +65,20 @@ list), grouped by the T-state their name carries. The lit set IS the
 instruction being decoded, and the firing pills name it: at STA's T2 you read
 `op-store`, `op-sta/cmp`, `op-T2-mem-zp` straight off the silicon.
 
+**Adder** — ALUA, ALUB, the carry, and the sum as four bit rows, with the
+carry row read from the die's own chain (`alucin`, `C01`..`C78`, `alucout`)
+rather than computed: each dashed cell is the carry arriving into that bit
+from the bit on its right. Bit 7 is last because its carry rippled through
+all eight slices.
+
 **Memory** — the footprint: every touched address as a row against time,
 reads cool, writes warm, click to seek; below it each touched page as a
 64-cell grid shaded by access type.
+
+**Stack** — page $01 with S marked, pushes highlighted, growing downward.
+Run the subroutine preset and watch return addresses appear. Mid-JSR the tab
+says what it is actually seeing: S is not a stack pointer during the push
+cycles, it is holding the low byte of the address being called.
 
 **Signals** — all 22 datapath control lines, and the external bus.
 

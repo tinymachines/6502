@@ -296,6 +296,8 @@ def step(req: StepRequest) -> StepResponse:
 
     lines = [verb, _state_line(req.machine)]
     lines += _memory_lines(req.machine.memory)
+    for pin, level in req.pins.items():
+        lines.append(f"PIN {pin} {level}")
     if req.watch:
         lines.append("WATCH " + " ".join(req.watch))
     if req.trace:

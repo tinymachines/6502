@@ -440,6 +440,116 @@ def test_cors_is_open_for_any_origin(client):
     assert r.headers["access-control-allow-origin"] == "*"
 
 
+def test_rdy_low_stalls_and_the_pin_persists_in_the_machine(client):
+    """pins are levels driven onto the pad, and the drive is a pull that
+    lives in the state bitsets: set rdy low once and every later machine
+    carries the stall until somebody raises it. The T-state readout and PC
+    freezing is the same evidence the tracer's ready harness uses."""
+    res = boot_add(client)
+    r1 = client.post("/v1/step", json={"machine": res["machine"], "half_cycles": 6}).json()
+    stalled = client.post(
+        "/v1/step",
+        json={"machine": r1["machine"], "half_cycles": 12, "pins": {"rdy": 0}},
+    ).json()
+    # The pin travels IN the machine: no pins field here, still stalled.
+    still = client.post(
+        "/v1/step", json={"machine": stalled["machine"], "half_cycles": 12}
+    ).json()
+    assert still["observe"]["pc"] == stalled["observe"]["pc"]
+    assert still["observe"]["tstates"] == stalled["observe"]["tstates"]
+    # Raising rdy resumes: the chip must now be able to reach a LATER
+    # instruction (the sum label at $0208), which a stalled chip cannot.
+    # "pc changed after one fetch" would be the wrong assertion: the stall
+    # froze the chip BEFORE a fetch, so the first fetch after resume can
+    # legitimately land at the same pc it was stalled at.
+    resumed = client.post(
+        "/v1/step",
+        json={"machine": still["machine"], "until_pc": 0x0208,
+              "max_half_cycles": 80, "pins": {"rdy": 1}},
+    ).json()
+    assert resumed["completed"] is True
+
+
+def test_irq_low_runs_the_interrupt_sequence(client):
+    """Drive irq low with the I flag clear and the chip vectors through
+    $FFFE: the 6502 has no interrupt sequencer, predecode forces BRK, and
+    this test watches the whole story land at the handler."""
+    boot = client.post("/v1/boot", json={
+        "rom": {"source": "        .org $0200\nstart:  CLI\nloop:   JMP loop"},
+        "memory": {"pages": {"ff": "00" * 254 + "0003"}},  # $FFFE/F -> $0300
+    }).json()
+    # Let CLI execute (2 cycles) and the loop settle.
+    r = client.post("/v1/step", json={"machine": boot["machine"], "half_cycles": 8}).json()
+    hit = client.post(
+        "/v1/step",
+        json={"machine": r["machine"], "until_pc": 0x0300,
+              "max_half_cycles": 40, "pins": {"irq": 0}},
+    ).json()
+    assert hit["completed"] is True, "the interrupt sequence reached the handler"
+    assert hit["observe"]["pc"] == 0x0300
+    # The pushed P has B clear and the return address is the loop, on the
+    # stack where the sequence left it.
+    s = hit["observe"]["s"]
+    page1 = bytes.fromhex(hit["machine"]["memory"]["pages"]["01"])
+    pushed_p = page1[(s + 1) & 0xFF]
+    assert pushed_p & 0x10 == 0, "B clear: an IRQ, not a BRK"
+    ret = page1[(s + 2) & 0xFF] | (page1[(s + 3) & 0xFF] << 8)
+    # Derived from the assembler's own label table, not hand-typed: CLI is
+    # one byte, so the loop sits at $0201.
+    assert ret == boot["assembled"]["labels"]["loop"], "return address is the interrupted loop"
+
+
+def test_jsr_parks_its_target_in_the_stack_pointer(client):
+    """A silicon behaviour no behavioural emulator shows, found by driving
+    the Lab's own subroutine example: during JSR's push cycles S does not
+    read a stack pointer at all. It reads the LOW BYTE OF THE CALL TARGET,
+    because the chip parks the new PCL in S while the address latches are
+    busy pushing the return address, then hands it to the program counter.
+
+    Pinned across two distinct targets, so the value is shown to track the
+    call rather than being one coincidental byte, with the addresses taken
+    from the assembler's own label table."""
+    src = ("        .org $0200\n"
+           "start:  LDX #$FD\n"
+           "        TXS\n"
+           "        JSR one\n"
+           "        JSR two\n"
+           "        JMP start\n"
+           "        .byte $EA,$EA,$EA,$EA,$EA\n"
+           "one:    RTS\n"
+           "        .byte $EA,$EA,$EA,$EA,$EA,$EA,$EA\n"
+           "two:    RTS")
+    boot = client.post("/v1/boot", json={"rom": {"source": src}}).json()
+    labels = boot["assembled"]["labels"]
+    r = client.post(
+        "/v1/step",
+        json={"machine": boot["machine"], "half_cycles": 90, "trace": True},
+    ).json()
+    # Runs of S values that are not plausible stack pointers for this
+    # program (it sets S to $FD and never pushes more than two bytes).
+    runs, cur = [], None
+    for t in r["trace"]:
+        s_ = t["s"]
+        if s_ not in (0xFD, 0xFC, 0xFB):
+            cur = cur or s_
+        elif cur is not None:
+            runs.append(cur)
+            cur = None
+    assert len(runs) >= 2, f"expected the JSR parks, saw {runs}"
+    assert runs[0] == labels["one"] & 0xFF, "first JSR parks its own target's ADL"
+    assert runs[1] == labels["two"] & 0xFF, "second JSR parks ITS target's ADL"
+    assert runs[0] != runs[1], "the parked value tracks the call, not a constant"
+
+
+def test_pins_refuse_a_typo(client):
+    res = boot_add(client)
+    r = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 2, "pins": {"iqr": 0}},
+    )
+    assert r.status_code == 422
+
+
 def test_memory_stays_sparse_and_fill_is_honoured(client):
     # A fill of $EA (NOP) and no rom: the chip executes NOPs from wherever
     # the fill's reset vector sends it ($EAEA), and no page ever differs

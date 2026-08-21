@@ -273,6 +273,28 @@ select{
 .mc.wr{background:color-mix(in srgb,var(--data) 55%,#161E2B)}
 .mc.now{outline:1.5px solid var(--glow);outline-offset:-1px}
 
+/* ---------- adder & stack ---------- */
+.addgrid{display:grid;grid-template-columns:56px repeat(8,minmax(26px,40px));gap:3px;align-items:center;font-family:var(--mono);font-size:10px}
+.addgrid .rl{color:var(--dim);text-align:right;padding-right:6px}
+.addgrid .hd{color:var(--dim);text-align:center;padding-bottom:2px}
+.acell{height:20px;border-radius:2px;background:#1A2331;border:1px solid #232E3D;display:flex;align-items:center;justify-content:center;color:var(--dim)}
+.acell.on{background:currentColor;border-color:currentColor}
+.acell.on::after{content:"1";color:#0D131C;font-weight:700}
+.acell:not(.on)::after{content:"0"}
+.acell.arow-a.on{color:var(--addr)} .acell.arow-b.on{color:var(--data)}
+.acell.arow-c{height:14px;border-style:dashed}
+.acell.arow-c.on{color:var(--alu);border-style:solid}
+.acell.arow-s.on{color:var(--alu)}
+.addeq{font-family:var(--mono);font-size:12px;color:var(--text);padding:12px 0 2px}
+.addeq b{color:var(--bright)}
+.stkrow{display:flex;gap:10px;align-items:center;font-family:var(--mono);font-size:11.5px;min-height:20px}
+.stkrow .a{color:var(--dim)}
+.stkrow b{color:var(--text);font-weight:400}
+.stkrow.wrote b{color:var(--data);font-weight:600}
+.stkrow.sp .a{color:var(--glow)}
+.stkrow .tag{font-size:9.5px;border:1px solid currentColor;border-radius:2px;padding:0 5px;color:var(--glow);white-space:nowrap}
+.stkrow.now b{outline:1.5px solid var(--glow);outline-offset:2px}
+
 /* ---------- narration ---------- */
 .tell{padding:14px 16px;border-top:1px solid var(--rule);background:var(--panel2)}
 .tell .lede{font-size:15.5px;line-height:1.55;color:var(--bright);margin:0}
@@ -365,7 +387,9 @@ select{
   <button class="tab" role="tab" id="t-bits" aria-controls="p-bits" aria-selected="false">Bits</button>
   <button class="tab" role="tab" id="t-time" aria-controls="p-time" aria-selected="false">Timeline</button>
   <button class="tab" role="tab" id="t-dec"  aria-controls="p-dec"  aria-selected="false">Decode</button>
+  <button class="tab" role="tab" id="t-add"  aria-controls="p-add"  aria-selected="false">Adder</button>
   <button class="tab" role="tab" id="t-mem"  aria-controls="p-mem"  aria-selected="false">Memory</button>
+  <button class="tab" role="tab" id="t-stk"  aria-controls="p-stk"  aria-selected="false">Stack</button>
   <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
   <button class="tab" role="tab" id="t-state" aria-controls="p-state" aria-selected="false">State</button>
   <button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
@@ -473,6 +497,25 @@ select{
     </div>
   </section>
 
+  <section role="tabpanel" id="p-add" aria-labelledby="t-add" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">The adder, bit by bit — and the carry between them</h2>
+        <span class="eyebrow" id="addpos"></span>
+      </div>
+      <div class="pb">
+        <div class="addgrid" id="addgrid"></div>
+        <p class="addeq" id="addeq"></p>
+        <p class="note">The carry row is read from the die's own carry-chain
+        nodes (<code>alucin</code>, <code>C01</code>..<code>C78</code>,
+        <code>alucout</code>), not computed: each dashed cell is the carry
+        arriving INTO that bit from the bit to its right. Bit 7's answer is
+        last because its carry has rippled through all eight slices, which
+        is why the flags cannot settle before the sum does.</p>
+      </div>
+    </div>
+  </section>
+
   <section role="tabpanel" id="p-mem" aria-labelledby="t-mem" hidden>
     <div class="panel">
       <div class="ph">
@@ -486,6 +529,25 @@ select{
     <div class="panel">
       <div class="ph"><h2 class="eyebrow">By page — reads cool, writes warm</h2></div>
       <div class="pb"><div id="memmap"></div></div>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p-stk" aria-labelledby="t-stk" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">The stack — page $01, growing downward</h2>
+        <span class="eyebrow" id="stkpos"></span>
+      </div>
+      <div class="pb">
+        <p class="note" id="stknote" hidden></p>
+        <div id="stkrows"></div>
+        <p class="note">S is the low byte of the next push's address; a push
+        writes then decrements, a pull increments then reads, so the live
+        bytes sit ABOVE the pointer. Out of power-on S is whatever its
+        storage nodes came up as (reset only decrements it by three), which
+        is why the subroutine example sets it with TXS before the first JSR:
+        run that preset and watch return addresses appear here.</p>
+      </div>
     </div>
   </section>
 
@@ -563,6 +625,10 @@ const IX = {}; SHORT.forEach((s,i)=>IX[s]=i);
    list; the hex watch bitset carries any number of names. Empty when the
    trace predates them, and the Decode tab says so. */
 let DECODE_NAMES=[];
+/* The adder's carry chain, by the die's own positive-polarity names: the
+   carry INTO bit n is C(n-1)(n); into bit 0 it is alucin, and out of bit 7
+   alucout, with aluvout the overflow the V flag reads. */
+const ADDER_NAMES=["alucin","C01","C12","C23","C34","C45","C56","C67","C78","alucout","aluvout"];
 
 /* human-readable label + which path each line belongs to */
 const LINEMETA = {
@@ -621,6 +687,16 @@ const EDGES = [
 
 /* ---------- example programs ---------- */
 const PRESETS = [
+{name:"Subroutines — the stack remembers",
+ note:"JSR pushes where to come back to; RTS reads it back. Open the Stack tab and watch page $01 grow downward.",
+ src:`        .org $0200
+start:  LDX #$FD
+        TXS
+loop:   JSR bump
+        JSR bump
+        JMP loop
+bump:   INC $90
+        RTS`},
 {name:"Add two bytes — where does the sum live?",
  note:"Step to h=37: the ALU reads $42 while A still reads $2E. The sum exists in no register.",
  src:`        .org $0200
@@ -1167,7 +1243,7 @@ function decStage(n){
   return m?("T"+m[1]):"any";
 }
 function decNames(){
-  return WNAMES.filter(n=>!WATCH.includes(n));
+  return WNAMES.filter(n=>!WATCH.includes(n)&&!ADDER_NAMES.includes(n));
 }
 function buildDecode(){
   const names=decNames();
@@ -1194,6 +1270,89 @@ function paintDecode(o){
   }
   $("#deccount").textContent=decNames().length?(lit.length?`${lit.length} firing`:"none firing"):"no terms in this trace";
   $("#decfire").innerHTML=lit.sort().map(n=>`<span class="ln alu on"><i></i>${n}</span>`).join("");
+}
+
+/* ---- the adder, bit by bit ---- */
+let ADDBUILT=false;
+function buildAdder(){
+  if(ADDBUILT) return; ADDBUILT=true;
+  let h='<span></span>';
+  for(let b=7;b>=0;b--) h+=`<span class="hd">bit ${b}</span>`;
+  for(const [cls,label] of [["arow-a","ALUA"],["arow-b","ALUB"],["arow-c","carry in"],["arow-s","SUM"]]){
+    h+=`<span class="rl">${label}</span>`;
+    for(let b=7;b>=0;b--) h+=`<span class="acell ${cls}" data-ab="${cls}:${b}"></span>`;
+  }
+  $("#addgrid").innerHTML=h;
+}
+function renderAdder(o){
+  buildAdder();
+  const cin=b=>b===0?on(o,"alucin"):on(o,"C"+(b-1)+b);
+  for(const el of document.querySelectorAll(".acell")){
+    const [cls,bs]=el.dataset.ab.split(":"), b=+bs;
+    const v=cls==="arow-a"?(o.alua>>b&1):cls==="arow-b"?(o.alub>>b&1)
+           :cls==="arow-s"?(o.alu>>b&1):(cin(b)?1:0);
+    el.classList.toggle("on",!!v);
+  }
+  const op=aluOp(o);
+  $("#addpos").textContent=op?`summing ${op}`:`holding ${hx(o.alu)}`;
+  $("#addeq").innerHTML=`<b>${hx(o.alua)}</b> + <b>${hx(o.alub)}</b> + ${on(o,"alucin")?1:0}`
+    +` = <b>${hx(o.alu)}</b> &nbsp;·&nbsp; carry out ${on(o,"alucout")?1:0}`
+    +` &nbsp;·&nbsp; overflow ${on(o,"aluvout")?1:0}`
+    +(ADDER_NAMES.some(n=>WNAMES.includes(n))?"":" &nbsp;(carry nodes not in this trace)");
+}
+
+/* ---- the stack, page $01 ---- */
+function pageImage(pg){
+  const key=hx(pg,2).slice(1).toLowerCase();
+  const page=(MEM0.pages&&MEM0.pages[key])||"00".repeat(256);
+  const bytes=[]; for(let n=0;n<256;n++) bytes.push(parseInt(page.substr(n*2,2),16)||0);
+  const touched={};
+  for(let n=1;n<=i;n++){
+    const r=F[n];
+    if(r[CI.rw]===1&&(r[CI.addr]>>8)===pg){ bytes[r[CI.addr]&255]=r[CI.data]; touched[r[CI.addr]&255]=(n===i)?2:1; }
+  }
+  return {bytes,touched};
+}
+function renderStack(o){
+  const {bytes,touched}=pageImage(1);
+  const sp=o.s;
+  /* Mid-JSR, S is NOT a stack pointer: the chip parks the target's low
+     byte there while the address latches are busy pushing the return
+     address, and takes it back out into PCL at the end. Measured, not
+     assumed: with subroutines at $0211 and $0219, S reads $11 and $19
+     during their pushes. So the tab says so rather than drawing a
+     pointer that has wandered into the middle of the page. */
+  /* The park is only claimed where it is measurable: S during a JSR that
+     is neither the pointer this instruction started with nor one of the
+     two values a two-byte push walks it through. Early JSR half-cycles
+     still read a real pointer, and the tab must not call those a park. */
+  let jsr=false;
+  if(o.ir===0x20&&!o.sync){
+    let f=i; while(f>0&&!(F[f][CI.sync]&&F[f][CI.phase]===1)) f--;
+    const s0=F[f][CI.s];
+    jsr=![s0,(s0-1)&0xFF,(s0-2)&0xFF].includes(sp);
+  }
+  $("#stknote").hidden=!jsr;
+  if(jsr) $("#stknote").innerHTML=`<b>JSR in flight.</b> S reads <code>${hx(sp)}</code>,`
+    +` which is not a stack pointer: it is the low byte of the address being called.`
+    +` The chip parks the new PCL in S while the address latches push the return`
+    +` address, then hands it to the program counter. A behavioural emulator shows`
+    +` S stepping down smoothly; the silicon does this.`;
+  const lo=jsr?0xF4:(Math.min(sp-2,0xF4)&0xFF);
+  let h="";
+  for(let a=0xFF;a>=Math.max(lo,0);a--){
+    const cls=["stkrow"];
+    if(touched[a]) cls.push("wrote");
+    if(touched[a]===2) cls.push("now");
+    if(a===sp) cls.push("sp");
+    h+=`<div class="${cls.join(" ")}"><span class="a">${hx(0x100+a,4)}</span>`
+      +`<b>${bytes[a].toString(16).toUpperCase().padStart(2,"0")}</b>`
+      +(a===sp&&!jsr?`<span class="tag">S &mdash; next push lands here</span>`:``)
+      +(touched[a]&&a>sp?`<span class="a">pushed</span>`:``)
+      +`</div>`;
+  }
+  $("#stkrows").innerHTML=h;
+  $("#stkpos").textContent=jsr?`S ${hx(sp)} · in use by JSR`:`S ${hx(sp)}`;
 }
 
 /* ---- the memory footprint ---- */
@@ -1248,7 +1407,9 @@ function paintExtras(){
   const o=obs(i); if(!o) return;
   if(!$("#p-time").hidden) drawTimeline();
   if(!$("#p-dec").hidden) paintDecode(o);
+  if(!$("#p-add").hidden) renderAdder(o);
   if(!$("#p-mem").hidden) drawMemory();
+  if(!$("#p-stk").hidden) renderStack(o);
 }
 
 /* ---- scope: Figure 3.4 redrawn from the recording ---- */
@@ -1356,7 +1517,7 @@ function reload(){ buildLane(); memIndex(); DECBUILT=null; $("#scrub").max=Math.
 function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][CI.sync]&&F[n][CI.phase]===1) return go(n); go(F.length-1); }
 
 /* tabs */
-const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-time","p-time"],["t-dec","p-dec"],["t-mem","p-mem"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
+const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-time","p-time"],["t-dec","p-dec"],["t-add","p-add"],["t-mem","p-mem"],["t-stk","p-stk"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
 function showTab(id){
   for(const [t,p] of TABS){
     const sel=t===id;
@@ -1417,7 +1578,7 @@ function showListing(a){
    they are first-class rows columns now (findings issue 03), so the merge
    went the way its own comment predicted. */
 async function fetchTrace(machine,n){
-  const a=await post("step",{machine,half_cycles:n,trace:true,watch:WATCH.concat(DECODE_NAMES),format:"rows"});
+  const a=await post("step",{machine,half_cycles:n,trace:true,watch:WATCH.concat(ADDER_NAMES,DECODE_NAMES),format:"rows"});
   return {machine:a.machine,cols:a.trace_rows.cols,watch_names:a.trace_rows.watch_names,rows:a.trace_rows.rows};
 }
 
