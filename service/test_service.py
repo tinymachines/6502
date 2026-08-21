@@ -191,11 +191,20 @@ def test_the_api_page_documents_what_the_service_does(client):
     assert r.headers["content-type"].startswith("text/html")
     page = r.text
 
-    # Every route the app serves is named on the page.
+    # Every route the app serves is named on the page. A path converter is
+    # stripped first: FastAPI needs `{key:path}` because five group keys carry
+    # a slash of their own, and printing the converter to a reader would be
+    # documenting the framework rather than the API. The stripping is checked
+    # to have actually happened, or a typo in the pattern would quietly turn
+    # this into a test of nothing.
+    import re
+
     from fastapi.routing import APIRoute
-    for route in app.routes:
-        if isinstance(route, APIRoute) and route.path != "/":
-            assert route.path in page, f"page does not mention {route.path}"
+    served = [r.path for r in app.routes if isinstance(r, APIRoute) and r.path != "/"]
+    assert any(":path}" in p for p in served), "no route uses a converter; drop the stripping"
+    for path in served:
+        shown = re.sub(r"\{(\w+):\w+\}", r"{\1}", path)
+        assert shown in page, f"page does not mention {path} (looked for {shown})"
 
     # The stated numbers are the measured ones.
     meta = client.get("/v1/meta").json()

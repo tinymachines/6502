@@ -23,17 +23,22 @@ import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from assembler import AssemblyError, assemble
+from atlas import MAX_DEPTH, MAX_LIMIT, Atlas, AtlasError
 from engine import EngineError, Pool
 from models import (
     AssembleResponse,
+    AtlasResponse,
     BootRequest,
     ChipState,
+    GroupsResponse,
     Machine,
+    NeighborsResponse,
+    NodeListResponse,
     NodesResponse,
     Observation,
     Rom,
@@ -168,6 +173,193 @@ def nodes() -> NodesResponse:
                 groups["other"][name] = nid
         _nodes_cache = NodesResponse(count=res["count"], groups=groups)
     return _nodes_cache
+
+
+# ---------------------------------------------------------------------------
+# The chip atlas
+#
+# /v1/nodes above answers "what can I watch", and its grouping is a reading of
+# the die's NAMES. Everything below answers "what is this node part of", and
+# every answer is measured: `web/chip-groups.js` composes the tracer's
+# derivations (the ALU as bit slices, one container per status flag, the
+# registers as their closures and load lines, the timing chain as the cells
+# that compute each T-state) and `tools/export-groups.mjs` exports them. The
+# module the pages draw with is the module the API serves, so the two cannot
+# disagree.
+#
+# Loaded lazily and once: a missing file must not stop the chip answering, so
+# the failure lands on these routes as a 503 and nowhere else.
+# ---------------------------------------------------------------------------
+_atlas: Atlas | None = None
+_atlas_error: str | None = None
+
+
+def _at() -> Atlas:
+    global _atlas, _atlas_error
+    if _atlas is None:
+        try:
+            _atlas = Atlas()
+        except AtlasError as e:
+            _atlas_error = str(e)
+            raise HTTPException(status_code=503, detail=_atlas_error) from e
+        # The die's full name table, aliases and all, from the same engine
+        # response /v1/nodes serves: 832 names over 707 nodes, so a node can
+        # be asked for by any of its names.
+        # Best effort on purpose: the atlas is static data and must answer
+        # with no engine behind it, so an engine that is down costs the 125
+        # aliases and nothing else.
+        try:
+            table: dict[str, int] = {}
+            for grp in nodes().groups.values():
+                table.update(grp)
+            _atlas.attach_names(table)
+        except (EngineError, AssertionError, HTTPException):
+            pass
+    return _atlas
+
+
+@app.get("/v1/atlas", response_model=AtlasResponse)
+def atlas() -> dict:
+    """What the atlas holds: the container kinds, the twelve functional
+    blocks plus the static logic and the residue, the node roles, and the
+    bounds a walk is held to. Static, like /v1/nodes."""
+    return _at().overview()
+
+
+@app.get("/v1/groups", response_model=GroupsResponse)
+def groups(
+    kind: str | None = Query(None, description="one container kind, e.g. alu, flags, regs"),
+    parent: str | None = Query(None, description="only the children of this group key"),
+    block: str | None = Query(None, description="functional block, by id or name"),
+    q: str | None = Query(None, description="substring of the key or the label"),
+    min_nodes: int = Query(0, ge=0, description="drop groups smaller than this"),
+    layer: str = Query("partition", description="partition | containers | absorbed"),
+    members: bool = Query(False, description="include each group's node list"),
+) -> dict:
+    """The derived containers.
+
+    `layer=partition` (the default) is the 132 disjoint groups the chip map
+    draws: every node in exactly one. `layer=containers` is the same
+    derivations unfiltered, so they overlap and a node can be in five.
+    `layer=absorbed` is the three that exist only in the overlapping layer,
+    having been claimed whole by a container that outranks them.
+    """
+    a = _at()
+    try:
+        rows = a.list_groups(kind=kind, parent=parent, block=block, q=q,
+                             min_nodes=min_nodes, layer=layer, members=members)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return {"count": len(rows), "layer": layer, "groups": rows}
+
+
+@app.get("/v1/groups/{key:path}")
+def group(
+    key: str,
+    members: bool = Query(True),
+    layer: str = Query("partition", description="partition | containers"),
+) -> dict:
+    """One container: its parent and children, the blocks its nodes are filed
+    in, every other container it shares nodes with, the bundles it anchors
+    (the gate legs and switches crossing to each neighbouring group, with the
+    control lines on them), and its members.
+
+    `layer=containers` returns the derivation's OWN node set instead of the
+    partition's: `intr:nmi` is 20 nodes as a walk and 18 as a box, because the
+    pipeline latch file outranks the interrupts and keeps `pipeVectorA2`. The
+    response then also carries `owned` and `claimed_elsewhere`, so the
+    difference is visible rather than implied.
+
+    The path converter is `:path` because five keys carry a slash of their
+    own -- `alat:ADL/ABL` is a load line, not two path segments.
+    """
+    try:
+        return _at().group_full(key, members=members, layer=layer)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@app.get("/v1/tags", response_model=NodeListResponse)
+def tags(
+    group: str | None = Query(None, description="every node in this group key"),
+    kind: str | None = Query(None, description="every node in any container of this kind"),
+    block: str | None = Query(None, description="functional block, by id or name"),
+    role: str | None = Query(None, description="signal | decode term | control line"),
+    q: str | None = Query(None, description="substring of the node name"),
+    named: bool | None = Query(None, description="true for named nodes only, false for unnamed"),
+    multi: bool = Query(False, description="only nodes in more than one container"),
+    limit: int = Query(200, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """Nodes with their tags: the group that owns each, every container it is
+    in, its functional block, role, pull-up, centroid and degree.
+
+    This is a separate route from /v1/nodes rather than a mode of it, because
+    /v1/nodes answers a different question and consumers depend on its shape.
+    """
+    a = _at()
+    try:
+        rows, total = a.list_nodes(group=group, kind=kind, block=block, role=role,
+                                   q=q, named=named, multi=multi, limit=limit, offset=offset)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    return {"total": total, "count": len(rows), "offset": offset, "nodes": rows}
+
+
+@app.get("/v1/neighbors", response_model=NeighborsResponse)
+def neighbors(
+    node: str = Query(..., description="a die name or a node number"),
+    via: str = Query("all", description="all | gate | switch | control"),
+    direction: str = Query("both", description="both | in | out, for gate edges"),
+    depth: int = Query(1, ge=1, le=MAX_DEPTH),
+    limit: int = Query(200, ge=1, le=MAX_LIMIT),
+) -> dict:
+    """What one node reaches, with each neighbour's own tags.
+
+    Four relations, kept apart because they are four different things:
+    `drives` (this node is an input to that gate), `driven_by` (that node is
+    an input to the gate driving this one), `channel` (a pass transistor,
+    which conducts both ways and therefore has no direction, reported with
+    the control line that opens it) and `opens` (this node IS a control line,
+    reaching the two ends of the switch it operates -- not a path through it).
+
+    `direction` applies to the gate relations only. A control line is never
+    followed as if it were a signal path, which is the rule the schematic
+    walks by: `cclk` gates 273 transistors, and expanding controls buries
+    whatever was asked about.
+    """
+    a = _at()
+    # Resolution and the walk are caught separately, deliberately: a KeyError
+    # raised inside the walk is a bug in the walk, and a blanket 404 around
+    # both would report it as "no such node" forever.
+    try:
+        nid = a.resolve(node)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    try:
+        return a.neighbors(nid, via=via, direction=direction, depth=depth, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@app.get("/v1/node/{ref:path}")
+def node(ref: str) -> dict:
+    """One node, by die name or by number: every name it carries, the group
+    that owns it, every container it is in, its block, role, pull-up,
+    centroid and degree.
+
+    `:path` because 47 die names carry a slash (`op-T2-ADL/ADD`).
+    """
+    a = _at()
+    try:
+        nid = a.resolve(ref)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return a.node_full(nid)
 
 
 @app.post("/v1/assemble")

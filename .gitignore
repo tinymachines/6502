@@ -18,6 +18,8 @@ __pycache__/
 /web/schematic.json
 # cargo run -p v6502-netlist --bin export-graph -- web/graph.json
 /web/graph.json
+# node tools/export-groups.mjs
+/web/groups.json
 
 # cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 /web/decode.json

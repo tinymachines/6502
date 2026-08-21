@@ -28,8 +28,10 @@ run does. `test_service.py` proves the same through the HTTP surface.
 | `models.py` | The public shapes (Pydantic): `Machine`, `ChipState`, `SparseMemory`, `Rom`, `Observation`. |
 | `engine.py` | The pool of warm engine processes. |
 | `app.py` | FastAPI: the endpoints. |
+| `atlas.py` | The chip atlas: the die's derived containers, indexed and queryable. Reads two generated files and runs nothing. |
 | `api.html` | The API reference page, served at `/`. The test suite holds it to the app: every route named, every stated number the measured one. `/docs` and `/redoc` are generated beside it from the same models. |
-| `test_service.py` | 13 tests, end to end. |
+| `test_service.py` | 26 tests, end to end. |
+| `test_atlas.py` | 52 tests over the atlas, against the site's own published figures. |
 
 ## Run
 
@@ -81,6 +83,38 @@ An `Observation` is what a learner reads at one instant: the bus (address,
 data, read/write, sync), the registers with a `nv-BdIzC` flag string, the
 clock phase, the timing chain's T-states, the last opcode fetch, and any
 watched nodes. All of it read off the silicon, none of it modelled.
+
+## The atlas: what a wire is part of
+
+`/v1/nodes` answers *what can I watch*, and its grouping is a reading of the
+die's names. Five more routes answer *what is this node part of*, and every
+answer is measured. Twenty-three kinds of machinery, walked out of the switch
+network by `web/chip-groups.js` (the module the tracer and the chip map draw
+with) and exported by `tools/export-groups.mjs` into `web/groups.json`.
+
+```bash
+curl -s localhost:6502/v1/atlas                       # the kinds, blocks, counts
+curl -s 'localhost:6502/v1/groups?kind=alu'           # the ALU as 17 containers
+curl -s 'localhost:6502/v1/groups/regs:a'             # one, with its wiring
+curl -s 'localhost:6502/v1/tags?multi=true'           # the 88 nodes in more than one
+curl -s 'localhost:6502/v1/node/pipeUNK39'            # one node, all of its tags
+curl -s 'localhost:6502/v1/neighbors?node=a0&via=switch'
+```
+
+Two layers, and the difference is the point. The **partition** is 132 groups
+with every one of the 1547 nodes in exactly one, because a drawing needs
+disjoint boxes. The **containers** are the same derivations unfiltered: 135,
+overlapping, 88 nodes in more than one, and three (`sdp:sd1`, `sdp:sd2`,
+`sbus:link`) that exist only there. `?layer=containers` on a group asks for
+the derivation's own set instead of the box: `intr:nmi` is 20 nodes as a walk
+and 18 as a box, and the two it loses include `pipeVectorA2`, the one address
+bit by which `$FFFA` differs from `$FFFE`.
+
+Nothing here runs the chip and none of it changes, so nginx serves the whole
+family `public, max-age=86400`.
+
+Rebuild it whenever the die exporters run (`deploy.sh` does), then
+`sudo systemctl restart 6502-api`: the atlas is held in memory.
 
 ## What to try first
 

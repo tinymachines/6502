@@ -48,6 +48,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. Full Wayback sweep complete: 24,429 URLs, 3.01 GB. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
 | Service | 6502 as a service: the `halfwave` stateless engine binary plus a FastAPI reference implementation in `service/`. Proven bit-exact across serialize/resume hops. Launches under a separate site property; only the engine lives here. |
+| Atlas | The chip map's own derivation over HTTP: 132 groups over 23 kinds covering all 1547 nodes once, the 135 overlapping containers behind it, the hierarchy, the wiring between groups, and a bounded neighbour walk. One module, shared with the pages. |
 
 Known gaps, all deliberate:
 
@@ -140,6 +141,8 @@ cargo run --release -p v6502-sim --example activity # how much of the chip moves
 cargo build --release -p v6502-sim --bin halfwave   # the warm engine process
 cargo test -p v6502-sim --test state                # snapshot/restore, bit-exact
 python3 -m pytest service/test_service.py -q        # the service, end to end
+python3 -m pytest service/test_atlas.py -q          # the chip atlas, 52 tests.
+                                                    # SKIPS without web/groups.json.
 uvicorn app:app --app-dir service --port 6502       # run it
 
 # Regenerate the oracle (5 MB, gitignored; required by the golden test)
@@ -154,6 +157,10 @@ cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json
 cargo run -p v6502-netlist --bin export-blocks -- web/blocks.json
 cargo run -p v6502-netlist --bin export-schematic -- web/schematic.json
 cargo run -p v6502-netlist --bin export-graph -- web/graph.json
+node tools/export-groups.mjs                       # web/groups.json
+# (the chip atlas: chip-groups.js run outside a browser, so the API serves the
+#  same partition the chip map draws. Needs schematic/blocks/timing/graph.json.
+#  Refuses to write a file that fails its own checks.)
 # (graph.json is the chip as ONE node-and-edge file: every node with its name,
 #  block, role, pullup and centroid; all 3510 transistors as {gate, c1, c2};
 #  and the interpreted gate and switch edges the pages draw. Hand it to anyone
@@ -211,7 +218,7 @@ python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 ```
 
 `web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/blocks.json`,
-`web/schematic.json`, `web/graph.json`, `web/decode.json`, `web/timing.json`,
+`web/schematic.json`, `web/graph.json`, `web/groups.json`, `web/decode.json`, `web/timing.json`,
 `web/build-info.json`, `dist/`, the golden trace
 and everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
@@ -867,6 +874,85 @@ state that decodes to the wrong chip is worse than one that is rejected.
   compared against `/v1/meta` and the model constants, so the page cannot
   drift the way prose does. `/docs` and `/redoc` are generated beside it
   from the same Pydantic models.
+- **The chip atlas: five routes that answer what a wire is part of, and the
+  derivation is the page's, not a second one.** `/v1/nodes` groups the die's
+  832 names by an authored regex table and lands 310 in `other`; it says
+  nothing about the 674 static-logic nodes the die never named. The atlas is
+  the measured half: `/v1/atlas`, `/v1/groups`, `/v1/groups/{key}`,
+  `/v1/tags`, `/v1/node/{ref}`, `/v1/neighbors`, served from
+  `service/atlas.py` over `web/groups.json` + `web/graph.json`, holding
+  **132 groups over 23 kinds covering all 1547 nodes exactly once**.
+  - **`web/chip-groups.js` runs under node, and that is what makes this
+    honest.** It was already a pure function of `schematic.json`,
+    `blocks.json` and `timing.json` with no DOM in it, so
+    `tools/export-groups.mjs` imports the module the tracer and the chip map
+    draw with rather than porting it to Rust or Python. A second
+    implementation of "which container is this node in" is the copy that
+    drifts, and there would be no way for a reader comparing the API with the
+    drawing to tell which was lying.
+  - **Two layers, because a partition is a fact about a DRAWING.** The
+    tracer's containers overlap on purpose and the chip map makes them
+    disjoint so every node gets one box. `chipGroups()` now records each
+    candidate set before the ownership filter as well as after
+    (`containers`, additive: the partition, its order and its counts are
+    unchanged, and `_chipmap-test` and `_tracer-test` passed before and
+    after). Measured: **135 containers, 88 nodes in more than one, five at
+    most** (`pipeUNK39` is in `alat:ADL/ABL`, `dbus:rw`, `sdp:sd1`,
+    `pipe:unk` and `alu:out`), and **three containers exist only in the
+    overlapping layer** -- `sdp:sd1`, `sdp:sd2` and `sbus:link`, absorbed
+    whole. SD1 and SD2 are the store-data latches the simulator's own timing
+    readout names, so the partition alone cannot answer a question about
+    them at all.
+  - **`?layer=containers` on a group is the same key read the other way, and
+    a test found the need for it.** `intr:nmi` is 20 nodes as a walk and 18
+    as a box, because the pipeline latch file outranks the interrupts; the
+    two it loses include `pipeVectorA2`, the one address bit by which
+    `$FFFA` differs from `$FFFE`. Asserting the finding against the
+    partition reported it as absent. The response carries `owned` and
+    `claimed_elsewhere` so the difference is visible rather than implied.
+  - **Hierarchy is reported, never invented.** A kind is the root; a group
+    whose id is `X.Y` is a child of `kind:X` where that group exists, which
+    today is the register load lines and nothing else (`regs:a.SBAC` ->
+    `regs:a` -> `regs`). Everything else hangs off its kind rather than
+    being given a plausible parent.
+  - **Bundles are counted the chip map's way, out of `schematic.json`'s gate
+    legs and switches, NOT out of `graph.json`'s edges.** The first version
+    used graph.json and got 530 bundles / 1602 gate edges against the page's
+    534 / 1644: graph.json deduplicates to 2435 distinct input-to-output
+    pairs and does not count a precharge as an input, which is a different
+    question with a different right answer. Two numbers for one drawing is
+    the failure this repo keeps finding, so the exporter uses the page's
+    rule and reproduces 534 / 1644 / 310 / 922 / 313 exactly.
+  - **Four neighbour relations, kept apart.** `drives` and `driven_by` are
+    the two ends of a gate edge and the only pair `direction` applies to;
+    `channel` is a pass transistor, which conducts both ways and has no
+    direction, reported with the control that opens it; `opens` is a control
+    line reaching the ends of its switch, which is not a path through it.
+    **A rail is reported and never walked** (eleven gates take vss as an
+    input: the permanently-off pull-up that makes RDY and S.O. inputs), and
+    `via=control` is opt-in for the reason the schematic walk states:
+    `cclk` opens 243 switches.
+  - **`/v1/nodes` is untouched and a test says so.** Its shape, its count
+    and its eight group names are pinned, because consumers depend on it and
+    the atlas is a different claim: the decode NAME group is 132 nodes, the
+    decode PLA's product terms are 122, and the API must not imply those are
+    one set.
+  - **nginx serves the whole static family from one regex location**
+    (`~ ^/api/v1/(nodes|atlas|groups|tags|node|neighbors)(/|$)`), replacing
+    the exact `/api/v1/nodes` block. Six near-identical exact blocks would be
+    six chances to drop a header, which is this config's own documented
+    trap. A regex location cannot carry a URI on `proxy_pass`, hence the
+    `rewrite ^/api/(.*)$ /$1 break`.
+  - Two path routes take `{...:path}`, because **five group keys and 47 die
+    names carry a slash** (`alat:ADL/ABL`, `op-T2-ADL/ADD`). The api page
+    prints `{key}` and the page-vs-app test strips the converter, checking
+    first that a converter existed at all.
+  - The atlas loads lazily and its name aliasing is best effort, so a
+    missing file is a 503 on these routes and nowhere else, and an engine
+    that is down costs the 125 aliases rather than the whole atlas.
+  - **`deploy.sh` runs the exporter** after `check-programs.mjs` (where
+    `NODE_BIN` is known). The API holds it in memory: `sudo systemctl
+    restart 6502-api` after a deploy that changed it.
 - **`Cpu::set_last_fetch` exists for restore and nothing else.** The fetch
   is bookkeeping for disassembly, not silicon, so it travels beside the
   bitsets rather than being lost on every hop.

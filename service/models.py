@@ -269,3 +269,66 @@ class NodesResponse(BaseModel):
 
     count: int
     groups: dict[str, dict[str, int]]
+
+
+# ---------------------------------------------------------------------------
+# The chip atlas: derived containers over the die.
+#
+# These carry deliberately loose inner types. The shapes are wide (a group
+# names its parent, its children, the blocks its nodes are filed in, every
+# container it overlaps and every bundle it anchors) and they are generated
+# by `tools/export-groups.mjs` from the same module the tracer draws with. A
+# second, hand-written declaration of each field here would be a copy that
+# drifts; the exporter refuses to write a file that fails its own structural
+# checks, and `service/test_service.py` holds the served shape to the file.
+# ---------------------------------------------------------------------------
+
+
+class AtlasResponse(BaseModel):
+    """What the atlas contains: the kinds, the functional blocks, the roles
+    and the counts. Static: the die does not change."""
+
+    format: str
+    counts: dict[str, int]
+    kinds: list[dict]
+    blocks: list[dict]
+    roles: list[str]
+    limits: dict[str, int]
+
+
+class GroupsResponse(BaseModel):
+    """Derived containers, filtered. `layer` says which of the two layers was
+    asked for: `partition` (132 disjoint groups, every node once),
+    `containers` (135, overlapping) or `absorbed` (the 3 that exist only in
+    the overlapping layer)."""
+
+    count: int
+    layer: str
+    groups: list[dict]
+
+
+class NodeListResponse(BaseModel):
+    """Nodes with their tags, filtered. `total` is how many matched;
+    `nodes` is the page asked for."""
+
+    total: int
+    count: int
+    offset: int
+    nodes: list[dict]
+
+
+class NeighborsResponse(BaseModel):
+    """One node's neighbours, by relation. `drives`/`driven_by` are the two
+    ends of a gate edge; `channel` is a pass transistor, which conducts both
+    ways and therefore has no direction; `opens` is a control line reaching
+    the switch it operates, which is a third relation again and is not a path
+    through the node at all."""
+
+    node: dict
+    via: str
+    direction: str
+    depth: int
+    count: int
+    rails: int
+    truncated: bool
+    neighbors: list[dict]

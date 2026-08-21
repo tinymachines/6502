@@ -107,6 +107,22 @@ NODE_BIN=$(pick_node) || {
 }
 "$NODE_BIN" tools/check-programs.mjs || exit 1
 
+# The chip atlas: the tracer's derivations composed into the chip map's
+# partition, exported for the API to serve. It runs here rather than beside
+# the cargo exporters because it needs node, and NODE_BIN is only known once
+# pick_node has run. The exporter refuses to write a file that fails its own
+# structural checks (132 groups, the partition disjoint and complete, every
+# parent a real group, the bundles adding up), so a broken derivation stops
+# the deploy rather than publishing plausible nonsense.
+#
+# It reads schematic.json, blocks.json, timing.json and graph.json, all four
+# of which were rebuilt above, so it cannot go stale behind them. The API
+# holds it in memory: `sudo systemctl restart 6502-api` after a deploy that
+# changed it.
+log "composing the chip atlas"
+"$NODE_BIN" tools/export-groups.mjs || exit 1
+[ -s web/groups.json ] || { echo "deploy: web/groups.json is empty" >&2; exit 1; }
+
 # Every measured cycle count and byte length against the published instruction
 # table. It SKIPS where the manual is not present, which is everywhere but this
 # box, so it can never block a deploy for being unavailable -- only for a real

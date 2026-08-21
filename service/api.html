@@ -162,7 +162,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
 
 <section id="endpoints">
   <p class="eyebrow">Endpoints</p>
-  <h2>Six routes, one idea</h2>
+  <h2>Six routes that run the chip</h2>
 
   <div class="endpoint">
     <h3><span class="method get">GET</span>/healthz</h3>
@@ -258,6 +258,160 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
       <tr><td><code>trace</code></td><td>if true, one <a href="#observation">Observation</a> per half-cycle</td></tr>
       <tr><td><code>format</code></td><td><code>"objects"</code> (default) or <code>"rows"</code>: the trace as columnar rows in <code>trace_rows</code>, the same information in fewer bytes. Measured on the trace payload alone (the machine, identical under both formats, excluded): 3.7x smaller at 45 half-cycles watching 2 nodes, 7.5x at 133 watching 22. Gzipped the two forms nearly converge, so rows earns its keep as parse time and allocation. Encodings in the response model and in <a href="#encoding">Encodings</a></td></tr>
     </table>
+  </div>
+</section>
+
+<section id="atlas">
+  <p class="eyebrow">The atlas</p>
+  <h2>Five routes that ask what a wire is part of</h2>
+
+  <p>
+    <code>/v1/nodes</code> above answers <em>what can I watch</em>, and its
+    grouping is a reading of the names. These five answer <em>what is this
+    node part of</em>, and every answer is measured. Twenty-three kinds of
+    machinery are walked out of the switch network itself: the ALU as eight
+    bit slices with its inputs and carry ends, the status register as one
+    container per flag, the four registers as their storage closures plus the
+    lines that move each, the timing chain as the cells that compute each
+    T-state, the decimal correction as everything its names are wired into.
+    The derivation is <code>web/chip-groups.js</code>, the same module the
+    <a href="https://6502.tinymachines.ai/tracer">tracer</a> and the
+    <a href="https://6502.tinymachines.ai/chipmap">chip map</a> draw with, so
+    the API and the drawings cannot disagree.
+  </p>
+  <p>
+    <strong>Two layers, and the difference is the point.</strong> The
+    <em>partition</em> is 132 groups with every one of the 1547 nodes in
+    exactly one, because a drawing needs disjoint boxes and ownership goes to
+    the most specific claim. The <em>containers</em> are the same derivations
+    unfiltered: 135 of them, overlapping, with <strong>88 nodes in more than
+    one</strong> and three (<code>sdp:sd1</code>, <code>sdp:sd2</code>,
+    <code>sbus:link</code>) that exist only there, absorbed whole by a
+    container that outranks them. Asking which group a node is in and getting
+    one answer is a fact about the drawing, not about the chip.
+  </p>
+  <p>
+    Nothing here runs the chip and none of it changes, so every response is
+    served <code>public, max-age=86400</code>.
+  </p>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/atlas</h3>
+    <p>
+      What the atlas holds: the 23 container kinds with their sizes, the
+      twelve functional blocks plus the static logic and the residue, the
+      three node roles, and the bounds a walk is held to. The counts are the
+      chip map's own: 132 groups, 534 bundles carrying 1644 gate legs and 310
+      switches between groups, 922 and 313 staying inside one.
+    </p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/groups</h3>
+    <p>The containers, filtered.</p>
+    <table>
+      <tr><th>query</th><th>meaning</th></tr>
+      <tr><td><code>layer</code></td><td><code>partition</code> (default, 132 disjoint), <code>containers</code> (135, overlapping) or <code>absorbed</code> (the 3 that exist only in the overlapping layer)</td></tr>
+      <tr><td><code>kind</code></td><td>one kind: <code>alu</code>, <code>flags</code>, <code>regs</code>, <code>alat</code>, <code>dbus</code>, <code>irp</code>, <code>sbus</code>, <code>sdp</code>, <code>rdy</code>, <code>pcr</code>, <code>pipe</code>, <code>sync</code>, <code>clock</code>, <code>intr</code>, <code>branch</code>, <code>decimal</code>, <code>incr</code>, <code>chain</code>, <code>bus</code>, <code>stage</code>, <code>pins</code>, <code>rest</code>, <code>logic</code></td></tr>
+      <tr><td><code>parent</code></td><td>only the children of one group key. <code>parent=regs:a</code> gives the accumulator's three load lines</td></tr>
+      <tr><td><code>block</code></td><td>a functional block, by id or name: which machinery reaches into the ALU</td></tr>
+      <tr><td><code>q</code></td><td>substring of the key or the label</td></tr>
+      <tr><td><code>min_nodes</code></td><td>drop groups smaller than this</td></tr>
+      <tr><td><code>members</code></td><td>include each group's node list</td></tr>
+    </table>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/groups/{key}</h3>
+    <p>
+      One container, in full: its parent and children, the blocks its nodes
+      are filed in, every other container it shares nodes with and how many,
+      the bundles it anchors (the gate legs and switches crossing to each
+      neighbouring group, with the control lines on them, and the gate
+      direction reported from this group's side), and its members.
+    </p>
+    <p>
+      <code>layer=containers</code> returns the derivation's <em>own</em> node
+      set instead of the partition's, with <code>owned</code> and
+      <code>claimed_elsewhere</code> beside it. <code>intr:nmi</code> is 20
+      nodes as a walk and 18 as a box, because the pipeline latch file
+      outranks the interrupts and keeps <code>pipeVectorA2</code>: the one
+      address bit by which <code>$FFFA</code> differs from <code>$FFFE</code>,
+      which the walk found without being told.
+    </p>
+    <p>
+      Keys are <code>kind:id</code>. Five of them carry a slash of their own
+      (<code>alat:ADL/ABL</code> is one load line, not two path segments), so
+      the route takes the rest of the path as the key.
+    </p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/tags</h3>
+    <p>
+      Nodes with their tags: the group that owns each, every container it is
+      in, its functional block, role, pull-up, die centroid and degree. A
+      separate route from <code>/v1/nodes</code> rather than a mode of it,
+      because that one answers a different question and consumers depend on
+      its shape.
+    </p>
+    <table>
+      <tr><th>query</th><th>meaning</th></tr>
+      <tr><td><code>group</code></td><td>every node in one group key</td></tr>
+      <tr><td><code>kind</code></td><td>every node in any container of one kind</td></tr>
+      <tr><td><code>block</code></td><td>a functional block, by id or name</td></tr>
+      <tr><td><code>role</code></td><td><code>signal</code>, <code>decode term</code> (122 of them) or <code>control line</code> (46)</td></tr>
+      <tr><td><code>q</code></td><td>substring of the node name</td></tr>
+      <tr><td><code>named</code></td><td>true for the 705 named nodes, false for the 842 the die never named</td></tr>
+      <tr><td><code>multi</code></td><td>only the 88 nodes in more than one container</td></tr>
+      <tr><td><code>limit</code>, <code>offset</code></td><td>paging; <code>total</code> says how many matched</td></tr>
+    </table>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/node/{ref}</h3>
+    <p>
+      One node, by any die name or by number. 125 nodes carry more than one
+      name (<code>p4</code> and <code>Pout4</code> are one wire), and every
+      one of them resolves; 47 names carry a slash, so the route takes the
+      rest of the path as the reference. An unnamed node answers to its
+      number, with or without the <code>#</code> the pages print
+      (<code>%231446</code>, since a bare <code>#</code> is a fragment and
+      never reaches the server).
+    </p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/neighbors</h3>
+    <p>
+      What one node reaches, with each neighbour's own tags.
+      <strong>Four relations, kept apart because they are four different
+      things:</strong> <code>drives</code> (this node is an input to that
+      gate), <code>driven_by</code> (that node is an input to the gate driving
+      this one), <code>channel</code> (a pass transistor, which conducts both
+      ways and therefore has no direction, reported with the control line that
+      opens it) and <code>opens</code> (this node <em>is</em> a control line,
+      reaching the two ends of the switch it operates, which is not a path
+      through it at all).
+    </p>
+    <table>
+      <tr><th>query</th><th>meaning</th></tr>
+      <tr><td><code>node</code></td><td>a die name or a node number</td></tr>
+      <tr><td><code>via</code></td><td><code>all</code> (default), <code>gate</code>, <code>switch</code> or <code>control</code></td></tr>
+      <tr><td><code>direction</code></td><td><code>both</code>, <code>in</code> or <code>out</code>, for the gate relations only</td></tr>
+      <tr><td><code>depth</code></td><td>1 to 4</td></tr>
+      <tr><td><code>limit</code></td><td>up to 2000; <code>truncated</code> says when the cap was reached</td></tr>
+    </table>
+    <p>
+      <strong>A rail is reported and never walked.</strong> vss and vcc reach
+      hundreds of transistors, and stepping through one would join most of the
+      chip into a single answer. Eleven gates really do take vss as an input,
+      the permanently-off pull-up that makes RDY and S.O. inputs rather than
+      outputs, so those legs appear with <code>rail: true</code> and the walk
+      stops there. A control line is never followed as though it were a signal
+      path either: <code>cclk</code> opens 243 switches, and expanding it
+      buries whatever was asked about.
+    </p>
   </div>
 </section>
 

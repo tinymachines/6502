@@ -152,12 +152,21 @@ server {
     # docs ask for /api/openapi.json rather than /openapi.json; the trailing
     # slashes on both sides of proxy_pass strip the prefix on the way in.
     location = /api { return 301 /api/; }
-    # The one API response that is static data: the die's node names. The
-    # /api/ location below says no-store, which is right for everything that
-    # reflects a POSTed machine and wrong for this, so the exact-match
-    # location (which nginx prefers) restates the full header set with a
-    # real cache life. The CORS headers come from the app and pass through.
-    location = /api/v1/nodes {
+    # The API responses that are static data: the die's node names, and the
+    # atlas (its derived containers, their members, and the wiring between
+    # them). The /api/ location below says no-store, which is right for
+    # everything that reflects a POSTed machine and wrong for these, so this
+    # location restates the full header set with a real cache life. It is a
+    # regex rather than six near-identical exact blocks, because this file's
+    # own rule at the top is that one add_header in a location discards every
+    # inherited one, and six copies of the header set is six chances to drop
+    # one. Regex locations are matched before prefix locations, so this beats
+    # /api/ without needing to be exact.
+    #
+    # A regex location cannot carry a URI on proxy_pass, hence the rewrite:
+    # the app serves /v1/..., the site publishes it under /api/v1/....
+    # The CORS headers come from the app and pass through.
+    location ~ ^/api/v1/(nodes|atlas|groups|tags|node|neighbors)(/|$) {
         # Findings issue 02: the largest transport win available, one stanza.
         # Runtime gzip, because these responses are dynamic; the static site
         # precompresses instead (gzip_static, see above). min_length spares
@@ -167,7 +176,8 @@ server {
         gzip_comp_level 5;
         gzip_min_length 860;
         gzip_vary on;
-        proxy_pass http://127.0.0.1:6502/v1/nodes;
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass http://127.0.0.1:6502;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

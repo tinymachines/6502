@@ -95,20 +95,34 @@ export function nodeUniverse(sch) {
  * @param {object} sch     schematic.json
  * @param {object} blocks  blocks.json (nodeDrives, transistorGate/Block)
  * @param {object} timing  timing.json (the chain's six stages)
- * @returns {{groups: {key:string, kind:string, id:string, label:string,
- *            nodes:number[]}[], universe:Set<number>, stats:object}}
+ * @returns {{groups: G[], containers: G[], universe:Set<number>, stats:object}}
+ *   where G is {key, kind, id, label, nodes}. `groups` is the disjoint
+ *   partition (every node once); `containers` is the same derivations
+ *   unfiltered, so they overlap, and a container fully absorbed by an
+ *   earlier one appears there and not in `groups`.
  */
 export function chipGroups(sch, blocks, timing) {
   const universe = nodeUniverse(sch);
   const claimed = new Set();
   const groups = [];
+  const containers = [];
   const byName = new Map();
   sch.names.forEach((n, i) => { if (n) byName.set(n, i); });
 
+  // Every candidate set is recorded BEFORE the ownership filter as well as
+  // after it. The filtered sets are the partition this page draws; the raw
+  // ones are the tracer's own overlapping containers, which is the honest
+  // answer to "which groups is this node in" -- a node in the decimal
+  // correction is also in an ALU slice, and saying only one of those is a
+  // consequence of the drawing needing disjoint boxes, not a fact about the
+  // chip. `containers` is additive: nothing above or below reads it, and the
+  // partition, its order and its counts are byte for byte what they were.
   const take = (kind, id, label, nodes) => {
-    const ns = [...new Set(nodes)]
-      .filter((n) => n != null && n >= 0 && universe.has(n) && !claimed.has(n))
+    const raw = [...new Set(nodes)]
+      .filter((n) => n != null && n >= 0 && universe.has(n))
       .sort((a, b) => a - b);
+    if (raw.length) containers.push({ key: `${kind}:${id}`, kind, id: String(id), label, nodes: raw });
+    const ns = raw.filter((n) => !claimed.has(n));
     if (!ns.length) return null;
     for (const n of ns) claimed.add(n);
     const g = { key: `${kind}:${id}`, kind, id: String(id), label, nodes: ns };
@@ -279,5 +293,5 @@ export function chipGroups(sch, blocks, timing) {
     groups: groups.length,
     kinds: new Set(groups.map((g) => g.kind)).size,
   };
-  return { groups, universe, stats };
+  return { groups, containers, universe, stats };
 }
