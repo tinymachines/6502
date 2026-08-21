@@ -38,16 +38,28 @@ server {
     access_log /var/log/nginx/halfwave.access.log;
     error_log  /var/log/nginx/halfwave.error.log;
 
-    # The page is one file carrying its own inline style and script, and it
-    # pulls three font families from Google Fonts; the CSP says exactly that
-    # and nothing more. connect-src stays 'self' because the API is
-    # same-origin through the proxy below; a reader passing ?api= to point
-    # the page elsewhere is stepping outside this policy on purpose.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+    # The page is one file carrying its own inline style and script, plus
+    # the PWA's sw.js, and it pulls three font families from Google Fonts;
+    # the CSP says exactly that and nothing more. script-src needs 'self'
+    # BESIDE 'unsafe-inline': the service worker is a script resource, and
+    # a policy of 'unsafe-inline' alone blocked its registration silently
+    # (no install, no error on the page: found by the worker's absence).
+    # connect-src stays 'self' because the API is same-origin through the
+    # proxy below; a reader passing ?api= to point the page elsewhere is
+    # stepping outside this policy on purpose.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Strict-Transport-Security "max-age=31536000" always;
     add_header Cache-Control "no-cache" always;
+
+    # This nginx has no webmanifest MIME type; without this the browser
+    # gets application/octet-stream and declines to install the app. A
+    # location with no add_header of its own, so every server-level header
+    # is inherited (see the 6502 config for the trap this sidesteps).
+    location ~* \.webmanifest$ {
+        default_type application/manifest+json;
+    }
 
     # The same API the 6502 site proxies, one engine behind both origins.
     # These locations declare add_header and therefore restate the COMPLETE

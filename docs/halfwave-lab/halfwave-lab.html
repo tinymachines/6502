@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101620">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <title>Halfwave Lab · a 6502, half a clock phase at a time</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,6 +24,8 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+/* The page never scrolls sideways; anything wide scrolls inside its own box. */
+html,body{overflow-x:clip}
 body{
   background:var(--ground); color:var(--text);
   font-family:var(--sans); font-size:14px; line-height:1.5;
@@ -33,6 +39,8 @@ button,input,textarea,select{font:inherit;color:inherit}
 header{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   padding:10px 0 8px;border-bottom:1px solid var(--rule);
+  /* Locked to the top. Solid background: content scrolls under it. */
+  position:sticky;top:0;z-index:50;background:var(--ground);
 }
 .brand{font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:-.01em;color:var(--bright);white-space:nowrap}
 .brand em{font-style:normal;color:var(--glow);transition:color .18s}
@@ -59,18 +67,29 @@ header{
   background:color-mix(in srgb,var(--glow) 12%,transparent);transition:.18s;white-space:nowrap;
 }
 .phasepill .dot{width:6px;height:6px;border-radius:50%;background:var(--glow)}
-.pos{font-family:var(--mono);font-size:11.5px;color:var(--mid);white-space:nowrap}
+/* Tabular digits and a reserved width: the counter grows h 0 -> h 9999
+   without moving anything beside it. Same for the phase pill and the
+   scrubber label; a header that jumps on every half-cycle is unreadable. */
+.pos{font-family:var(--mono);font-size:11.5px;color:var(--mid);white-space:nowrap;
+     font-variant-numeric:tabular-nums;min-width:15ch;text-align:right}
+#pilltxt{display:inline-block;min-width:86px}
 .pos b{color:var(--bright);font-weight:600}
 .conn{font-family:var(--mono);font-size:10.5px;padding:3px 7px;border:1px solid var(--rule);border-radius:2px;color:var(--dim);white-space:nowrap}
 .conn.live{color:var(--addr);border-color:color-mix(in srgb,var(--addr) 45%,var(--rule))}
 .conn.demo{color:var(--alu);border-color:color-mix(in srgb,var(--alu) 45%,var(--rule))}
 
 /* ---------- player (sticky, top) ---------- */
+/* The transport is the footer: locked to the bottom at every width, so
+   the controls are reachable however deep a tab scrolls. The body reserves
+   its height (more on a phone, where the row wraps to two lines), and the
+   safe-area inset keeps it clear of a home indicator. */
 .player{
-  position:sticky;top:0;z-index:30;margin:0 -14px;padding:8px 14px 6px;
-  background:color-mix(in srgb,var(--ground) 95%,#000);
-  border-bottom:1px solid var(--rule);backdrop-filter:blur(8px);
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  padding:8px max(14px,env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-right));
+  background:color-mix(in srgb,var(--ground) 96%,#000);
+  border-top:1px solid var(--rule);backdrop-filter:blur(8px);
 }
+body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
 .prow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .tbtn{
   background:var(--panel);border:1px solid var(--rule);border-radius:2px;
@@ -82,7 +101,7 @@ header{
 .tbtn.play{min-width:62px;color:var(--bright)}
 #scrub{flex:1 1 140px;min-width:110px;accent-color:var(--glow);height:26px}
 .strip{width:100%;height:20px;display:block;background:var(--panel2);border:1px solid var(--rule);border-radius:2px;cursor:pointer;margin-top:6px}
-.tlab{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap}
+.tlab{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums;min-width:9ch;text-align:right}
 
 /* ---------- instruction lane + scope ---------- */
 .scopewrap{margin-top:10px;overflow:hidden}
@@ -154,6 +173,8 @@ select{
 .stage{border-top:2px solid var(--glow);transition:border-color .18s}
 .mapwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 #map,#lmap{display:block;width:100%;min-width:500px;max-width:860px;margin:0 auto;height:auto}
+/* Below the diagram's 500px floor the wrap scrolls; the page never does. */
+.mapwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .bx rect{fill:var(--panel2);stroke:var(--rule);stroke-width:1}
 .bx text.n{font-family:var(--disp);font-size:9.5px;font-weight:700;letter-spacing:.08em;fill:var(--mid)}
 .bx text.v{font-family:var(--mono);font-size:12.5px;font-weight:600;fill:var(--dim)}
@@ -171,18 +192,11 @@ select{
 .elab{font-family:var(--mono);font-size:8.5px;fill:var(--dim);opacity:0;letter-spacing:.02em}
 .elab.on{opacity:.95}
 
-/* ---------- stage: diagram beside its narration ---------- */
-.stagegrid{display:grid;grid-template-columns:1fr}
-.stageside{display:flex;flex-direction:column;min-width:0}
+/* ---------- stage ---------- */
 @media(min-width:1060px){
-  .stagegrid{grid-template-columns:minmax(0,1fr) 400px}
-  .stageside{border-left:1px solid var(--rule)}
-  .stageside .readout{border-top:none;border-bottom:1px solid var(--rule)}
-  .stageside .tell{border-top:none;flex:1}
   .mapwrap{display:flex;align-items:center;justify-content:center}
   #map,#lmap{max-width:none;min-width:0;width:100%;height:min(46vh,460px)}
 }
-@media(min-width:1400px){ .stagegrid{grid-template-columns:minmax(0,1fr) 460px} }
 
 /* ---------- readout strip ---------- */
 .readout{
@@ -227,6 +241,7 @@ select{
 .bl.alu{color:var(--alu)}  .bl.rg{color:#8FA3BC}
 .bl.idle{opacity:.42}
 @media(max-width:620px){
+  body{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
   .bc{width:8px;height:13px}
   .bn{width:38px;font-size:9.5px}
   .bh{width:40px;font-size:10px}
@@ -317,6 +332,7 @@ select{
 <!-- ============ TABS ============ -->
 <div class="tabs" role="tablist" aria-label="Panels">
   <button class="tab" role="tab" id="t-map"  aria-controls="p-map"  aria-selected="true">Datapath</button>
+  <button class="tab" role="tab" id="t-story" aria-controls="p-story" aria-selected="false">Story</button>
   <button class="tab" role="tab" id="t-lat"  aria-controls="p-lat"  aria-selected="false">Latches</button>
   <button class="tab" role="tab" id="t-bits" aria-controls="p-bits" aria-selected="false">Bits</button>
   <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
@@ -332,17 +348,31 @@ select{
         <h2 class="eyebrow">The datapath, right now</h2>
         <span class="eyebrow"><span id="aluop" style="color:var(--alu)"></span> <span id="tstate"></span></span>
       </div>
-      <div class="stagegrid">
-        <div class="pb mapwrap" style="padding:6px 10px 2px">
-          <svg id="map" viewBox="0 0 540 336" role="img" aria-label="Live 6502 datapath diagram"></svg>
-        </div>
-        <div class="stageside">
-          <div class="readout" id="readout"></div>
-          <div class="tell">
-            <p class="lede" id="lede">Boot a program to begin.</p>
-            <ul id="beats"></ul>
-          </div>
-        </div>
+      <div class="readout" id="readout"></div>
+      <div class="pb mapwrap" style="padding:6px 10px 2px">
+        <svg id="map" viewBox="0 0 540 336" role="img" aria-label="Live 6502 datapath diagram"></svg>
+      </div>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p-story" aria-labelledby="t-story" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">This half-cycle, in words</h2>
+        <span class="eyebrow" id="storypos"></span>
+      </div>
+      <div class="tell" style="border-top:none">
+        <p class="lede" id="lede">Boot a program to begin.</p>
+        <ul id="beats"></ul>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2 class="eyebrow">The latches, read</h2></div>
+      <div class="tell" style="border-top:none">
+        <ul id="latwords"></ul>
+        <p class="note">Every sentence above is generated from the latch bytes
+        and control-line booleans of this half-cycle; nothing is authored per
+        instruction, so the words cannot outlive the wires they describe.</p>
       </div>
     </div>
   </section>
@@ -665,6 +695,33 @@ function renderLatches(o,p){
   $("#latmoved").textContent=moved?`${moved} latch${moved>1?"es":""} moved at this edge`:"nothing moved: a hold half-cycle";
 }
 
+/* ---------- the latches, read out in words ---------- */
+function latchWords(o,p){
+  const w=[]; const chg=k=>!!p&&p[k]!==o[k];
+  if([o.pclp,o.pchp,o.abl,o.abh,o.alua,o.alub,o.idl,o.dor].some(v=>v==null))
+    return [[0,"This trace predates the latch fields; boot live to read them."]];
+  const nx=(o.pchp<<8)|o.pclp, ab=(o.abh<<8)|o.abl, ia=intAddr(o);
+  w.push([chg("pclp")||chg("pchp")?1:0,
+    `PCLP/PCHP hold <code>${hx(nx,4)}</code>${nx===((o.pc+1)&0xffff)?", PC plus one,":""} waiting for the write-back`
+    +(on(o,"ADLPCL")?` — and <code>ADL→PCL</code> is open, so the write-back is happening now.`:`.`)]);
+  w.push([0, ab===ia
+    ? `ABL/ABH track ADL/ADH at <code>${hx(ab,4)}</code>: the pins and the internal bus agree right now.`
+    : `ABL/ABH hold <code>${hx(ab,4)}</code> steady for the pins while ADL/ADH have already moved to <code>${hx(ia,4)}</code>. The output latch is why the datasheet can promise a stable address.`]);
+  w.push([chg("idl")?1:0,
+    `IDL holds <code>${hx(o.idl)}</code>, the byte memory answered${chg("idl")?" — fresh at this edge":""}.`
+    +(o.idl===o.ir?` It is the opcode now executing.`:``)]);
+  const op=aluOp(o);
+  if(op) w.push([1,`The adder is working on <b>${op}</b>: ALUA <code>${hx(o.alua)}</code>, ALUB <code>${hx(o.alub)}</code>, hold register <code>${hx(o.alu)}</code>${chg("alu")?" — the result just landed":""}.`]);
+  else w.push([chg("alu")?1:0,`ALUA <code>${hx(o.alua)}</code> and ALUB <code>${hx(o.alub)}</code> sit at the adder's inputs; its hold register reads <code>${hx(o.alu)}</code>${chg("alu")?", new at this edge":""}.`]);
+  const took=on(o,"SBAC")||on(o,"SBX")||on(o,"SBY")||on(o,"SBS");
+  if(on(o,"ADDSB")&&!took)
+    w.push([1,`That result is out on SB and <b>no register is taking it</b>: the value exists and lives nowhere.`]);
+  if(o.wr) w.push([1,`DOR <code>${hx(o.dor)}</code> is on the data pins: this half-cycle is the write.`]);
+  else if(chg("dor")) w.push([1,`DOR just loaded <code>${hx(o.dor)}</code>, staged for a coming write cycle.`]);
+  else w.push([0,`DOR still holds <code>${hx(o.dor)}</code> from the last store.`]);
+  return w;
+}
+
 /* ---------- build static DOM ---------- */
 (function build(){
   const svg=$("#map"); let s="";
@@ -816,10 +873,12 @@ function render(){
   $("#readout").innerHTML=RD.map(([k,v,c])=>
     `<span class="rd ${c} ${PV[k]&&PV[k]!==v?"chg":""}">${k}<b>${v}</b></span>`).join("");
 
-  /* narration */
+  /* the story tab: narration plus the latches read out in words */
   const {lede,beats}=narrate(o,p);
   $("#lede").innerHTML=lede;
   $("#beats").innerHTML=beats.map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
+  $("#storypos").textContent=`h ${o.h} · ${o.ph2?"φ2":"φ1"}`;
+  $("#latwords").innerHTML=latchWords(o,p).map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
   renderLatches(o,p);
 
   /* registers */
@@ -1043,7 +1102,7 @@ function reload(){ buildLane(); $("#scrub").max=Math.max(0,F.length-1); }
 function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][CI.sync]&&F[n][CI.phase]===1) return go(n); go(F.length-1); }
 
 /* tabs */
-const TABS=[["t-map","p-map"],["t-lat","p-lat"],["t-bits","p-bits"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
+const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
 function showTab(id){
   for(const [t,p] of TABS){
     const sel=t===id;
@@ -1054,6 +1113,11 @@ function showTab(id){
 }
 for(const [t] of TABS) $("#"+t).onclick=()=>showTab(t);
 buildLatches();
+
+/* ---------- PWA: offline shell. The app already degrades to its packed
+   trace with no API, so cached-shell + no API = still a working lab. ---------- */
+if("serviceWorker" in navigator && location.protocol==="https:")
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
 showTab("t-map");
 
 $("#b-reset").onclick=()=>{ stopPlay(); go(0); };

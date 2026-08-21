@@ -19,5 +19,12 @@ grep -qE "fetch\((\"|')[a-z]" "$SRC" && {
   grep -oE "fetch\((\"|')[a-z][^\"')]*" "$SRC"; exit 1; }
 
 install -o www-data -g www-data -m 644 "$SRC" "$ROOT/index.html"
-echo "published $(wc -c < "$SRC") bytes -> $ROOT/index.html"
+# The PWA shell beside it: manifest, service worker, icons. All unhashed and
+# all served no-cache by the vhost, so a deploy is picked up on the next
+# online load and the worker cannot pin a stale build.
+install -o www-data -g www-data -m 644 docs/halfwave-lab/manifest.webmanifest "$ROOT/"
+install -o www-data -g www-data -m 644 docs/halfwave-lab/sw.js "$ROOT/"
+install -d -o www-data -g www-data "$ROOT/icons"
+install -o www-data -g www-data -m 644 docs/halfwave-lab/icons/*.png "$ROOT/icons/"
+echo "published $(wc -c < "$SRC") bytes -> $ROOT/index.html (+ manifest, sw, icons)"
 curl -fsS -o /dev/null https://halfwave.tinymachines.ai/ && echo "live: 200"
