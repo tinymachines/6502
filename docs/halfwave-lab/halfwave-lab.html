@@ -52,8 +52,28 @@ header{
 }
 .panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px}
 .panel > .ph{
-  display:flex;align-items:center;justify-content:space-between;gap:8px;
-  padding:8px 12px;border-bottom:1px solid var(--rule);
+  display:flex;align-items:flex-start;justify-content:space-between;gap:8px 12px;
+  flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--rule);
+  /* Two lines are ALLOCATED, not merely allowed: the headings are of very
+     different lengths and a row that grows when you switch to a longer one
+     moves the whole panel down under the reader. Two lines of the eyebrow's
+     own line-height, plus the padding. */
+  min-height:calc(2 * 1.45em + 16px);
+}
+.panel > .ph > .eyebrow{line-height:1.45}
+.panel > .ph > h2{flex:1 1 12rem;min-width:0}
+.panel > .ph > .eyebrow:not(h2){flex:0 1 auto;text-align:right}
+/* On a phone the two of them cannot share a row: measured, the headings
+   land on 57px or 69px depending on which tab is open, so the panel under
+   them moves. The status gets a row of its own and the heading the full
+   width, which is a steady three lines whatever is in them. */
+@media(max-width:620px){
+  .panel > .ph{
+    flex-direction:column;align-items:stretch;gap:2px;
+    min-height:calc(3 * 1.45em + 16px);
+  }
+  .panel > .ph > h2{flex:none}
+  .panel > .ph > .eyebrow:not(h2){text-align:left}
 }
 .panel > .pb{padding:12px}
 .panel + .panel{margin-top:12px}
@@ -157,20 +177,26 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
 .scopewrap.folded .scopebar{border-bottom:none}
 
 /* ---------- tabs ---------- */
-.tabs{display:flex;gap:2px;margin:12px 0 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+/* The menu sits in the header, on its own row under the wordmark: it is
+   navigation, so it belongs with the chrome rather than sitting on top of
+   the panel it opens. flex-basis 100% is what puts it on the second row of
+   a wrapping header without a second container. */
+.tabs{
+  flex:1 0 100%;display:flex;gap:1px;margin:2px -4px -8px;padding:0 4px;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
 .tabs::-webkit-scrollbar{display:none}
 .tab{
-  flex:0 0 auto;background:transparent;border:1px solid transparent;border-bottom:none;
-  border-radius:3px 3px 0 0;padding:8px 14px;cursor:pointer;
-  font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--dim);min-height:36px;
+  flex:0 0 auto;background:transparent;border:none;
+  border-bottom:2px solid transparent;
+  padding:7px 10px 6px;cursor:pointer;
+  font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--dim);min-height:32px;white-space:nowrap;
 }
 .tab:hover{color:var(--text)}
-.tab[aria-selected="true"]{
-  color:var(--bright);background:var(--panel);
-  border-color:var(--rule);position:relative;top:1px;
-}
-.tabwrap{border-top:1px solid var(--rule);padding-top:12px}
+.tab[aria-selected="true"]{color:var(--bright);border-bottom-color:var(--glow)}
+.tab:focus-visible{outline:1px solid var(--glow);outline-offset:-2px}
+.tabwrap{padding-top:12px}
 [role="tabpanel"][hidden]{display:none}
 .two{display:grid;grid-template-columns:1fr;gap:12px}
 @media(min-width:1000px){.two{grid-template-columns:1fr 300px}}
@@ -218,6 +244,8 @@ select{
 .e.addr{stroke:var(--addr)} .e.data{stroke:var(--data)} .e.alu{stroke:var(--alu)}
 .e.struct{opacity:.3}
 .e.on{opacity:1;stroke-width:2.6;stroke-dasharray:7 5;animation:flow .7s linear infinite}
+.e.head{stroke-width:1.4}
+.e.head.on{stroke-width:2.2;stroke-dasharray:none;animation:none}
 @keyframes flow{to{stroke-dashoffset:-24}}
 .elab{font-family:var(--mono);font-size:8.5px;fill:var(--dim);opacity:0;letter-spacing:.02em}
 .elab.on{opacity:.95}
@@ -243,13 +271,21 @@ select{
 .rd.addr{color:var(--addr)} .rd.data{color:var(--data)} .rd.alu{color:var(--alu)}
 
 /* ---------- bit lanes ---------- */
-.bitgrid{display:grid;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.bitgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));align-items:start}
+.bsecbox{
+  border:1px solid var(--rule);border-radius:3px;background:var(--panel2);
+  padding:7px 9px 8px;display:grid;gap:2px;align-content:start;min-width:0;
+}
+.bsecbox.wide{grid-column:1/-1}
 .bsec{
   font-family:var(--disp);font-size:9px;font-weight:700;letter-spacing:.16em;
-  text-transform:uppercase;color:var(--dim);padding:9px 0 3px;
+  text-transform:uppercase;color:var(--dim);padding:0 0 4px;
 }
-.bsec:first-child{padding-top:0}
-.bl{display:flex;align-items:center;gap:8px;min-height:19px}
+.bl{display:flex;align-items:center;gap:8px;min-height:19px;min-width:0}
+/* The pins are a 2x2 of badges rather than a run of four: as a row they
+   were the widest thing on the tab and set the width of every column. */
+.ptags{display:grid;grid-template-columns:repeat(2,minmax(0,auto));gap:3px 5px;justify-content:start}
+.ptags .btag{text-align:center}
 .bn{
   font-family:var(--mono);font-size:10.5px;color:var(--mid);
   width:46px;flex:none;text-align:right;
@@ -270,12 +306,38 @@ select{
 .bl.addr{color:var(--addr)} .bl.data{color:var(--data)}
 .bl.alu{color:var(--alu)}  .bl.rg{color:#8FA3BC}
 .bl.idle{opacity:.42}
+/* Two columns on a phone, and the lane goes vertical to make room for
+   them. Measured first: side by side, name + eight cells + hex needs 158px
+   against the 141 a half column has at 390px, and shrinking the pieces to
+   fit lands exactly on the limit at one width and over it at the next. So
+   the lane stacks instead -- name and value on one line, the bits under
+   them -- which needs only the 78px the cells occupy and fits at every
+   phone width with room to spare. */
 @media(max-width:620px){
   body{padding-bottom:calc(100px + env(safe-area-inset-bottom))}
   .bc{width:8px;height:13px}
-  .bn{width:38px;font-size:9.5px}
-  .bh{width:40px;font-size:10px}
-  .bl{gap:5px}
+  .bitgrid{grid-template-columns:1fr 1fr;gap:7px}
+  .bsecbox{padding:6px 7px 7px}
+  .bsecbox.wide{grid-column:auto}
+  .bl{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 6px;
+    align-items:center;min-height:0;padding:2px 0;
+  }
+  .bl + .bl{border-top:1px solid #1A2331}
+  .bn{width:auto;text-align:left;font-size:9.5px}
+  .bh{width:auto;text-align:right;font-size:10px}
+  .bits{grid-column:1/-1;padding-top:1px}
+  .btag{grid-column:1/-1;justify-self:start;margin-top:2px}
+  /* A 16-bit lane is two bytes stacked, which is how they are named anyway
+     (ADH/ADL, PCH/PCL). The half-byte gap becomes the line break. */
+  .bl.w16 .bits{flex-wrap:wrap;width:78px}
+  .bl.w16 .bits .gap{flex:1 0 100%;width:auto;height:2px}
+  .bl.pins{display:block}
+  .bl.pins .bn{display:block;padding-bottom:3px}
+}
+@media(max-width:420px){
+  /* Two badges side by side are wider than a half column at 320px. */
+  .ptags{grid-template-columns:minmax(0,1fr)}
 }
 
 /* ---------- timeline, decode, memory ---------- */
@@ -331,7 +393,8 @@ select{
 .acell.arow-c{height:14px;border-style:dashed}
 .acell.arow-c.on{color:var(--alu);border-style:solid}
 .acell.arow-s.on{color:var(--alu)}
-.addeq{font-family:var(--mono);font-size:12px;color:var(--text);padding:12px 0 2px}
+.addeq{font-family:var(--mono);font-size:12px;color:var(--text);padding:8px 0 0;margin:0}
+.addeq .sep{color:var(--dim);padding:0 2px}
 .addeq b{color:var(--bright)}
 .stkrow{display:flex;gap:10px;align-items:center;font-family:var(--mono);font-size:11.5px;min-height:20px}
 .stkrow .a{color:var(--dim)}
@@ -351,6 +414,15 @@ select{
 .tell li.k:before{background:var(--glow);height:2px}
 .tell li.k{color:var(--text)}
 .tell code{font-family:var(--mono);font-size:12.5px;color:var(--bright);background:#0C1219;padding:1px 4px;border-radius:2px}
+/* The block list leads with the block's name, so the reader can find the
+   one they came for without reading the sentence first. */
+.tell ul.bw{gap:9px}
+.tell ul.bw li > b.bwl{
+  font-family:var(--disp);font-size:9.5px;font-weight:700;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--dim);display:block;padding-bottom:1px;
+}
+.tell ul.bw li.k > b.bwl{color:var(--glow)}
+.tell ul.bw li b:not(.bwl){color:var(--text);font-weight:600}
 
 /* ---------- control-line grid ---------- */
 .lines{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:5px}
@@ -398,6 +470,21 @@ select{
   <div class="clockbar">
     <span class="pos" id="pos">h <b>0</b> · cyc <b>0</b></span>
   </div>
+<nav class="tabs" role="tablist" aria-label="Panels">
+  <button class="tab" role="tab" id="t-map"  aria-controls="p-map"  aria-selected="true">Datapath</button>
+  <button class="tab" role="tab" id="t-story" aria-controls="p-story" aria-selected="false">Story</button>
+  <button class="tab" role="tab" id="t-lat"  aria-controls="p-lat"  aria-selected="false">Latches</button>
+  <button class="tab" role="tab" id="t-bits" aria-controls="p-bits" aria-selected="false">Bits</button>
+  <button class="tab" role="tab" id="t-time" aria-controls="p-time" aria-selected="false">Timeline</button>
+  <button class="tab" role="tab" id="t-dec"  aria-controls="p-dec"  aria-selected="false">Decode</button>
+  <button class="tab" role="tab" id="t-add"  aria-controls="p-add"  aria-selected="false">Adder</button>
+  <button class="tab" role="tab" id="t-mem"  aria-controls="p-mem"  aria-selected="false">Memory</button>
+  <button class="tab" role="tab" id="t-stk"  aria-controls="p-stk"  aria-selected="false">Stack</button>
+  <button class="tab" role="tab" id="t-irq"  aria-controls="p-irq"  aria-selected="false">Interrupt</button>
+  <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
+  <button class="tab" role="tab" id="t-state" aria-controls="p-state" aria-selected="false">State</button>
+  <button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
+</nav>
 </header>
 
 <!-- ============ PLAYER ============ -->
@@ -428,23 +515,6 @@ select{
   <canvas id="scope" aria-label="Clock phases, RDY, SYNC and timing states"></canvas>
 </div>
 
-<!-- ============ TABS ============ -->
-<div class="tabs" role="tablist" aria-label="Panels">
-  <button class="tab" role="tab" id="t-map"  aria-controls="p-map"  aria-selected="true">Datapath</button>
-  <button class="tab" role="tab" id="t-story" aria-controls="p-story" aria-selected="false">Story</button>
-  <button class="tab" role="tab" id="t-lat"  aria-controls="p-lat"  aria-selected="false">Latches</button>
-  <button class="tab" role="tab" id="t-bits" aria-controls="p-bits" aria-selected="false">Bits</button>
-  <button class="tab" role="tab" id="t-time" aria-controls="p-time" aria-selected="false">Timeline</button>
-  <button class="tab" role="tab" id="t-dec"  aria-controls="p-dec"  aria-selected="false">Decode</button>
-  <button class="tab" role="tab" id="t-add"  aria-controls="p-add"  aria-selected="false">Adder</button>
-  <button class="tab" role="tab" id="t-mem"  aria-controls="p-mem"  aria-selected="false">Memory</button>
-  <button class="tab" role="tab" id="t-stk"  aria-controls="p-stk"  aria-selected="false">Stack</button>
-  <button class="tab" role="tab" id="t-irq"  aria-controls="p-irq"  aria-selected="false">Interrupt</button>
-  <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
-  <button class="tab" role="tab" id="t-state" aria-controls="p-state" aria-selected="false">State</button>
-  <button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
-</div>
-
 <div class="tabwrap">
 
   <section role="tabpanel" id="p-map" aria-labelledby="t-map">
@@ -472,12 +542,23 @@ select{
       </div>
     </div>
     <div class="panel">
-      <div class="ph"><h2 class="eyebrow">The latches, read</h2></div>
+      <div class="ph"><h2 class="eyebrow">The latches, read</h2>
+        <span class="eyebrow">the named storage</span></div>
       <div class="tell" style="border-top:none">
         <ul id="latwords"></ul>
-        <p class="note">Every sentence above is generated from the latch bytes
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2 class="eyebrow">The rest of the chip — the blocks that move no value</h2>
+        <span class="eyebrow" id="bwpos"></span></div>
+      <div class="tell" style="border-top:none">
+        <ul class="bw" id="blockwords"></ul>
+        <p class="note">Every sentence on this tab is generated from the bytes
         and control-line booleans of this half-cycle; nothing is authored per
-        instruction, so the words cannot outlive the wires they describe.</p>
+        instruction, so the words cannot outlive the wires they describe. The
+        two panels above follow the value through the datapath, and this one
+        covers the blocks that never appear in that story because they do not
+        carry a value: what is decoding, what is timing, what is remembering.</p>
       </div>
     </div>
   </section>
@@ -805,7 +886,7 @@ const EDGES = [
   {ln:"ADLPCL",k:"addr",d:"M232,85 H214 V31 H232",  lx:210,ly:52,anchor:"end"},
   {ln:"PCHDB", k:"data",d:"M144,16 V6 H478 V178",   lx:404,ly:3},
   {ln:"PCLDB", k:"data",d:"M280,16 V11 H490 V178",  lx:404,ly:22},
-  {ln:"SBDB",  k:"data",d:"M152,206 V226",          lx:158,ly:220,anchor:"start"},
+  {ln:"SBDB",  k:"data",d:"M152,206 V226",          lx:158,ly:220,anchor:"start",both:1},
   {ln:"SBADH", k:"addr",d:"M60,226 H24 V85 H96",    lx:28,ly:150,anchor:"start"},
   {ln:"SBAC",  k:"data",d:"M294,252 V274",          lx:298,ly:266,anchor:"start"},
   {ln:"SBX",   k:"data",d:"M354,252 V274",          lx:358,ly:266,anchor:"start"},
@@ -817,6 +898,41 @@ const EDGES = [
   {ln:"ADDSB", k:"alu", d:"M216,286 H240 V252",     lx:236,ly:266,anchor:"end"},
   {ln:"ADDADL",k:"alu", d:"M126,312 V326 H528 V85 H328", lx:300,ly:322,anchor:"middle"}
 ];
+
+/* Arrowheads, computed from the paths rather than drawn beside them.
+   Every edge above is written from producer to consumer, so the head goes
+   on the LAST segment and points the way the value travels: the diagram
+   answers "who is taking this" without the reader having to know which
+   box is upstream. SBDB is the exception and is marked as one -- it does
+   not move a value anywhere, it shorts SB and DB into one wire, so it
+   gets a head at both ends.
+
+   The head is two stroked lines, not a marker: a marker's fill would have
+   to be coloured separately from the line, and these lines already change
+   colour and opacity with `.e.on`. Drawn as a chevron it inherits all of
+   it, and matches the icon family. */
+function ptsOf(d){
+  const pts=[]; let x=0,y=0;
+  for(const m of d.matchAll(/([MHV])\s*(-?[\d.]+)(?:,(-?[\d.]+))?/g)){
+    const a=+m[2];
+    if(m[1]==="M"){ x=a; y=+m[3]; } else if(m[1]==="H") x=a; else y=a;
+    pts.push([x,y]);
+  }
+  return pts;
+}
+function headPath(from,to,len,wide){
+  const dx=to[0]-from[0], dy=to[1]-from[1], L=Math.hypot(dx,dy)||1;
+  const ux=dx/L, uy=dy/L, px=-uy, py=ux, A=len||5.5, B=wide||3.4;
+  const bx=to[0]-ux*A, by=to[1]-uy*A;
+  const r=v=>Math.round(v*10)/10;
+  return `M${r(bx+px*B)},${r(by+py*B)} L${to[0]},${to[1]} L${r(bx-px*B)},${r(by-py*B)}`;
+}
+function headsFor(e){
+  const P=ptsOf(e.d); if(P.length<2) return [];
+  const out=[headPath(P[P.length-2],P[P.length-1])];
+  if(e.both) out.push(headPath(P[1],P[0]));
+  return out;
+}
 
 /* ---------- example programs ---------- */
 const PRESETS = [
@@ -1004,6 +1120,105 @@ function renderLatches(o,p){
   $("#latmoved").textContent=moved?`${moved} latch${moved>1?"es":""} moved at this edge`:"nothing moved: a hold half-cycle";
 }
 
+/* The opcode fetch this half-cycle belongs to. Every "which cycle of the
+   instruction is this" question walks back to it, so it is one function
+   rather than a loop copied into each tab. */
+function fetchFrameAt(n){
+  let f=Math.min(n,F.length-1);
+  while(f>0&&!(F[f][CI.sync]&&F[f][CI.phase]===1)) f--;
+  return f;
+}
+const ORD=["1st","2nd","3rd","4th","5th","6th","7th","8th"];
+const FLAGS=["C","Z","I","D","B","-","V","N"];
+function flagStr(v){
+  let out="";
+  for(let b=7;b>=0;b--){ const n=FLAGS[b]; out+= b===5?"-":((v>>b)&1?n:n.toLowerCase()); }
+  return out;
+}
+
+/* ---------- the rest of the chip, block by block ----------
+   The narration above follows the value moving through the datapath. These
+   are the blocks that do not move a value and therefore never came up in
+   it: what is decoding, what is counting, what is remembering. Same rule as
+   everywhere else -- every sentence is generated from this half-cycle's own
+   bytes and booleans, nothing is authored per instruction. */
+function blockWords(o,p){
+  const w=[], chg=k=>!!p&&p[k]!==o[k];
+  const f=fetchFrameAt(i), cyc=Math.floor((i-f)/2), src=insLabel(F[f][CI.fetch_addr]);
+
+  /* instruction register and predecode */
+  w.push([o.sync?1:0,"Instruction register",
+    `IR holds <code>${hx(o.ir)}</code>`
+    +(src?`, the <b>${src}</b> fetched at ${hx(F[f][CI.fetch_addr],4)}`:``)
+    +`, and this is its <b>${ORD[cyc]||(cyc+1)+"th"} cycle</b>.`
+    +(o.sync?` <code>SYNC</code> is high, so the byte on the pins is the NEXT opcode: it does not reach IR until the end of this cycle, which is why IR still reads the instruction before it.`
+            :` It was loaded through the predecode latch, which is also what an interrupt overwrites to force <code>$00</code>.`)]);
+
+  /* Decode, and the group is two things rather than one: the product terms
+     the die names op-... , and the predecode nodes that read the opcode byte
+     before the PLA sees it. Calling all of them terms would be wrong by nine. */
+  const pla=DECODE_NAMES.filter(n=>/^op-/.test(n));
+  const pre=DECODE_NAMES.filter(n=>!/^op-/.test(n));
+  const terms=pla.filter(n=>on(o,n));
+  const fresh=p?terms.filter(n=>!on(p,n)):[];
+  const short=n=>n.replace(/^op-/,"");
+  if(pla.length)
+    w.push([fresh.length?1:0,"Decode PLA",
+      `<b>${terms.length}</b> of ${pla.length} product terms are high`
+      +(terms.length?`: <code>${terms.slice(0,4).map(short).join("</code> <code>")}</code>${terms.length>4?` and ${terms.length-4} more`:``}.`:`.`)
+      +(fresh.length?` <b>${fresh.map(short).join(", ")}</b> arrived at this edge.`:``)
+      +` A term named <code>op-Tn-…</code> is the opcode and that T-state ANDed together; the control lines are what the terms drive.`]);
+  else
+    w.push([0,"Decode PLA",`This trace carries no product terms. Boot against a live API and the names come from <code>/v1/nodes</code>.`]);
+
+  /* predecode */
+  if(pre.length){
+    const hi=pre.filter(n=>on(o,n));
+    w.push([hi.length&&p&&hi.some(n=>!on(p,n))?1:0,"Predecode",
+      `The ${pre.length} nodes beside the PLA read the opcode byte before it does`
+      +(hi.length?`; <code>${hi.join("</code> <code>")}</code> ${hi.length>1?"are":"is"} high.`:`, and none is high.`)
+      +` <code>clearIR</code> is the one that matters most: during an interrupt it is what makes the instruction register load <code>$00</code> instead of the byte on the pins, which is why every interrupt runs BRK with no BRK in memory.`]);
+  }
+
+  /* timing chain */
+  w.push([chg("t")?1:0,"Timing chain",
+    `The chain reads <code>${o.t}</code>${o.hid?` with hidden <code>${o.hid}</code>`:``}${o.sd?` and store pipeline <code>${o.sd}</code>`:``}.`
+    +` It is a shift register, active low, and nothing counts cycles: the instruction ends when a product term resets the chain, so its length is however long that took.`
+    +(o.t.indexOf("+")>=0?` Two states at once is two instructions overlapping.`:``)]);
+
+  /* status register */
+  const moved=[];
+  if(p) for(let b=0;b<8;b++) if(b!==5&&((o.p^p.p)>>b&1)) moved.push(FLAGS[b]);
+  w.push([moved.length?1:0,"Status register",
+    `P reads <code>${hx(o.p)}</code>, <code>${flagStr(o.p)}</code> (capitals are set).`
+    +(moved.length?` <b>${moved.join(" and ")}</b> just changed.`:` No flag moved at this edge.`)
+    +` Bit 5 does not exist on the die: it has no storage node and reads as 1.`]);
+
+  /* stack pointer */
+  const inStack=(o.addr>>8)===1;
+  w.push([inStack||chg("s")?1:0,"Stack pointer",
+    `S holds <code>${hx(o.s)}</code>, so the next push lands at <code>${hx(0x100|o.s,4)}</code> and grows downward.`
+    +(inStack?` <b>This access is in page $01</b>: ${o.wr?`a push of <code>${hx(o.data)}</code>`:`a pull of <code>${hx(o.data)}</code>`}.`:``)
+    +(chg("s")&&o.ir===0x20?` S changed, but mid-JSR it is not a pointer at all -- see the Stack tab.`:chg("s")?` It moved at this edge.`:``)]);
+
+  /* memory interface */
+  const where=o.addr>=0xFFFA?"the vector table":(o.addr>>8)===1?"the stack page"
+             :o.addr<0x100?"zero page":"memory";
+  w.push([0,"Memory interface",
+    o.wr?`The chip is writing <code>${hx(o.data)}</code> to ${hx(o.addr,4)} in ${where}. R/W falls in φ1 and memory takes the byte on the φ2 edge.`
+        :`The chip is reading ${hx(o.addr,4)} in ${where} and memory answered <code>${hx(o.data)}</code>.`
+         +(o.sync?` SYNC marks it an opcode.`:` The byte lands in IDL either way; what reads IDL is what makes it an operand or a value.`)]);
+
+  /* input pins */
+  const low=[["rdy","RDY"],["irq","IRQ"],["nmi","NMI"],["res","RES"]].filter(([n])=>WNAMES.some(x=>x===n)&&!on(o,n));
+  w.push([low.length?1:0,"Input pins",
+    low.length
+      ? `<b>${low.map(x=>x[1]).join(", ")}</b> ${low.length>1?"are":"is"} low. All four are active low`
+        +(low.some(x=>x[0]==="rdy")?`, and RDY low stalls the chip on a read cycle but never on a write.`:`, so low means asserted.`)
+      : `RDY, IRQ, NMI and RES are all high: nothing outside the chip is asking for anything.`]);
+  return w;
+}
+
 /* ---------- the latches, read out in words ---------- */
 function latchWords(o,p){
   const w=[]; const chg=k=>!!p&&p[k]!==o[k];
@@ -1036,6 +1251,8 @@ function latchWords(o,p){
   const svg=$("#map"); let s="";
   for(const e of EDGES){
     s+=`<path class="e ${e.k}${e.struct?" struct":""}" data-ln="${e.ln||""}" d="${e.d}"/>`;
+    for(const h of headsFor(e))
+      s+=`<path class="e head ${e.k}${e.struct?" struct":""}" data-ln="${e.ln||""}" d="${h}"/>`;
     if(e.ln) s+=`<text class="elab" data-ln="${e.ln}" x="${e.lx}" y="${e.ly}" text-anchor="${e.anchor||"middle"}">${SHORTLAB[e.ln]||(LINEMETA[e.ln]?LINEMETA[e.ln][0]:e.ln)}</text>`;
   }
   for(const b of BOXES){
@@ -1187,6 +1404,9 @@ function render(){
   $("#beats").innerHTML=beats.map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
   $("#storypos").textContent=`h ${o.h} · ${o.ph2?"φ2":"φ1"}`;
   $("#latwords").innerHTML=latchWords(o,p).map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
+  const bw=blockWords(o,p);
+  $("#blockwords").innerHTML=bw.map(([k,lab,t])=>`<li class="${k?"k":""}"><b class="bwl">${lab}</b>${t}</li>`).join("");
+  $("#bwpos").textContent=`${bw.filter(x=>x[0]).length} of ${bw.length} moved`;
   renderLatches(o,p);
 
   /* registers */
@@ -1256,10 +1476,15 @@ const LANES=[
 function renderBits(o,p){
   let h="";
   for(const [sec,rows] of LANES){
-    h+=`<div class="bsec">${sec}</div>`;
+    /* One box per section, the shape the Decode tab already uses. As a
+       flat list the widest lane set the width of everything and a phone
+       got one column with a sideways scroll; as boxes the sections tile,
+       and the two that hold a 16-bit lane say so and take the full row. */
+    const wide=rows.some(r=>r[2]===16)?" wide":"";
+    h+=`<div class="bsecbox${wide}"><div class="bsec">${sec}</div>`;
     for(const [name,get,w,kind,tag] of rows){
       if(get===null){
-        h+=`<div class="bl"><span class="bn">${name}</span>${tag(o)}</div>`;
+        h+=`<div class="bl pins"><span class="bn">${name}</span><span class="ptags">${tag(o)}</span></div>`;
         continue;
       }
       const v=get(o), pv=p?get(p):null, idle=(pv!==null&&pv===v);
@@ -1270,11 +1495,12 @@ function renderBits(o,p){
         if(w===16&&b===8) cells+='<span class="gap"></span>';
       }
       const t=tag?tag(o):null;
-      h+=`<div class="bl ${kind}${idle?" idle":""}"><span class="bn">${name}</span>`
+      h+=`<div class="bl ${kind}${idle?" idle":""}${w===16?" w16":""}"><span class="bn">${name}</span>`
         +`<span class="bits">${cells}</span>`
         +`<span class="bh">${hx(v,w/4)}</span>`
         +(t?`<span class="btag">${t}</span>`:"")+`</div>`;
     }
+    h+=`</div>`;
   }
   $("#bits").innerHTML=h;
   const stage=on(o,"SBAC")?"ALU \u2192 SB \u2192 A"
@@ -1450,9 +1676,10 @@ function renderAdder(o){
   }
   const op=aluOp(o);
   $("#addpos").textContent=op?`summing ${op}`:`holding ${hx(o.alu)}`;
+  const sep=`<span class="sep">·</span>`;
   $("#addeq").innerHTML=`<b>${hx(o.alua)}</b> + <b>${hx(o.alub)}</b> + ${on(o,"alucin")?1:0}`
-    +` = <b>${hx(o.alu)}</b> &nbsp;·&nbsp; carry out ${on(o,"alucout")?1:0}`
-    +` &nbsp;·&nbsp; overflow ${on(o,"aluvout")?1:0}`
+    +` = <b>${hx(o.alu)}</b> ${sep} carry out ${on(o,"alucout")?1:0}`
+    +` ${sep} overflow ${on(o,"aluvout")?1:0}`
     +(ADDER_NAMES.some(n=>WNAMES.includes(n))?"":" &nbsp;(carry nodes not in this trace)");
 }
 
@@ -1483,8 +1710,7 @@ function renderStack(o){
      still read a real pointer, and the tab must not call those a park. */
   let jsr=false;
   if(o.ir===0x20&&!o.sync){
-    let f=i; while(f>0&&!(F[f][CI.sync]&&F[f][CI.phase]===1)) f--;
-    const s0=F[f][CI.s];
+    const s0=F[fetchFrameAt(i)][CI.s];
     jsr=![s0,(s0-1)&0xFF,(s0-2)&0xFF].includes(sp);
   }
   $("#stknote").hidden=!jsr;

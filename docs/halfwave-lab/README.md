@@ -118,6 +118,40 @@ recording touches, so the map keeps its shape while you scrub.
 painted into every `[data-ic]`, so an icon inherits the colour and hover state of the control
 it sits in and no glyph can be spelled two ways in two places.
 
+**The tabs are a menu in the header**, on a row under the wordmark, marked by a rule rather
+than drawn as folder tabs: the panels stopped sitting visually inside a tab, so the folder
+shape was claiming a containment the layout no longer had. Every panel heading **allocates**
+its lines rather than merely allowing them, because a row that grows when you switch to a
+longer heading moves the whole panel down under the reader: two lines on a desktop, and on a
+phone the status readout takes a row of its own for a steady three. Measured across all
+thirteen tabs at three widths: 57px throughout on a desktop, 77px throughout on a phone. The
+`min-height` alone was not enough and the measurement is what said so, cutting the jump from
+37px to 12px rather than to zero.
+
+**The datapath draws arrowheads at the consumer.** Every edge is written producer to
+consumer, so the head goes on the last segment and is computed from the path rather than
+placed beside it; the diagram answers "who is taking this" without the reader knowing which
+box is upstream. `SBDB` is the one exception and is marked as one: it moves no value, it
+shorts SB and DB into one wire, so it gets a head at both ends. The head is two stroked
+lines rather than an SVG marker, because a marker's fill would have to be coloured
+separately from the line it belongs to and these lines already change colour and opacity
+with `.e.on`.
+
+**Bits tiles into section boxes, two columns on a phone**, and the lane goes vertical to make
+room. Measured first: side by side, a name plus eight cells plus the hex needs 158px against
+the 141 a half column has at 390px, and shrinking the pieces lands exactly on the limit at
+one width and over it at the next. Stacked (name and value on one line, bits under them) it
+needs only the 78px the cells occupy and fits at 320px with room to spare. A 16-bit lane
+wraps into two bytes, which is how they are named anyway.
+
+**Story carries a third panel**, the blocks that move no value and therefore never came up in
+a story about a value moving: instruction register, decode PLA, predecode, timing chain,
+status register, stack pointer, memory interface, input pins. Generated from this
+half-cycle's own bytes and booleans like everything else. The decode group from `/v1/nodes`
+is **132 nodes, not 132 product terms** -- 123 named `op-...` and 9 predecode nodes
+(`PD-...`, `ONEBYTE`, `clearIR`, `fetch`, `irline3`) -- so the panel counts them separately
+rather than calling all of them terms.
+
 ## Three things worth knowing
 
 **The clock phases are read as pins**, `clk1out` and `clk2out`, not derived from the `phase`
