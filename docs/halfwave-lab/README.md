@@ -63,6 +63,9 @@ line highlighted.
 
 Above the tabs: an instruction lane (one cell per half-cycle, clickable) and a scope with
 φ1, φ2, RDY, SYNC and T0–T5 — Figure 3.4 of the MCS6500 manual, redrawn from the recording.
+The scope collapses to a one-line strip (a shaded box per signal at the current half-cycle,
+painted from the same chVal the waveforms use), which is most of the panel's height handed
+back to whatever tab is open. The fold persists.
 
 ## Three things worth knowing
 

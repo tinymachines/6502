@@ -125,6 +125,23 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
 .cell.wr{background:var(--data);opacity:.55}
 .cell.now{background:var(--glow)}
 #scope{display:block;width:100%;height:auto;background:#0D131C}
+/* The scope, collapsible: the strip is the whole waveform display folded to
+   one line, a shaded box per channel at the current half-cycle. High fills
+   in the channel's colour, low is the empty outline, unknown (no trace, or
+   a channel the packed demo lacks) is a dashed grey box. */
+.scopebar{display:flex;align-items:center;gap:8px;padding:3px 8px;background:var(--panel2);border-bottom:1px solid var(--rule)}
+.scopetgl{
+  margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;color:var(--dim);
+  background:none;border:1px solid var(--rule);border-radius:2px;padding:2px 7px;cursor:pointer;
+}
+.scopetgl:hover{color:var(--text);border-color:var(--mid)}
+.scopestrip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:2px 0}
+.sch{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;white-space:nowrap}
+.sbox{width:11px;height:12px;border-radius:1px;border:1px solid currentColor;background:none;opacity:.55}
+.sbox.hi{background:currentColor;opacity:1}
+.sbox.unk{border-style:dashed;border-color:var(--rule);opacity:1}
+.scopewrap.folded #scope{display:none}
+.scopewrap.folded .scopebar{border-bottom:none}
 
 /* ---------- tabs ---------- */
 .tabs{display:flex;gap:2px;margin:12px 0 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -326,6 +343,11 @@ select{
 <!-- ============ LANE + SCOPE ============ -->
 <div class="panel scopewrap">
   <div class="lane" id="lane" role="group" aria-label="Instructions, one cell per half-cycle"></div>
+  <div class="scopebar">
+    <div class="scopestrip" id="scopestrip" hidden></div>
+    <button class="scopetgl" id="scopetgl" aria-expanded="true"
+            title="Collapse the scope to a one-line strip">&#9662; scope</button>
+  </div>
   <canvas id="scope" aria-label="Clock phases, RDY, SYNC and timing states"></canvas>
 </div>
 
@@ -1095,7 +1117,39 @@ $("#scope").onclick=e=>{
   go(start+Math.floor((e.clientX-r.left-x0)/cw));
 };
 
-function drawStrip(){ markLane(); drawScope(); }
+/* The collapsed scope: one shaded box per channel, painted from the SAME
+   chVal() the waveform draws, so the strip cannot disagree with the scope
+   it stands in for. */
+function buildScopeStrip(){
+  $("#scopestrip").innerHTML=CH.map((c,k)=>
+    `<span class="sch" style="color:${CHCOL[c[2]]}">${c[0]}<i class="sbox" data-ch="${k}" title="${c[0]}"></i></span>`).join("");
+}
+function paintScopeStrip(){
+  if(!scopeFolded) return;
+  for(const el of document.querySelectorAll(".sbox")){
+    const v=chVal(i,CH[+el.dataset.ch]);
+    el.classList.toggle("hi",v===1);
+    el.classList.toggle("unk",v===null||v===undefined);
+    el.title=`${CH[+el.dataset.ch][0]}: ${v===1?"high":v===0?"low":"unknown"}`;
+  }
+}
+let scopeFolded=false;
+function setScopeFolded(f){
+  scopeFolded=f;
+  document.querySelector(".scopewrap").classList.toggle("folded",f);
+  $("#scopestrip").hidden=!f;
+  const b=$("#scopetgl");
+  b.setAttribute("aria-expanded",String(!f));
+  b.innerHTML=f?"&#9656; scope":"&#9662; scope";
+  b.title=f?"Expand the waveform scope":"Collapse the scope to a one-line strip";
+  try{localStorage.setItem("hw.scopeFolded",f?"1":"0")}catch(e){}
+  if(f) paintScopeStrip(); else drawScope();
+}
+$("#scopetgl").onclick=()=>setScopeFolded(!scopeFolded);
+buildScopeStrip();
+try{ if(localStorage.getItem("hw.scopeFolded")==="1") setScopeFolded(true); }catch(e){}
+
+function drawStrip(){ markLane(); if(scopeFolded) paintScopeStrip(); else drawScope(); }
 /* ---------- transport ---------- */
 function go(n){ i=Math.max(0,Math.min(F.length-1,n)); render(); }
 function reload(){ buildLane(); $("#scrub").max=Math.max(0,F.length-1); }
