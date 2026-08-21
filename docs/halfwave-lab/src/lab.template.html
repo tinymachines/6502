@@ -83,7 +83,25 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
 .tbtn{
   background:var(--panel);border:1px solid var(--rule);border-radius:2px;
   padding:6px 9px;font-family:var(--mono);font-size:11.5px;cursor:pointer;color:var(--mid);
-  min-height:32px;white-space:nowrap;
+  min-height:32px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;
+}
+/* Every icon on the page is this one shape: a 24-unit outline stroked in
+   the control's own colour, so it hovers and disables with the control. */
+.ic{
+  width:14px;height:14px;flex:none;display:block;
+  fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+.tbtn.pw{color:var(--dim)}
+.tbtn.pw:hover:not(:disabled){color:var(--data);border-color:var(--data)}
+/* On a phone the four steppers keep only their icon: a chevron either way,
+   a double chevron and a chevron-to-a-bar say what "½ / cyc / op" said, and
+   the row goes from four wrapped lines to two. Power, start and play keep
+   their words, because no icon distinguishes a power cycle from a rewind
+   to somebody who has not read the caption. */
+@media(max-width:26rem){
+  #b-hb .lb,#b-hf .lb,#b-cf .lb,#b-if .lb{display:none}
+  .tbtn{padding:6px 8px}
 }
 .tbtn:hover:not(:disabled){color:var(--bright);border-color:var(--glow)}
 .tbtn:disabled{opacity:.35;cursor:not-allowed}
@@ -104,7 +122,11 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
 .ins .il{
   font-family:var(--mono);font-size:10px;color:var(--dim);
   padding:0 2px 3px;white-space:nowrap;letter-spacing:-.01em;
+  display:block;width:100%;text-align:left;background:none;border:none;
+  cursor:pointer;line-height:1.3;
 }
+.ins .il:hover{color:var(--bright)}
+.ins .il:focus-visible{outline:1px solid var(--glow);outline-offset:1px}
 .ins.here .il{color:var(--bright)}
 .ins .cells{display:flex;gap:2px}
 .cell{
@@ -113,7 +135,7 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
 .cell.ph2{background:#1B2534}
 .cell.wr{background:var(--data);opacity:.55}
 .cell.now{background:var(--glow)}
-#scope{display:block;width:100%;height:auto;background:#0D131C}
+#scope{display:block;width:100%;height:auto;background:#0D131C;touch-action:none;cursor:ew-resize}
 /* The scope, collapsible: the strip is the whole waveform display folded to
    one line, a shaded box per channel at the current half-cycle. High fills
    in the channel's colour, low is the empty outline, unknown (no trace, or
@@ -124,6 +146,8 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
   background:none;border:1px solid var(--rule);border-radius:2px;padding:2px 7px;cursor:pointer;
 }
 .scopetgl:hover{color:var(--text);border-color:var(--mid)}
+.scopetgl{display:inline-flex;align-items:center;gap:4px}
+.scopetgl .ic{width:12px;height:12px}
 .scopestrip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:2px 0;flex:1;justify-content:flex-end}
 .sch{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;white-space:nowrap}
 .sbox{width:11px;height:12px;border-radius:1px;border:1px solid currentColor;background:none;opacity:.55}
@@ -278,6 +302,7 @@ select{
 .pinbtn{
   font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:2px;cursor:pointer;
   background:var(--panel2);border:1px solid var(--rule);color:var(--text);
+  display:inline-flex;align-items:center;gap:5px;
 }
 .pinbtn:hover:not(:disabled){border-color:var(--glow);color:var(--bright)}
 .pinbtn:disabled{opacity:.45;cursor:default}
@@ -378,12 +403,15 @@ select{
 <!-- ============ PLAYER ============ -->
 <div class="player">
   <div class="prow">
-    <button class="tbtn" id="b-reset" title="Back to the first half-cycle">⏮ reset</button>
-    <button class="tbtn" id="b-hb" title="Back one half-cycle (←)">◄ ½</button>
-    <button class="tbtn play" id="b-play" title="Play / pause (space)">▶ play</button>
-    <button class="tbtn" id="b-hf" title="Forward one half-cycle (→)">½ ►</button>
-    <button class="tbtn" id="b-cf" title="Next full cycle (shift + →)">cyc ►</button>
-    <button class="tbtn" id="b-if" title="Next opcode fetch (shift + ↓)">op ►</button>
+    <button class="tbtn pw" id="b-power" data-ic="power"
+            title="Power-cycle: assemble and boot again from source. Memory goes back to the program image and every pin is released."><span class="lb">power</span></button>
+    <button class="tbtn" id="b-reset" data-ic="start"
+            title="Back to the first half-cycle: the state the chip powered on into"><span class="lb">start</span></button>
+    <button class="tbtn" id="b-hb" data-ic="prev" title="Back one half-cycle (←)"><span class="lb">½</span></button>
+    <button class="tbtn play" id="b-play" data-ic="play" title="Play / pause (space)"><span class="lb" id="playlab">play</span></button>
+    <button class="tbtn" id="b-hf" data-ic="next" title="Forward one half-cycle (→)"><span class="lb">½</span></button>
+    <button class="tbtn" id="b-cf" data-ic="cycle" title="Next full cycle (shift + →)"><span class="lb">cyc</span></button>
+    <button class="tbtn" id="b-if" data-ic="op" title="Next opcode fetch (shift + ↓)"><span class="lb">op</span></button>
     <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Half-cycle position">
     <span class="tlab" id="tlab">0 / 0</span>
   </div>
@@ -394,8 +422,8 @@ select{
   <div class="lane" id="lane" role="group" aria-label="Instructions, one cell per half-cycle"></div>
   <div class="scopebar">
     <div class="scopestrip" id="scopestrip" hidden></div>
-    <button class="scopetgl" id="scopetgl" aria-expanded="true"
-            title="Collapse the scope to a one-line strip">&#9662; scope</button>
+    <button class="scopetgl" id="scopetgl" aria-expanded="true" data-ic="down"
+            title="Collapse the scope to a one-line strip">scope</button>
   </div>
   <canvas id="scope" aria-label="Clock phases, RDY, SYNC and timing states"></canvas>
 </div>
@@ -549,8 +577,13 @@ select{
       each touched address is a row. Reads cool, writes warm. Click to go.</p>
     </div>
     <div class="panel">
-      <div class="ph"><h2 class="eyebrow">By page — reads cool, writes warm</h2></div>
-      <div class="pb"><div id="memmap"></div></div>
+      <div class="ph"><h2 class="eyebrow">By page — everything touched up to this half-cycle</h2>
+        <span class="eyebrow" id="mapseen"></span></div>
+      <div class="pb"><div id="memmap"></div><p class="tlnote">Reads cool, writes
+      warm, four addresses to a cell. This fills in as the program runs and
+      empties on rewind: it is the footprint as of where the cursor is, not
+      of the whole recording. The rows are every page the recording touches,
+      so the map keeps its shape while you scrub.</p></div>
     </div>
   </section>
 
@@ -581,9 +614,9 @@ select{
       </div>
       <div class="pb">
         <div class="pinrow">
-          <button class="pinbtn" id="fire-irq">pull IRQ low</button>
-          <button class="pinbtn" id="fire-nmi">pull NMI low</button>
-          <button class="pinbtn" id="fire-res">pull RES low</button>
+          <button class="pinbtn" id="fire-irq" data-ic="pull">pull IRQ low</button>
+          <button class="pinbtn" id="fire-nmi" data-ic="pull">pull NMI low</button>
+          <button class="pinbtn" id="fire-res" data-ic="pull">pull RES low</button>
           <span class="pinstate" id="ps-irq"><i></i>IRQ</span>
           <span class="pinstate" id="ps-nmi"><i></i>NMI</span>
           <span class="pinstate" id="ps-res"><i></i>RES</span>
@@ -674,6 +707,44 @@ select{
 "use strict";
 const $ = s => document.querySelector(s);
 const hx = (v,n=2) => "$"+v.toString(16).toUpperCase().padStart(n,"0");
+
+/* ---------- icons ----------
+   One family, drawn rather than typed: 24x24, stroked in currentColor, no
+   fill, so every icon inherits the colour and the hover state of the
+   control it sits in. They are defined here once and painted into every
+   [data-ic] element, so a glyph cannot be spelled two ways in two places
+   the way the transport's mixed arrows and pictographs were. */
+const IC = {
+  power:  "M12 3.5v8.5 M7.2 6.4a7.2 7.2 0 1 0 9.6 0",
+  start:  "M6.5 5.5v13 M18 5.8L9 12l9 6.2z",
+  prev:   "M14.5 5.8L8 12l6.5 6.2",
+  next:   "M9.5 5.8L16 12l-6.5 6.2",
+  play:   "M8.5 5.4L18.5 12l-10 6.6z",
+  pause:  "M9.5 5.5v13 M14.5 5.5v13",
+  cycle:  "M6.5 5.8L13 12l-6.5 6.2 M13.5 5.8L20 12l-6.5 6.2",
+  op:     "M6.5 5.8L13 12l-6.5 6.2 M18 5.5v13",
+  down:   "M6.5 9.5L12 15l5.5-5.5",
+  up:     "M6.5 14.5L12 9l5.5 5.5",
+  pull:   "M12 4.5v9 M8.2 10l3.8 3.8 3.8-3.8 M5 19h14"
+};
+function ic(name,cls){
+  const d=IC[name]; if(!d) return "";
+  return `<svg class="ic${cls?" "+cls:""}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">`
+    +d.split(" M").map((seg,k)=>`<path d="${k?"M"+seg:seg}"/>`).join("")+`</svg>`;
+}
+/* Paint every declared icon in the document. Called at boot and again by
+   anything that rewrites a control's contents. */
+function paintIcons(root){
+  for(const el of (root||document).querySelectorAll("[data-ic]")){
+    if(el.dataset.icDone===el.dataset.ic) continue;
+    el.insertAdjacentHTML("afterbegin",ic(el.dataset.ic));
+    el.dataset.icDone=el.dataset.ic;
+  }
+}
+function setIcon(el,name){
+  const old=el.querySelector(".ic"); if(old) old.remove();
+  el.insertAdjacentHTML("afterbegin",ic(name)); el.dataset.icDone=name;
+}
 
 /* ---------- watch list: the 22 datapath control lines ---------- */
 const WATCH = ["dpc38_PCLADL","dpc32_PCHADH","dpc25_SBDB","dpc23_SBAC","dpc9_DBADD",
@@ -1253,10 +1324,18 @@ function laneGroups(){
 function buildLane(){
   const groups=laneGroups();
   $("#lane").innerHTML=groups.map(gr=>
-    `<div class="ins" data-from="${gr.from}"><div class="il">${insLabel(gr.fa)}</div><div class="cells">`
+    `<div class="ins" data-from="${gr.from}"><button class="il" data-from="${gr.from}"`
+    +` title="Jump to the first half-cycle of this instruction, at ${hx(gr.fa<0?0:gr.fa,4)}">${insLabel(gr.fa)}</button><div class="cells">`
     +gr.idx.map(n=>`<button class="cell${F[n][CI.phase]===2?" ph2":""}${F[n][CI.rw]===1?" wr":""}" data-n="${n}" aria-label="half-cycle ${F[n][CI.half_cycle]}"></button>`).join("")
     +`</div></div>`).join("");
-  $("#lane").onclick=e=>{ const c=e.target.closest(".cell"); if(c) go(+c.dataset.n); };
+  /* A click on the label goes to the instruction's own opcode fetch, which
+     is where every panel then reads from: the label is the coarse control
+     and the cells the fine one. Nothing about the layout says the label is
+     pressable, so it is a real button with a title and a focus ring. */
+  $("#lane").onclick=e=>{
+    const b=e.target.closest(".il"); if(b) return go(+b.dataset.from);
+    const c=e.target.closest(".cell"); if(c) go(+c.dataset.n);
+  };
 }
 function markLane(){
   const cur=$("#lane").querySelector(".cell.now");
@@ -1551,8 +1630,13 @@ function memIndex(){
   for(let n=0;n<F.length;n++){
     const a=F[n][CI.addr], wr=F[n][CI.rw]===1;
     acc.push({n,a,wr});
-    if(!addrs.has(a)) addrs.set(a,{rd:0,wr:0});
-    addrs.get(a)[wr?"wr":"rd"]++;
+    /* First touch of each kind, so the page map can be drawn as of the
+       cursor rather than as of the whole recording: rewinding has to put
+       the map back, or "reset" visibly resets nothing. */
+    if(!addrs.has(a)) addrs.set(a,{rd:0,wr:0,frd:Infinity,fwr:Infinity});
+    const st=addrs.get(a);
+    st[wr?"wr":"rd"]++;
+    if(wr){ if(n<st.fwr) st.fwr=n; } else if(n<st.frd) st.frd=n;
   }
   const sorted=[...addrs.keys()].sort((x,y)=>x-y);
   const rank=new Map(sorted.map((a,k)=>[a,k]));
@@ -1574,23 +1658,31 @@ function drawMemory(){
   }
   g.strokeStyle="#EAF1F8"; g.beginPath(); g.moveTo(X(i)+CW/2,0); g.lineTo(X(i)+CW/2,H); g.stroke();
   const cur=acc[i];
-  $("#mempos").textContent=cur?`${cur.wr?"write":"read"} ${hx(cur.a,4)} · ${sorted.length} addresses`:"";
+  $("#mempos").textContent=cur?`${cur.wr?"write":"read"} ${hx(cur.a,4)} · ${sorted.length} addresses in all`:"";
   cv.onclick=e=>{ const r=cv.getBoundingClientRect(); go(Math.round((e.clientX-r.left-PAD)/(w-2*PAD)*F.length)); };
+  /* The rows are every page the whole recording touches, so the map keeps
+     its shape while you scrub; the cells are only what has been touched at
+     or before the cursor, so the footprint fills in as the program runs and
+     empties again on rewind. */
   const pages=[...new Set(sorted.map(a=>a>>8))];
+  let seen=0;
   $("#memmap").innerHTML=pages.map(pg=>{
     let cells="";
     for(let c=0;c<64;c++){
       const base=(pg<<8)+c*4;
       let cls="", now=false;
       for(let b=0;b<4;b++){
-        const st=addrs.get(base+b);
-        if(st) cls=st.wr?"wr":(cls||"rd");
+        const st=addrs.get(base+b); if(!st) continue;
+        if(st.fwr<=i) cls="wr";
+        else if(st.frd<=i&&cls!=="wr") cls="rd";
+        if(st.fwr<=i||st.frd<=i) seen++;
         if(cur&&cur.a===base+b) now=true;
       }
       cells+=`<span class="mc ${cls}${now?" now":""}" title="${hx(base,4)}"></span>`;
     }
     return `<div class="mrow"><div class="ma">page ${hx(pg,2)} · ${hx(pg<<8,4)}..${hx((pg<<8)|255,4)}</div><div class="mcells">${cells}</div></div>`;
   }).join("");
+  $("#mapseen").textContent=`${seen} of ${sorted.length} touched so far`;
 }
 function paintExtras(){
   const o=obs(i); if(!o) return;
@@ -1623,16 +1715,32 @@ function chVal(n,c){
   if(c[0]==="SYNC") return r[CI.sync]?1:0;
   return (r[CI.tstates]>>(+c[0][1]))&1;
 }
+/* The window the scope shows. It used to be recomputed as "centre on the
+   cursor" at every paint, which is fine for stepping and impossible to
+   drag: the waveform would slide out from under the finger, and the
+   pointer's own x would then mean a different half-cycle. It is state
+   now, and it follows the cursor only when the cursor nears an edge, so
+   the drawing holds still while a drag reads absolute positions off it.
+   The same rule gives edge auto-scroll for free: a drag past the end
+   moves the cursor there, and the follow rule brings the window along. */
+let scopeStart=0;
+const SCOPE_LAB=30;
+function scopeWindow(){
+  const SPAN=span(), max=Math.max(0,F.length-SPAN);
+  if(i<scopeStart+2) scopeStart=i-2;
+  else if(i>scopeStart+SPAN-3) scopeStart=i-SPAN+3;
+  return scopeStart=Math.max(0,Math.min(max,scopeStart));
+}
 function drawScope(){
   const cv=$("#scope"); const w=cv.clientWidth||700;
   const SPAN=span();
-  const RH=12, GAP=6, PAD=7, LAB=30, H=PAD*2+CH.length*(RH+GAP)-GAP;
+  const RH=12, GAP=6, PAD=7, LAB=SCOPE_LAB, H=PAD*2+CH.length*(RH+GAP)-GAP;
   const dpr=devicePixelRatio||1;
   cv.width=w*dpr; cv.height=H*dpr; cv.style.height=H+"px";
   const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
   g.clearRect(0,0,w,H);
   if(!F.length) return;
-  const start=Math.max(0,Math.min(F.length-SPAN,i-(SPAN>>1)));
+  const start=scopeWindow();
   const x0=LAB+4, cw=(w-x0-6)/SPAN;
   /* cycle rules */
   g.strokeStyle="#1C2634"; g.lineWidth=1;
@@ -1661,12 +1769,27 @@ function drawScope(){
   g.strokeStyle="#F2C14E"; g.lineWidth=1;
   g.beginPath(); g.moveTo(cx,PAD-4); g.lineTo(cx,H-PAD+4); g.stroke();
 }
-$("#scope").onclick=e=>{
+/* Drag to scrub. The pointer is captured so a finger leaving the canvas
+   keeps scrubbing rather than dropping the gesture halfway, and the
+   canvas claims the touch stream (touch-action: none) or a drag scrolls
+   the page instead. Position is read absolutely against scopeStart, which
+   is what is actually on screen. */
+function scopeAt(clientX){
   const SPAN=span(), r=$("#scope").getBoundingClientRect();
-  const LAB=30, x0=LAB+4, cw=(r.width-x0-6)/SPAN;
-  const start=Math.max(0,Math.min(F.length-SPAN,i-(SPAN>>1)));
-  go(start+Math.floor((e.clientX-r.left-x0)/cw));
-};
+  const x0=SCOPE_LAB+4, cw=(r.width-x0-6)/SPAN;
+  return scopeStart+Math.floor((clientX-r.left-x0)/cw);
+}
+(function(){
+  const cv=$("#scope"); let dragging=false;
+  cv.addEventListener("pointerdown",e=>{
+    if(!F.length) return;
+    dragging=true; stopPlay();
+    try{cv.setPointerCapture(e.pointerId)}catch(err){}
+    go(scopeAt(e.clientX)); e.preventDefault();
+  });
+  cv.addEventListener("pointermove",e=>{ if(dragging) go(scopeAt(e.clientX)); });
+  for(const ev of ["pointerup","pointercancel"]) cv.addEventListener(ev,()=>{dragging=false;});
+})();
 
 /* The collapsed scope: one shaded box per channel, painted from the SAME
    chVal() the waveform draws, so the strip cannot disagree with the scope
@@ -1691,13 +1814,13 @@ function setScopeFolded(f){
   $("#scopestrip").hidden=!f;
   const b=$("#scopetgl");
   b.setAttribute("aria-expanded",String(!f));
-  b.innerHTML=f?"&#9656; scope":"&#9662; scope";
+  setIcon(b,f?"up":"down");
   b.title=f?"Expand the waveform scope":"Collapse the scope to a one-line strip";
   try{localStorage.setItem("hw.scopeFolded",f?"1":"0")}catch(e){}
   if(f) paintScopeStrip(); else drawScope();
 }
 $("#scopetgl").onclick=()=>setScopeFolded(!scopeFolded);
-buildScopeStrip();
+buildScopeStrip(); paintIcons();
 try{ if(localStorage.getItem("hw.scopeFolded")==="1") setScopeFolded(true); }catch(e){}
 
 function drawStrip(){ markLane(); if(scopeFolded) paintScopeStrip(); else drawScope(); }
@@ -1719,6 +1842,24 @@ function showTab(id){
 }
 for(const [t] of TABS) $("#"+t).onclick=()=>showTab(t);
 buildLatches();
+paintIcons();
+
+/* The player is fixed to the bottom, so the body has to reserve its height
+   or the last line of a panel sits under it. That height is not a constant
+   CSS can know: the row wraps, so it is one line at 768px and two on a
+   320px phone, and the declared 58px/100px in the stylesheet were each
+   right at one width and wrong at another (measured: 110px against 100px
+   reserved at 320px, before this button was added). Measure it, and
+   re-measure whenever it reflows, which is the same reason site-nav
+   measures the header instead of declaring it. The CSS values stay as the
+   pre-script fallback. */
+(function(){
+  const pl=document.querySelector(".player");
+  const reserve=()=>{ document.body.style.paddingBottom=Math.ceil(pl.getBoundingClientRect().height)+"px"; };
+  if(window.ResizeObserver) new ResizeObserver(reserve).observe(pl);
+  addEventListener("resize",reserve);
+  reserve();
+})();
 
 /* ---------- PWA: offline shell. The app already degrades to its packed
    trace with no API, so cached-shell + no API = still a working lab. ---------- */
@@ -1727,13 +1868,24 @@ if("serviceWorker" in navigator && location.protocol==="https:")
 showTab("t-map");
 
 $("#b-reset").onclick=()=>{ stopPlay(); go(0); };
+/* Power is not rewind, and the two used to be one button called "reset".
+   Rewind moves the cursor back through a recording that already exists;
+   power throws the recording away and boots a new machine from the source,
+   which is the only thing that puts memory back and releases a pin that
+   was pulled. With no API there is nothing to boot, and frame 0 already IS
+   the power-on state, so the button says as much rather than lying. */
+$("#b-power").onclick=()=>{
+  stopPlay();
+  if(LIVE) boot(); else go(0);
+};
 $("#b-hb").onclick=()=>go(i-1); $("#b-hf").onclick=()=>go(i+1);
 $("#b-cf").onclick=()=>go(i+2); $("#b-if").onclick=nextFetch;
 $("#scrub").oninput=e=>go(+e.target.value);
-function stopPlay(){ if(timer){clearInterval(timer);timer=null;} $("#b-play").textContent="▶ play"; }
+function setPlaying(on){ setIcon($("#b-play"),on?"pause":"play"); $("#playlab").textContent=on?"pause":"play"; }
+function stopPlay(){ if(timer){clearInterval(timer);timer=null;} setPlaying(false); }
 $("#b-play").onclick=()=>{
   if(timer){stopPlay();return;}
-  $("#b-play").textContent="❚❚ pause";
+  setPlaying(true);
   timer=setInterval(()=>{ if(i>=F.length-1){stopPlay();return;} go(i+1); },170);
 };
 addEventListener("keydown",e=>{
@@ -1810,6 +1962,8 @@ function useDemo(reason){
   showListing(d.asm); reload();
   $("#hint").textContent=reason;
   $("#more").disabled=true; $("#run").disabled=true;
+  $("#b-power").title="No API from this origin, so there is nothing to boot. "
+    +"This packed trace starts at power-on, so power and start are the same place.";
   go(0);
 }
 (async()=>{

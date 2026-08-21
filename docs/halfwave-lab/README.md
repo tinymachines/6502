@@ -93,11 +93,30 @@ Every claim under it is derived from those rows.
 **Program** — editor, four worked examples, assemble, and the listing with the executing
 line highlighted.
 
-Above the tabs: an instruction lane (one cell per half-cycle, clickable) and a scope with
-φ1, φ2, RDY, SYNC and T0–T5 — Figure 3.4 of the MCS6500 manual, redrawn from the recording.
-The scope collapses to a one-line strip (a shaded box per signal at the current half-cycle,
-painted from the same chVal the waveforms use), which is most of the panel's height handed
-back to whatever tab is open. The fold persists.
+Above the tabs: an instruction lane and a scope with φ1, φ2, RDY, SYNC and T0–T5 — Figure
+3.4 of the MCS6500 manual, redrawn from the recording. Both are controls. In the lane, a
+cell is one half-cycle and the **label above it is the instruction**: clicking the label
+lands on that opcode's own fetch, which is where every tab then reads from, so the label is
+the coarse control and the cells the fine one. The scope **drags**: press anywhere on the
+waveform and scrub, and the window follows when the cursor reaches an edge. The window is
+state rather than "centre on the cursor at every paint", because a window that recentres
+slides out from under the finger and makes the pointer's own x mean a different half-cycle.
+The scope also collapses to a one-line strip (a shaded box per signal at the current
+half-cycle, painted from the same chVal the waveforms use), which is most of the panel's
+height handed back to whatever tab is open. The fold persists.
+
+**Power is not rewind, and they used to be one button called "reset".** `start` moves the
+cursor back through a recording that already exists; `power` throws the recording away and
+boots a new machine from the source, which is the only thing that puts memory back and
+releases a pin that was pulled. With no API there is nothing to boot and frame 0 already is
+the power-on state, so the button says so rather than lying. The Memory tab's page map is
+drawn **as of the cursor** for the same reason: it used to show every address the whole
+recording touched, so rewinding visibly reset nothing. The rows are still every page the
+recording touches, so the map keeps its shape while you scrub.
+
+**One icon family**, 24-unit outlines stroked in `currentColor`, defined once in `IC` and
+painted into every `[data-ic]`, so an icon inherits the colour and hover state of the control
+it sits in and no glyph can be spelled two ways in two places.
 
 ## Three things worth knowing
 
