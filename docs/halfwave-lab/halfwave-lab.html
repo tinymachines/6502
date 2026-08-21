@@ -318,7 +318,7 @@ select{
 <div class="tabs" role="tablist" aria-label="Panels">
   <button class="tab" role="tab" id="t-map"  aria-controls="p-map"  aria-selected="true">Datapath</button>
   <button class="tab" role="tab" id="t-lat"  aria-controls="p-lat"  aria-selected="false">Latches</button>
-  <button class="tab" role="tab" id="t-half" aria-controls="p-half" aria-selected="false">Half-cycle</button>
+  <button class="tab" role="tab" id="t-bits" aria-controls="p-bits" aria-selected="false">Bits</button>
   <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
   <button class="tab" role="tab" id="t-state" aria-controls="p-state" aria-selected="false">State</button>
   <button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
@@ -345,6 +345,9 @@ select{
         </div>
       </div>
     </div>
+  </section>
+
+  <section role="tabpanel" id="p-bits" aria-labelledby="t-bits" hidden>
     <div class="panel">
       <div class="ph">
         <h2 class="eyebrow">Inside the boxes — every line, every latch</h2>
@@ -371,34 +374,6 @@ select{
         half-cycle. This is the layer the datapath tab's diagram rides on:
         the values that exist between the registers, which is where the 6502
         does most of its thinking.</p>
-      </div>
-    </div>
-  </section>
-
-  <section role="tabpanel" id="p-half" aria-labelledby="t-half" hidden>
-    <div class="panel">
-      <div class="ph">
-        <h2 class="eyebrow">This half-cycle, described from its own booleans</h2>
-        <span class="eyebrow" id="hpos"></span>
-      </div>
-      <div class="pb">
-        <p class="lede" id="hlede"></p>
-        <ul id="hbeats"></ul>
-        <p class="note">Nothing above is authored per instruction. Every
-        sentence is generated from the same control-line booleans and latch
-        bytes the diagrams draw, so the words cannot disagree with the
-        pictures.</p>
-      </div>
-    </div>
-    <div class="two">
-      <div class="panel">
-        <div class="ph"><h2 class="eyebrow">Every value, before &rarr; after</h2></div>
-        <div class="pb"><div class="mem" id="hvals"></div></div>
-      </div>
-      <div class="panel" style="margin-top:0">
-        <div class="ph"><h2 class="eyebrow">Conducting at this half-cycle</h2><span class="eyebrow" id="hcnt"></span></div>
-        <div class="pb"><div class="lines" id="hlines"></div>
-        <p class="note" id="hnone" hidden>No datapath pass transistor is open: the buses are precharging.</p></div>
       </div>
     </div>
   </section>
@@ -690,37 +665,6 @@ function renderLatches(o,p){
   $("#latmoved").textContent=moved?`${moved} latch${moved>1?"es":""} moved at this edge`:"nothing moved: a hold half-cycle";
 }
 
-/* ---------- the half-cycle description tab ---------- */
-const HGROUPS=[
-  ["PINS",[["AB",o=>o.addr,4],["DB",o=>o.data,2],["R/W",o=>o.wr?1:0,0,o=>o.wr?"WRITE":"read"],["SYNC",o=>o.sync?1:0,0,o=>o.sync?"high":"low"]]],
-  ["REGISTERS",[["PC",o=>o.pc,4],["A",o=>o.a,2],["X",o=>o.x,2],["Y",o=>o.y,2],["S",o=>o.s,2],["P",o=>o.p,2],["IR",o=>o.ir,2]]],
-  ["NAMED STORAGE",[["PCLP",o=>o.pclp,2],["PCHP",o=>o.pchp,2],["ADL",o=>o.adl,2],["ADH",o=>o.adh,2],["ABL",o=>o.abl,2],["ABH",o=>o.abh,2],
-    ["IDL",o=>o.idl,2],["IDB",o=>o.idb,2],["SB",o=>o.sb,2],["ALUA",o=>o.alua,2],["ALUB",o=>o.alub,2],["ALU",o=>o.alu,2],["DOR",o=>o.dor,2]]],
-  ["TIMING",[["T",o=>o.t,-1],["hidden",o=>o.hid||"none",-1],["store data",o=>o.sd||"none",-1]]]
-];
-function renderHalf(o,p){
-  $("#hpos").textContent=`h ${o.h} · ${o.ph2?"φ2":"φ1"}`;
-  let h="";
-  for(const [sec,rows] of HGROUPS){
-    h+=`<span class="a" style="display:block;margin-top:6px">${sec}</span>`;
-    for(const [name,get,w,fmt] of rows){
-      const v=get(o), pv=p?get(p):null, chg=pv!=null&&pv!==v;
-      const show=x=>x==null?"??":(w===-1?x:fmt?fmt({wr:x===1,sync:x===1}):hx(x,w||2));
-      h+=`<div><span class="a" style="display:inline-block;min-width:58px">${name}</span> `
-        +(chg?`${typeof pv==="number"||w===-1?show(pv):show(pv)} → <b class="w">${show(v)}</b>`
-             :`<b class="${v===0?"z":""}">${show(v)}</b>`)+`</div>`;
-    }
-  }
-  $("#hvals").innerHTML=h;
-  const open=SHORT.filter(n=>LINEMETA[n]&&on(o,n));
-  $("#hlines").innerHTML=open.map(n=>{
-    const m=LINEMETA[n];
-    return `<span class="ln ${m[1]} on" data-ln="${n}"><i></i>${m[0]}</span>`;
-  }).join("");
-  $("#hcnt").textContent=`${open.length} of ${SHORT.filter(n=>LINEMETA[n]).length} lines`;
-  $("#hnone").hidden=open.length>0;
-}
-
 /* ---------- build static DOM ---------- */
 (function build(){
   const svg=$("#map"); let s="";
@@ -872,14 +816,11 @@ function render(){
   $("#readout").innerHTML=RD.map(([k,v,c])=>
     `<span class="rd ${c} ${PV[k]&&PV[k]!==v?"chg":""}">${k}<b>${v}</b></span>`).join("");
 
-  /* narration, shared by the datapath sidebar and the half-cycle tab */
+  /* narration */
   const {lede,beats}=narrate(o,p);
   $("#lede").innerHTML=lede;
   $("#beats").innerHTML=beats.map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
-  $("#hlede").innerHTML=lede;
-  $("#hbeats").innerHTML=beats.map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
   renderLatches(o,p);
-  renderHalf(o,p);
 
   /* registers */
   const rv={A:[hx(o.a),p&&p.a!==o.a],X:[hx(o.x),p&&p.x!==o.x],Y:[hx(o.y),p&&p.y!==o.y],
@@ -1102,7 +1043,7 @@ function reload(){ buildLane(); $("#scrub").max=Math.max(0,F.length-1); }
 function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][CI.sync]&&F[n][CI.phase]===1) return go(n); go(F.length-1); }
 
 /* tabs */
-const TABS=[["t-map","p-map"],["t-lat","p-lat"],["t-half","p-half"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
+const TABS=[["t-map","p-map"],["t-lat","p-lat"],["t-bits","p-bits"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
 function showTab(id){
   for(const [t,p] of TABS){
     const sel=t===id;

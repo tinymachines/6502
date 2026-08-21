@@ -173,3 +173,9 @@ only the connection badge, which is the dead-overlay mistake the simulator's
 own docs warn about. Fixed with the same wbit() the other two call sites
 got, and the deploy verification now asserts lit edges and a non-trivial
 narration, which is the check that fails when an overlay dies.
+
+Revised same day: the Half-cycle tab came back out as redundant on arrival
+(its narration is the Datapath sidebar's, its table the Latches diagram's,
+its pills the Signals tab's), and "Inside the boxes" moved out of the
+Datapath tab into its own **Bits** tab instead. Tabs now: Datapath, Latches,
+Bits, Signals, State, Program.
