@@ -203,6 +203,29 @@ is **132 nodes, not 132 product terms** -- 123 named `op-...` and 9 predecode no
 (`PD-...`, `ONEBYTE`, `clearIR`, `fetch`, `irline3`) -- so the panel counts them separately
 rather than calling all of them terms.
 
+**Power is a latch, not a shot, and that is what fixed a button that looked stalled.** A
+power cycle is an assemble plus a 300 half-cycle trace over the network, and the only
+feedback for it lived on the Assemble button inside the Program tab, three tabs away from
+the control being pressed: the transport simply sat there for a second. It is now a switch.
+One press powers **off** and that is instantaneous and visible: the body carries `.off`, the
+lane, the scope and every state panel go inert and grey, the rest of the transport is
+disabled, the arrow keys stop, and a panel says the chip holds no state. The next press
+powers **on**, and for the duration of that the button is disabled, says `boot...` and
+pulses, so a second press cannot start a second boot. A boot that fails leaves the machine
+off and puts the API's own message in that panel, rather than in a tab the reader is not
+looking at.
+
+**The Program tab is deliberately exempt from the powered-off dimming.** Editing the source
+is the one useful thing to do while the chip is off, and the next power-on is what assembles
+it. `opacity` composites, so this could not be done by dimming the whole tab region and
+brightening one panel inside it: the rule is written as
+`section[role="tabpanel"]:not(#p-prog)`.
+
+**Power is the one control with a colour of its own** (`--power`, restated in both themes)
+and the one drawn filled rather than outlined, because it is the one control that can throw
+a recording away. Measured: 4.9:1 filled and 5.0:1 hollow against the bar in dark, 5.7:1 and
+5.2:1 in light.
+
 ## Three things worth knowing
 
 **The clock phases are read as pins**, `clk1out` and `clk2out`, not derived from the `phase`
