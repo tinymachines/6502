@@ -18,9 +18,31 @@
   --addr:#4FBFD4; --data:#E06A96; --alu:#E0A24B;
   --phi1:#7C9BC4; --phi2:#E8A05C;
   --glow:var(--phi1);
+  /* Everything below was a bare hex somewhere in the stylesheet or a
+     canvas. They are tokens so the light theme can restate them: a
+     hardcoded colour is a colour that cannot be themed. */
+  --sunk:#0D131C; --code:#0C1219; --foot:#111823; --cell:#1A2331; --cellrule:#232E3D; --lane:#131A24; --mcell:#161E2B; --cell2:#243040; --cell3:#1B2534; --hotfill:#1F2937; --hover:#182130; --onbg:#1E2735; --faint:#3B4757; --reg:#8FA3BC; --teal:#3E93A6;
+  --grid:#1C2634; --cursor:#F2C14E; --t2:#5CC8A8; --t3:#B8A85C; --axis:#9AABC0;
   --mono:"IBM Plex Mono",ui-monospace,monospace;
   --sans:"IBM Plex Sans",system-ui,sans-serif;
   --disp:"Archivo",system-ui,sans-serif;
+}
+/* The light theme restates every token and nothing else: because no rule
+   anywhere carries a bare colour, this block IS the theme. Chosen against
+   the dark one rather than derived from it -- an inverted lightness gives
+   washed-out accents on white, so the three datapath colours are darkened
+   until they carry their weight on a pale panel. */
+:root[data-theme="light"]{
+  --ground:#F2F5F9; --panel:#FFFFFF; --panel2:#E9EEF5; --rule:#C3CEDB;
+  --dim:#5F6E80; --mid:#445365; --text:#1F2A37; --bright:#0B1220;
+  --addr:#0E7C90; --data:#C43C6E; --alu:#A9700F;
+  --phi1:#3F6FA8; --phi2:#B4661F;
+  --sunk:#FFFFFF; --code:#EDF1F7; --foot:#EDF1F7;
+  --cell:#DFE7F0; --cellrule:#C3CEDB; --lane:#F5F8FC; --mcell:#E3EAF3;
+  --cell2:#C7D3E0; --cell3:#DDE5EF; --hotfill:#DCE6F2;
+  --hover:#E4EBF4; --onbg:#DCE6F4; --faint:#A8B6C6;
+  --reg:#5A6B80; --teal:#137382; --grid:#D5DEE9; --cursor:#9A6B00;
+  --t2:#127A5E; --t3:#7A6510; --axis:#4A5A6E;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -45,6 +67,14 @@ header{
 .brand{font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:-.01em;color:var(--bright);white-space:nowrap}
 .brand em{font-style:normal;color:var(--glow);transition:color .18s}
 .tag{font-size:12px;color:var(--dim);flex:1 1 auto;min-width:0}
+.themebtn{
+  margin-left:auto;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;padding:0;cursor:pointer;color:var(--dim);
+  background:var(--panel);border:1px solid var(--rule);border-radius:2px;
+}
+.themebtn:hover{color:var(--bright);border-color:var(--glow)}
+.themebtn .ic{width:15px;height:15px}
+@media(max-width:860px){.themebtn{margin-left:auto}}
 @media(max-width:860px){.tag{display:none}}
 .eyebrow{
   font-family:var(--disp);font-size:10px;font-weight:700;letter-spacing:.16em;
@@ -79,7 +109,7 @@ header{
 .panel + .panel{margin-top:12px}
 
 /* ---------- clock badge ---------- */
-.clockbar{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+
 /* Tabular digits and a reserved width: the counter grows h 0 -> h 9999
    without moving anything beside it. Same for the scrubber label; a header
    that jumps on every half-cycle is unreadable. */
@@ -127,6 +157,9 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
 .tbtn:disabled{opacity:.35;cursor:not-allowed}
 .tbtn.play{min-width:62px;color:var(--bright)}
 #scrub{flex:1 1 140px;min-width:110px;accent-color:var(--glow);height:26px}
+.rate{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+#rate{width:80px;accent-color:var(--glow);height:26px}
+#ratelab{min-width:5ch;text-align:left}
 .strip{width:100%;height:20px;display:block;background:var(--panel2);border:1px solid var(--rule);border-radius:2px;cursor:pointer;margin-top:6px}
 .tlab{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums;min-width:9ch;text-align:right}
 
@@ -137,8 +170,8 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
   border-bottom:1px solid var(--rule);background:var(--panel2);
   scrollbar-width:thin;-webkit-overflow-scrolling:touch;
 }
-.ins{flex:0 0 auto;border:1px solid var(--rule);border-radius:2px;background:#131A24;padding:3px 4px 4px}
-.ins.here{border-color:var(--glow);background:color-mix(in srgb,var(--glow) 10%,#131A24)}
+.ins{flex:0 0 auto;border:1px solid var(--rule);border-radius:2px;background:var(--lane);padding:3px 4px 4px}
+.ins.here{border-color:var(--glow);background:color-mix(in srgb,var(--glow) 10%,var(--lane))}
 .ins .il{
   font-family:var(--mono);font-size:10px;color:var(--dim);
   padding:0 2px 3px;white-space:nowrap;letter-spacing:-.01em;
@@ -150,17 +183,18 @@ body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
 .ins.here .il{color:var(--bright)}
 .ins .cells{display:flex;gap:2px}
 .cell{
-  width:9px;height:13px;border-radius:1px;background:#243040;cursor:pointer;border:none;padding:0;
+  width:9px;height:13px;border-radius:1px;background:var(--cell2);cursor:pointer;border:none;padding:0;
 }
-.cell.ph2{background:#1B2534}
+.cell.ph2{background:var(--cell3)}
 .cell.wr{background:var(--data);opacity:.55}
 .cell.now{background:var(--glow)}
-#scope{display:block;width:100%;height:auto;background:#0D131C;touch-action:none;cursor:ew-resize}
+#scope{display:block;width:100%;height:auto;background:var(--sunk);touch-action:none;cursor:ew-resize}
 /* The scope, collapsible: the strip is the whole waveform display folded to
    one line, a shaded box per channel at the current half-cycle. High fills
    in the channel's colour, low is the empty outline, unknown (no trace, or
    a channel the packed demo lacks) is a dashed grey box. */
-.scopebar{display:flex;align-items:center;gap:8px;padding:3px 8px;background:var(--panel2);border-bottom:1px solid var(--rule)}
+.scopebar{display:flex;align-items:flex-end;gap:8px;padding:3px 8px;background:var(--panel2);border-bottom:1px solid var(--rule)}
+.scopebar .pos{align-self:center;flex:none;margin-right:auto}
 .scopetgl{
   margin-left:auto;flex:none;font-family:var(--mono);font-size:10px;color:var(--dim);
   background:none;border:1px solid var(--rule);border-radius:2px;padding:2px 7px;cursor:pointer;
@@ -234,12 +268,21 @@ select{
 .bx rect{fill:var(--panel2);stroke:var(--rule);stroke-width:1}
 .bx text.n{font-family:var(--disp);font-size:9.5px;font-weight:700;letter-spacing:.08em;fill:var(--mid)}
 .bx text.v{font-family:var(--mono);font-size:12.5px;font-weight:600;fill:var(--dim)}
-.bx.hot rect{stroke:var(--bright);fill:#1F2937}
+.bx.hot rect{stroke:var(--bright);fill:var(--hotfill)}
 .bx.hot text.v{fill:var(--bright)}
-.bx.bus rect{fill:#131A24}
+.bx.bus rect{fill:var(--lane)}
 .bx.stale rect{stroke-dasharray:4 3;stroke:var(--dim)}
 .bx.stale text.v{fill:var(--dim)}
 .bx.bus text.n{font-size:9.5px}
+/* A latch that took a value at this edge fills solid in its own colour, so
+   the diagram answers "what moved" without reading a single byte. The datapath
+   map keeps the tint: `hot` means a control line is conducting there, which is
+   a claim about a wire rather than about storage. */
+#lmap .bx.hot rect{fill:var(--mid);stroke:var(--mid)}
+#lmap .bx.k-addr.hot rect{fill:var(--addr);stroke:var(--addr)}
+#lmap .bx.k-data.hot rect{fill:var(--data);stroke:var(--data)}
+#lmap .bx.k-alu.hot rect{fill:var(--alu);stroke:var(--alu)}
+#lmap .bx.hot text.n,#lmap .bx.hot text.v{fill:var(--ground)}
 .e{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.2;opacity:.11}
 .e.addr{stroke:var(--addr)} .e.data{stroke:var(--data)} .e.alu{stroke:var(--alu)}
 .e.struct{opacity:.3}
@@ -259,7 +302,7 @@ select{
 /* ---------- readout strip ---------- */
 .readout{
   display:flex;flex-wrap:wrap;gap:5px;padding:9px 12px;
-  border-top:1px solid var(--rule);background:#111823;
+  border-top:1px solid var(--rule);background:var(--foot);
 }
 .rd{
   font-family:var(--mono);font-size:11.5px;padding:3px 7px;border-radius:2px;
@@ -302,7 +345,7 @@ select{
 .bits .gap{width:6px}
 .bc{
   width:11px;height:15px;border-radius:1px;
-  background:#1A2331;border:1px solid #232E3D;
+  background:var(--cell);border:1px solid var(--cellrule);
 }
 .bc.on{background:currentColor;border-color:currentColor}
 .bc.flip{box-shadow:0 0 0 1.5px var(--glow)}
@@ -312,7 +355,7 @@ select{
   border:1px solid currentColor;opacity:.9;white-space:nowrap;
 }
 .bl.addr{color:var(--addr)} .bl.data{color:var(--data)}
-.bl.alu{color:var(--alu)}  .bl.rg{color:#8FA3BC}
+.bl.alu{color:var(--alu)}  .bl.rg{color:var(--reg)}
 .bl.idle{opacity:.42}
 /* Two columns on a phone, and the lane goes vertical to make room for
    them. Measured first: side by side, name + eight cells + hex needs 158px
@@ -330,7 +373,7 @@ select{
     display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 6px;
     align-items:center;min-height:0;padding:2px 0;
   }
-  .bl + .bl{border-top:1px solid #1A2331}
+  .bl + .bl{border-top:1px solid var(--cell)}
   .bn{width:auto;text-align:left;font-size:9.5px}
   .bh{width:auto;text-align:right;font-size:10px}
   .bits{grid-column:1/-1;padding-top:1px}
@@ -346,22 +389,22 @@ select{
 }
 
 /* ---------- timeline, decode, memory ---------- */
-#tl,#memtime{display:block;width:100%;background:#0D131C}
+#tl,#memtime{display:block;width:100%;background:var(--sunk)}
 .tlnote{font-family:var(--mono);font-size:10px;color:var(--dim);padding:7px 12px}
 .decgrid{display:flex;gap:14px;flex-wrap:wrap;padding:4px 0}
 .decstage{min-width:70px}
 .dechead{font-family:var(--disp);font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--dim);padding-bottom:4px}
 .decbeads{display:grid;grid-template-columns:repeat(6,12px);gap:3px}
-.bead{width:12px;height:12px;border-radius:2px;background:#1A2331;border:1px solid #232E3D;padding:0;cursor:default}
+.bead{width:12px;height:12px;border-radius:2px;background:var(--cell);border:1px solid var(--cellrule);padding:0;cursor:default}
 .bead.on{background:var(--alu);border-color:var(--alu);box-shadow:0 0 6px color-mix(in srgb,var(--alu) 60%,transparent)}
 .decfire{display:flex;gap:6px;flex-wrap:wrap;padding-top:10px}
 .decfire .ln{cursor:default}
 #memmap{display:grid;gap:10px}
 .mrow .ma{font-family:var(--mono);font-size:10px;color:var(--dim);padding-bottom:3px}
 .mcells{display:grid;grid-template-columns:repeat(64,1fr);gap:1px}
-.mc{aspect-ratio:1;background:#161E2B;border-radius:1px}
-.mc.rd{background:color-mix(in srgb,var(--addr) 45%,#161E2B)}
-.mc.wr{background:color-mix(in srgb,var(--data) 55%,#161E2B)}
+.mc{aspect-ratio:1;background:var(--mcell);border-radius:1px}
+.mc.rd{background:color-mix(in srgb,var(--addr) 45%,var(--mcell))}
+.mc.wr{background:color-mix(in srgb,var(--data) 55%,var(--mcell))}
 .mc.now{outline:1.5px solid var(--glow);outline-offset:-1px}
 
 /* ---------- interrupts ---------- */
@@ -375,10 +418,10 @@ select{
 .pinbtn:disabled{opacity:.45;cursor:default}
 .pinstate{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;color:var(--dim)}
 .pinstate i{width:9px;height:9px;border-radius:50%;background:var(--rule);display:inline-block}
-.pinstate.hi i{background:#3E93A6} .pinstate.lo i{background:var(--data);box-shadow:0 0 7px var(--data)}
+.pinstate.hi i{background:var(--teal)} .pinstate.lo i{background:var(--data);box-shadow:0 0 7px var(--data)}
 .seq{font-family:var(--mono);font-size:11px;line-height:1.85;overflow-x:auto}
 .seq .r{display:flex;gap:10px;white-space:nowrap;cursor:pointer;border-radius:2px;padding:0 4px}
-.seq .r:hover{background:#182130}
+.seq .r:hover{background:var(--hover)}
 .seq .r.now{background:color-mix(in srgb,var(--glow) 16%,transparent)}
 .seq .h{color:var(--dim);width:34px;flex:none;text-align:right}
 .seq .w{width:118px;flex:none}
@@ -390,9 +433,9 @@ select{
 .addgrid{display:grid;grid-template-columns:56px repeat(8,minmax(26px,40px));gap:3px;align-items:center;font-family:var(--mono);font-size:10px}
 .addgrid .rl{color:var(--dim);text-align:right;padding-right:6px}
 .addgrid .hd{color:var(--dim);text-align:center;padding-bottom:2px}
-.acell{height:20px;border-radius:2px;background:#1A2331;border:1px solid #232E3D;display:flex;align-items:center;justify-content:center;color:var(--dim)}
+.acell{height:20px;border-radius:2px;background:var(--cell);border:1px solid var(--cellrule);display:flex;align-items:center;justify-content:center;color:var(--dim)}
 .acell.on{background:currentColor;border-color:currentColor}
-.acell.on::after{content:"1";color:#0D131C;font-weight:700}
+.acell.on::after{content:"1";color:var(--ground);font-weight:700}
 .acell:not(.on)::after{content:"0"}
 .acell.arow-a.on{color:var(--addr)} .acell.arow-b.on{color:var(--data)}
 .acell.arow-c{height:14px;border-style:dashed}
@@ -418,7 +461,7 @@ select{
 .tell li:before{content:"";position:absolute;left:0;top:.58em;width:6px;height:1.5px;background:var(--dim)}
 .tell li.k:before{background:var(--glow);height:2px}
 .tell li.k{color:var(--text)}
-.tell code{font-family:var(--mono);font-size:12.5px;color:var(--bright);background:#0C1219;padding:1px 4px;border-radius:2px}
+.tell code{font-family:var(--mono);font-size:12.5px;color:var(--bright);background:var(--code);padding:1px 4px;border-radius:2px}
 /* The block list leads with the block's name, so the reader can find the
    one they came for without reading the sentence first. */
 .tell ul.bw{gap:9px}
@@ -437,7 +480,7 @@ select{
   font-family:var(--mono);font-size:10.5px;color:var(--dim);
 }
 .ln i{width:6px;height:6px;border-radius:1px;background:var(--rule);flex:none;font-style:normal}
-.ln.on{color:var(--bright);border-color:currentColor;background:#1E2735}
+.ln.on{color:var(--bright);border-color:currentColor;background:var(--onbg)}
 .ln.on i{background:currentColor}
 .ln.addr.on{color:var(--addr)} .ln.data.on{color:var(--data)} .ln.alu.on{color:var(--alu)}
 
@@ -451,13 +494,13 @@ select{
 .reg.chg{border-color:var(--glow);background:color-mix(in srgb,var(--glow) 13%,var(--panel2))}
 .reg.chg .v{color:var(--bright)}
 .flags{font-family:var(--mono);font-size:15px;letter-spacing:.15em;margin-top:1px}
-.flags span{color:#3B4757}
+.flags span{color:var(--faint)}
 .flags span.set{color:var(--alu)}
 .mem{font-family:var(--mono);font-size:11px;line-height:1.75;overflow-x:auto;white-space:nowrap}
 .mem .a{color:var(--dim)}
 .mem b{font-weight:400;color:var(--text)}
 .mem b.w{color:var(--data);font-weight:600}
-.mem b.z{color:#3B4757}
+.mem b.z{color:var(--faint)}
 .lline{padding:1px 4px;border-left:2px solid transparent;border-radius:2px}
 .lline.here{border-left-color:var(--glow);background:color-mix(in srgb,var(--glow) 14%,transparent)}
 .lline.here b,.lline.here{color:var(--bright)}
@@ -472,9 +515,8 @@ select{
 <header>
   <div class="brand">Halfwave <em>Lab</em></div>
   <p class="tag">A 6502, half a clock phase at a time. Every value is read out of a storage node on the die.</p>
-  <div class="clockbar">
-    <span class="pos" id="pos">h <b>0</b> · cyc <b>0</b></span>
-  </div>
+  <button class="themebtn" id="theme" data-ic="sun" title="Switch to the light theme"
+          aria-label="Switch colour theme"></button>
 <nav class="tabs" role="tablist" aria-label="Panels">
   <button class="tab" role="tab" id="t-map"  aria-controls="p-map"  aria-selected="true">Datapath</button>
   <button class="tab" role="tab" id="t-story" aria-controls="p-story" aria-selected="false">Story</button>
@@ -504,6 +546,10 @@ select{
     <button class="tbtn" id="b-hf" data-ic="next" title="Forward one half-cycle (→)"><span class="lb">½</span></button>
     <button class="tbtn" id="b-cf" data-ic="cycle" title="Next full cycle (shift + →)"><span class="lb">cyc</span></button>
     <button class="tbtn" id="b-if" data-ic="op" title="Next opcode fetch (shift + ↓)"><span class="lb">op</span></button>
+    <label class="rate" title="Simulated clock rate. A cycle is two half-cycles, so 1 Hz is two steps a second. Playing past the end of the recording runs the chip for more, up to 4000 half-cycles.">
+      <input type="range" id="rate" min="0" max="4" step="1" value="0" aria-label="Clock rate">
+      <span class="tlab" id="ratelab">1 Hz</span>
+    </label>
     <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Half-cycle position">
     <span class="tlab" id="tlab">0 / 0</span>
   </div>
@@ -513,6 +559,7 @@ select{
 <div class="panel scopewrap">
   <div class="lane" id="lane" role="group" aria-label="Instructions, one cell per half-cycle"></div>
   <div class="scopebar">
+    <span class="pos" id="pos">h <b>0</b> · cyc <b>0</b></span>
     <div class="scopestrip" id="scopestrip" hidden></div>
     <button class="scopetgl" id="scopetgl" aria-expanded="true" data-ic="down"
             title="Collapse the scope to a one-line strip">scope</button>
@@ -811,6 +858,8 @@ const IC = {
   op:     "M6.5 5.8L13 12l-6.5 6.2 M18 5.5v13",
   down:   "M6.5 9.5L12 15l5.5-5.5",
   up:     "M6.5 14.5L12 9l5.5 5.5",
+  sun:    "M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6 M12 2.6v2.2 M12 19.2v2.2 M2.6 12h2.2 M19.2 12h2.2 M5.4 5.4l1.6 1.6 M17 17l1.6 1.6 M18.6 5.4L17 7 M7 17l-1.6 1.6",
+  moon:   "M20.2 14.8A8.6 8.6 0 0 1 9.2 3.8a7.6 7.6 0 1 0 11 11z",
   pull:   "M12 4.5v9 M8.2 10l3.8 3.8 3.8-3.8 M5 19h14"
 };
 function ic(name,cls){
@@ -826,6 +875,42 @@ function paintIcons(root){
     el.insertAdjacentHTML("afterbegin",ic(el.dataset.ic));
     el.dataset.icDone=el.dataset.ic;
   }
+}
+/* A canvas takes a colour string, not a custom property, so the drawing
+   code has to read the token itself. Cached because getComputedStyle is a
+   layout read and the scope repaints on every half-cycle; the cache is
+   dropped when the theme changes, which is the only time a token moves. */
+let CSSV={};
+function cssv(n){ return CSSV[n]||(CSSV[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim()); }
+
+/* Theme. The stored choice wins; with none, follow the system. Everything
+   the page draws in CSS follows for free because no rule carries a bare
+   colour -- only the canvases need telling, and they need telling by
+   being redrawn. */
+function applyTheme(t){
+  document.documentElement.setAttribute("data-theme",t);
+  CSSV={};
+  const b=$("#theme");
+  if(b){
+    setIcon(b,t==="light"?"moon":"sun");
+    b.title=t==="light"?"Switch to the dark theme":"Switch to the light theme";
+    b.setAttribute("aria-pressed",t==="light"?"true":"false");
+  }
+  const m=document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute("content",cssv("--ground"));
+  try{localStorage.setItem("hw.theme",t)}catch(e){}
+  if(typeof F!=="undefined"&&F.length){ drawStrip(); paintExtras(); }
+}
+function initTheme(){
+  /* The URL wins, then the stored choice, then dark. NOT the system
+     preference: this page is dark-native and a light-mode reader who has
+     never touched the switch would otherwise arrive somewhere different
+     from every screenshot of it. Following the OS is one line here if that
+     is wanted instead. */
+  const q=new URLSearchParams(location.search).get("theme");
+  let t=(q==="light"||q==="dark")?q:null;
+  if(!t){ try{ t=localStorage.getItem("hw.theme"); }catch(e){} }
+  applyTheme(t==="light"?"light":"dark");
 }
 function setIcon(el,name){
   const old=el.querySelector(".ic"); if(old) old.remove();
@@ -934,6 +1019,9 @@ function headPath(from,to,len,wide){
 }
 function headsFor(e){
   const P=ptsOf(e.d); if(P.length<2) return [];
+  /* `rev` is for the one edge whose consumer is the start of its path, and
+     `both` for a tie that moves no value in either direction. */
+  if(e.rev) return [headPath(P[1],P[0])];
   const out=[headPath(P[P.length-2],P[P.length-1])];
   if(e.both) out.push(headPath(P[1],P[0]));
   return out;
@@ -1072,10 +1160,10 @@ const LEDGES=[
   {d:"M218,84 H396",k:"addr",struct:1,off:1},
   {d:"M343,98 V122",k:"addr",struct:1},
   {d:"M439,98 V122",k:"addr",struct:1},
-  {d:"M91,170 V148 H343",k:"addr",struct:1},
+  {d:"M91,170 V148 H343",k:"addr",struct:1,rev:1},
   {d:"M146,184 H170",k:"data",struct:1},
   {d:"M256,184 H280",k:"data",struct:1},
-  {d:"M366,184 H396",k:"data",ln:"SBDB",lx:381,ly:180},
+  {d:"M366,184 H396",k:"data",ln:"SBDB",lx:381,ly:180,both:1},
   {d:"M323,198 V224",k:"alu",ln:"DBADD",lx:330,ly:216,anchor:"start"},
   {d:"M451,198 V210 H213 V224",k:"alu",ln:"SBADD",lx:346,ly:206},
   {d:"M451,252 V262 H514 V184 H506",k:"alu",ln:"ADDSB06",lx:510,ly:222,anchor:"end"},
@@ -1093,10 +1181,12 @@ function buildLatches(){
   let m="";
   for(const e of LEDGES){
     m+=`<path class="e ${e.k}${e.struct?" struct":""}" data-ln="${e.ln||""}" d="${e.d}"/>`;
+    for(const h of headsFor(e))
+      m+=`<path class="e head ${e.k}${e.struct?" struct":""}" data-ln="${e.ln||""}" d="${h}"/>`;
     if(e.ln) m+=`<text class="elab" data-ln="${e.ln}" x="${e.lx}" y="${e.ly}" text-anchor="${e.anchor||"middle"}">${(LINEMETA[e.ln]||[e.ln])[0]}</text>`;
   }
   for(const b of LBOXES){
-    m+=`<g class="bx${b.bus?" bus":""}" data-lb="${b.id}">`
+    m+=`<g class="bx${b.bus?" bus":""}${b.k?" k-"+b.k:""}" data-lb="${b.id}">`
       +`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="2"/>`
       +(b.bus
         ? `<text class="n" x="${b.x+8}" y="${b.y+b.h/2+3.5}">${b.label}</text>`
@@ -1582,7 +1672,7 @@ function markLane(){
 }
 
 /* ---- the timeline: instructions against time, overlap drawn as overlap ---- */
-const TCOL={0:"#4FBFD4",1:"#7C9BC4",2:"#5CC8A8",3:"#B8A85C",4:"#E0A24B",5:"#E06A96"};
+const TCOL=["--addr","--phi1","--t2","--t3","--alu","--data"];
 function drawTimeline(){
   const cv=$("#tl"); if(!F.length||!cv.clientWidth) return;
   const groups=laneGroups();
@@ -1593,12 +1683,12 @@ function drawTimeline(){
   cv.width=w*dpr; cv.height=H*dpr; cv.style.height=H+"px";
   const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,H);
   const X=n=>PAD+(w-2*PAD)*n/F.length, CW=(w-2*PAD)/F.length;
-  const glow=getComputedStyle(document.documentElement).getPropertyValue("--glow").trim()||"#E8A05C";
+  const glow=getComputedStyle(document.documentElement).getPropertyValue("--glow").trim()||cssv("--phi2");
   groups.forEach((gr,k)=>{
     const y=(k%2)?yB:yA;
     for(const n of gr.idx){
-      const t=F[n][CI.tstates]; let c="#1B2534";
-      for(let b=0;b<6;b++) if(t>>b&1){ c=TCOL[b]; break; }
+      const t=F[n][CI.tstates]; let c=cssv("--cell3");
+      for(let b=0;b<6;b++) if(t>>b&1){ c=cssv(TCOL[b]); break; }
       g.fillStyle=c; g.globalAlpha=F[n][CI.sync]?1:.5;
       g.fillRect(X(n),y,Math.max(CW-.6,.8),RH);
     }
@@ -1613,11 +1703,11 @@ function drawTimeline(){
       g.fillRect(X(n),y+4,Math.max(CW-.6,.8),RH-8);
     }
     if(CW*gr.idx.length>30){
-      g.fillStyle="#9AABC0"; g.font="9px monospace";
+      g.fillStyle=cssv("--axis"); g.font="9px monospace";
       g.fillText(insLabel(gr.fa),X(gr.idx[0])+1,(k%2)?yB+RH+10:yA-4);
     }
   });
-  g.strokeStyle="#EAF1F8"; g.beginPath(); g.moveTo(X(i)+CW/2,0); g.lineTo(X(i)+CW/2,H); g.stroke();
+  g.strokeStyle=cssv("--bright"); g.beginPath(); g.moveTo(X(i)+CW/2,0); g.lineTo(X(i)+CW/2,H); g.stroke();
   $("#tlpos").textContent=`h ${F[i][CI.half_cycle]}`;
   cv.onclick=e=>{ const r=cv.getBoundingClientRect(); go(Math.round((e.clientX-r.left-PAD)/(w-2*PAD)*F.length)); };
 }
@@ -1884,10 +1974,10 @@ function drawMemory(){
   const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,H);
   const X=n=>PAD+(w-2*PAD)*n/F.length, CW=Math.max((w-2*PAD)/F.length,1);
   for(const {n,a,wr} of acc){
-    g.fillStyle=wr?"#E06A96":"#3E93A6";
+    g.fillStyle=wr?cssv("--data"):cssv("--teal");
     g.fillRect(X(n),PAD+rank.get(a)*RH,CW,Math.max(RH-1,2));
   }
-  g.strokeStyle="#EAF1F8"; g.beginPath(); g.moveTo(X(i)+CW/2,0); g.lineTo(X(i)+CW/2,H); g.stroke();
+  g.strokeStyle=cssv("--bright"); g.beginPath(); g.moveTo(X(i)+CW/2,0); g.lineTo(X(i)+CW/2,H); g.stroke();
   const cur=acc[i];
   $("#mempos").textContent=cur?`${cur.wr?"write":"read"} ${hx(cur.a,4)} · ${sorted.length} addresses in all`:"";
   cv.onclick=e=>{ const r=cv.getBoundingClientRect(); go(Math.round((e.clientX-r.left-PAD)/(w-2*PAD)*F.length)); };
@@ -1930,7 +2020,7 @@ const CH=[["\u03c61","clk1out","phi1"],["\u03c62","clk2out","phi2"],["RDY","rdy"
           ["SYNC",null,"addr"],["T0",null,"t"],["T1",null,"t"],["T2",null,"t"],
           ["T3",null,"t"],["T4",null,"t"],["T5",null,"t"]];
 const span = () => innerWidth<700?16:32;
-const CHCOL={phi1:"#7C9BC4",phi2:"#E8A05C",dim:"#6D7C8F",addr:"#4FBFD4",t:"#3E93A6"};
+const CHCOL={phi1:"--phi1",phi2:"--phi2",dim:"--dim",addr:"--addr",t:"--teal"};
 /* One watch bit out of a rows mask. The API's watch_encoding is "hex":
    a lowercase hex bitset, bit i in byte i/8, LSB first (the state blobs'
    own convention), which is exact at any width -- a JSON integer is a
@@ -1974,15 +2064,15 @@ function drawScope(){
   const start=scopeWindow();
   const x0=LAB+4, cw=(w-x0-6)/SPAN;
   /* cycle rules */
-  g.strokeStyle="#1C2634"; g.lineWidth=1;
+  g.strokeStyle=cssv("--grid"); g.lineWidth=1;
   for(let k=0;k<=SPAN;k++){
     const n=start+k; if(n<F.length&&F[n]&&F[n][CI.phase]!==1) continue;
     const x=Math.round(x0+k*cw)+.5;
     g.beginPath(); g.moveTo(x,PAD-2); g.lineTo(x,H-PAD+2); g.stroke();
   }
   CH.forEach((c,r)=>{
-    const yTop=PAD+r*(RH+GAP), yBot=yTop+RH-2, col=CHCOL[c[2]];
-    g.font='9px "IBM Plex Mono",monospace'; g.fillStyle="#6D7C8F"; g.textAlign="right";
+    const yTop=PAD+r*(RH+GAP), yBot=yTop+RH-2, col=cssv(CHCOL[c[2]]);
+    g.font='9px "IBM Plex Mono",monospace'; g.fillStyle=cssv("--dim"); g.textAlign="right";
     g.fillText(c[0],LAB,yBot);
     g.strokeStyle=col; g.lineWidth=1.4; g.beginPath();
     let prev=null;
@@ -1997,7 +2087,7 @@ function drawScope(){
   });
   /* cursor */
   const cx=Math.round(x0+(i-start)*cw)+.5;
-  g.strokeStyle="#F2C14E"; g.lineWidth=1;
+  g.strokeStyle=cssv("--cursor"); g.lineWidth=1;
   g.beginPath(); g.moveTo(cx,PAD-4); g.lineTo(cx,H-PAD+4); g.stroke();
 }
 /* Drag to scrub. The pointer is captured so a finger leaving the canvas
@@ -2027,7 +2117,7 @@ function scopeAt(clientX){
    it stands in for. */
 function buildScopeStrip(){
   $("#scopestrip").innerHTML=CH.map((c,k)=>
-    `<span class="sch" style="color:${CHCOL[c[2]]}">${c[0]}<i class="sbox" data-ch="${k}" title="${c[0]}"></i></span>`).join("");
+    `<span class="sch" style="color:${cssv(CHCOL[c[2]])}">${c[0]}<i class="sbox" data-ch="${k}" title="${c[0]}"></i></span>`).join("");
 }
 function paintScopeStrip(){
   if(!scopeFolded) return;
@@ -2052,6 +2142,9 @@ function setScopeFolded(f){
 }
 $("#scopetgl").onclick=()=>setScopeFolded(!scopeFolded);
 buildScopeStrip(); paintIcons();
+$("#theme").onclick=()=>applyTheme(
+  document.documentElement.getAttribute("data-theme")==="light"?"dark":"light");
+initTheme();
 try{ if(localStorage.getItem("hw.scopeFolded")==="1") setScopeFolded(true); }catch(e){}
 
 function drawStrip(){ markLane(); if(scopeFolded) paintScopeStrip(); else drawScope(); }
@@ -2113,11 +2206,55 @@ $("#b-hb").onclick=()=>go(i-1); $("#b-hf").onclick=()=>go(i+1);
 $("#b-cf").onclick=()=>go(i+2); $("#b-if").onclick=nextFetch;
 $("#scrub").oninput=e=>go(+e.target.value);
 function setPlaying(on){ setIcon($("#b-play"),on?"pause":"play"); $("#playlab").textContent=on?"pause":"play"; }
-function stopPlay(){ if(timer){clearInterval(timer);timer=null;} setPlaying(false); }
+
+/* The clock rate, as the rate of the SIMULATED chip: a cycle is two
+   half-cycles, so 1 Hz is two steps a second. It used to be a fixed
+   170ms interval, which is a fact about setInterval rather than about the
+   6502 -- the same reason the main site's transport counts in Hz. The
+   loop is paced against wall-clock time so a slow frame costs no steps,
+   and clamped at 500ms so a backgrounded tab returning does not run the
+   whole recording in one frame. */
+const RATES=[1,10,100,1000,0], MAX_FRAMES=4000;
+const rateHz=()=>RATES[+$("#rate").value];
+function paintRate(){ $("#ratelab").textContent=rateHz()?rateHz()+" Hz":"max"; }
+$("#rate").oninput=()=>{ paintRate(); try{localStorage.setItem("hw.rate",$("#rate").value)}catch(e){} };
+try{ const v=localStorage.getItem("hw.rate"); if(v!==null&&RATES[+v]!==undefined) $("#rate").value=v; }catch(e){}
+paintRate();
+
+/* Playing to the end of a 300-frame recording takes a fifth of a second at
+   1000 Hz, so the top of the slider would be a control with nothing to
+   show. While the API is reachable, running off the end runs the chip for
+   more rather than stopping. */
+let growing=false;
+async function growTrace(){
+  if(growing||!LIVE||F.length>=MAX_FRAMES) return;
+  growing=true;
+  try{ const a=await fetchTrace(MACH,200); F=F.concat(a.rows); MACH=a.machine; reload(); }
+  catch(e){ /* leave the recording as it stands; the loop will stop */ }
+  finally{ growing=false; }
+}
+let lastT=0, acc=0;
+function stopPlay(){ if(timer){cancelAnimationFrame(timer);timer=null;} setPlaying(false); }
+function tick(t){
+  if(!timer) return;
+  const hz=rateHz(), dt=Math.min(500,lastT?t-lastT:0); lastT=t;
+  let steps;
+  if(hz===0){ steps=256; acc=0; }
+  else { acc+=dt/1000*hz*2; steps=Math.floor(acc); acc-=steps; }
+  if(steps>0){
+    if(i+steps>=F.length-1){
+      go(F.length-1);
+      if(LIVE&&F.length<MAX_FRAMES){ growTrace(); }
+      else { stopPlay(); return; }
+    } else go(i+steps);
+  }
+  timer=requestAnimationFrame(tick);
+}
 $("#b-play").onclick=()=>{
   if(timer){stopPlay();return;}
-  setPlaying(true);
-  timer=setInterval(()=>{ if(i>=F.length-1){stopPlay();return;} go(i+1); },170);
+  if(i>=F.length-1&&!LIVE) return;
+  setPlaying(true); lastT=0; acc=0;
+  timer=requestAnimationFrame(tick);
 };
 addEventListener("keydown",e=>{
   if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;

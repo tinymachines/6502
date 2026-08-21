@@ -114,6 +114,45 @@ drawn **as of the cursor** for the same reason: it used to show every address th
 recording touched, so rewinding visibly reset nothing. The rows are still every page the
 recording touches, so the map keeps its shape while you scrub.
 
+**There is a light theme, and the switcher is top right.** It works because no rule anywhere
+carries a bare colour: twenty-eight hardcoded hex values in the stylesheet became tokens, so
+`:root[data-theme="light"]` restating them *is* the theme. The canvases cannot use a custom
+property, so the drawing code reads the tokens itself through `cssv()`, cached and dropped
+when the theme changes. The palette is chosen against the dark one rather than derived from
+it: an inverted lightness gives washed-out accents on white, so the three datapath colours
+are darkened until they carry on a pale panel. **The default is dark, not the system
+preference** -- this page is dark-native and a light-mode reader who has never touched the
+switch would otherwise arrive somewhere different from every screenshot of it. `?theme=light`
+deep-links, the choice persists, and `<meta name="theme-color">` follows.
+
+Verified by pixel-diffing the dark render against the pre-tokenisation build: **zero
+differing pixels** once the one deliberate change is put back (the digit drawn on a filled
+adder cell moved from `--sunk` to `--ground`, 3/255 in dark, and necessary so it inverts on
+light). A control diffing two captures of the same build was also zero, which is what makes
+the comparison mean anything.
+
+**A slider picks the clock rate** -- 1, 10, 100, 1000 Hz and max -- as the rate of the
+simulated chip, so 1 Hz is two half-cycles a second. It replaced a fixed 170ms interval,
+which is a fact about `setInterval` rather than about a 6502; the loop is paced against
+wall-clock time and clamped at 500ms so a backgrounded tab cannot return and run the whole
+recording in one frame. Playing past the end of the recording runs the chip for more while
+the API is reachable, up to 4000 half-cycles: at 1000 Hz a 300-frame recording is over in a
+fifth of a second, so without that the top of the slider would be a control with nothing to
+show.
+
+**The latch diagram carries arrowheads too**, from the same computed path code as the
+datapath. One edge needs `rev`: the address goes out on the pins and the byte comes back on
+the data pins, so the arrow points at the data pins even though the path is drawn from them.
+A latch that took a value at this edge now **fills solid in its own colour** with its text
+inverted, so the diagram answers "what moved" without reading a byte. The datapath map keeps
+its tint, because `hot` means a conducting control line there -- a claim about a wire rather
+than about storage.
+
+**The position readout sits flush left in the scope bar** rather than in the header, and the
+scope toggle aligns to the bottom of that bar so it sits with the strip's last row. Measured
+at six widths: the strip wraps to two rows at 480px (last row exactly `T2,T3,T4,T5`), four at
+390 and five at 320, and the toggle is within 1px of the last row's midline at every one.
+
 **One icon family**, 24-unit outlines stroked in `currentColor`, defined once in `IC` and
 painted into every `[data-ic]`, so an icon inherits the colour and hover state of the control
 it sits in and no glyph can be spelled two ways in two places.
