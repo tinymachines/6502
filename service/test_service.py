@@ -240,8 +240,13 @@ def test_the_demo_sections_claims_are_measurements(client):
     assert by_h[wb - 1]["a"] == 0x2E, "A still old the half-cycle before"
     # The homeless sum, on screen: the half-cycle before the writeback, the
     # adder's hold register and the special bus both read $42 while A does
-    # not. This is the observation the alu/sb fields exist for.
+    # not. This is the observation the alu/sb fields exist for. One earlier,
+    # the operands themselves sit in the adder's input latches, and the
+    # input data latch already holds the NEXT opcode by the time the sum is
+    # real: the add happens after the instruction is over, field by field.
     assert by_h[wb - 1]["alu"] == 0x42 and by_h[wb - 1]["sb"] == 0x42
+    assert by_h[wb - 2]["alua"] == 0x2E and by_h[wb - 2]["alub"] == 0x14
+    assert by_h[wb - 1]["idl"] == 0x85, "the next opcode, already latched"
     # ADC is already over: the fetch before the writeback is the NEXT
     # instruction's (STA, $85), with A still reading the operand's old value.
     assert by_h[wb - 2]["sync"] and by_h[wb - 2]["fetch"]["opcode"] == 0x85
@@ -370,6 +375,26 @@ def test_rows_trace_carries_the_same_information(client):
     assert 3.2 < ratio < 4.2, f"page claims 3.7x on this shape; measured {ratio:.1f}x"
     page = client.get("/").text
     assert "3.7x" in page and "7.5x" in page
+
+
+def test_latch_fields_agree_with_their_own_bits(client):
+    """Findings issue 03: the named latches are first-class fields so a
+    consumer stops rebuilding each byte from 8 watched bits. The check
+    that keeps that honest: every promoted field must equal the byte
+    rebuilt from watching its own bits, on every half-cycle of a run, or
+    the promotion changed the meaning while claiming convenience."""
+    stems = ["alua", "alub", "idb", "idl", "dor", "abl", "abh", "pclp", "pchp"]
+    names = [f"{s}{i}" for s in stems for i in range(8)]
+    res = boot_add(client)
+    r = client.post(
+        "/v1/step",
+        json={"machine": res["machine"], "half_cycles": 30, "trace": True,
+              "watch": names},
+    ).json()
+    for t in r["trace"]:
+        for si, stem in enumerate(stems):
+            rebuilt = sum(t["watch"][f"{stem}{i}"] << i for i in range(8))
+            assert t[stem] == rebuilt, f"{stem} at h={t['half_cycle']}"
 
 
 def test_watch_survives_past_53_names(client):

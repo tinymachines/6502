@@ -115,15 +115,38 @@ fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
 /// the whole overlap demo turns on.
 struct ExtraBuses {
     alu: [NodeId; 8],
+    alua: [NodeId; 8],
+    alub: [NodeId; 8],
     sb: [NodeId; 8],
+    idb: [NodeId; 8],
+    idl: [NodeId; 8],
+    dor: [NodeId; 8],
     adl: [NodeId; 8],
     adh: [NodeId; 8],
+    abl: [NodeId; 8],
+    abh: [NodeId; 8],
+    pclp: [NodeId; 8],
+    pchp: [NodeId; 8],
 }
 
 impl ExtraBuses {
     fn resolve(nl: &v6502_netlist::Netlist) -> ExtraBuses {
         let bus = |p: &str| nl.bus::<8>(p).unwrap_or_else(|| panic!("no bus {p}0..7"));
-        ExtraBuses { alu: bus("alu"), sb: bus("sb"), adl: bus("adl"), adh: bus("adh") }
+        ExtraBuses {
+            alu: bus("alu"),
+            alua: bus("alua"),
+            alub: bus("alub"),
+            sb: bus("sb"),
+            idb: bus("idb"),
+            idl: bus("idl"),
+            dor: bus("dor"),
+            adl: bus("adl"),
+            adh: bus("adh"),
+            abl: bus("abl"),
+            abh: bus("abh"),
+            pclp: bus("pclp"),
+            pchp: bus("pchp"),
+        }
     }
 }
 
@@ -173,13 +196,23 @@ fn obs_json(cpu: &Cpu<FlatMemory>, extra: &ExtraBuses, watch: &[(String, NodeId)
             StoreData::None => "",
         },
     );
+    let rb = |b: &[NodeId; 8]| cpu.engine().read_bus(b);
     let _ = write!(
         s,
-        ",\"alu\":{},\"sb\":{},\"adl\":{},\"adh\":{}",
-        cpu.engine().read_bus(&extra.alu),
-        cpu.engine().read_bus(&extra.sb),
-        cpu.engine().read_bus(&extra.adl),
-        cpu.engine().read_bus(&extra.adh),
+        ",\"alu\":{},\"alua\":{},\"alub\":{},\"sb\":{},\"idb\":{},\"idl\":{},\"dor\":{},         \"adl\":{},\"adh\":{},\"abl\":{},\"abh\":{},\"pclp\":{},\"pchp\":{}",
+        rb(&extra.alu),
+        rb(&extra.alua),
+        rb(&extra.alub),
+        rb(&extra.sb),
+        rb(&extra.idb),
+        rb(&extra.idl),
+        rb(&extra.dor),
+        rb(&extra.adl),
+        rb(&extra.adh),
+        rb(&extra.abl),
+        rb(&extra.abh),
+        rb(&extra.pclp),
+        rb(&extra.pchp),
     );
     match cpu.last_fetch() {
         Some(f) => {

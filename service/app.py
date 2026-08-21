@@ -234,7 +234,9 @@ def boot(req: BootRequest) -> StepResponse:
 
 _ROW_COLS = [
     "half_cycle", "cycle", "clk0", "phase", "addr", "data", "rw", "sync",
-    "pc", "a", "x", "y", "s", "p", "ir", "alu", "sb", "adl", "adh",
+    "pc", "a", "x", "y", "s", "p", "ir",
+    "alu", "alua", "alub", "sb", "idb", "idl", "dor",
+    "adl", "adh", "abl", "abh", "pclp", "pchp",
     "tstates", "hidden", "store_data", "fetch_addr", "fetch_opcode", "watch",
 ]
 _HIDDEN = {"": 0, "T1": 1, "VEC0": 2, "T6": 3}
@@ -265,7 +267,8 @@ def _pack_rows(trace: list[dict], watch_names: list[str]) -> TraceRows:
             1 if t["phase"] == "phi1" else 2,
             t["addr"], t["data"], 0 if t["rw"] == "read" else 1, int(t["sync"]),
             t["pc"], t["a"], t["x"], t["y"], t["s"], t["p"], t["ir"],
-            t["alu"], t["sb"], t["adl"], t["adh"],
+            t["alu"], t["alua"], t["alub"], t["sb"], t["idb"], t["idl"], t["dor"],
+            t["adl"], t["adh"], t["abl"], t["abh"], t["pclp"], t["pchp"],
             tmask, _HIDDEN[t["hidden"]], _SD[t["store_data"]],
             f["addr"] if f else -1, f["opcode"] if f else -1, whex,
         ])

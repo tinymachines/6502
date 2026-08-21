@@ -138,3 +138,18 @@ The package (`halfwave-lab/`) arrived with eight filed issues. Dispositions:
   padding, even frame count ending phi2) or the Rust suite
   (contested_groups, nonconvergent_settles). CI itself is this repo's
   documented deliberate gap; the checks run by hand and in the deploy.
+
+## 3. Issue 03: the latches, promoted (2026-08-21)
+
+`alua`, `alub`, `idb`, `idl`, `dor`, `abl`, `abh`, `pclp`, `pchp` are
+first-class Observation fields beside the four that already were, each byte
+read from its own wires, in the object form and as rows columns. The test
+that keeps the promotion honest: every field must equal the byte rebuilt
+from watching its own 8 bits, on every half-cycle of a run.
+
+The payoff on the demo trace is the whole mechanism in three fields: at
+h=36 the operands sit in `alua`/`alub` ($2E, $14) while sync is already
+high for the next fetch; at h=37 the sum is real in `alu` and on `sb`
+while A still reads $2E and `idl` already holds the next opcode ($85, STA);
+at h=38 A takes it. "The add happens after the instruction is over," now
+visible field by field, and the api page's demo section walks exactly that.

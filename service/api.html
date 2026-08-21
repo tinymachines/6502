@@ -335,7 +335,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     <tr><td><code>tstates</code></td><td>the timing chain, e.g. <code>"T0+T1"</code>. More than one can be active: the chain overlaps the tail of one instruction with the head of the next</td></tr>
     <tr><td><code>hidden</code></td><td><code>"T1"</code>, <code>"VEC0"</code>, <code>"T6"</code> or "": the timing bits that never reach the decode PLA</td></tr>
     <tr><td><code>store_data</code></td><td><code>"SD1"</code>, <code>"SD2"</code> or "": the store-data pipeline, active in a store's or read-modify-write's data cycles</td></tr>
-    <tr><td><code>alu, sb, adl, adh</code></td><td>the adder's hold register, the special bus, and the internal address bus, each read from its own wires. These are the values that live in no register: during ADC's overlap the sum is real on <code>alu</code> and <code>sb</code> while <code>a</code> still reads the old value. A precharged bus idles high where nothing drives it, which is the silicon's answer, not a default</td></tr>
+    <tr><td><code>alu, alua, alub, sb, idb, idl, dor, adl, adh, abl, abh, pclp, pchp</code></td><td>the named internal storage, each byte read from its own wires: the adder's hold register and its two input latches, the special and internal data buses, the input data latch (what memory answered), the data output register (what a write will drive), the internal address bus, the address output latches (what the pins hold steady), and the program counter's prime latches (the incremented next PC). These are the values that live in no register: during ADC's overlap the operands sit in <code>alua</code>/<code>alub</code>, then the sum is real on <code>alu</code> and <code>sb</code> while <code>a</code> still reads the old value. A precharged bus idles high where nothing drives it, which is the silicon's answer, not a default</td></tr>
     <tr><td><code>fetch</code></td><td>the last opcode fetch, for disassembly</td></tr>
     <tr><td><code>watch</code></td><td>each watched node name to its level. Any of the 832 resolvable names on the die works: <code>sync</code>, <code>sb0</code>, <code>cclk</code>, <code>dpc17_SUMS</code>, ... and <code>/v1/nodes</code> lists them all</td></tr>
   </table>
@@ -431,8 +431,11 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     are over: <code>sync</code> was high at h=36 for the <em>next</em>
     instruction's fetch, IR already holds STA's opcode, and A still reads
     $2E. The sum <strong>exists and is in no register</strong>, and the
-    observation now shows it: at <code>h=37</code> the <code>alu</code> and
-    <code>sb</code> fields both read $42 while <code>a</code> reads $2E.
+    observation shows the whole mechanism: at <code>h=36</code> the operands
+    sit in the adder's input latches (<code>alua</code> $2E,
+    <code>alub</code> $14), at <code>h=37</code> the <code>alu</code> and
+    <code>sb</code> fields both read $42 while <code>a</code> reads $2E and
+    <code>idl</code> already holds the next opcode.
     One half-cycle into STA, SBAC fires and A snaps to $42. The pulse at h=30 is the same overlap happening to the LDA
     before it. Every behavioural emulator hides this; it falls out of this
     one because nothing here knows what ADC is supposed to do.

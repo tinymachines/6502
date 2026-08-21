@@ -160,9 +160,18 @@ class Observation(BaseModel):
     hidden: str
     store_data: str
     alu: int = Field(description="the adder's hold register: where a sum is real before any register holds it")
+    alua: int = Field(description="the adder's A input latch")
+    alub: int = Field(description="the adder's B input latch (loaded inverted by nDBADD for SBC)")
     sb: int = Field(description="the special bus. Precharged: idles high where nothing drives it")
+    idb: int = Field(description="the internal data bus")
+    idl: int = Field(description="the input data latch: what memory answered, held")
+    dor: int = Field(description="the data output register: what a write cycle will drive")
     adl: int = Field(description="internal address bus, low byte")
     adh: int = Field(description="internal address bus, high byte")
+    abl: int = Field(description="address output latch, low byte: what the pins hold steady")
+    abh: int = Field(description="address output latch, high byte")
+    pclp: int = Field(description="the program counter's low prime latch: the incremented next PC")
+    pchp: int = Field(description="the program counter's high prime latch")
     fetch: Optional[LastFetch] = None
     watch: Optional[dict[str, bool]] = None
 

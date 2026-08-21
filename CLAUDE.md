@@ -826,7 +826,10 @@ state that decodes to the wrong chip is worse than one that is rejected.
   found by a consumer watching 64 and pinned by a regression that requires
   a mask past 2^53; and the API locations gzip
   (`gzip_types application/json` per location, since the global
-  gzip_types is commented out and covers only text/html).
+  gzip_types is commented out and covers only text/html). The named
+  latches are first-class observation fields (alu, alua, alub, sb, idb,
+  idl, dor, adl, adh, abl, abh, pclp, pchp), each held by a test to equal
+  the byte rebuilt from watching its own 8 bits.
 - **The `/api/` nginx location declares the COMPLETE header set, and must.**
   This config's own top comment is the rule: one `add_header` in a location
   discards every inherited one, so the proxy location restates HSTS,
