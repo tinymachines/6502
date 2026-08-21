@@ -262,3 +262,28 @@ service suite off the assembler's own label table, and the tab now explains
 it where it measurably happens: the note fires on exactly the 25 parked
 half-cycles of the preset's run and on no others, the pointer tag is
 suppressed while S is not a pointer.
+
+## 8. The Interrupt tab (2026-08-21)
+
+The payoff of pin control, and the 6502 story nothing in the Lab could tell
+before. Three buttons pulse IRQ, NMI or RES low for eight cycles and append
+what the chip did; the sequence is then read back out of the recording
+rather than described. Measured on the interrupt preset, and this is the
+whole mechanism in six lines of trace:
+
+    h=310  read  $0206   $4C · IR $E6 · opcode fetch
+    h=312  read  $0206   $4C · IR $00            <- BRK, with no BRK fetched
+    h=315  write $01FF   $02 · push PCH
+    h=317  write $01FE   $06 · push PCL
+    h=319  write $01FD   $20 · push P            <- B clear: not a BRK
+    h=321  read  $FFFE   $00 · vector low
+    h=323  read  $FFFF   $03 · vector high
+    h=324  read  $0300   $EA · opcode fetch      <- the handler
+
+The chip fetched `$4C` and the instruction register nevertheless reads
+`$00`: predecode forced it, which IS the interrupt mechanism. The vector
+pull is found by the timing chain's own hidden VEC0/T6 states, which exist
+for nothing else, so the tab locates the sequence by measurement rather
+than by counting cycles. Presets may now carry their own memory (the
+handler and the vectors that reach it), which no assembly source can place
+without filling the 64 KiB between.

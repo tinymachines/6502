@@ -273,6 +273,27 @@ select{
 .mc.wr{background:color-mix(in srgb,var(--data) 55%,#161E2B)}
 .mc.now{outline:1.5px solid var(--glow);outline-offset:-1px}
 
+/* ---------- interrupts ---------- */
+.pinrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-bottom:10px}
+.pinbtn{
+  font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:2px;cursor:pointer;
+  background:var(--panel2);border:1px solid var(--rule);color:var(--text);
+}
+.pinbtn:hover:not(:disabled){border-color:var(--glow);color:var(--bright)}
+.pinbtn:disabled{opacity:.45;cursor:default}
+.pinstate{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+.pinstate i{width:9px;height:9px;border-radius:50%;background:var(--rule);display:inline-block}
+.pinstate.hi i{background:#3E93A6} .pinstate.lo i{background:var(--data);box-shadow:0 0 7px var(--data)}
+.seq{font-family:var(--mono);font-size:11px;line-height:1.85;overflow-x:auto}
+.seq .r{display:flex;gap:10px;white-space:nowrap;cursor:pointer;border-radius:2px;padding:0 4px}
+.seq .r:hover{background:#182130}
+.seq .r.now{background:color-mix(in srgb,var(--glow) 16%,transparent)}
+.seq .h{color:var(--dim);width:34px;flex:none;text-align:right}
+.seq .w{width:118px;flex:none}
+.seq .w.wr{color:var(--data)} .seq .w.rd{color:var(--addr)}
+.seq .d{color:var(--mid)}
+.seq .r.key .d{color:var(--bright)}
+
 /* ---------- adder & stack ---------- */
 .addgrid{display:grid;grid-template-columns:56px repeat(8,minmax(26px,40px));gap:3px;align-items:center;font-family:var(--mono);font-size:10px}
 .addgrid .rl{color:var(--dim);text-align:right;padding-right:6px}
@@ -390,6 +411,7 @@ select{
   <button class="tab" role="tab" id="t-add"  aria-controls="p-add"  aria-selected="false">Adder</button>
   <button class="tab" role="tab" id="t-mem"  aria-controls="p-mem"  aria-selected="false">Memory</button>
   <button class="tab" role="tab" id="t-stk"  aria-controls="p-stk"  aria-selected="false">Stack</button>
+  <button class="tab" role="tab" id="t-irq"  aria-controls="p-irq"  aria-selected="false">Interrupt</button>
   <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
   <button class="tab" role="tab" id="t-state" aria-controls="p-state" aria-selected="false">State</button>
   <button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
@@ -551,6 +573,46 @@ select{
     </div>
   </section>
 
+  <section role="tabpanel" id="p-irq" aria-labelledby="t-irq" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">The pins — pull one and watch what the chip does</h2>
+        <span class="eyebrow" id="irqpos"></span>
+      </div>
+      <div class="pb">
+        <div class="pinrow">
+          <button class="pinbtn" id="fire-irq">pull IRQ low</button>
+          <button class="pinbtn" id="fire-nmi">pull NMI low</button>
+          <button class="pinbtn" id="fire-res">pull RES low</button>
+          <span class="pinstate" id="ps-irq"><i></i>IRQ</span>
+          <span class="pinstate" id="ps-nmi"><i></i>NMI</span>
+          <span class="pinstate" id="ps-res"><i></i>RES</span>
+        </div>
+        <p class="note" id="irqhint">Each button pulses its pin low for eight
+        cycles and releases it, then appends what the chip did to the end of
+        this trace and jumps there. IRQ is ignored while the I flag is set,
+        so run the interrupt example (or any program that has done a CLI)
+        and give it a handler; NMI cannot be masked at all.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">The sequence, as recorded</h2>
+        <span class="eyebrow" id="seqpos"></span>
+      </div>
+      <div class="pb">
+        <div class="seq" id="seqrows"></div>
+        <ul id="seqwords" style="margin:12px 0 0;padding:0;list-style:none;display:grid;gap:6px"></ul>
+        <p class="note">The 6502 has no interrupt sequencer. Predecode forces
+        the instruction register to <code>$00</code>, which is
+        <code>BRK</code>, so IRQ, NMI and reset all run the BRK sequence and
+        only the vector and the B flag differ. Everything above is read out
+        of this recording: the byte that was actually on the data bus, what
+        each push wrote, and the vector the chip fetched.</p>
+      </div>
+    </div>
+  </section>
+
   <section role="tabpanel" id="p-sig" aria-labelledby="t-sig" hidden>
     <div class="two">
       <div class="panel">
@@ -617,7 +679,7 @@ const hx = (v,n=2) => "$"+v.toString(16).toUpperCase().padStart(n,"0");
 const WATCH = ["dpc38_PCLADL","dpc32_PCHADH","dpc25_SBDB","dpc23_SBAC","dpc9_DBADD",
   "dpc11_SBADD","dpc10_ADLADD","dpc21_ADDADL","dpc20_ADDSB06","dpc19_ADDSB7",
   "dpc40_ADLPCL","dpc39_PCLPCL","dpc31_PCHPCH","dpc30_ADHPCH","dpc37_PCLDB",
-  "dpc33_PCHDB","dpc1_SBY","dpc3_SBX","dpc6_SBS","dpc27_SBADH","dpc17_SUMS","dpc12_0ADD","clk1out","clk2out","rdy"];
+  "dpc33_PCHDB","dpc1_SBY","dpc3_SBX","dpc6_SBS","dpc27_SBADH","dpc17_SUMS","dpc12_0ADD","clk1out","clk2out","rdy","irq","nmi","res"];
 const SHORT = WATCH.map(w => w.split("_")[1]);
 const IX = {}; SHORT.forEach((s,i)=>IX[s]=i);
 /* The decode PLA's product terms, by name, from /v1/nodes (the API's own
@@ -687,6 +749,20 @@ const EDGES = [
 
 /* ---------- example programs ---------- */
 const PRESETS = [
+{name:"Interrupts — the BRK that never was",
+ note:"CLI lets IRQ through, then the chip loops. Open the Interrupt tab and pull IRQ low: the fetched byte is INC, but IR reads $00.",
+ mem:{pages:{
+   /* $0300: the handler, four NOPs then RTI ($40). */
+   "03":"eaeaeaea40"+"00".repeat(251),
+   /* $FFFA..$FFFF: NMI, RESET and IRQ vectors, all at $0300. The reset
+      vector is overwritten by boot with the program's own org. */
+   "ff":"00".repeat(250)+"0003"+"0003"+"0003"}},
+ src:`        .org $0200
+start:  CLI
+        LDX #$FF
+        TXS
+loop:   INC $90
+        JMP loop`},
 {name:"Subroutines — the stack remembers",
  note:"JSR pushes where to come back to; RTS reads it back. Open the Stack tab and watch page $01 grow downward.",
  src:`        .org $0200
@@ -1355,6 +1431,119 @@ function renderStack(o){
   $("#stkpos").textContent=jsr?`S ${hx(sp)} · in use by JSR`:`S ${hx(sp)}`;
 }
 
+/* ---- interrupts: the sequence, read out of the recording ---- */
+function findInterrupt(){
+  /* The vector pull announces itself in the timing chain: VEC0 and T6 are
+     hidden states that exist for exactly this. Find the last one in the
+     trace, then walk back to the opcode fetch the sequence hijacked and
+     forward to the handler's first fetch. */
+  let v=-1;
+  for(let n=F.length-1;n>=0;n--){ const h=HID[F[n][CI.hidden]]; if(h==="VEC0"||h==="T6"){ v=n; break; } }
+  if(v<0) return null;
+  let from=v; while(from>0&&!(F[from][CI.sync]&&F[from][CI.phase]===1)) from--;
+  let to=v; while(to<F.length-1&&!(F[to][CI.sync]&&F[to][CI.phase]===1&&to>v)) to++;
+  const rows=[];
+  for(let n=from;n<=Math.min(to+1,F.length-1);n++) rows.push(n);
+  const pushes=rows.filter(n=>F[n][CI.rw]===1&&(F[n][CI.addr]>>8)===1&&F[n][CI.phase]===2);
+  const vecs=rows.filter(n=>F[n][CI.rw]===0&&F[n][CI.addr]>=0xFFFA&&F[n][CI.phase]===2);
+  return {from,to,rows,pushes,vecs,hijacked:from};
+}
+function renderInterrupt(o){
+  for(const [id,name] of [["ps-irq","irq"],["ps-nmi","nmi"],["ps-res","res"]]){
+    const el=$("#"+id), known=WNAMES.includes(name);
+    el.className="pinstate"+(known?(on(o,name)?" hi":" lo"):"");
+    el.lastChild.textContent=name.toUpperCase()+(known?(on(o,name)?" high":" LOW"):" ?");
+  }
+  $("#irqpos").textContent=LIVE?"":"needs a live API";
+  for(const id of ["fire-irq","fire-nmi","fire-res"]) $("#"+id).disabled=!LIVE||!MACH;
+
+  const seq=findInterrupt();
+  if(!seq){
+    $("#seqrows").innerHTML='<span class="d">No interrupt in this recording. Pull a pin above, or load the interrupt example.</span>';
+    $("#seqwords").innerHTML=""; $("#seqpos").textContent="";
+    return;
+  }
+  const PUSHNAME=["PCH","PCL","P"];
+  let pi=0, vi=0, html="";
+  for(const n of seq.rows){
+    const r=F[n], wr=r[CI.rw]===1, ph2=r[CI.phase]===2;
+    let what="", key=false;
+    if(wr&&ph2&&(r[CI.addr]>>8)===1){ what=`push ${PUSHNAME[pi]||""}`; pi++; key=true; }
+    else if(!wr&&ph2&&r[CI.addr]>=0xFFFA){ what=`vector ${vi?"high":"low"}`; vi++; key=true; }
+    else if(r[CI.sync]) what="opcode fetch";
+    else if(wr) what="write";
+    else what="read";
+    if(n===seq.from) key=true;
+    html+=`<div class="r${n===i?" now":""}${key?" key":""}" data-n="${n}">`
+      +`<span class="h">${r[CI.half_cycle]}</span>`
+      +`<span class="w ${wr?"wr":"rd"}">${wr?"write":"read"} ${hx(r[CI.addr],4)}</span>`
+      +`<span class="d">${hx(r[CI.data])} · IR ${hx(r[CI.ir])} · ${what}</span></div>`;
+  }
+  $("#seqrows").innerHTML=html;
+  $("#seqrows").onclick=e=>{ const r=e.target.closest(".r"); if(r) go(+r.dataset.n); };
+  $("#seqpos").textContent=`h ${F[seq.from][CI.half_cycle]}..${F[seq.to][CI.half_cycle]}`;
+
+  /* The claims, each derived from the rows above. */
+  const w=[];
+  const hj=F[seq.hijacked], bus=hj[CI.data];
+  const irAt=seq.rows.find(n=>F[n][CI.ir]===0x00&&n>seq.hijacked);
+  if(irAt!==undefined)
+    w.push([1,`The chip fetched <code>${hx(bus)}</code> from <code>${hx(hj[CI.addr],4)}</code>,`
+      +` and by h=${F[irAt][CI.half_cycle]} the instruction register reads <code>$00</code>:`
+      +` <b>BRK, with no BRK anywhere in memory</b>. Predecode forced it, which is the whole`
+      +` interrupt mechanism.`]);
+  const pv=seq.pushes.map(n=>F[n][CI.data]);
+  if(pv.length===3){
+    const ret=(pv[0]<<8)|pv[1];
+    w.push([1,`Three pushes: <code>${hx(pv[0])}</code> then <code>${hx(pv[1])}</code>`
+      +` (the return address <code>${hx(ret,4)}</code>, which is the instruction that was`
+      +` interrupted, so it runs again on the way back) then <code>${hx(pv[2])}</code>, the flags.`]);
+    w.push([1,`The pushed P is <code>${hx(pv[2])}</code>, so B is <b>${pv[2]&0x10?"set":"clear"}</b>:`
+      +` ${pv[2]&0x10?"a BRK the program asked for":"an interrupt from outside, not a BRK"}.`
+      +` That bit is the only thing in the pushed state that tells a handler which happened.`]);
+  }
+  if(seq.vecs.length===2){
+    const lo=F[seq.vecs[0]], hi=F[seq.vecs[1]];
+    const tgt=(hi[CI.data]<<8)|lo[CI.data];
+    const which=lo[CI.addr]===0xFFFA?"NMI":lo[CI.addr]===0xFFFC?"RESET":"IRQ/BRK";
+    w.push([1,`The vector is read low then high from <code>${hx(lo[CI.addr],4)}</code> and`
+      +` <code>${hx(hi[CI.addr],4)}</code> (the <b>${which}</b> vector), sending the chip to`
+      +` <code>${hx(tgt,4)}</code>. The timing chain marks these two cycles with its hidden`
+      +` VEC0 and T6 states, which exist for nothing else.`]);
+  }
+  $("#seqwords").innerHTML=w.map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
+}
+async function firePin(pin){
+  if(!LIVE||!MACH) return;
+  for(const id of ["fire-irq","fire-nmi","fire-res"]) $("#"+id).disabled=true;
+  const was=$("#irqhint").textContent;
+  $("#irqhint").textContent=`${pin.toUpperCase()} low\u2026`;
+  try{
+    const at=F.length;
+    /* A pulse: low for eight cycles, then released, so a level-triggered
+       IRQ cannot re-fire forever the moment the handler clears I. */
+    const a=await post("step",{machine:MACH,half_cycles:16,trace:true,
+      watch:WATCH.concat(ADDER_NAMES,DECODE_NAMES),format:"rows",pins:{[pin]:0}});
+    const b=await post("step",{machine:a.machine,half_cycles:44,trace:true,
+      watch:WATCH.concat(ADDER_NAMES,DECODE_NAMES),format:"rows",pins:{[pin]:1}});
+    F=F.concat(a.trace_rows.rows,b.trace_rows.rows); MACH=b.machine;
+    reload();
+    const seq=findInterrupt();
+    go(seq&&seq.from>=at?seq.from:at);
+    $("#irqhint").textContent=seq&&seq.from>=at
+      ? `${pin.toUpperCase()} pulsed low: the sequence below is what the chip did.`
+      : `${pin.toUpperCase()} pulsed low and the chip carried on: nothing vectored. `
+        +`IRQ is ignored while the I flag is set.`;
+  }catch(e){
+    $("#irqhint").textContent="Could not drive the pin: "+e.message;
+    setTimeout(()=>{$("#irqhint").textContent=was;},4000);
+  }
+  for(const id of ["fire-irq","fire-nmi","fire-res"]) $("#"+id).disabled=!LIVE||!MACH;
+}
+$("#fire-irq").onclick=()=>firePin("irq");
+$("#fire-nmi").onclick=()=>firePin("nmi");
+$("#fire-res").onclick=()=>firePin("res");
+
 /* ---- the memory footprint ---- */
 let MEMACC=null;
 function memIndex(){
@@ -1410,6 +1599,7 @@ function paintExtras(){
   if(!$("#p-add").hidden) renderAdder(o);
   if(!$("#p-mem").hidden) drawMemory();
   if(!$("#p-stk").hidden) renderStack(o);
+  if(!$("#p-irq").hidden) renderInterrupt(o);
 }
 
 /* ---- scope: Figure 3.4 redrawn from the recording ---- */
@@ -1517,7 +1707,7 @@ function reload(){ buildLane(); memIndex(); DECBUILT=null; $("#scrub").max=Math.
 function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][CI.sync]&&F[n][CI.phase]===1) return go(n); go(F.length-1); }
 
 /* tabs */
-const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-time","p-time"],["t-dec","p-dec"],["t-add","p-add"],["t-mem","p-mem"],["t-stk","p-stk"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
+const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-time","p-time"],["t-dec","p-dec"],["t-add","p-add"],["t-mem","p-mem"],["t-stk","p-stk"],["t-irq","p-irq"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
 function showTab(id){
   for(const [t,p] of TABS){
     const sel=t===id;
@@ -1585,7 +1775,13 @@ async function fetchTrace(machine,n){
 async function boot(){
   const btn=$("#run"); btn.disabled=true; btn.textContent="assembling…"; $("#err").hidden=true;
   try{
-    const b=await post("boot",{rom:{source:$("#src").value},watch:WATCH});
+    const pre=PRESETS[+$("#preset").value];
+    const body={rom:{source:$("#src").value},watch:WATCH};
+    /* A preset may bring its own memory: a handler and the vectors that
+       reach it, which no assembly source can place without filling the
+       64 KiB between. Only when the editor still holds that preset. */
+    if(pre&&pre.mem&&$("#src").value.trim()===pre.src.trim()) body.memory=pre.mem;
+    const b=await post("boot",body);
     const s=await fetchTrace(b.machine,300);
     setCols(s.cols,s.watch_names);
     F=s.rows;

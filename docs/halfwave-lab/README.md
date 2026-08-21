@@ -80,6 +80,12 @@ Run the subroutine preset and watch return addresses appear. Mid-JSR the tab
 says what it is actually seeing: S is not a stack pointer during the push
 cycles, it is holding the low byte of the address being called.
 
+**Interrupt** — the three pins, with buttons that pulse one low and append
+what the chip did to the trace. The sequence is then read back out of the
+recording: the byte that was actually fetched, the instruction register going
+to `$00` with no BRK in memory, the three pushes, the vector, the handler.
+Every claim under it is derived from those rows.
+
 **Signals** — all 22 datapath control lines, and the external bus.
 
 **State** — registers and zero page.
