@@ -66,9 +66,6 @@ header{
 .pos{font-family:var(--mono);font-size:11.5px;color:var(--mid);white-space:nowrap;
      font-variant-numeric:tabular-nums;min-width:15ch;text-align:right}
 .pos b{color:var(--bright);font-weight:600}
-.conn{font-family:var(--mono);font-size:10.5px;padding:3px 7px;border:1px solid var(--rule);border-radius:2px;color:var(--dim);white-space:nowrap}
-.conn.live{color:var(--addr);border-color:color-mix(in srgb,var(--addr) 45%,var(--rule))}
-.conn.demo{color:var(--alu);border-color:color-mix(in srgb,var(--alu) 45%,var(--rule))}
 
 /* ---------- player (sticky, top) ---------- */
 /* The transport is the footer: locked to the bottom at every width, so
@@ -181,9 +178,9 @@ select{
 /* ---------- datapath stage ---------- */
 .stage{border-top:2px solid var(--glow);transition:border-color .18s}
 .mapwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-#map,#lmap{display:block;width:100%;min-width:500px;max-width:860px;margin:0 auto;height:auto}
-/* Below the diagram's 500px floor the wrap scrolls; the page never does. */
-.mapwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* The diagrams FIT their container at every width: the viewBox scales
+   them down rather than scrolling them sideways. */
+#map,#lmap{display:block;width:100%;max-width:860px;margin:0 auto;height:auto}
 .bx rect{fill:var(--panel2);stroke:var(--rule);stroke-width:1}
 .bx text.n{font-family:var(--disp);font-size:9.5px;font-weight:700;letter-spacing:.08em;fill:var(--mid)}
 .bx text.v{font-family:var(--mono);font-size:12.5px;font-weight:600;fill:var(--dim)}
@@ -312,7 +309,6 @@ select{
   <div class="brand">Halfwave <em>Lab</em></div>
   <p class="tag">A 6502, half a clock phase at a time. Every value is read out of a storage node on the die.</p>
   <div class="clockbar">
-    <span class="conn" id="conn">checking…</span>
     <span class="pos" id="pos">h <b>0</b> · cyc <b>0</b></span>
   </div>
 </header>
@@ -1240,7 +1236,6 @@ function useDemo(reason){
   const d=JSON.parse($("#demo").textContent);
   setCols(d.cols,d.watch_names); F=d.rows; MEM0=d.mem; $("#src").value=d.src; $("#presetnote").textContent=PRESETS[0].note;
   showListing(d.asm); reload();
-  $("#conn").className="conn demo"; $("#conn").textContent="packed trace";
   $("#hint").textContent=reason;
   $("#more").disabled=true; $("#run").disabled=true;
   go(0);
@@ -1256,8 +1251,6 @@ function useDemo(reason){
     return;
   }
   LIVE=true;
-  $("#conn").className="conn live";
-  $("#conn").textContent=`live \u00b7 ${meta.transistors} transistors`;
   $("#scrub").max=0;
   await boot();
 })();</script>
