@@ -60,17 +60,39 @@ export class Console6502 {
     this.frames = 0;
     this.lastFrameHalfCycles = 0;
     this.requests = 0;
+    this.retried = 0;
   }
 
-  async post(path, body) {
-    this.requests++;
-    const r = await fetch(`${this.api}/v1/${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
-    return r.json();
+  /**
+   * A frame is a request, so a game is hundreds of them, and one transient
+   * failure used to end the session: a `net::ERR_NETWORK_CHANGED` from the
+   * browser -- the OS reconfiguring an interface -- reported itself on screen
+   * as "the engine stopped answering" while the engine was answering every
+   * request with a 200.
+   *
+   * Retrying is free here in a way it is not for most APIs: the machine is a
+   * value we still hold, so the retry is the SAME body sent again, and the
+   * server has no session to have lost. An HTTP status is a real answer and
+   * is never retried -- only a rejected fetch, which is a transport failure.
+   */
+  async post(path, body, tries = 3) {
+    const payload = JSON.stringify(body);
+    for (let n = 1; ; n++) {
+      this.requests++;
+      try {
+        const r = await fetch(`${this.api}/v1/${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: payload,
+        });
+        if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+        return await r.json();
+      } catch (e) {
+        if (!(e instanceof TypeError) || n >= tries) throw e;
+        this.retried++;
+        await new Promise((ok) => setTimeout(ok, 150 * n));
+      }
+    }
   }
 
   /** Lay the ROM out, aim the reset vector at it, and power-cycle for real. */
@@ -121,7 +143,13 @@ export class Console6502 {
     // A chunk that overshoots spends the chip's time in the spin loop, and a
     // chunk that undershoots spends a round trip.
     let spent = 0;
-    const chunks = [c.frameCost || 800, 800, 4000, 16000];
+    // Sized from what the cartridge actually costs, so a normal frame is one
+    // request. Die Runner is 8,400 half-cycles a frame and 19,200 on the
+    // eighth, when the clock phase flips and every pass transistor on screen
+    // changes state -- so the second chunk has to cover that or a phase frame
+    // pays three round trips instead of two.
+    const base = c.frameCost || 800;
+    const chunks = [base, base * 2, 32000];
     for (const step of chunks) {
       if (spent >= budget) break;
       const r = await this.post('step', {

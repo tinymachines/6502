@@ -72,6 +72,35 @@ art exists and so the spec is executable -- whatever a tool produces has to
 decode to exactly that shape. `encodeCHR` is the inverse, so the art pipeline
 and the console share one definition rather than two that drift.
 
+## Cartridge one: Die Runner
+
+`rom/dierunner.s` -> **339 bytes**, written for this console and assembled by
+this project's own assembler (`games/tools/asm.mjs` over `web/asm.js`, which
+inverts the disassembler's table -- so if it assembles, it disassembles back to
+the same lines).
+
+You are a charge carrier descending the die. The world scrolls up to meet you.
+Polysilicon gates bar the way with one opening; **pass-transistor gates have
+two channels and only one conducts**, and every eighth frame the clock phase
+flips and they swap. A channel that is shut now will be open in a moment, which
+is the whole game. Charge packets score. The die wraps.
+
+**8,400 half-cycles a frame, 19,200 on the phase flip** -- measured, and the
+console sizes its request chunks from it, so an ordinary frame is one round
+trip and a phase frame is two.
+
+Two things had to be measured rather than designed:
+
+- **The runner sits at row 2, not row 13.** New terrain appears at row 15 and
+  scrolls up, so from row 13 a wall arrived two frames after it appeared: no
+  warning at all at five frames a second. From row 2 the same wall is thirteen
+  frames away, and it reads as descending into the die rather than being
+  ambushed by it.
+- **Gaps drift, they do not land anywhere.** A gap at a random column can be
+  further away than the runner can walk before the barrier arrives, which is
+  not difficulty but a death the player could not have avoided. Each gap steps
+  -3..+4 from the last, against six frames of travel.
+
 ## Cartridge zero
 
 `rom/snake.rom` -- 351 bytes, here to prove the pipe end to end.
@@ -105,9 +134,10 @@ No build step: the page is ES modules and a ROM, served as they are. `_*` is
 excluded from the deploy, because `rsync -a --delete` copies everything and the
 archive already learned that lesson.
 
-## One bug worth keeping
+## Three bugs worth keeping
 
-Input was read from the shared slot *after* the request that used it:
+**Input pressed during a request was thrown away.** It was read from the shared
+slot *after* the request that used it:
 
 ```js
 const r = await con.frame(state.input || undefined);
@@ -119,3 +149,17 @@ lands *during* an await -- and this cleared the press that had just arrived
 rather than the one that was used. The snake kept going straight. Read and
 clear before the await. Proven by reverting it and watching the steering test
 go red.
+
+**Changing cartridge left the old loop running.** It woke from its await, saw
+`running` true again, and carried on driving a console that had been replaced:
+two loops, one machine. Every loop carries the generation it started in now.
+Anything decided before an await has to be rechecked after it, and here a frame
+*is* an await.
+
+**One transient network failure ended the session.** A
+`net::ERR_NETWORK_CHANGED` -- the OS reconfiguring an interface -- surfaced on
+screen as "the engine stopped answering" while the engine was answering every
+request with a 200. `post()` retries a rejected fetch up to three times; an
+HTTP status is a real answer and is never retried. Retrying is free here in a
+way it is not for most APIs: the machine is a value we still hold, so the retry
+is the same body sent again, and the server has no session to have lost.

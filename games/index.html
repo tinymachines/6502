@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0B1120">
 <title>Die Runner &middot; games.tinymachines.ai</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -42,6 +43,8 @@ button{font:inherit;font-size:11.5px;background:var(--panel);color:var(--mid);cu
 button:hover:not(:disabled){color:var(--bright);border-color:var(--metal)}
 button:disabled{opacity:.4;cursor:not-allowed}
 button.go{color:var(--substrate);background:var(--metal);border-color:var(--metal);font-weight:600}
+select{font:inherit;font-size:11.5px;background:var(--panel);color:var(--mid);
+  border:1px solid var(--rule);border-radius:2px;padding:5px 8px;min-height:32px;width:100%}
 .pad{display:grid;grid-template-columns:repeat(3,2.6rem);gap:4px;justify-content:center;margin-top:8px}
 .pad button{min-height:2.6rem;padding:0}
 .pad .u{grid-column:2}
@@ -74,6 +77,7 @@ footer a{color:var(--diffusion)}
       <h2>the chip</h2>
       <div class="kv">
         <span>cartridge</span><b id="k-cart">--</b>
+        <span>score</span><b id="k-score">0</b>
         <span>half-cycle</span><b id="k-hc">0</b>
         <span>per frame</span><b id="k-fc">--</b>
         <span>frames</span><b id="k-frames">0</b>
@@ -82,6 +86,12 @@ footer a{color:var(--diffusion)}
       </div>
       <p class="note" id="note">The screen is a page of the chip's own memory.
         Nothing draws it but this page.</p>
+      <div class="bar">
+        <select id="cart" aria-label="Cartridge">
+          <option value="0">Die Runner</option>
+          <option value="1">Silicon Snake</option>
+        </select>
+      </div>
       <div class="bar">
         <button class="go" id="b-power">power on</button>
         <button id="b-pause" disabled>pause</button>

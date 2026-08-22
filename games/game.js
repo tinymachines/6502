@@ -40,9 +40,45 @@ const SNAKE = {
   over: (v) => v !== 0,
 };
 
+/* -- cartridge one --------------------------------------------------------
+ * Die Runner, written for this console in 6502 and assembled by this
+ * project's own assembler. It writes tile indices straight into the screen
+ * page, so there is no mapping table: what the ROM stores is what gets drawn.
+ */
+const DIERUNNER = {
+  name: 'Die Runner',
+  rom: 'rom/dierunner.rom',
+  org: 0x0200,
+  reset: 0x0200,
+  tick: 0x000d,
+  input: 0x0002,
+  status: 0x0003,
+  score: 0x0011,
+  screen: 0x0400,
+  width: 16,
+  height: 16,
+  frameCost: 8400,              // measured; 19,200 on the eighth frame
+  dirs: { up: 0, down: 0, left: 3, right: 4 },
+  tiles: {},                    // the ROM addresses tiles directly
+  over: (v) => v !== 0,
+  blurb: 'Ride the metal. Thread the gates. A pass transistor conducts on one '
+       + 'clock phase and blocks on the other, so a channel that is shut now '
+       + 'will open in a moment.',
+};
+
+const CARTS = [DIERUNNER, SNAKE];
+
 const state = {
-  con: null, cart: SNAKE, sheet: null, running: false, input: 0,
+  con: null, cart: CARTS[0], sheet: null, running: false, input: 0,
   fpsAt: 0, fpsFrames: 0, scale: 2,
+  // Anything decided before an await has to be rechecked after it. A frame IS
+  // a round trip, so powering on or changing cartridge while one is in flight
+  // left the OLD loop alive: it woke up, saw `running` true again, and carried
+  // on driving a console that had been replaced. Two loops, one machine, and
+  // the failure surfaced as "the engine stopped answering" while the engine
+  // was answering every request with a 200. Each loop carries the generation
+  // it started in and stops the moment that is stale.
+  gen: 0,
 };
 
 function say(msg, bad) {
@@ -80,17 +116,20 @@ function paint() {
 
 function hud() {
   const con = state.con;
+  if (con && state.cart.score !== undefined) {
+    $('#k-score').textContent = con.read(state.cart.score);
+  }
   $('#k-hc').textContent = con ? con.halfCycle.toLocaleString() : '0';
   $('#k-frames').textContent = con ? con.frames : '0';
-  $('#k-req').textContent = con ? con.requests : '0';
+  $('#k-req').textContent = con ? (con.retried ? `${con.requests} (${con.retried} retried)` : con.requests) : '0';
   if (con && con.lastFrameHalfCycles) {
     $('#k-fc').textContent = con.lastFrameHalfCycles;
     $('#k-cost').textContent = con.lastFrameHalfCycles;
   }
 }
 
-async function loop() {
-  while (state.running) {
+async function loop(gen) {
+  while (state.running && gen === state.gen) {
     try {
       // Read and clear BEFORE the await, not after. A request takes about
       // 200ms and frames run back to back, so almost every keypress lands
@@ -100,6 +139,7 @@ async function loop() {
       const inp = state.input;
       state.input = 0;
       const r = await state.con.frame(inp || undefined);
+      if (gen !== state.gen) return;    // a newer loop owns the console now
       paint();
       hud();
       if (!r.done) say('the cartridge did not raise its flag: budget spent', true);
@@ -118,6 +158,7 @@ async function loop() {
         state.fpsFrames = 0;
       }
     } catch (e) {
+      if (gen !== state.gen) return;    // torn down under us; not an error
       state.running = false;
       $('#b-pause').disabled = true;
       say(`the engine stopped answering: ${e.message}`, true);
@@ -128,6 +169,8 @@ async function loop() {
 
 async function power() {
   say('');
+  const gen = ++state.gen;           // whatever was running is now stale
+  state.running = false;
   $('#b-power').disabled = true;
   $('#b-power').textContent = 'booting...';
   try {
@@ -146,7 +189,7 @@ async function power() {
     $('#b-pause').disabled = false;
     $('#b-pause').textContent = 'pause';
     $('#b-power').textContent = 'reset';
-    loop();
+    loop(gen);
   } catch (e) {
     say(`could not boot: ${e.message}`, true);
   } finally {
@@ -158,7 +201,7 @@ $('#b-power').onclick = power;
 $('#b-pause').onclick = () => {
   state.running = !state.running;
   $('#b-pause').textContent = state.running ? 'pause' : 'resume';
-  if (state.running) { state.fpsAt = performance.now(); state.fpsFrames = 0; loop(); }
+  if (state.running) { state.fpsAt = performance.now(); state.fpsFrames = 0; loop(++state.gen); }
 };
 
 const KEYS = {
@@ -177,14 +220,30 @@ for (const b of document.querySelectorAll('[data-dir]')) {
 }
 addEventListener('resize', () => { if (state.con) { fit(); paint(); } });
 
+$('#cart').onchange = () => {
+  state.gen++;
+  state.running = false;
+  state.cart = CARTS[+$('#cart').value];
+  state.con = null;
+  $('#k-cart').textContent = '--';
+  $('#k-score').textContent = '0';
+  $('#note').textContent = state.cart.blurb || 'The screen is a page of the '
+    + "chip's own memory. Nothing draws it but this page.";
+  $('#b-pause').disabled = true;
+  $('#b-power').textContent = 'power on';
+  fit();
+  preview();
+};
+
 // Something on screen before anything is booted: the starter tiles, laid out
 // so the palette and the shapes can be judged without playing.
-(function preview() {
-  state.cart = SNAKE;
+function preview() {
   fit();
   const demo = new Uint8Array(SNAKE.width * SNAKE.height);
   for (let i = 0; i < demo.length; i++) demo[i] = 0;
   for (let t = 0; t < 9; t++) demo[(2 + ((t / 3) | 0) * 2) * SNAKE.width + 6 + (t % 3) * 2] = t;
   drawScreen($('#screen').getContext('2d'), state.sheet, demo, SNAKE.width, SNAKE.height);
   say('nine starter tiles. Power on to run the cartridge.');
-})();
+}
+$('#note').textContent = CARTS[0].blurb;
+preview();
