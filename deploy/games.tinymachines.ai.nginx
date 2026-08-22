@@ -1,0 +1,95 @@
+# games.tinymachines.ai -- Die Runner, and whatever follows it.
+#
+# A console over the 6502 API: the game is a 6502 ROM, the "screen" is a page
+# of its memory, and the host draws it. Same shape as halfwave.tinymachines.ai
+# (a consumer of the same stateless engine), so this vhost carries the same
+# /api/ proxy to the same local uvicorn. Install as
+# sites-available/games.tinymachines.ai.nginx -- the .nginx suffix is what
+# sites-enabled links to; the bare name would be a second, unread file.
+
+server {
+    server_name games.tinymachines.ai;
+    listen 80;
+    listen [::]:80;
+
+    location /.well-known/acme-challenge/ { root /var/www/html; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    server_name games.tinymachines.ai;
+
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+
+    ssl_certificate     /etc/letsencrypt/live/games.tinymachines.ai/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/games.tinymachines.ai/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Kept in the repository at deploy/games.tinymachines.ai.nginx. The live
+    # file is the one nginx reads; copy it over after editing, and check the
+    # sites-enabled symlink target rather than the directory listing.
+    root /var/www/games.tinymachines.ai;
+    index index.html;
+
+    access_log /var/log/nginx/games.access.log;
+    error_log  /var/log/nginx/games.error.log;
+
+    # img-src carries blob: because the tile sheet is decoded once and kept
+    # as an ImageBitmap; connect-src stays 'self' because the API is
+    # same-origin through the proxy below.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Cache-Control "no-cache" always;
+
+    location ~* \.webmanifest$ { default_type application/manifest+json; }
+
+    # A ROM is bytes and never changes once published, so it is the one thing
+    # here worth caching hard. Everything else is the page.
+    location ~* \.(rom|bin|chr)$ {
+        add_header Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Cache-Control "public, max-age=86400" always;
+        default_type application/octet-stream;
+    }
+
+    # Pretty URLs for the registry. A builder page and a ROM page are one
+    # static document each, reading the handle and the slug out of their own
+    # path rather than out of a query. None of these declare add_header, so
+    # they inherit the complete set above, which is this config's own rule.
+    location = /builders { try_files /builders.html =404; }
+    location = /manage   { try_files /manage.html =404; }
+    # The regexes are QUOTED because they contain {2,32}: an unquoted brace is
+    # the start of a block to nginx's parser, and it fails with "unknown
+    # directive" naming the middle of the pattern. The 6502 config records the
+    # same trap for a map key.
+    location ~ "^/b/[a-z0-9-]{2,32}/[a-z0-9-]{2,32}/?$" { try_files /index.html =404; }
+    location ~ "^/b/[a-z0-9-]{2,32}/?$"                 { try_files /builder.html =404; }
+
+    # The same engine both other origins use. These locations declare
+    # add_header and therefore restate the COMPLETE set: nginx discards every
+    # inherited header the moment one appears.
+    location = /api { return 301 /api/; }
+    location /api/ {
+        gzip on;
+        gzip_types application/json;
+        gzip_comp_level 5;
+        gzip_min_length 860;
+        gzip_vary on;
+        proxy_pass http://127.0.0.1:6502/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header Cache-Control "no-store" always;
+    }
+}

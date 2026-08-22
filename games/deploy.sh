@@ -5,7 +5,8 @@ set -e
 cd "$(dirname "$0")"
 DEST=/var/www/games.tinymachines.ai
 [ -d "$DEST" ] || { echo "games: $DEST does not exist" >&2; exit 1; }
-for f in index.html game.js console.js chr.js; do
+for f in index.html game.js console.js chr.js site.css registry.js art.js \
+         builders.html builders.js builder.html builder.js manage.html manage.js; do
   [ -f "$f" ] || { echo "games: $f is missing" >&2; exit 1; }
 done
 [ -s rom/snake.rom ] || { echo "games: rom/snake.rom is missing" >&2; exit 1; }

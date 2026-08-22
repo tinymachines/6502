@@ -695,6 +695,141 @@ curl -s https://6502.tinymachines.ai/api/mcp -H <span class="s">'content-type: a
   </p>
 </section>
 
+<section id="registry">
+  <p class="eyebrow">Registry</p>
+  <h2>Builders, their pages, and what they publish</h2>
+  <p>
+    <strong>This is the one stateful thing behind this API, and the boundary
+    is the point.</strong> The chip is unaffected: every request still carries
+    the whole machine, any instance still answers any request, and running a
+    published ROM still means POSTing it to <code>/v1/step</code>. What is
+    stored is a <em>catalogue</em>: who a builder is, and which cartridges they
+    published. One SQLite file, a row per thing.
+  </p>
+  <p>
+    Pages are at
+    <a href="https://games.tinymachines.ai/builders">games.tinymachines.ai/builders</a>,
+    and a builder's own is <code>/b/&lt;handle&gt;</code>. Every ROM on one is
+    playable in place, on this chip.
+  </p>
+
+  <h3 id="tokens">Tokens</h3>
+  <p>
+    There is no sign-up. A token is minted by hand, handed to somebody, and
+    they claim a handle with it: <strong>one token, one builder</strong>. That
+    is deliberately the whole of the auth story for now, and it is written
+    down as a limitation rather than dressed up as a design.
+  </p>
+  <p>
+    What it does get right is the part that would hurt to change later:
+    <strong>a token is shown once and never stored.</strong> The table holds
+    its SHA-256, so a copy of the database is not a copy of everybody's
+    credentials. A lost token is re-minted, never recovered. An unknown token
+    and a revoked one get the same refusal, because telling them apart is
+    telling somebody which guesses were close.
+  </p>
+<pre><code><span class="c"># Claim a handle. Everything after this carries the same header.</span>
+curl -s https://6502.tinymachines.ai/api/v1/registry/claim \
+  -H <span class="s">'authorization: Bearer &lt;token&gt;'</span> -H <span class="s">'content-type: application/json'</span> \
+  -d <span class="s">'{"handle": "ada", "name": "Ada"}'</span></code></pre>
+
+  <h3 id="regart">Art is rows of 0 to 3</h3>
+  <p>
+    A profile photo and a ROM's cover art are pictures in <strong>the die's
+    own four colours</strong>, the same palette the tiles use, stored as
+    <a href="#tiles">CHR</a>. So the portrait on a builder page is drawn by
+    the same <code>decodeCHR</code> that draws the game, and every page looks
+    like the console.
+  </p>
+  <p>
+    <strong>Nothing here decodes an image.</strong> Converting a photograph is
+    the client's job (<code>games/art.js</code> does it in a canvas), and what
+    this API accepts is a tile grid: <code>w</code> and <code>h</code> in
+    8-pixel tiles, and one entry per tile in row-major order, each eight
+    strings of eight <code>'0'</code>..<code>'3'</code>. That leaves no image
+    parser in the request path, no arbitrary bytes on disk, and one encoding
+    rather than two.
+  </p>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/registry</h3>
+    <p>Everyone with a page, the most recently published ROMs, and the limits
+      every write is held to.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/registry/me</h3>
+    <p>What a token is: whether it has claimed a handle yet, and which.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method">POST</span>/v1/registry/claim</h3>
+    <p><code>{"handle", "name"}</code>. A handle is two to thirty-two
+      characters of lowercase letters, digits and dashes, starting and ending
+      with a letter or a digit, and it becomes a URL. A second claim on the
+      same token is refused.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/registry/b/{handle}</h3>
+    <p>One builder's page as data: name, bio, links, avatar, and every ROM
+      they publish. Public, no token.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method">PATCH</span>/v1/registry/b/{handle}</h3>
+    <p>
+      <code>{"name", "bio", "links", "avatar"}</code>, and
+      <strong>only the fields present are touched</strong>, so a client saving
+      a bio cannot blank an avatar it never loaded. Links must be
+      <code>https</code>, because they are printed on a page other people
+      click.
+    </p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method">PUT</span>/v1/registry/b/{handle}/roms/{slug}</h3>
+    <p>
+      Publish a cartridge, or replace the one under this slug.
+      <code>{"cart": "&lt;base64 of the .cart.gz&gt;", "title", "blurb",
+      "cover", "frames"}</code>. Title and blurb default to the cartridge's
+      own.
+    </p>
+    <p>
+      <strong>The registry measures rather than believes.</strong> A cartridge
+      is a file somebody can edit, so the <code>verify</code> block it arrives
+      with is a claim by its author, not evidence. The cartridge is unpacked
+      and <em>run here</em>, and the size, tile count and frame cost printed
+      beside it are what that run produced. A ROM that does not complete its
+      frames on this chip is refused rather than listed.
+    </p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/registry/b/{handle}/roms/{slug}</h3>
+    <p>One ROM: what it is, and what the registry measured about it.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/registry/b/{handle}/roms/{slug}/cart</h3>
+    <p>The cartridge itself, byte for byte as it was published. Feed it to
+      <a href="https://games.tinymachines.ai/">the console</a>, or read it
+      with <code>gzip</code> and <code>json</code>.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method">DELETE</span>/v1/registry/b/{handle}/roms/{slug}</h3>
+    <p>Take one down. The page stays.</p>
+  </div>
+
+  <p>
+    A token that is not this builder's gets <strong>404, not 403</strong>: it
+    has no business learning whether the builder exists. Revoking a token
+    leaves the page and its ROMs alone, because revoking is about the
+    credential.
+  </p>
+</section>
+
 <section id="objects">
   <p class="eyebrow">Objects</p>
   <h2>The shapes that travel</h2>

@@ -198,7 +198,11 @@ let TILES = starterTiles(16);
 
 async function loadTiles() {
   try {
-    const r = await fetch('art/tiles.chr', { cache: 'no-cache' });
+    // Resolved against THIS MODULE's url, not the document's. The page is
+    // served at /b/<handle>/<slug> as well as at /, and a document-relative
+    // fetch there asks for /b/<handle>/art/tiles.chr. Same reason the wasm
+    // glue uses new URL(..., import.meta.url).
+    const r = await fetch(new URL('art/tiles.chr', import.meta.url), { cache: 'no-cache' });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const chr = new Uint8Array(await r.arrayBuffer());
     if (chr.length < 16) throw new Error(`${chr.length} bytes is not a tile`);
@@ -371,7 +375,7 @@ async function power() {
     // this page. Either way what reaches the console is a Uint8Array.
     let rom = state.cart.bytes;
     if (!rom) {
-      const r = await fetch(state.cart.rom);
+      const r = await fetch(new URL(state.cart.rom, import.meta.url));
       if (!r.ok) throw new Error(`${state.cart.rom}: HTTP ${r.status}`);
       rom = new Uint8Array(await r.arrayBuffer());
     }
@@ -462,6 +466,34 @@ legend();
 loadTiles();
 
 // A cartridge named in the URL wins over the built-in one, because a link
-// naming a cartridge is somebody asking for it.
-const WANT = new URLSearchParams(location.search).get('cart');
-if (WANT) loadCartFrom(WANT).catch((e) => say(`could not load that cartridge: ${e.message}`, true));
+// naming a cartridge is somebody asking for it. Two spellings: an explicit
+// ?cart=<url>, and /b/<handle>/<slug>, which nginx serves this same document
+// for so that a published ROM has a URL of its own rather than a query string.
+function wantedCart() {
+  const explicit = new URLSearchParams(location.search).get('cart');
+  if (explicit) return { url: explicit, from: null };
+  const parts = location.pathname.split('/').filter(Boolean);
+  if (parts[0] === 'b' && parts.length >= 3) {
+    const [, handle, slug] = parts;
+    return {
+      url: `${API}/v1/registry/b/${encodeURIComponent(handle)}`
+         + `/roms/${encodeURIComponent(slug)}/cart`,
+      from: { handle, slug },
+    };
+  }
+  return null;
+}
+
+const WANT = wantedCart();
+if (WANT) {
+  if (WANT.from) {
+    // A way back to whoever published it. Added before the fetch, so it is
+    // there even if the cartridge turns out not to load.
+    const back = document.createElement('span');
+    back.className = 'sub';
+    back.innerHTML = ' &middot; <a href="/b/' + WANT.from.handle + '">by '
+      + WANT.from.handle.replace(/[<>&"]/g, '') + '</a>';
+    document.querySelector('header .sub').after(back);
+  }
+  loadCartFrom(WANT.url).catch((e) => say(`could not load that cartridge: ${e.message}`, true));
+}

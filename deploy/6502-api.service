@@ -32,6 +32,12 @@ User=bisenbek
 WorkingDirectory=/home/bisenbek/projects/tinymachines/6502
 Environment=HALFWAVE_BIN=/home/bisenbek/projects/tinymachines/6502/target/release/halfwave
 Environment=NODE=/mnt/nom01/envs/.nvm/versions/node/v24.0.1/bin/node
+# The registry is the one thing here that survives a restart, so it lives
+# outside the checkout: a git operation must never be able to delete
+# somebody's page. StateDirectory creates it and hands it to the unit's
+# user, so nothing has to be chowned by hand on a new machine.
+Environment=REGISTRY_DB=/var/lib/6502-registry/registry.db
+StateDirectory=6502-registry
 ExecStart=/usr/bin/python3 -m uvicorn app:app --app-dir service --host 127.0.0.1 --port 6502 --root-path /api
 Restart=on-failure
 RestartSec=2

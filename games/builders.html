@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B1120">
+<title>Builders &middot; games.tinymachines.ai</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/site.css">
+<style>
+.b-card{display:grid;grid-template-columns:auto 1fr;gap:11px;align-items:start}
+.b-card h3{margin:0 0 2px;font-size:12.5px;color:var(--bright);font-weight:600}
+.b-card h3 a{color:inherit;text-decoration:none}
+.b-card h3 a:hover{color:var(--metal)}
+.b-bio{font-size:11px;color:var(--dim);line-height:1.5;margin:4px 0 0;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.b-none{width:64px;height:64px;border:1px solid var(--rule);background:var(--substrate)}
+.r-card{display:flex;flex-direction:column;gap:8px}
+.r-card h3{margin:0;font-size:12.5px;color:var(--bright);font-weight:600}
+.r-cover{display:flex;justify-content:center;background:var(--substrate);
+  border:1px solid var(--rule);padding:6px;min-height:64px;align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <h1><a href="/">Die <span>Runner</span></a></h1>
+  <span class="sub">builders</span>
+  <nav>
+    <a href="/">the console</a>
+    <a href="/manage">your page</a>
+    <a href="https://6502.tinymachines.ai/api/#registry">the API</a>
+  </nav>
+</header>
+
+<p class="note" style="margin-bottom:16px">
+  Every ROM here runs on a <b>transistor-level MOS 6502</b>: 3510 real switches
+  settled per half-cycle, the same die the
+  <a href="https://6502.tinymachines.ai">explorer</a> draws. Nothing is
+  emulated. Want a page? You need a token; see
+  <a href="https://6502.tinymachines.ai/api/#tokens">the API</a>.
+</p>
+
+<section style="margin-bottom:22px">
+  <p class="eyebrow">Newest</p>
+  <h2 id="latest-head">Recently published</h2>
+  <div class="grid" id="latest"></div>
+</section>
+
+<section>
+  <p class="eyebrow">Everyone</p>
+  <h2 id="builders-head">Builders</h2>
+  <div class="grid" id="builders"></div>
+</section>
+
+<p class="err" id="err" hidden></p>
+
+<footer class="site">
+  The registry is the one stateful thing behind this: a catalogue of who
+  published what. The chip itself keeps no sessions, which is why a machine
+  travels in every request.
+</footer>
+
+</div>
+<script type="module" src="/builders.js"></script>
+</body>
+</html>

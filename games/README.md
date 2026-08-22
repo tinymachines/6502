@@ -227,6 +227,36 @@ is canonical, and `XSB` joins `sb0` to a node **the die never named**, so
 `x0 - sb0` was naming the register a reader knows is there. The atlas says
 that node is owned by `regs:x`.
 
+## Builder pages
+
+<https://games.tinymachines.ai/builders>. A page is `/b/<handle>`, and a ROM on
+it is `/b/<handle>/<slug>`, which is the console with that cartridge already
+loaded. Both are static documents that read their own path: nginx points a
+quoted regex location at `builder.html` and at `index.html`, so a published ROM
+has an address of its own rather than a query string.
+
+`/manage` is the editor: paste a token, edit the page, publish a `.cart.gz`.
+
+**A photograph is converted in the browser** (`art.js`) into the die's four
+colours and uploaded as a grid of `'0'..'3'`, never as an image. The stored
+form is CHR, so an avatar is drawn by the same `decodeCHR` that draws a sprite,
+and every page looks like the console. Dithering is Floyd-Steinberg **in RGB
+rather than in luminance**, and that was measured: by Rec.709 the palette is
+17, 130, 169, 169, so polysilicon and metal are the same brightness to within
+0.2 of 255 and differ only in hue. A luminance ramp has three steps, not four,
+and throws the warm half of the palette away.
+
+### The bug that only showed at depth two
+
+`index.html` loaded `game.js` with a relative `src`. Served at `/`, that is
+`/game.js`; served at `/b/tinymachines/die-runner` it is
+`/b/tinymachines/game.js`, which is a 404. **The page still rendered**, because
+the markup is static and only the JavaScript was missing, so it looked like a
+console that had failed to boot rather than one whose script was never fetched.
+The document's references are absolute now, and the two fetches inside
+`game.js` resolve against `import.meta.url` rather than the page, the same
+trick the wasm glue uses. Found by driving the real page, not by reading it.
+
 ## Cartridge zero
 
 `rom/snake.rom` -- 351 bytes, here to prove the pipe end to end.

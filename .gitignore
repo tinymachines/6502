@@ -64,3 +64,8 @@ __pycache__/
 # Minted by games/tools/mint.py at deploy time, from rom/dierunner.s and
 # art/tiles.chr, so it cannot go stale against either.
 games/*.cart.gz
+
+# The registry, when run from the checkout in development. Production keeps
+# it in /var/lib/6502-registry, named by the systemd unit.
+service/registry.db
+service/registry.db-*

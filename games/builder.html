@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B1120">
+<title>A builder &middot; games.tinymachines.ai</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/site.css">
+<style>
+.profile{display:grid;gap:14px;grid-template-columns:auto 1fr;align-items:start;
+  margin-bottom:20px}
+.profile h2{font-size:17px;margin:0 0 3px}
+.profile .handle{font-size:11px;color:var(--dim)}
+.profile p{margin:8px 0 0;font-size:12px;line-height:1.6;color:var(--mid);
+  white-space:pre-wrap}
+.p-none{width:128px;height:128px;border:1px solid var(--rule);background:var(--panel)}
+.r-card{display:flex;flex-direction:column;gap:9px}
+.r-card h3{margin:0;font-size:12.5px;color:var(--bright);font-weight:600}
+.r-cover{display:flex;justify-content:center;align-items:center;background:var(--substrate);
+  border:1px solid var(--rule);padding:7px;min-height:80px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <h1><a href="/">Die <span>Runner</span></a></h1>
+  <nav>
+    <a href="/builders">all builders</a>
+    <a href="/">the console</a>
+    <a href="/manage">your page</a>
+  </nav>
+</header>
+
+<div class="profile" id="profile" hidden>
+  <div id="avatar"></div>
+  <div>
+    <h2 id="name"></h2>
+    <div class="handle" id="handle"></div>
+    <p id="bio"></p>
+    <div class="row" id="links" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<section>
+  <p class="eyebrow">Published</p>
+  <h2 id="roms-head">ROMs</h2>
+  <div class="grid" id="roms"></div>
+</section>
+
+<p class="err" id="err" hidden></p>
+
+<footer class="site">
+  Every ROM here is a 6502 cartridge: a program, its tiles, and the console
+  contract it was written to, in one file. Each runs on the real die.
+</footer>
+
+</div>
+<script type="module" src="/builder.js"></script>
+</body>
+</html>

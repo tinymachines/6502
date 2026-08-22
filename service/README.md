@@ -178,6 +178,48 @@ the server.
 that turns writing a 6502 game from guessing into working: an assembler says
 the bytes are legal, and only the picture says the program is right.
 
+## The registry: builders, pages, and what they publish
+
+<https://games.tinymachines.ai/builders>. **The only stateful thing here, and
+the boundary is the point.** The chip is untouched: every request still carries
+the whole machine, and running a published ROM still means POSTing it. What is
+stored is a catalogue. One SQLite file (`REGISTRY_DB`), a row per thing.
+
+```bash
+python3 service/registry_admin.py mint --note "who it is for"   # printed once
+python3 service/registry_admin.py tokens
+python3 service/registry_admin.py builders
+python3 service/registry_admin.py revoke <token-or-hash>
+python3 service/registry_admin.py grant <token> <handle> <name>  # reserved names
+```
+
+There is no sign-up: a token is minted by hand, handed over, and claimed. One
+token, one builder. That is deliberately the whole of the auth story for now,
+and it is a limitation rather than a design. What it does get right is the part
+that would hurt to change later: **a token is shown once and only its SHA-256
+is stored**, so a copy of the database is not a copy of everybody's
+credentials.
+
+Three rules that shape the rest:
+
+- **The registry measures rather than believes.** A cartridge is a file
+  somebody can edit, so its own `verify` block is a claim by its author. On
+  publish the cartridge is unpacked and **run here**, and the size, tile count
+  and frame cost printed beside it are what that run produced. A ROM that does
+  not complete its frames is refused rather than listed. The test publishes a
+  cartridge claiming a 12-half-cycle frame and requires the stored number to be
+  the measured one.
+- **Art is only ever rows of `'0'..'3'`.** Converting a photograph happens in
+  the browser, so there is no image parser in the request path and what lands
+  on disk is CHR: the same encoding a sprite sheet uses, so the portrait on a
+  builder page is drawn by the same `decodeCHR` that draws the game.
+- **A PATCH touches only what it names**, so a client saving a bio cannot blank
+  an avatar it never loaded.
+
+A token that is not this builder's gets **404, not 403**: it has no business
+learning whether the builder exists. Revoking leaves the page and its ROMs
+alone, because revoking is about the credential.
+
 ## What to try first
 
 The programs page's "Add two bytes" ($2E + $14): boot it, step 41

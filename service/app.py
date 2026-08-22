@@ -19,9 +19,12 @@ The flow a learner follows:
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import re
+import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -31,14 +34,17 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 
 import cartridge
 import mcp_server
+import registry
 from assembler import AssemblyError, assemble
 from atlas import GROUPS_PATH, MAX_DEPTH, MAX_LIMIT, Atlas, AtlasError
 from engine import EngineError, Pool
 from models import (
     AssembleResponse,
+    BuilderPatch,
     CartMeta,
     CartridgeRequest,
     CartridgeResponse,
+    ClaimRequest,
     ConsoleSpec,
     AtlasResponse,
     BootRequest,
@@ -49,6 +55,7 @@ from models import (
     NodeListResponse,
     NodesResponse,
     Observation,
+    PublishRequest,
     Rom,
     SparseMemory,
     StepRequest,
@@ -1143,3 +1150,185 @@ def mcp_no_stream() -> Response:
         status_code=405,
         headers={"allow": "POST"},
     )
+
+
+# -- the registry ------------------------------------------------------------
+#
+# Builders, their pages, and the cartridges they publish. See registry.py for
+# why this is the one stateful thing here and what that does NOT change: the
+# chip is still stateless, and running a ROM still means POSTing the machine.
+
+
+def _reg() -> sqlite3.Connection:
+    db = registry.connect()
+    registry.init(db)
+    return db
+
+
+def _bearer(request: Request) -> str | None:
+    header = request.headers.get("authorization") or ""
+    kind, _, value = header.partition(" ")
+    return value.strip() if kind.lower() == "bearer" else None
+
+
+def _reg_error(e: registry.RegistryError) -> HTTPException:
+    return HTTPException(status_code=e.status, detail={"error": str(e)})
+
+
+def _measure_cartridge(doc: dict, frames: int) -> VerifyReport:
+    """Run a published cartridge here rather than believing its own report.
+
+    A cartridge is a file somebody can edit, so the `verify` block it arrives
+    with is a claim by its author. Every number the registry prints beside a
+    ROM is this function's, which costs a few seconds on publish and means a
+    listing cannot be gamed by editing a JSON field.
+    """
+    return _verify(doc, frames, 60000)
+
+
+@app.get("/v1/registry")
+def registry_index(limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)) -> dict:
+    """Everyone with a page, and the most recently published ROMs."""
+    db = _reg()
+    try:
+        out = registry.builders(db, limit=limit, offset=offset)
+        out["latest"] = registry.latest(db)
+        out["limits"] = registry.LIMITS
+        return out
+    finally:
+        db.close()
+
+
+@app.get("/v1/registry/me")
+def registry_me(request: Request) -> dict:
+    """What this token is: whether it has claimed a handle yet, and which."""
+    db = _reg()
+    try:
+        row = registry.authorise(db, _bearer(request))
+        return {
+            "handle": row["handle"],
+            "claimed": bool(row["handle"]),
+            "note": row["note"],
+            "created": row["created"],
+            "builder": registry.builder(db, row["handle"]) if row["handle"] else None,
+        }
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+
+
+@app.post("/v1/registry/claim")
+def registry_claim(req: ClaimRequest, request: Request) -> dict:
+    """Turn a token into a page. One token, one builder."""
+    db = _reg()
+    try:
+        return registry.claim(db, _bearer(request) or "", req.handle, req.name)
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+
+
+@app.get("/v1/registry/b/{handle}")
+def registry_builder(handle: str) -> dict:
+    """One builder's page as data: who they are and everything they publish."""
+    db = _reg()
+    try:
+        return registry.builder(db, handle.lower())
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+
+
+@app.patch("/v1/registry/b/{handle}")
+def registry_edit(handle: str, patch: BuilderPatch, request: Request) -> dict:
+    """Edit a page. Only the fields present are touched, so a client saving a
+    bio cannot blank an avatar it never loaded."""
+    db = _reg()
+    try:
+        handle = handle.lower()
+        registry.owner_of(db, _bearer(request), handle)
+        return registry.update_builder(db, handle, patch.model_dump(exclude_unset=True))
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+
+
+@app.get("/v1/registry/b/{handle}/roms/{slug}")
+def registry_rom(handle: str, slug: str) -> dict:
+    db = _reg()
+    try:
+        return registry.rom(db, handle.lower(), slug.lower())
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+
+
+@app.get("/v1/registry/b/{handle}/roms/{slug}/cart")
+def registry_cart(handle: str, slug: str) -> Response:
+    """The cartridge itself, byte for byte as it was published."""
+    db = _reg()
+    try:
+        blob = registry.rom_bytes(db, handle.lower(), slug.lower())
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+    return Response(
+        content=blob,
+        media_type="application/gzip",
+        headers={
+            "content-disposition": f'attachment; filename="{slug.lower()}.cart.gz"',
+            "cache-control": "public, max-age=300",
+        },
+    )
+
+
+@app.put("/v1/registry/b/{handle}/roms/{slug}")
+def registry_publish(handle: str, slug: str, req: PublishRequest, request: Request) -> dict:
+    """Publish a cartridge, or replace one already published under this slug.
+
+    The cartridge is unpacked, RUN here, and stored with what this run
+    measured. Nothing a builder writes in the request decides a number.
+    """
+    db = _reg()
+    try:
+        handle = handle.lower()
+        registry.owner_of(db, _bearer(request), handle)
+        try:
+            blob = base64.b64decode(req.cart, validate=True)
+        except (ValueError, binascii.Error) as e:
+            raise registry.RegistryError(f"cart is not base64: {e}") from e
+        doc = registry.read_cartridge(blob)
+        report = _measure_cartridge(doc, req.frames)
+        if report.frames_completed < req.frames:
+            raise registry.RegistryError(
+                f"that cartridge completed {report.frames_completed} of {req.frames} "
+                f"frames on the chip here, so it is not publishable. "
+                f"{' '.join(report.notes)}"
+            )
+        patch = req.model_dump(exclude_unset=True)
+        patch.pop("cart", None)
+        return registry.publish(db, handle, slug.lower(), blob,
+                                report.model_dump(), patch)
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+
+
+@app.delete("/v1/registry/b/{handle}/roms/{slug}")
+def registry_unpublish(handle: str, slug: str, request: Request) -> dict:
+    db = _reg()
+    try:
+        handle = handle.lower()
+        registry.owner_of(db, _bearer(request), handle)
+        return registry.unpublish(db, handle, slug.lower())
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()

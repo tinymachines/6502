@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B1120">
+<title>Your page &middot; games.tinymachines.ai</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/site.css">
+<style>
+section{margin-bottom:20px}
+.two{display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:52rem){.two{grid-template-columns:minmax(0,1fr) auto}}
+.artbox{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.filebtn{font-size:11.5px;background:var(--panel);color:var(--mid);cursor:pointer;
+  border:1px solid var(--rule);border-radius:2px;padding:6px 11px;display:inline-block}
+.filebtn:hover{color:var(--bright);border-color:var(--metal)}
+.mine{display:grid;gap:9px}
+.mine .card{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mine b{color:var(--bright);font-weight:600}
+.check{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--dim)}
+.check input{width:auto;min-height:0}
+label.inline{display:inline;text-transform:none;letter-spacing:0;font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site">
+  <h1><a href="/">Die <span>Runner</span></a></h1>
+  <span class="sub">your page</span>
+  <nav>
+    <a href="/builders">all builders</a>
+    <a href="/">the console</a>
+    <a href="https://6502.tinymachines.ai/api/#registry">the API</a>
+  </nav>
+</header>
+
+<section class="card">
+  <p class="eyebrow">Token</p>
+  <h2>Who you are</h2>
+  <div class="row">
+    <input id="token" type="password" autocomplete="off" spellcheck="false"
+           placeholder="tm6502_..." style="flex:1 1 18rem">
+    <button id="signin" class="go">use it</button>
+    <button id="signout" hidden>forget it</button>
+  </div>
+  <p class="note">
+    Kept in this browser's local storage and sent as a bearer header. It is
+    never put in a URL: a URL ends up in history, in a Referer and in
+    somebody's log. There is no password to reset, so a lost token is
+    re-minted rather than recovered.
+  </p>
+  <p class="err" id="tok-err" hidden></p>
+  <p class="ok" id="tok-ok" hidden></p>
+</section>
+
+<section class="card" id="claim" hidden>
+  <p class="eyebrow">First time</p>
+  <h2>Claim a handle</h2>
+  <div class="field">
+    <label for="c-handle">handle</label>
+    <input id="c-handle" placeholder="ada" maxlength="32" autocomplete="off">
+    <p class="note">This becomes your page: <b id="c-preview">/b/...</b>. Two to
+      thirty-two characters, lowercase letters, digits and dashes. One token,
+      one handle, and it cannot be changed later.</p>
+  </div>
+  <div class="field">
+    <label for="c-name">display name</label>
+    <input id="c-name" placeholder="Ada" maxlength="64" autocomplete="off">
+  </div>
+  <button class="go" id="c-go">claim it</button>
+  <p class="err" id="c-err" hidden></p>
+</section>
+
+<div id="editor" hidden>
+
+<section class="card">
+  <p class="eyebrow">Profile</p>
+  <h2>Your page <span class="muted" id="p-link"></span></h2>
+  <div class="two">
+    <div>
+      <div class="field">
+        <label for="p-name">display name</label>
+        <input id="p-name" maxlength="64" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="p-bio">bio</label>
+        <textarea id="p-bio" maxlength="600" rows="5"></textarea>
+      </div>
+      <div class="field">
+        <label for="p-links">links, one per line: label &lt;space&gt; https://url</label>
+        <textarea id="p-links" rows="3" spellcheck="false"
+                  placeholder="site https://example.com"></textarea>
+        <p class="note">https only. These are printed on a page other people click.</p>
+      </div>
+    </div>
+    <div class="artbox">
+      <label>photo</label>
+      <canvas id="p-art" class="art" width="64" height="64"
+              style="width:128px;height:128px"></canvas>
+      <label class="filebtn" for="p-file">choose an image</label>
+      <input id="p-file" type="file" accept="image/*" hidden>
+      <span class="check">
+        <input type="checkbox" id="p-dither" checked>
+        <label class="inline" for="p-dither">dither</label>
+      </span>
+      <p class="note" style="max-width:14rem">Converted here, in your browser,
+        to the die's four colours at 64x64. The image itself is never uploaded:
+        what goes up is the tile grid.</p>
+    </div>
+  </div>
+  <button class="go" id="p-save">save</button>
+  <p class="err" id="p-err" hidden></p>
+  <p class="ok" id="p-ok" hidden></p>
+</section>
+
+<section class="card">
+  <p class="eyebrow">Publish</p>
+  <h2>Add a ROM</h2>
+  <div class="two">
+    <div>
+      <div class="field">
+        <label for="r-cart">cartridge</label>
+        <label class="filebtn" for="r-cart">choose a .cart.gz</label>
+        <input id="r-cart" type="file" accept=".gz,application/gzip" hidden>
+        <span class="muted" id="r-cart-name" style="margin-left:8px">nothing chosen</span>
+        <p class="note">Mint one with
+          <a href="https://6502.tinymachines.ai/api/#cartridges">POST /v1/cartridge</a>.
+          It is run here on the chip before it is listed: a ROM that does not
+          finish its frames is refused rather than published.</p>
+      </div>
+      <div class="field">
+        <label for="r-slug">slug</label>
+        <input id="r-slug" maxlength="32" autocomplete="off" placeholder="die-runner">
+        <p class="note">The URL: <b id="r-preview">/b/.../...</b>. Publishing to a
+          slug you already used replaces that ROM.</p>
+      </div>
+      <div class="field">
+        <label for="r-title">title</label>
+        <input id="r-title" maxlength="64" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="r-blurb">description</label>
+        <textarea id="r-blurb" maxlength="400" rows="3"></textarea>
+      </div>
+    </div>
+    <div class="artbox">
+      <label>cover art</label>
+      <canvas id="r-art" class="art" width="128" height="96"
+              style="width:256px;height:192px"></canvas>
+      <label class="filebtn" for="r-file">choose an image</label>
+      <input id="r-file" type="file" accept="image/*" hidden>
+      <span class="check">
+        <input type="checkbox" id="r-dither" checked>
+        <label class="inline" for="r-dither">dither</label>
+      </span>
+      <p class="note" style="max-width:16rem">16x12 tiles, 128x96 pixels, four
+        colours. Leave it alone when replacing a ROM and the cover you already
+        have is kept.</p>
+    </div>
+  </div>
+  <button class="go" id="r-go">publish</button>
+  <p class="err" id="r-err" hidden></p>
+  <p class="ok" id="r-ok" hidden></p>
+</section>
+
+<section>
+  <p class="eyebrow">Yours</p>
+  <h2 id="mine-head">Published</h2>
+  <div class="mine" id="mine"></div>
+</section>
+
+</div>
+
+<footer class="site">
+  Tokens are handed out by hand for now, and that is a limitation rather than a
+  design. What it does get right: a token is shown once and only its SHA-256 is
+  stored, so a copy of the registry is not a copy of everybody's credentials.
+</footer>
+
+</div>
+<script type="module" src="/manage.js"></script>
+</body>
+</html>

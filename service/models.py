@@ -420,3 +420,53 @@ class CartridgeResponse(BaseModel):
     size: int
     packed_size: int
     sha256: str
+
+
+# -- the registry ------------------------------------------------------------
+#
+# The one stateful corner of the service. The chip is unaffected: what is
+# stored is a catalogue of who published what, and running a ROM still means
+# POSTing the machine.
+
+
+class TileArtIn(BaseModel):
+    """A picture in the console's four colours, as tiles.
+
+    `pixels` is one entry per 8x8 tile in row-major order, each eight strings
+    of eight '0'..'3'. The server decodes no images: a photo is converted in
+    the client (games/art.js, in a canvas), so there is no image parser in the
+    request path and what lands on disk is CHR, the same encoding a sprite
+    sheet uses."""
+
+    w: int = Field(ge=1, le=24, description="width in 8-pixel tiles")
+    h: int = Field(ge=1, le=24, description="height in 8-pixel tiles")
+    pixels: list[list[str]]
+
+
+class ClaimRequest(BaseModel):
+    handle: str = Field(description="the page's URL: /b/<handle>")
+    name: str
+
+
+class BuilderPatch(BaseModel):
+    """Only what is present is changed, so a client editing a bio cannot
+    blank an avatar it did not send."""
+
+    name: Optional[str] = None
+    bio: Optional[str] = None
+    links: Optional[list[dict]] = None
+    avatar: Optional[TileArtIn] = None
+
+
+class PublishRequest(BaseModel):
+    """A cartridge, and what to call it.
+
+    Everything measurable comes out of the file and is then measured again on
+    the chip here: the size, the tile count and the frame cost are not fields
+    a builder can set. Title and blurb default to the cartridge's own."""
+
+    cart: str = Field(description="the .cart.gz, base64")
+    title: Optional[str] = None
+    blurb: Optional[str] = None
+    cover: Optional[TileArtIn] = None
+    frames: int = Field(default=3, ge=1, le=8)

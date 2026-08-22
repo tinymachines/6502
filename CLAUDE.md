@@ -48,6 +48,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Games | <https://games.tinymachines.ai> -- Die Runner: a console on the API. The game is a 6502 ROM, the screen is a page of its memory, the browser draws it. The round trip is the frame rate. Cartridges are one gzipped file carrying the ROM, its tiles and the contract; the page loads one from `?cart=` or a file picker. See `games/README.md`. |
 | Cartridges | `POST /v1/cartridge` mints one: assemble, refuse a layout that cannot work, **run it on the chip**, pack it. `GET /v1/console` publishes the contract, the memory map and the tile format. |
 | MCP | `POST /api/mcp`, hand-written JSON-RPC, no session and no SSE. Five coarse tools; `run` hands back the screen as hex so a model can read its own picture. |
+| Registry | Builders, their pages and the ROMs on them: <https://games.tinymachines.ai/builders>. The one stateful thing here, one SQLite file beside the checkout. Tokens by hand, shown once, only the hash stored. Art is the die's four colours, converted in the browser, stored as CHR. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. Full Wayback sweep complete: 24,429 URLs, 3.01 GB. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
 | Service | 6502 as a service: the `halfwave` stateless engine binary plus a FastAPI reference implementation in `service/`. Proven bit-exact across serialize/resume hops. Launches under a separate site property; only the engine lives here. |
@@ -1155,6 +1156,78 @@ naming it was missed.
   (`games/tools/mint.py`, run by `games/deploy.sh`), so it cannot go stale
   against `rom/dierunner.s` and every deploy exercises the endpoint. It
   refuses to write a file whose verification did not complete its frames.
+
+### The registry (`service/registry.py`), and the one place state lives
+
+Builders, their pages, and the cartridges they publish, at
+<https://games.tinymachines.ai/builders>. **This is the only stateful thing
+behind the API and the boundary is the point:** the chip is untouched, every
+request still carries the whole machine, and running a published ROM still
+means POSTing it. What is stored is a *catalogue*. One SQLite file, a row per
+thing, WAL on so a publish does not block every reader while the chip runs.
+
+- **The registry measures rather than believes, and that is the load-bearing
+  test.** A cartridge is a file somebody can edit, so the `verify` block it
+  arrives with is a claim by its author. On publish the cartridge is unpacked
+  and **run here**, and the size, tile count and frame cost printed beside it
+  are what that run produced. A ROM that does not complete its frames on this
+  chip is refused rather than listed. The test publishes a cartridge whose own
+  block claims a 12-half-cycle frame and requires the stored number to be the
+  measured one.
+- **Art is only ever rows of `'0'..'3'`.** Converting a photograph happens in
+  the browser (`games/art.js`, in a canvas), so there is no image parser in
+  the request path, no arbitrary bytes on disk, and the stored form is CHR:
+  the same encoding a sprite sheet uses, so `decodeCHR` draws a portrait and
+  every builder page looks like the console. Avatars are 8x8 tiles, covers up
+  to 24x24.
+  - **Dithering is in RGB, not luminance, and that was measured.** By Rec.709
+    the palette is 17, 130, 169, 169: **polysilicon and metal are the same
+    brightness to within 0.2 of 255** and differ only in hue. A luminance ramp
+    therefore has three steps rather than four and throws the warm half of the
+    palette away. Floyd-Steinberg in RGB keeps amber and cyan apart.
+- **A token is shown once and never stored.** The table holds its SHA-256, so
+  a copy of the database is not a copy of everybody's credentials; a lost
+  token is re-minted, never recovered. An unknown token and a revoked one get
+  the same refusal, because telling them apart is telling somebody which
+  guesses were close. One token, one builder. `test_the_token_is_never_stored`
+  reads the database file as bytes, which is the only way to check a claim
+  about what is *not* in it.
+- **A token that is not this builder's gets 404, not 403.** It has no business
+  learning whether the builder exists. Revoking leaves the page and its ROMs
+  alone: revoking is about the credential.
+- **A PATCH touches only what it names**, so a client saving a bio cannot
+  blank an avatar it never loaded. `exclude_unset` on the Pydantic side and,
+  on the page, pending art held apart from the loaded page. Worth a test
+  because the failure is somebody losing work rather than an error.
+- **Two bugs found by the tests, both of which only a user would have hit:**
+  - The handle regex was `first + optional(middle + last)`, which matches a
+    length of 1 or 3-and-up and **never 2**: `rm` was refused while `a` was
+    accepted, and the message said "2 to 32" throughout. It is
+    `first middle{0,30} last` now.
+  - **Slugs were checked against the handle reserved list**, so nobody could
+    call their game `game`, `rom`, `console` or `cart`. A handle is a
+    top-level path (`/b/api` is confusing) and a slug is not; they are
+    different questions and the list belongs to only one of them.
+    `check_slug` takes the characters and not the list.
+- **A reserved name needs the admin path.** `registry_admin.py grant` is the
+  only caller that may take one, because the list exists so nobody *claims* a
+  name implying they speak for the project, and the person who can already
+  read the database is not who it protects those names from. Weakening the
+  list so the project could have its own page would have removed the
+  protection for everyone.
+- **The database lives outside the checkout** (`REGISTRY_DB`, the unit sets
+  `/var/lib/6502-registry/registry.db` with `StateDirectory=`), because a git
+  operation must never be able to delete somebody's page.
+- **The pages are static documents that read their own path.**
+  `/b/<handle>` and `/b/<handle>/<slug>` are nginx regex locations serving
+  `builder.html` and `index.html`; the handle and slug come out of
+  `location.pathname`, so a published ROM has an address of its own rather
+  than a query string. **The regexes are QUOTED**: `{2,32}` unquoted is the
+  start of a block to nginx's parser and it fails with "unknown directive"
+  naming the middle of the pattern, which is the same trap the 6502 config
+  already records for a `map` key.
+- `games/site.css` is the shell the four pages share, added when the third
+  one would otherwise have carried a third copy of a header and a button.
 
 ### MCP (`service/mcp_server.py`): coarse tools, and why
 
