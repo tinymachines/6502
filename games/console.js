@@ -61,6 +61,12 @@ export class Console6502 {
     this.lastFrameHalfCycles = 0;
     this.requests = 0;
     this.retried = 0;
+    // The levels of the control lines the cartridge asked to watch, and the
+    // same thing packed into the byte the ROM reads. Sampled at the end of a
+    // frame and handed to the NEXT one, which is the only ordering available:
+    // the chip has to have run before there is anything to sample.
+    this.watch = {};
+    this.mask = 0xff;
   }
 
   /**
@@ -119,8 +125,12 @@ export class Console6502 {
     const extra = this.cart.memory || {};
     for (const [p, hex] of Object.entries(extra)) pages[p] = hex;
 
-    const boot = await this.post('boot', { memory: { fill: '00', pages } });
+    const boot = await this.post('boot', {
+      memory: { fill: '00', pages },
+      watch: this.cart.watch || [],
+    });
     this.machine = boot.machine;
+    this.sample(boot.observe);
     this.frames = 0;
     return boot.observe;
   }
@@ -135,6 +145,10 @@ export class Console6502 {
     let mem = this.machine.memory;
     if (input !== undefined && input !== null) mem = poke(mem, c.input, input);
     if (c.entropy !== undefined) mem = poke(mem, c.entropy, (Math.random() * 256) | 0);
+    // The gates: one bit per real control line, read off this very chip at the
+    // end of the last frame. Nothing here decides when a gate opens -- the
+    // 6502 executing the game does, by whatever it happened to be doing.
+    if (c.gateMask !== undefined) mem = poke(mem, c.gateMask, this.mask);
     mem = poke(mem, c.tick, 0);
     this.machine = { ...this.machine, memory: mem };
 
@@ -155,8 +169,10 @@ export class Console6502 {
       const r = await this.post('step', {
         machine: this.machine,
         half_cycles: Math.min(step, budget - spent),
+        watch: c.watch || [],
       });
       this.machine = r.machine;
+      this.sample(r.observe);
       spent += step;
       if (peek(this.machine.memory, c.tick) !== 0) break;
     }
@@ -180,6 +196,16 @@ export class Console6502 {
       out[i] = pages[a >> 8][a & 0xff];
     }
     return out;
+  }
+
+  /** Pack the watched levels into the byte the ROM reads. */
+  sample(observe) {
+    const names = this.cart.watch;
+    if (!names || !observe || !observe.watch) return;
+    this.watch = observe.watch;
+    let m = 0;
+    names.forEach((n, i) => { if (observe.watch[n]) m |= 1 << i; });
+    this.mask = m;
   }
 
   read(addr) { return peek(this.machine.memory, addr); }

@@ -85,9 +85,50 @@ two channels and only one conducts**, and every eighth frame the clock phase
 flips and they swap. A channel that is shut now will be open in a moment, which
 is the whole game. Charge packets score. The die wraps.
 
-**8,400 half-cycles a frame, 19,200 on the phase flip** -- measured, and the
-console sizes its request chunks from it, so an ordinary frame is one round
-trip and a phase frame is two.
+### The gates are real
+
+Each gate is a **switch that exists on this die**, and it conducts exactly when
+its own control line is high **on the chip running the game**. Nothing
+simulates a clock phase; the phase is whatever the 6502 executing this code
+happens to be doing at the end of a frame.
+
+The host watches eight lines, packs their levels into a byte, and hands it to
+the ROM. A gate cell carries its own gate index (`16+g` is the channel that
+conducts while line `g` is high, `24+g` the one that conducts while it is low),
+so **what is drawn and what kills you come from the same byte** and the picture
+cannot lie about which way is open. The two channels are complementary, so
+there is always a way through -- that is not a kindness, it is what a pass
+transistor is.
+
+The eight were chosen by measurement, not taste: they are the lines that gate a
+switch between two *named* nodes, ranked by how often they actually moved over
+twenty-four frames of play. A line that never moves makes a gate that is always
+shut or always open, which is scenery.
+
+| gate | control line | high | flips | the switch it gates |
+|---:|---|---:|---:|---|
+| 0 | `dpc25_SBDB` | 16/24 | 10 | `sb0 - idb0` |
+| 1 | `dpc9_DBADD` | 18/24 | 9 | `idb0 - alub0` |
+| 2 | `dpc10_ADLADD` | 6/24 | 9 | `adl0 - alub0` |
+| 3 | `dpc21_ADDADL` | 3/24 | 6 | `alu2 - adl2` |
+| 4 | `dpc23_SBAC` | 4/24 | 4 | `sb0 - a0` |
+| 5 | `dpc30_ADHPCH` | 21/24 | 4 | `pch3 - adh3` |
+| 6 | `dpc40_ADLPCL` | 21/24 | 4 | `adl0 - pcl0` |
+| 7 | `dpc2_XSB` | 2/24 | 2 | `x0 - sb0` |
+
+Gates 5 and 6 move together and always will: `ADHPCH` and `ADLPCL` are the
+program counter's own round trip, and they fire on every opcode fetch. Two
+gates that are really one event is a true thing about the chip, so they are
+both kept.
+
+Sampling is one frame behind, and has to be: the chip must have run before
+there is anything to read. So the gates you are threading are the state of the
+CPU as it finished drawing the frame you are looking at.
+
+**8,400 half-cycles a frame** -- measured, and the console sizes its request
+chunks from it, so an ordinary frame is one round trip. The board-wide phase
+scan is gone: a gate cell carries its own identity, so a change of state costs
+nothing and nothing has to be rewritten.
 
 Two things had to be measured rather than designed:
 

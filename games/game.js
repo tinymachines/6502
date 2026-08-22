@@ -57,9 +57,21 @@ const DIERUNNER = {
   screen: 0x0400,
   width: 16,
   height: 16,
-  frameCost: 8400,              // measured; 19,200 on the eighth frame
+  frameCost: 8400,              // measured
   dirs: { up: 0, down: 0, left: 3, right: 4 },
   tiles: {},                    // the ROM addresses tiles directly
+  gateMask: 0x0014,
+  /* The eight gates are REAL switches on this die, and each conducts exactly
+   * when its own control line is high on the chip running the game. Chosen by
+   * measurement rather than taste: these are the lines that gate a switch
+   * between two NAMED nodes and that actually move while this ROM executes.
+   * Twenty-four frames of play flipped them 10, 9, 9, 6, 4, 4, 4 and 2 times;
+   * the ones that never moved would have made a gate that is always shut or
+   * always open, which is scenery rather than a gate. */
+  watch: ['dpc25_SBDB', 'dpc9_DBADD', 'dpc10_ADLADD', 'dpc21_ADDADL',
+          'dpc23_SBAC', 'dpc30_ADHPCH', 'dpc40_ADLPCL', 'dpc2_XSB'],
+  joins: ['sb0 - idb0', 'idb0 - alub0', 'adl0 - alub0', 'alu2 - adl2',
+          'sb0 - a0', 'pch3 - adh3', 'adl0 - pcl0', 'x0 - sb0'],
   over: (v) => v !== 0,
   blurb: 'Ride the metal. Thread the gates. A pass transistor conducts on one '
        + 'clock phase and blocks on the other, so a channel that is shut now '
@@ -110,12 +122,41 @@ function paint() {
   // The ROM's values are not tile numbers. Map them, and let anything
   // unmapped through as itself, so a cartridge can address tiles directly.
   const idx = new Uint8Array(cells.length);
-  for (let i = 0; i < cells.length; i++) idx[i] = c.tiles[cells[i]] ?? cells[i];
+  const mask = state.con.mask;
+  for (let i = 0; i < cells.length; i++) {
+    const v = cells[i];
+    // 16+g and 24+g are the two channels of gate g. What is drawn and what
+    // kills you come from the same byte, so the picture cannot lie about
+    // which way is open.
+    if (v >= 16 && v < 32) {
+      const g = v & 7;
+      const high = (mask >> g) & 1;
+      const conducts = v < 24 ? high : !high;
+      idx[i] = conducts ? 6 : 7;
+    } else {
+      idx[i] = c.tiles[v] ?? v;
+    }
+  }
   drawScreen($('#screen').getContext('2d'), state.sheet, idx, c.width, c.height);
+}
+
+function gates() {
+  const c = state.cart;
+  const con = state.con;
+  const box = $('#gates');
+  if (!c.watch || !con) { box.innerHTML = ''; return; }
+  box.innerHTML = c.watch.map((n, g) => {
+    const high = (con.mask >> g) & 1;
+    return `<div class="gate ${high ? 'hi' : 'lo'}">
+      <b>${n.replace(/^dpc\d+_/, '')}</b>
+      <span>${c.joins[g]}</span>
+      <i>${high ? 'A' : 'B'}</i></div>`;
+  }).join('');
 }
 
 function hud() {
   const con = state.con;
+  gates();
   if (con && state.cart.score !== undefined) {
     $('#k-score').textContent = con.read(state.cart.score);
   }
