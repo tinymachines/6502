@@ -226,6 +226,32 @@ and the one drawn filled rather than outlined, because it is the one control tha
 a recording away. Measured: 4.9:1 filled and 5.0:1 hollow against the bar in dark, 5.7:1 and
 5.2:1 in light.
 
+**Every readout is clickable, and says what it is part of.** The page always knew a latch's
+value and nothing about the wire. `/v1/atlas/full` is the chip map's own derivation of the
+die into machinery: 132 groups over 23 kinds covering all 1547 nodes once, plus the 135
+overlapping containers behind them. One fetch, ~50 KB gzipped, cached a day, pulled in the
+background after the trace lands, and every question after that is answered locally: nothing
+new happens on the step path.
+
+Click A, or the SB rail, or the P lane, or the `SB->A` control line, and the inspector names
+the wires, the container that owns them, the blocks they are filed in and what they are wired
+to. **The containers beyond the owner are listed too**, because the partition gives every node
+one box only so the chip map can draw it: `dpc23_SBAC` is in `regs:a.SBAC` *and* in the
+special bus's `sbus:off`, and `dpc25_SBDB` is in `dbus:SBDB` and in `sbus:link`, one of the
+three containers the partition absorbed whole. One lane can come apart into several: **P is
+seven containers, one per flag**, and the ALU is its eight bit slices.
+
+**Watching a container puts its named nodes in the trace's own watch set.** The trace in hand
+carries a fixed set of names per row, so adding one cannot be done to rows already taken: the
+program is booted again with the wider watch and the cursor is put back where it was. That is
+the same path power already takes, and it is said out loud rather than hidden. The eight `sb`
+bits, watched, reconstruct exactly the byte the readout strip already reports, at every
+half-cycle the harness checked.
+
+A container the die never named has nothing to watch (most of the chip is unnamed gate
+outputs) and the button says so instead of appearing to work. With no API there is no atlas,
+so the inspector shows the names alone and says why.
+
 ## Three things worth knowing
 
 **The clock phases are read as pins**, `clk1out` and `clk2out`, not derived from the `phase`

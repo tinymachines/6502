@@ -178,6 +178,50 @@ body.off .scopewrap,
 body.off .tabwrap section[role="tabpanel"]:not(#p-prog){
   opacity:.22;filter:grayscale(.85);pointer-events:none;
 }
+/* Anything on screen that names a node on the die is clickable, and says so
+   quietly: the readouts are the page and the affordance must not compete
+   with them. */
+.tagged{cursor:pointer}
+.bx.tagged rect{transition:stroke .12s}
+.bx.tagged:hover rect{stroke:var(--bright)}
+.bl.tagged:hover{background:var(--hover)}
+.ln.tagged:hover{color:var(--bright)}
+.bx.sel rect,.bl.sel{outline:1.5px solid var(--alu);outline-offset:1px}
+.ln.sel{color:var(--alu)}
+
+/* The inspector: what the thing you just clicked is part of. Sits between
+   the scope and the tabs, so one panel serves every tab rather than each
+   tab growing its own copy. */
+.insp{margin-bottom:12px;border-color:var(--alu)}
+.insp .ph{align-items:center}
+.insp .pb{padding:10px 12px}
+.ig{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:860px){.ig{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}}
+.icard{border:1px solid var(--rule);border-radius:3px;padding:8px 10px;background:var(--panel2)}
+.icard + .icard{margin-top:8px}
+.ikey{font-family:var(--mono);font-size:12px;color:var(--bright);font-weight:600}
+.ilab{font-size:12px;color:var(--mid)}
+.imeta{font-size:11.5px;color:var(--dim);margin-top:3px;line-height:1.5}
+.imeta b{color:var(--mid);font-weight:500}
+.ipills{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.ipill{font-family:var(--mono);font-size:10.5px;border:1px solid var(--rule);border-radius:2px;
+  padding:1px 5px;color:var(--dim);background:var(--cell)}
+.ipill.hi{color:var(--ground);background:var(--alu);border-color:var(--alu)}
+.ipill.lo{color:var(--mid)}
+.ipill.chg{box-shadow:0 0 0 1.5px var(--glow)}
+.iwatch{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.ibtn{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:2px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--rule);color:var(--mid);white-space:nowrap}
+.ibtn:hover:not(:disabled){color:var(--bright);border-color:var(--glow)}
+.ibtn:disabled{opacity:.45;cursor:not-allowed}
+.ibtn.on{color:var(--ground);background:var(--alu);border-color:var(--alu)}
+.inote{font-size:11.5px;color:var(--dim);margin-top:8px;line-height:1.5}
+.iclose{background:none;border:0;color:var(--dim);cursor:pointer;padding:2px 4px;line-height:1}
+.iclose:hover{color:var(--bright)}
+.wrow{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline}
+.wrow .ikey{flex:0 0 auto}
+.wrow.stack{margin-top:6px}
+.idim{color:var(--dim)}
 .offnote{border-color:var(--power);margin-bottom:12px}
 .offnote .pb{font-size:12.5px;color:var(--mid);line-height:1.55}
 .offnote b{color:var(--power);font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase}
@@ -597,6 +641,21 @@ select{
             title="Collapse the scope to a one-line strip">scope</button>
   </div>
   <canvas id="scope" aria-label="Clock phases, RDY, SYNC and timing states"></canvas>
+</div>
+
+<div class="panel insp" id="insp" hidden>
+  <div class="ph">
+    <h2 class="eyebrow">What this is part of</h2>
+    <span class="eyebrow" id="inspwhat"></span>
+    <button class="iclose" id="inspclose" title="Close" aria-label="Close">&times;</button>
+  </div>
+  <div class="pb">
+    <div class="ig">
+      <div id="inspgroups"></div>
+      <div id="inspside"></div>
+    </div>
+    <p class="inote" id="inspnote"></p>
+  </div>
 </div>
 
 <div class="tabwrap">
@@ -1167,6 +1226,335 @@ const on = (o,name) => {
 };
 const intAddr = o => (o.adh<<8)|o.adl;
 
+/* ==========================================================================
+   The chip atlas, in the Lab
+   ==========================================================================
+   Every readout on this page names storage on the die, and until now the page
+   knew the VALUE and nothing about the wire. `/v1/atlas/full` is the chip
+   map's own derivation -- 132 groups over 23 kinds covering all 1547 nodes
+   once, plus the 135 overlapping containers behind them -- and it is one
+   fetch of about 50 KB gzipped, cached a day, so it is pulled ONCE in the
+   background after the trace has landed and every question after that is
+   answered locally. Nothing here is on the step path.
+
+   Two things it buys, and they are the same thing twice:
+     - click any latch, lane, bus, register, pin or control line and read what
+       it is part of, including the containers beyond the one that owns it,
+       because a node in the decimal correction is also in an ALU slice;
+     - watch a container: its named members go into the trace's own watch set,
+       so the whole C-flag cone or one ALU bit slice lights up per half-cycle
+       beside everything else the page already shows.
+   ========================================================================== */
+let ATL = null;           /* the parsed atlas, or null until it lands */
+let ATLERR = null;        /* why it did not, said out loud rather than hidden */
+let ATLBUSY = false;
+const AOWN = new Map();   /* die name -> node record */
+const AGRP = new Map();   /* group key -> group record */
+
+async function loadAtlas() {
+  if (ATL || ATLBUSY || !LIVE) return ATL;
+  ATLBUSY = true;
+  try {
+    const r = await fetch(API + "/v1/atlas/full", { cache: "force-cache" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const a = await r.json();
+    for (const g of a.groups) AGRP.set(g.key, g);
+    for (const c of a.containers) if (!AGRP.has(c.key)) AGRP.set(c.key, c);
+    const byId = new Map();
+    for (const n of a.nodes) { byId.set(n.id, n); if (n.name) AOWN.set(n.name, n); }
+    a.byId = byId;
+    a.kindLabel = {};
+    for (const k of a.kinds) a.kindLabel[k.key] = k.label;
+    /* The dump carries the 534 bundles as one flat list, because a bundle
+       belongs to two groups and storing it under both would be storing it
+       twice. Indexed here from each end, heaviest first, with the direction
+       read from the asking group's side so "out" always means out of here. */
+    a.wiredTo = new Map();
+    for (const b of a.bundles) {
+      for (const [me, far, out, inn] of [[b.a, b.b, b.ab, b.ba], [b.b, b.a, b.ba, b.ab]]) {
+        if (!a.wiredTo.has(me)) a.wiredTo.set(me, []);
+        a.wiredTo.get(me).push({ key: far, gate: b.gate, switch: b.switch,
+                                 gate_out: out, gate_in: inn, controls: b.controls || [] });
+      }
+    }
+    for (const list of a.wiredTo.values())
+      list.sort((x, y) => (y.gate + y.switch) - (x.gate + x.switch));
+    ATL = a;
+  } catch (e) {
+    ATLERR = e.message;
+  } finally {
+    ATLBUSY = false;
+  }
+  if (SEL) paintInspector();
+  return ATL;
+}
+
+/* -- what each readout on this page is, in the die's own names --------------
+   Written out rather than derived from the ids, because the page's ids are a
+   drawing's ids: LADH and ADH are two boxes showing one latch, ABUS and APIN
+   are the same sixteen pads on two diagrams, and LALU is the ALU hold. A rule
+   that guessed would be wrong about exactly those. `p` has no bit 5. */
+const abits = (stem, n) => Array.from({ length: n }, (_, b) => stem + b);
+const ANAMES = {
+  /* datapath diagram (data-bx) */
+  PCH: abits("pch", 8), PCL: abits("pcl", 8),
+  ADH: abits("adh", 8), ADL: abits("adl", 8),
+  ABUS: abits("ab", 16), DBUS: abits("db", 8),
+  SB: abits("sb", 8), ALU: abits("alu", 8),
+  A: abits("a", 8), X: abits("x", 8), Y: abits("y", 8), S: abits("s", 8),
+  /* latch diagram (data-lb) */
+  PCHP: abits("pchp", 8), PCLP: abits("pclp", 8),
+  LADH: abits("adh", 8), LADL: abits("adl", 8),
+  ABH: abits("abh", 8), ABL: abits("abl", 8),
+  APIN: abits("ab", 16), DPIN: abits("db", 8),
+  IDL: abits("idl", 8), IDB: abits("idb", 8), LSB: abits("sb", 8),
+  ALUA: abits("alua", 8), ALUB: abits("alub", 8), LALU: abits("alu", 8),
+  DOR: abits("dor", 8),
+  /* bits tab lanes (data-bl) */
+  IR: abits("ir", 8),
+  P: ["p0", "p1", "p2", "p3", "p4", "p6", "p7"],
+  PC: abits("pcl", 8).concat(abits("pch", 8)),
+  PINS: ["rdy", "irq", "nmi", "res", "sync", "rw", "clk1out", "clk2out"],
+};
+const ALABEL = {
+  ABUS: "the address pins", APIN: "the address pins", DBUS: "the data pins",
+  DPIN: "the data pins", LADH: "ADH", LADL: "ADL", LSB: "SB", LALU: "ALU hold",
+  PINS: "the pins",
+};
+/* A control line is one node and the page already carries its die name. */
+function lineNode(short) {
+  return WATCH.find((w) => w.split("_")[1] === short) || short;
+}
+
+/* -- selection ------------------------------------------------------------- */
+let SEL = null;           /* {label, names} */
+const WGROUPS = new Set(); /* container keys whose members are in the watch */
+const WATCH_CAP = 240;
+
+function inspect(label, names) {
+  SEL = { label, names: names.filter((n) => n) };
+  $("#insp").hidden = false;
+  markSelection();
+  paintInspector();
+  loadAtlas();
+}
+function clearInspect() {
+  SEL = null;
+  $("#insp").hidden = true;
+  markSelection();
+}
+function markSelection() {
+  const want = new Set(SEL ? SEL.names : []);
+  for (const el of document.querySelectorAll("[data-atlas]")) {
+    const mine = (ANAMES[el.dataset.atlas] || [lineNode(el.dataset.atlas)]);
+    el.classList.toggle("sel", !!SEL && mine.length > 0 && mine.every((n) => want.has(n)));
+  }
+}
+
+/* Which containers a set of nodes lands in, counted. The OWNER is the
+   partition's answer (one box on the chip map); `also` is everything else
+   that reaches the node, which is the answer the partition cannot give. */
+function tagsFor(names) {
+  if (!ATL) return null;
+  const own = new Map(); const also = new Map(); const blocks = new Map();
+  let known = 0;
+  for (const nm of names) {
+    const n = AOWN.get(nm);
+    if (!n) continue;
+    known++;
+    own.set(n.owner, (own.get(n.owner) || 0) + 1);
+    blocks.set(n.block, (blocks.get(n.block) || 0) + 1);
+    for (const k of n.groups) if (k !== n.owner) also.set(k, (also.get(k) || 0) + 1);
+  }
+  const rank = (m) => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return { known, missing: names.length - known, own: rank(own), also: rank(also), blocks: rank(blocks) };
+}
+
+/* -- the watch ------------------------------------------------------------- */
+/* A group's NAMED members. The unnamed ones are most of the chip and the
+   trace's watch is a name list, so a container of pure gate outputs comes
+   back empty and the button says so rather than appearing to work. */
+function groupNames(key) {
+  const g = AGRP.get(key);
+  if (!g || !ATL) return [];
+  return g.nodes.map((id) => (ATL.byId.get(id) || {}).name).filter((n) => n);
+}
+function watchedNames() {
+  const out = [];
+  for (const k of WGROUPS) for (const n of groupNames(k)) if (!out.includes(n)) out.push(n);
+  return out;
+}
+function traceWatch() {
+  const base = WATCH.concat(ADDER_NAMES, DECODE_NAMES);
+  return base.concat(watchedNames().filter((n) => !base.includes(n)));
+}
+
+/* Extending the watch means RE-RECORDING: the trace already in hand carries a
+   fixed set of names per row, and adding one cannot be done to rows that have
+   already been taken. So the program is booted again with the wider watch and
+   the cursor is put back where it was. That is honest about what it costs and
+   it is the same path power already takes. */
+async function rewatch() {
+  if (!LIVE) return;
+  const keep = i;
+  const want = Math.max(300, F.length);
+  const btns = document.querySelectorAll(".ibtn");
+  for (const b of btns) b.disabled = true;
+  $("#inspnote").textContent = "re-recording the trace with the wider watch...";
+  try {
+    const b = await post("boot", bootBody(traceWatch()));
+    const s = await post("step", {
+      machine: b.machine, half_cycles: want, trace: true,
+      watch: traceWatch(), format: "rows",
+    });
+    setCols(s.trace_rows.cols, s.trace_rows.watch_names);
+    F = s.trace_rows.rows; MEM0 = b.machine.memory; MACH = s.machine;
+    reload();
+    go(Math.min(keep, F.length - 1));
+  } catch (e) {
+    $("#err").hidden = false; $("#err").textContent = e.message;
+  } finally {
+    for (const b of btns) b.disabled = false;
+    paintInspector();
+  }
+}
+async function toggleWatch(key) {
+  if (WGROUPS.has(key)) WGROUPS.delete(key);
+  else {
+    const add = groupNames(key);
+    if (!add.length) { $("#inspnote").textContent =
+      "Nothing to watch: the die names none of this container's nodes, and the trace's watch is a list of names."; return; }
+    if (watchedNames().length + add.length > WATCH_CAP) {
+      $("#inspnote").textContent =
+        `That would watch more than ${WATCH_CAP} nodes at once. Unwatch a container first.`;
+      return;
+    }
+    WGROUPS.add(key);
+  }
+  await rewatch();
+}
+
+/* -- painting -------------------------------------------------------------- */
+function pill(name, o, p) {
+  const has = WNAMES.includes(name);
+  if (!has) return `<span class="ipill">${name}</span>`;
+  const v = bit(o, name), pv = p ? bit(p, name) : v;
+  return `<span class="ipill ${v ? "hi" : "lo"}${v !== pv ? " chg" : ""}">${name}</span>`;
+}
+function groupCard(key, n, total, o, p) {
+  const g = AGRP.get(key);
+  if (!g) return "";
+  const kind = ATL.kindLabel[g.kind] || g.kind;
+  const parent = g.parent && g.parent !== g.kind
+    ? ` &middot; inside <b>${g.parent}</b>` : "";
+  const share = total > 1 ? `${n} of ${total} bits &middot; ` : "";
+  const blocks = (g.blocks || []).map((b) => b.name).join(", ");
+  const watched = WGROUPS.has(key);
+  const named = groupNames(key);
+  /* The selection card already lists the wires it stands for. Repeating them
+     here whenever the group's named members ARE the selection is a second
+     copy of the same row; the pills are worth drawing only when the group
+     reaches names the selection did not. */
+  const extra = named.filter((nm) => !SEL.names.includes(nm));
+  const lit = named.filter((nm) => WNAMES.includes(nm) && bit(o, nm)).length;
+  const bundles = ((ATL.wiredTo && ATL.wiredTo.get(key)) || []).slice(0, 3).map((b) =>
+    `${b.key}<span class="idim"> (${b.switch ? b.switch + " switch" + (b.switch > 1 ? "es" : "")
+      : b.gate + " gate"}${b.controls.length ? " under " + b.controls.join(", ") : ""})</span>`)
+    .join(" &middot; ");
+  return `<div class="icard">
+    <div class="wrow"><span class="ikey">${key}</span><span class="ilab">${g.label}</span></div>
+    <div class="imeta">${share}<b>${kind}</b>${parent}
+      &middot; ${g.count} node${g.count > 1 ? "s" : ""}${g.partitioned === false
+        ? ' &middot; <b>absorbed</b>: it has no box on the chip map' : ""}
+      ${blocks ? `<br>filed in ${blocks}` : ""}
+      ${bundles ? `<br>wired to ${bundles}` : ""}</div>
+    ${watched && extra.length
+      ? `<div class="ipills">${extra.map((nm) => pill(nm, o, p)).join("")}</div>` : ""}
+    <div class="iwatch">
+      <button class="ibtn${watched ? " on" : ""}" data-watch="${key}" ${LIVE ? "" : "disabled"}>
+        ${watched ? "unwatch" : "watch"}</button>
+      <span class="ilab">${named.length
+        ? `${named.length} named node${named.length > 1 ? "s" : ""}${watched ? `, ${lit} high now` : ""}`
+        : "no named nodes to watch"}</span>
+    </div>
+  </div>`;
+}
+function paintInspector() {
+  if (!SEL) return;
+  const o = obs(i), p = obs(i - 1);
+  $("#inspwhat").textContent = SEL.names.length === 1
+    ? SEL.names[0] : `${SEL.names.length} nodes`;
+  if (!ATL) {
+    $("#inspgroups").innerHTML = `<div class="icard"><div class="ikey">${SEL.label}</div>
+      <div class="imeta">${SEL.names.join(" ")}</div></div>`;
+    $("#inspside").innerHTML = "";
+    $("#inspnote").textContent = ATLERR
+      ? `The atlas did not load (${ATLERR}), so this is the names only.`
+      : LIVE ? "Loading the atlas..."
+      : "The atlas needs the API. With no API this is the names only.";
+    return;
+  }
+  const t = tagsFor(SEL.names);
+  const total = t.known;
+  $("#inspgroups").innerHTML =
+    `<div class="icard"><div class="wrow"><span class="ikey">${SEL.label}</span>
+       <span class="ilab">${SEL.names.length} node${SEL.names.length > 1 ? "s" : ""} on the die</span></div>
+       <div class="ipills">${SEL.names.map((n) => pill(n, o, p)).join("")}</div>
+       ${t.missing ? `<div class="imeta">${t.missing} of them are not in the atlas's universe (a rail, or a node no gate or switch touches).</div>` : ""}
+     </div>`
+    + t.own.map(([k, n]) => groupCard(k, n, total, o, p)).join("");
+
+  const also = t.also.length
+    ? `<div class="icard"><div class="ikey">also in</div>
+       <div class="imeta">The partition gives every node one box, because a drawing needs
+         disjoint boxes. These containers reach the same nodes and are just as derived.</div>
+       ${t.also.map(([k, n]) => {
+         const g = AGRP.get(k) || {};
+         return `<div class="wrow stack"><span class="ikey">${k}</span>
+           <span class="ilab">${g.label || ""} &middot; ${n} node${n > 1 ? "s" : ""}${
+             g.partitioned === false ? " &middot; absorbed" : ""}</span></div>`;
+       }).join("")}</div>`
+    : "";
+  const blocks = t.blocks.length
+    ? `<div class="icard"><div class="ikey">on the die</div>
+       <div class="imeta">${t.blocks.map(([b, n]) =>
+         `${ATL.blockNames[b]} <b>${n}</b>`).join(" &middot; ")}
+       <br>A container is derived machinery and a block is a region of the die, so
+       the two cross freely.</div></div>`
+    : "";
+  const w = [...WGROUPS];
+  const watching = w.length
+    ? `<div class="icard"><div class="ikey">watching</div>
+       <div class="imeta">${w.length} container${w.length > 1 ? "s" : ""},
+         ${watchedNames().length} node${watchedNames().length > 1 ? "s" : ""} in the trace's watch set.</div>
+       ${w.map((k) => `<div class="wrow stack">
+          <button class="ibtn on" data-watch="${k}">unwatch</button>
+          <span class="ikey">${k}</span>
+          <span class="ilab">${(AGRP.get(k) || {}).label || ""}</span></div>`).join("")}</div>`
+    : "";
+  $("#inspside").innerHTML = also + blocks + watching;
+  $("#inspnote").innerHTML = LIVE
+    ? "A lit pill is high at this half-cycle; a ringed one just changed. Watching a "
+      + "container re-records the trace with its named nodes in the watch set, and keeps "
+      + "the cursor where it is."
+    : "Watching needs the API: it re-records the trace, and this is a packed one.";
+}
+
+/* -- wiring ---------------------------------------------------------------- */
+/* Delegated, because the Bits tab rebuilds its lanes every half-cycle and a
+   handler bound to a lane would be thrown away with it. */
+document.addEventListener("click", (e) => {
+  const w = e.target.closest("[data-watch]");
+  if (w) { toggleWatch(w.dataset.watch); return; }
+  const el = e.target.closest("[data-atlas]");
+  if (!el) return;
+  const id = el.dataset.atlas;
+  if (ANAMES[id]) inspect(ALABEL[id] || id, ANAMES[id]);
+  else inspect(id, [lineNode(id)]);          /* a control line is one node */
+});
+$("#inspclose").onclick = clearInspect;
+
+
 /* ---------- the latch diagram: the thirteen pieces of named storage ---------- */
 const LBOXES=[
   {id:"PCHP",x:36, y:16, w:86, h:28,label:"PCHP",k:"addr",get:o=>o.pchp},
@@ -1218,7 +1606,7 @@ function buildLatches(){
     if(e.ln) m+=`<text class="elab" data-ln="${e.ln}" x="${e.lx}" y="${e.ly}" text-anchor="${e.anchor||"middle"}">${(LINEMETA[e.ln]||[e.ln])[0]}</text>`;
   }
   for(const b of LBOXES){
-    m+=`<g class="bx${b.bus?" bus":""}${b.k?" k-"+b.k:""}" data-lb="${b.id}">`
+    m+=`<g class="bx${b.bus?" bus":""}${b.k?" k-"+b.k:""} tagged" data-lb="${b.id}" data-atlas="${b.id}">`
       +`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="2"/>`
       +(b.bus
         ? `<text class="n" x="${b.x+8}" y="${b.y+b.h/2+3.5}">${b.label}</text>`
@@ -1384,7 +1772,7 @@ function latchWords(o,p){
   }
   for(const b of BOXES){
     const cx=b.x+b.w/2;
-    s+=`<g class="bx${b.bus?" bus":""}" data-bx="${b.id}">`
+    s+=`<g class="bx${b.bus?" bus":""} tagged" data-bx="${b.id}" data-atlas="${b.id}">`
       +`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="2"/>`
       +(b.bus
          ? `<text class="n" x="${b.x+9}" y="${b.y+b.h/2+3.5}">${b.label}</text>`
@@ -1397,7 +1785,7 @@ function latchWords(o,p){
 
   $("#lines").innerHTML = SHORT.filter(n=>LINEMETA[n]).map(n=>{
     const m=LINEMETA[n]||[n,"alu"];
-    return `<span class="ln ${m[1]}" data-ln="${n}"><i></i>${m[0]}</span>`;
+    return `<span class="ln ${m[1]} tagged" data-ln="${n}" data-atlas="${n}"><i></i>${m[0]}</span>`;
   }).join("");
 
   $("#regs").innerHTML =
@@ -1535,6 +1923,7 @@ function render(){
   $("#blockwords").innerHTML=bw.map(([k,lab,t])=>`<li class="${k?"k":""}"><b class="bwl">${lab}</b>${t}</li>`).join("");
   $("#bwpos").textContent=`${bw.filter(x=>x[0]).length} of ${bw.length} moved`;
   renderLatches(o,p);
+  if(SEL) paintInspector();
 
   /* registers */
   const rv={A:[hx(o.a),p&&p.a!==o.a],X:[hx(o.x),p&&p.x!==o.x],Y:[hx(o.y),p&&p.y!==o.y],
@@ -1611,7 +2000,7 @@ function renderBits(o,p){
     h+=`<div class="bsecbox"><div class="bsec">${sec}</div>`;
     for(const [name,get,w,kind,tag] of rows){
       if(get===null){
-        h+=`<div class="bl pins"><span class="bn">${name}</span><span class="ptags">${tag(o)}</span></div>`;
+        h+=`<div class="bl pins tagged" data-atlas="${name}"><span class="bn">${name}</span><span class="ptags">${tag(o)}</span></div>`;
         continue;
       }
       const v=get(o), pv=p?get(p):null, idle=(pv!==null&&pv===v);
@@ -1622,7 +2011,8 @@ function renderBits(o,p){
         if(w===16&&b===8) cells+='<span class="gap"></span>';
       }
       const t=tag?tag(o):null;
-      h+=`<div class="bl ${kind}${idle?" idle":""}${w===16?" w16":""}"><span class="bn">${name}</span>`
+      h+=`<div class="bl ${kind}${idle?" idle":""}${w===16?" w16":""}${ANAMES[name]?" tagged":""}"`
+        +(ANAMES[name]?` data-atlas="${name}"`:"")+`><span class="bn">${name}</span>`
         +`<span class="bits">${cells}</span>`
         +`<span class="bh">${hx(v,w/4)}</span>`
         +(t?`<span class="btag">${t}</span>`:"")+`</div>`;
@@ -2362,21 +2752,27 @@ function showListing(a){
 /* One call. The latches used to need a second 40-watch request merged in;
    they are first-class rows columns now (findings issue 03), so the merge
    went the way its own comment predicted. */
+/* The boot request, in one place, because the atlas re-records with a wider
+   watch and a second copy of the preset-memory rule is the copy that drifts.
+   A preset may bring its own memory: a handler and the vectors that reach it,
+   which no assembly source can place without filling the 64 KiB between. Only
+   when the editor still holds that preset. */
+function bootBody(watch){
+  const pre=PRESETS[+$("#preset").value];
+  const body={rom:{source:$("#src").value},watch:watch||WATCH};
+  if(pre&&pre.mem&&$("#src").value.trim()===pre.src.trim()) body.memory=pre.mem;
+  return body;
+}
 async function fetchTrace(machine,n){
-  const a=await post("step",{machine,half_cycles:n,trace:true,watch:WATCH.concat(ADDER_NAMES,DECODE_NAMES),format:"rows"});
+  const w=(typeof traceWatch==="function")?traceWatch():WATCH.concat(ADDER_NAMES,DECODE_NAMES);
+  const a=await post("step",{machine,half_cycles:n,trace:true,watch:w,format:"rows"});
   return {machine:a.machine,cols:a.trace_rows.cols,watch_names:a.trace_rows.watch_names,rows:a.trace_rows.rows};
 }
 
 async function boot(){
   const btn=$("#run"); btn.disabled=true; btn.textContent="assembling…"; $("#err").hidden=true;
   try{
-    const pre=PRESETS[+$("#preset").value];
-    const body={rom:{source:$("#src").value},watch:WATCH};
-    /* A preset may bring its own memory: a handler and the vectors that
-       reach it, which no assembly source can place without filling the
-       64 KiB between. Only when the editor still holds that preset. */
-    if(pre&&pre.mem&&$("#src").value.trim()===pre.src.trim()) body.memory=pre.mem;
-    const b=await post("boot",body);
+    const b=await post("boot",bootBody(traceWatch()));
     const s=await fetchTrace(b.machine,300);
     setCols(s.cols,s.watch_names);
     F=s.rows;
@@ -2427,6 +2823,10 @@ function useDemo(reason){
   PWBUSY=true; paintPower();
   const err=await boot();
   PWBUSY=false; POWER=!err; paintPower();
+  /* The atlas is 50 KB gzipped and cached a day, and nothing on screen needs
+     it until something is clicked. Pulled after the trace so it never delays
+     the chip appearing. */
+  loadAtlas();
 })();</script>
 </body>
 </html>
