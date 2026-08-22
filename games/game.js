@@ -54,10 +54,13 @@ const DIERUNNER = {
   input: 0x0002,
   status: 0x0003,
   score: 0x0011,
-  screen: 0x0400,
+  // A page higher than the first cartridge's: this ROM grew past $0400 when
+  // the scenery arrived, and a ROM that reaches its own screen is overwritten
+  // by its own display.
+  screen: 0x0500,
   width: 16,
   height: 16,
-  frameCost: 8400,              // measured
+  frameCost: 12000,             // measured; the scenery added about 40%
   dirs: { up: 0, down: 0, left: 3, right: 4 },
   tiles: {},                    // the ROM addresses tiles directly
   gateMask: 0x0014,
@@ -97,6 +100,7 @@ async function loadTiles() {
     TILES = t;
     state.sheet = null;              // force the atlas to be rebuilt
     fit();
+    legend();
     if (state.con) paint(); else preview();
   } catch (e) {
     // Not an error the player needs: the starter set is a real tile set.
@@ -162,6 +166,23 @@ function paint() {
     }
   }
   drawScreen($('#screen').getContext('2d'), state.sheet, idx, c.width, c.height);
+}
+
+/* The legend's swatches are the REAL tiles, drawn from the same sheet the game
+ * draws from, so a key cannot show something the screen does not. */
+function legend() {
+  for (const i of document.querySelectorAll('.legend i')) {
+    const t = +i.className.slice(1);
+    if (!Number.isFinite(t) || !TILES[t]) continue;
+    const c = document.createElement('canvas');
+    c.width = c.height = TILE * 2;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    const one = buildSheet([TILES[t]], 2);
+    g.drawImage(one.canvas, 0, 0, TILE * 2, TILE * 2, 0, 0, TILE * 2, TILE * 2);
+    i.style.backgroundImage = `url(${c.toDataURL()})`;
+    i.style.backgroundSize = 'cover';
+  }
 }
 
 function gates() {
@@ -314,4 +335,5 @@ function preview() {
 }
 $('#note').textContent = CARTS[0].blurb;
 preview();
+legend();
 loadTiles();

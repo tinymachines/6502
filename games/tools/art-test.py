@@ -40,6 +40,12 @@ ok("the die is drawn in the palette and nothing else", set(cols)<={"11,17,32","6
    " ".join(sorted(cols,key=lambda k:-cols[k])))
 ok("gates are on screen", any(k.startswith("224,162") for k in cols))
 ok("the gate readout still tracks the chip", ev("document.querySelectorAll('#gates .gate').length")==8)
+ok("the legend is drawn from the real tiles",
+   (ev("[...document.querySelectorAll('.legend i')].filter(e=>e.style.backgroundImage.indexOf('data:image')>=0).length") or 0)>=6,
+   str(ev("document.querySelectorAll('.legend i').length"))+" swatches")
+ok("it keeps running with the scenery in",
+   wait("+document.querySelector('#k-frames').textContent>=22"),
+   ev("document.querySelector('#k-frames').textContent+' frames'"))
 err=ev("document.querySelector('#err').hidden?'':document.querySelector('#err').textContent")
 ok("no engine error", "stopped answering" not in (err or ""), err or "clean")
 print("ALL PASS" if not any(x.startswith("FAIL") for x in R) else "RED")

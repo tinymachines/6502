@@ -85,6 +85,45 @@ two channels and only one conducts**, and every eighth frame the clock phase
 flips and they swap. A channel that is shut now will be open in a moment, which
 is the whole game. Charge packets score. The die wraps.
 
+### What is on the die
+
+The seven tiles that arrived with the art are all in use, and none of them is
+decoration for its own sake -- the die used to be empty between barriers.
+
+| tile | what it is | what it does |
+|---:|---|---|
+| 9 | poly bus | a run of three across the die. Scenery |
+| 10 | power rail | runs **down** a column for three to six rows. Scenery |
+| 11 | diff well | an occasional single. Scenery |
+| 12 | poly T | where a rail comes in |
+| 13 | metal L | where a rail turns and leaves |
+| 14 | capacitor | worth **five** charge packets |
+| 15 | bond pad | **signposts the gap** of the barrier above it |
+
+The power rail is the one worth understanding: the ROM draws a single cell per
+row, and it comes out as a rail *because the world scrolls*. A poly T caps the
+end it comes in at and a metal L the end it leaves by, so a rail has a
+direction without the ROM ever drawing a line.
+
+Only a **plain** barrier gets a bond pad. Which channel of a *switched* gate is
+open depends on a control line that will have moved by the time the player
+arrives, so a signpost there would be pointing at a guess.
+
+A frame now costs **12,000 half-cycles**, up about 40% from the bare version.
+At one request a frame that changes nothing a player can feel: the round trip
+was always the frame rate.
+
+### The screen moved to $0500
+
+Adding the scenery pushed the ROM from 359 bytes to 521, past `$0400` -- which
+was where its own screen lived. It assembles, it boots, and the picture eats
+the code. `games/tools/asm.mjs --limit $0500` makes that a build failure
+instead of a mystery, and the screen sits a page higher.
+
+Moving it is four addresses, and **missing one is silent**: `$0410` is the
+scroll's *source*, and with it left behind the game copied unrelated memory
+into the screen every frame and drew an almost-empty die. Nothing errored.
+
 ### The gates are real
 
 Each gate is a **switch that exists on this die**, and it conducts exactly when

@@ -31,17 +31,27 @@
 ;   $11   score, one per charge packet
 ;   $12   frame counter
 ;   $19   scratch: which gate a barrier being built belongs to
+;   $1A   the column of the gap in the barrier just built
+;   $1B   non-zero while a bond pad is owed to that column, one row later
+;   $1C   the column a power rail is running down
+;   $1D   rows of that rail still to come
 ;   $13   frames until the next barrier
 ;   $14   gate mask, written by the host: bit g is control line g's level
 ;   $17   scratch: the column a gap starts at
 ;   $18   the column the LAST gap started at, so the next one drifts from it
 ;
-;   $0400 the screen: 16x16 cells, one tile index per cell
-;         row 2 ($0420) is the runner's row and never moves: the world
+;   $0500 the screen: 16x16 cells, one tile index per cell. It sits a page
+;         higher than it used to: the ROM grew past $0400 when the scenery
+;         arrived and would have been overwritten by its own display.
+;         row 2 ($0520) is the runner's row and never moves: the world
 ;         rises to meet him, so he must sit near the top to see it coming
 ;
 ; Tiles, from games/chr.js:
 ;   0 substrate   2 charge packet   4 polysilicon gate (solid)
+;   9  poly bus     10 power rail   11 diff well
+;   12 poly T       13 metal L      14 capacitor    15 bond pad
+;         all of these are scenery and pass through, except the capacitor,
+;         which is worth five. The die used to be empty between barriers.
 ;   16+g  channel A of gate g: conducts while line g is HIGH
 ;   24+g  channel B of gate g: conducts while line g is LOW
 ;         (the host draws both as tile 6 or 7 by the same rule)
@@ -58,7 +68,7 @@
 
         LDA #$00                ; clear the screen, all 256 cells
         TAX
-clear   STA $0400,X
+clear   STA $0500,X
         INX
         BNE clear
 
@@ -80,7 +90,7 @@ clear   STA $0400,X
 
         LDA #$08                ; draw the runner once before the first frame
         LDX $10
-        STA $0420,X
+        STA $0520,X
 
         LDA #$01                ; raise the flag: the host clears it to start
         STA $0D
@@ -131,8 +141,8 @@ noinput
 ; -- scroll the world up one row -------------------------------------------
 ; 240 bytes, forwards, destination below source: the plain copy is safe.
         LDX #$00
-scroll  LDA $0410,X
-        STA $0400,X
+scroll  LDA $0510,X
+        STA $0500,X
         INX
         CPX #$F0
         BNE scroll
@@ -140,7 +150,7 @@ scroll  LDA $0410,X
 ; -- the new bottom row ----------------------------------------------------
         LDX #$00
         LDA #$00
-blank   STA $04F0,X
+blank   STA $05F0,X
         INX
         CPX #$10
         BNE blank
@@ -148,16 +158,19 @@ blank   STA $04F0,X
         DEC $13
         BEQ barrier
 
-; not a barrier row: sometimes a charge packet
-        JSR rnd
-        AND #$03
-        BNE nopacket
-        JSR rnd
-        AND #$0F
-        TAX
-        LDA #$02
-        STA $04F0,X
-nopacket
+; Not a barrier row. The die gets some furniture, then perhaps something to
+; collect, then the signpost owed by the last barrier.
+        JSR scenery
+        JSR pickup
+
+        LDA $1B                 ; a bond pad, pointing at the way through the
+        BEQ nopad               ; barrier immediately above it
+        LDX $1A
+        LDA #$0F
+        STA $05F0,X
+        LDA #$00
+        STA $1B
+nopad
         JMP draw
 
 ; -- a barrier -------------------------------------------------------------
@@ -166,7 +179,7 @@ barrier LDA #$06                ; six frames until the next one
 
         LDX #$00                ; wall it off
         LDA #$04
-wall    STA $04F0,X
+wall    STA $05F0,X
         INX
         CPX #$10
         BNE wall
@@ -190,7 +203,15 @@ wall    STA $04F0,X
         AND #$01
         BNE switched
 
-; a plain gate: three cells of nothing
+; A plain gate: three cells of nothing, and a bond pad owed to the row below
+; so the opening is announced before it arrives. Only a plain gate is
+; signposted: which channel of a SWITCHED gate is open depends on a control
+; line that will have moved by the time the player gets there, so a signpost
+; would be pointing at a guess.
+        LDA $17
+        STA $1A
+        LDA #$01
+        STA $1B
         LDA #$00
         JSR punch
         LDA #$00
@@ -236,9 +257,11 @@ switched
 
 ; -- what the runner is standing in ----------------------------------------
 draw    LDX $10
-        LDA $0420,X
+        LDA $0520,X
         CMP #$02
         BEQ eat
+        CMP #$0E                ; a capacitor is worth five
+        BEQ eatbig
         CMP #$04                ; solid polysilicon
         BEQ dead
         CMP #$10
@@ -261,18 +284,108 @@ chana   TAY                     ; 16+g: conducts while the line is HIGH
         BNE alive
         BEQ dead
 
+eatbig  LDA $11                 ; a capacitor
+        CLC
+        ADC #$05
+        STA $11
+        LDA #$00
+        STA $0520,X
+        JMP alive
+
 eat     INC $11                 ; a charge packet: take it
         LDA #$00
-        STA $0420,X
+        STA $0520,X
 alive   LDA #$08
-        STA $0420,X
+        STA $0520,X
         RTS
 
 dead    LDA #$01
         STA $03
         LDA #$08                ; leave the runner where it stopped
-        STA $0420,X
+        STA $0520,X
         RTS
+
+; ---------------------------------------------------------------------------
+; The furniture of a die. A power rail runs down a column for a few rows, so
+; it is drawn one cell per row and comes out as a rail because the world
+; scrolls: a poly T where it starts, metal rail down its length, a metal L
+; where it turns away. None of it is in the way; it is here because a die is
+; not empty between its gates.
+; ---------------------------------------------------------------------------
+scenery LDA $1D
+        BEQ newrail
+        DEC $1D
+        LDX $1C
+        LDA $1D
+        BNE railon
+        LDA #$0D                ; metal L: the rail turns and leaves
+        STA $05F0,X
+        RTS
+railon  LDA #$0A                ; power rail
+        STA $05F0,X
+        RTS
+
+newrail JSR rnd
+        AND #$07
+        BEQ startrail
+        CMP #$01
+        BEQ polybus
+        CMP #$02
+        BEQ diffwell
+        RTS
+
+startrail
+        JSR rnd
+        AND #$0F
+        STA $1C
+        JSR rnd
+        AND #$03
+        CLC
+        ADC #$03                ; three to six rows of it
+        STA $1D
+        LDX $1C
+        LDA #$0C                ; poly T where it comes in
+        STA $05F0,X
+        RTS
+
+polybus JSR rnd                 ; a run of poly across the die
+        AND #$0F
+        STA $17
+        LDA #$09
+        JSR punch
+        LDA #$09
+        JSR punch
+        LDA #$09
+        JSR punch
+        RTS
+
+diffwell
+        JSR rnd
+        AND #$0F
+        TAX
+        LDA #$0B
+        STA $05F0,X
+        RTS
+
+; ---------------------------------------------------------------------------
+; Something to collect: usually a charge packet, occasionally a capacitor,
+; which is worth five of them.
+; ---------------------------------------------------------------------------
+pickup  JSR rnd
+        AND #$03
+        BNE nopick
+        JSR rnd
+        AND #$0F
+        TAX
+        JSR rnd
+        AND #$07
+        BNE plain
+        LDA #$0E                ; a capacitor
+        STA $05F0,X
+        RTS
+plain   LDA #$02
+        STA $05F0,X
+nopick  RTS
 
 ; ---------------------------------------------------------------------------
 ; Open one cell of the row being built, at $17, and step $17 on with a wrap.
@@ -280,7 +393,7 @@ dead    LDA #$01
 ; ---------------------------------------------------------------------------
 punch2
 punch   LDX $17
-        STA $04F0,X
+        STA $05F0,X
         INC $17
         LDA $17
         AND #$0F
