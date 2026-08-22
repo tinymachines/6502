@@ -372,6 +372,17 @@ three About links, most pages carried one, the blueprint carried two, and
 of the project, because a nav missing one link still looks exactly like a nav.
 Same reasoning as `version-footer.js` and `block-palette.js`.
 
+- **A `Developers` group holds the API and the Halfwave Lab**, between the
+  measured tables and About: things to build against rather than things to
+  read, which is why they are not entries under About. Both are marked
+  `off: true`, as the archive now is: **deployed beside this tree rather than
+  inside it** (the archive is an alias, `/api/` is a proxy to uvicorn, the Lab
+  is its own property), so all three are 404s against the dev server and real
+  pages in production. `renderMenu` puts that on the link as `data-off`, so
+  `_menu-test.html` skips fetching them **by the data's own rule rather than a
+  list of its own** -- it then pins the set (a fourth unverifiable link cannot
+  appear silently) and reaches all three against the live site. An absolute
+  `href` also gets `rel="noopener"`.
 - **The order is a reading order, not a sitemap.** Start here → the chip drawn
   four ways → one instruction at a time → the measured tables → about. `Blocks`
   sits between Exploded and Schematic, which is where it belongs: the exploded
@@ -420,6 +431,17 @@ Same reasoning as `version-footer.js` and `block-palette.js`.
   - **`_menu-test.html` asserts the DOM agrees with the file**: every page in
     `changed` carries a dot and no page outside it does, with a title and
     screen-reader text on each.
+  - **The panel is measured at real viewports now, and the last entry has to
+    be reachable.** Every narrow case used to be measured in an 820px-tall
+    frame, which is not a phone, so the panel never had to scroll and a
+    reachability check could not have failed. At 320x568 it is **458px of room
+    for 1937px of menu**. Fitting is not reaching, so the harness scrolls the
+    panel to its end and requires the last link to be inside it. Proved by
+    removing the scroll box (`overflow-y: visible`), which fails it -- **note
+    that `overflow: hidden` does NOT**, because a hidden box is still
+    programmatically scrollable in Chrome and only the user is stopped. That
+    was the first mutation tried and it passed, which looked like a weak
+    assertion and was a wrong proof.
 - **The archive's menu is grouped the same way but is not the same list.**
   `shell.py` owns it, split into "The archive" and "The simulator", which is
   the fact a reader most needs: half of those links leave the archive. The

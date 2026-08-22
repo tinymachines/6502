@@ -232,22 +232,57 @@ const shape = (groups) =>
     d = f.contentDocument;
     for (let i = 0; i < 300 && !d.querySelector('.navgroup'); i++) await sleep(50);
     const hrefs = [...new Set(readMenu(d).flatMap((g) => g.items).map((i) => i.href))];
+    // Deployed beside this tree rather than inside it: the archive is ~2.5 GB
+    // served from an alias, /api/ is a proxy to uvicorn, and the Lab is its
+    // own property. All three are 404s against the dev server and real pages
+    // in production, so they cannot be fetched here. The menu SAYS which ones
+    // those are (data-off), so this harness skips by the data's own rule
+    // rather than by a list of its own -- and then pins the set, or a fourth
+    // unverifiable link could be added and nothing would notice.
+    const off = [...d.querySelectorAll('.navlinks a[data-off]')]
+      .map((a) => a.getAttribute('href')).sort();
+    ok('the links that cannot be checked here are exactly the three deployed elsewhere',
+       JSON.stringify([...new Set(off)])
+         === JSON.stringify(['api/', 'archive/', 'https://halfwave.tinymachines.ai']),
+       [...new Set(off)].join(' '));
+    const offSet = new Set(off);
     const dead = [];
     let skipped = 0;
     for (const h of hrefs) {
       if (h.startsWith('#')) continue;              // a section of this page
-      // The archive is ~2.5 GB deployed beside the releases, not inside web/,
-      // so it is a 404 here and a real page in production. Checking it against
-      // the dev server would report a working link as broken.
-      if (h.startsWith('archive/')) { skipped++; continue; }
+      if (offSet.has(h)) { skipped++; continue; }
       const url = new URL(h, f.contentWindow.location.href);
-      const res = await fetch(url, { method: 'GET' });
-      if (!res.ok) dead.push(`${h} -> ${res.status}`);
+      // A cross-origin href is refused by CORS rather than answered, so an
+      // unguarded fetch throws and takes the whole run with it. A link that
+      // cannot be fetched from here is a dead link as far as this check is
+      // concerned, and saying so is more use than a stack trace.
+      try {
+        const res = await fetch(url, { method: 'GET' });
+        if (!res.ok) dead.push(`${h} -> ${res.status}`);
+      } catch (e) { dead.push(`${h} -> ${e.message}`); }
     }
     ok('every link in the menu reaches a real page',
        dead.length === 0,
        dead.join(', ')
          || `${hrefs.length - skipped} checked, ${skipped} deployed separately`);
+
+    // ...and the three that were skipped are checked against the LIVE site,
+    // which is the only place they exist. A skip that is never made good is a
+    // hole the size of three menu entries.
+    const live = [];
+    for (const h of [...offSet]) {
+      const u = new URL(h, 'https://6502.tinymachines.ai/');
+      try {
+        const r = await fetch(u, { mode: 'no-cors' });
+        // A no-cors response is opaque: status is 0 and ok is false whatever
+        // happened, so what is being tested is that the request COMPLETED
+        // rather than what it returned. A 404 would also complete, which is
+        // why the same-origin ones are asserted properly below.
+        live.push(`${h} reached`);
+      } catch (e) { live.push(`${h} FAILED: ${e.message}`); }
+    }
+    ok('the off-tree links reach something on the live site',
+       !live.some((x) => x.includes('FAILED')), live.join(', '));
 
     // --- it opens, and it closes -------------------------------------------
     const head = d.querySelector('.site-head');
@@ -273,11 +308,20 @@ const shape = (groups) =>
 
     // --- and it fits the screen it opens on --------------------------------
     //
-    // Five groups of links is a tall panel. On a phone it has to scroll inside
-    // itself rather than push the page sideways or run off the bottom.
+    // Seven groups of links is a tall panel: 1789px of content in 790px of
+    // room on a phone. It has to scroll inside itself rather than push the
+    // page sideways or run off the bottom -- AND the last entry has to be
+    // reachable, which is the failure this whole measurement exists for
+    // (a `calc(100vh - 4.25rem)` once left the last group 38px below the fold
+    // with no way to get to it).
+    // Height matters as much as width and was not being varied: every narrow
+    // case was measured in an 820px-tall frame, which is not a phone, so the
+    // panel never had to scroll and the reachability check below could not
+    // have failed. These are the real viewports.
     const over = [];
-    for (const width of [320, 390, 768, 1280, 1600]) {
+    for (const [width, height] of [[320, 568], [390, 844], [768, 1024], [1280, 800], [1600, 900]]) {
       f.style.width = `${width}px`;
+      f.style.height = `${height}px`;
       await load('schematic');
       const dd = f.contentDocument;
       for (let i = 0; i < 300 && !dd.querySelector('.navgroup'); i++) await sleep(50);
@@ -303,15 +347,31 @@ const shape = (groups) =>
       const below = Math.round(r.bottom - dd.documentElement.clientHeight);
       const cols = new Set([...panel.querySelectorAll('.navgroup')]
         .map((g) => Math.round(g.getBoundingClientRect().left))).size;
-      rows.push(`     menu @${String(width).padStart(4)}px  ${cols} column(s)`
+      rows.push(`     menu @${String(width).padStart(4)}x${height}  ${cols} column(s)`
         + `, ${Math.round(r.height)}px tall, ${below > 0 ? `${below}px past the fold` : 'fits'}`
         + `, doc ${docOver > 0 ? `+${docOver}` : 'fits'}`);
       if (docOver > 0) over.push(`${width}: page +${docOver}px`);
       if (below > 0) over.push(`${width}: panel ${below}px past the bottom`);
+      // Fitting is not the same as reaching. Scroll the panel to its end and
+      // require the last link to be inside it. Measured: at 320x568 the panel
+      // is 458px of room for 1937px of menu, so this really does scroll.
+      // Verified by removing the scroll box (`overflow-y: visible`), which
+      // fails it. Note that `overflow: hidden` does NOT: a hidden box is
+      // still programmatically scrollable in Chrome, it only stops the user,
+      // so it is the wrong mutation to prove this with.
+      panel.scrollTop = panel.scrollHeight;
+      await sleep(50);
+      const links = panel.querySelectorAll('a');
+      const last = links[links.length - 1].getBoundingClientRect();
+      const pr = panel.getBoundingClientRect();
+      if (last.bottom > pr.bottom + 1 || last.top < pr.top - 1) {
+        over.push(`${width}: the last entry cannot be scrolled to`);
+      }
     }
     f.style.width = '1280px';
+    f.style.height = '820px';
     ok('the panel fits the viewport at every width, and never widens the page',
-       over.length === 0, over.join(' | ') || 'five widths');
+       over.length === 0, over.join(' | ') || 'five real viewports');
 
     results.push('', ...rows);
   } catch (e) {

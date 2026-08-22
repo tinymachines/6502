@@ -89,6 +89,19 @@ export const MENU = [
         hint: 'every instruction, timed sync to sync' },
     ],
   },
+  // Things to build against rather than things to read, which is why they are
+  // their own group and not entries under About. Both are `off`: deployed
+  // beside this tree rather than inside it, so they are 404s against the dev
+  // server and real pages in production.
+  {
+    title: 'Developers',
+    items: [
+      { label: 'API', href: 'api/', off: true,
+        hint: 'the chip over HTTP, one half-cycle at a time, stateless' },
+      { label: 'Halfwave Lab', href: 'https://halfwave.tinymachines.ai', off: true,
+        hint: 'the API driven as an app: fourteen readings of one half-cycle' },
+    ],
+  },
   {
     title: 'About',
     items: [
@@ -102,7 +115,7 @@ export const MENU = [
         hint: 'what one of its authors recalls, asked of the silicon' },
       { label: 'Credit', page: '', hash: 'credit', marks: false,
         hint: 'who traced the die, and the licence' },
-      { label: 'Archive', href: 'archive/',
+      { label: 'Archive', href: 'archive/', off: true,
         hint: 'visual6502.org, preserved' },
     ],
   },
@@ -155,6 +168,7 @@ export function renderMenu(root = document) {
       for (const item of group.items) {
         const a = document.createElement('a');
         a.href = hrefFor(item, here);
+        if (/^https?:/.test(item.href || '')) a.rel = 'noopener';
         if (item.marks !== false && (item.page ?? null) === here && !item.href) {
           a.setAttribute('aria-current', 'page');
         }
@@ -165,6 +179,12 @@ export function renderMenu(root = document) {
         // carried on the link so the dot can find its entry without a second
         // copy of the list.
         if (item.page !== undefined && !item.href) a.dataset.page = item.page;
+        // Deployed beside this tree rather than inside it: the archive is
+        // ~2.5 GB served from an alias, /api/ is a proxy to uvicorn, and the
+        // Lab is its own property. Marked here so the harness skips fetching
+        // them by a rule in the data rather than by a list of its own, and can
+        // assert that the set is exactly what is declared.
+        if (item.off) a.dataset.off = '1';
         const hint = document.createElement('span');
         hint.className = 'navlink-hint';
         hint.textContent = item.hint;
