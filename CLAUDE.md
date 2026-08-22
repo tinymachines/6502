@@ -836,6 +836,30 @@ half-cycle.
 - The obvious optimisation, skipping nodes already covered by a group
   processed this round, is **not** safe: applying a group toggles transistors
   and can change connectivity before the later node is reached.
+- **A global-epoch pre-filter was built, proved correct, and reverted for
+  firing 0.63% of the time.** The idea: count every event that can change how
+  a group resolves (a transistor toggling, a pull being driven, the state
+  being replaced) in one monotonic `epoch`, stamp each node when its group is
+  resolved, and skip the walk when the stamp still equals the epoch. It is
+  sound where the unsafe version is not, because a toggle moves the epoch and
+  the skip stops firing; **the golden test passed bit-exact over all 1725
+  nodes at every half-cycle.** It is also useless: 5.65 skips per half-cycle
+  against 899 attempts, and throughput unchanged within noise.
+  - **The granularity is the whole problem.** ~180 nodes change level per
+    half-cycle and each toggles its gated transistors, so a *global* epoch
+    advances hundreds of times per half-cycle and no stamp survives to be
+    reused. A node's group only cares about toggles affecting *its* members,
+    not about any toggle on the die.
+  - What this rules out is the cheap version, not the idea. A per-node or
+    per-group staleness stamp could still work, but validating it needs the
+    group membership, which is the walk being avoided. Anything tried here has
+    to beat 437 instructions per recalc including its own bookkeeping.
+  - One hazard found while building it, worth knowing if this is revisited:
+    `Engine::state_mut()` hands out `&mut ChipState` and `v6502-sim`'s restore
+    path uses it to replace all four bitsets. Any scheme that caches a fact
+    about the state must invalidate there, or it will trust stamps taken
+    against a different machine, and the failure lands on the one path whose
+    promise is bit-exact resume.
 - **Throughput and latency are different problems.** One machine is bounded by
   the above; machines per second is bounded by cores, and there are 12.
 
