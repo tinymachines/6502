@@ -903,8 +903,34 @@ state that decodes to the wrong chip is worse than one that is rejected.
 - **Warm means the netlist, not the session.** The binary parses the netlist
   once and keeps one constructed machine; each request overwrites all four
   bitsets and all 64 KiB. The Python `Pool` is N such processes behind
-  per-worker locks, round-robin, respawned on death. `HALFWAVE_BIN`,
-  `HALFWAVE_POOL`.
+  per-worker locks, respawned on death. `HALFWAVE_BIN`, `HALFWAVE_POOL`.
+- **Twelve chips, started at boot rather than on first use.** A chip is
+  **3 ms and 2.2 MB** measured, so the pool is 40 ms and 26 MB and there is
+  nothing to weigh. Lazy spawning made "a pool of warm instances" false for
+  exactly as many requests as there are workers; `Pool.warm()` runs in the
+  lifespan and a worker that fails to start is left for the next request
+  rather than refusing the boot.
+- **It does not buy twelve times the throughput, and the docs must not imply
+  it.** Best of three, 24 concurrent requests of 3000 half-cycles: pool
+  1/4/6/8/12 gives **1.00x / 3.74x / 4.49x / 5.09x / 5.55x**. This is a
+  **6-core** part with two threads per core, and the solver is compute-bound
+  (IPC 2.04, 1.28% L1 miss), so the second thread on a core has little to
+  interleave with. An earlier note here claimed "12 cores, so a 12x win" and
+  was wrong on both counts: six physical cores, on a box whose load average
+  was 14 at the time of measuring.
+  - Twelve still beats eight, which is why it is twelve. Spare chips absorb
+    scheduling jitter on a shared host for 2.2 MB each.
+  - **Per-size noise is 1.05x to 1.20x here**, so single runs cannot rank
+    adjacent sizes: one run had 8 beating 12. Best-of-three makes the curve
+    monotonic. Same discipline as the solver bench.
+- **The HTTP layer is not the limit, and that was checked rather than
+  assumed.** With the work set to one half-cycle the same path serves about
+  **980 requests a second at roughly 1 ms each**, so at 50 req/s of real work
+  the framework is nowhere near the ceiling.
+- **The pool picks an idle chip, not the next one.** Round-robin alone hands
+  out the next worker whether or not it is busy, so a request could queue
+  behind a chip mid-settle while eleven sat idle. The sweep starts at the
+  round-robin cursor so an unloaded pool still spreads out.
 - **There is one assembler and the service does not grow a second one.**
   `/v1/assemble` shells to node running `service/asm-bridge.mjs`, which
   imports `web/asm.js` — the assembler that inverts the disassembler's

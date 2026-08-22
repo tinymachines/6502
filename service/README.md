@@ -232,8 +232,14 @@ of opcodes.
 
 ## Notes for whoever builds the site on this
 
-- Speed: ~28k half-cycles/s per warm instance. A request is bounded at
+- Speed: ~26k half-cycles/s per warm instance. A request is bounded at
   200,000 half-cycles (`max_step` in `/v1/meta`), so shard long runs.
+- **Twelve warm chips, up before the first request** (`HALFWAVE_POOL`, 3 ms
+  and 2.2 MB each). That is 5.55x the throughput of one, not 12x: this is a
+  6-core part with two threads per core and the solver is compute-bound, so
+  the second thread on a core has little to interleave with. The HTTP layer
+  is not the limit and was measured, not assumed: about 980 requests a second
+  when the work is one half-cycle.
 - The engine caps traced steps at 10,000 per request.
 - A JAM opcode ($02 and friends) never reaches another fetch:
   `until="instruction"` returns `completed: false` when the cap is hit,

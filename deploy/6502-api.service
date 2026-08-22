@@ -36,6 +36,17 @@ Environment=NODE=/mnt/nom01/envs/.nvm/versions/node/v24.0.1/bin/node
 # outside the checkout: a git operation must never be able to delete
 # somebody's page. StateDirectory creates it and hands it to the unit's
 # user, so nothing has to be chowned by hand on a new machine.
+# Twelve warm chips, ready before the first request. A chip is about 3 ms to
+# start and 2.3 MB resident, so the pool costs 40 ms and 28 MB.
+#
+# It does NOT buy twelve times the throughput and the unit should not imply it
+# does. Measured here, best of three, 24 concurrent requests of 3000
+# half-cycles: pool 1/4/6/8/12 gives 1.00x/3.74x/4.49x/5.09x/5.55x. This is a
+# 6-core part with two threads per core, and the solver is compute-bound
+# (IPC 2.04, 1.28% L1 miss), so the second thread on a core has little to
+# interleave with. Twelve still beats eight, and spare chips absorb scheduling
+# jitter on a shared box, which is what the extra 14 MB is for.
+Environment=HALFWAVE_POOL=12
 Environment=REGISTRY_DB=/var/lib/6502-registry/registry.db
 StateDirectory=6502-registry
 ExecStart=/usr/bin/python3 -m uvicorn app:app --app-dir service --host 127.0.0.1 --port 6502 --root-path /api

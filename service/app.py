@@ -72,6 +72,13 @@ pool: Pool | None = None
 async def lifespan(app: FastAPI):
     global pool
     pool = Pool()
+    # Start every chip before the first request rather than on it. Lazily
+    # spawned workers made "a pool of warm instances" false for exactly as
+    # many requests as there are workers, each paying a start it did not have
+    # to. The whole pool is about 40 ms and 28 MB.
+    up = pool.warm()
+    if up < len(pool.workers):
+        print(f"halfwave: {up} of {len(pool.workers)} chips warmed", flush=True)
     yield
     pool.close()
     pool = None
