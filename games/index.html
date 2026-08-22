@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B1120">
+<title>Die Runner &middot; games.tinymachines.ai</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --substrate:#0B1120; --diffusion:#3E93A6; --poly:#E0A24B; --metal:#4FBFD4;
+  --panel:#141B26; --rule:#26313F; --dim:#6D7C8F; --mid:#93A3B5; --bright:#EAF1F8;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;overflow-x:clip}
+body{background:var(--substrate);color:var(--mid);font-family:var(--mono);font-size:13px;
+  line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:64rem;margin:0 auto;padding:18px 14px 48px}
+header{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+h1{margin:0;font-size:19px;font-weight:600;color:var(--bright);letter-spacing:.02em}
+h1 span{color:var(--metal)}
+.sub{color:var(--dim);font-size:11.5px}
+.sub a{color:var(--diffusion)}
+.stage{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:820px){.stage{grid-template-columns:minmax(0,1fr) 17rem}}
+.screen{background:var(--substrate);border:1px solid var(--rule);border-radius:3px;
+  padding:8px;display:flex;justify-content:center;align-items:center;min-height:120px}
+canvas{display:block;image-rendering:pixelated;max-width:100%;height:auto;touch-action:none}
+.side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.card{border:1px solid var(--rule);border-radius:3px;background:var(--panel);padding:9px 11px}
+.card h2{margin:0 0 6px;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--dim);font-weight:600}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:11.5px}
+.kv b{color:var(--bright);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.kv span{color:var(--dim)}
+.bar{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+button{font:inherit;font-size:11.5px;background:var(--panel);color:var(--mid);cursor:pointer;
+  border:1px solid var(--rule);border-radius:2px;padding:5px 10px;min-height:32px}
+button:hover:not(:disabled){color:var(--bright);border-color:var(--metal)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.go{color:var(--substrate);background:var(--metal);border-color:var(--metal);font-weight:600}
+.pad{display:grid;grid-template-columns:repeat(3,2.6rem);gap:4px;justify-content:center;margin-top:8px}
+.pad button{min-height:2.6rem;padding:0}
+.pad .u{grid-column:2}
+.pad .l{grid-column:1;grid-row:2}
+.pad .d{grid-column:2;grid-row:2}
+.pad .r{grid-column:3;grid-row:2}
+.note{font-size:11px;color:var(--dim);line-height:1.55;margin:6px 0 0}
+.note b{color:var(--mid);font-weight:500}
+.err{color:#E06A96;font-size:11.5px;margin-top:8px;white-space:pre-wrap}
+footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--rule);
+  font-size:11px;color:var(--dim)}
+footer a{color:var(--diffusion)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Die <span>Runner</span></h1>
+  <span class="sub">a console on a transistor-level MOS 6502 &middot;
+    <a href="https://6502.tinymachines.ai">the chip</a> &middot;
+    <a href="https://6502.tinymachines.ai/api/">the API</a></span>
+</header>
+
+<div class="stage">
+  <div class="screen"><canvas id="screen" width="256" height="256"></canvas></div>
+
+  <div class="side">
+    <div class="card">
+      <h2>the chip</h2>
+      <div class="kv">
+        <span>cartridge</span><b id="k-cart">--</b>
+        <span>half-cycle</span><b id="k-hc">0</b>
+        <span>per frame</span><b id="k-fc">--</b>
+        <span>frames</span><b id="k-frames">0</b>
+        <span>frames / s</span><b id="k-fps">--</b>
+        <span>requests</span><b id="k-req">0</b>
+      </div>
+      <p class="note" id="note">The screen is a page of the chip's own memory.
+        Nothing draws it but this page.</p>
+      <div class="bar">
+        <button class="go" id="b-power">power on</button>
+        <button id="b-pause" disabled>pause</button>
+      </div>
+      <p class="err" id="err" hidden></p>
+    </div>
+
+    <div class="card">
+      <h2>controller</h2>
+      <div class="pad">
+        <button class="u" data-dir="up">&uarr;</button>
+        <button class="l" data-dir="left">&larr;</button>
+        <button class="d" data-dir="down">&darr;</button>
+        <button class="r" data-dir="right">&rarr;</button>
+      </div>
+      <p class="note">Arrow keys or WASD. One byte, written into the chip's
+        memory between two steps.</p>
+    </div>
+
+    <div class="card">
+      <h2>why it is slow</h2>
+      <p class="note">A frame costs <b id="k-cost">600</b> half-cycles, about
+        0.3&nbsp;ms of chip time. Everything else is the round trip: the whole
+        machine travels to the engine and back on every frame, because the
+        server keeps no sessions. The chip is not the bottleneck by three
+        orders of magnitude.</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Die Runner runs on the same stateless engine as
+  <a href="https://6502.tinymachines.ai/api/">6502 as a service</a>.
+  The playfield is the die: substrate, diffusion, polysilicon, metal.
+  Cartridge zero is <b>Silicon Snake</b>, here to prove the pipe.
+</footer>
+
+</div>
+
+<script type="module" src="game.js"></script>
+</body>
+</html>

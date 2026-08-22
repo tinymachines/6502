@@ -1,0 +1,182 @@
+; reset vector -> $0200
+; 179 instruction addresses reached from reset
+$0200  A2 FF      LDX #$FF
+$0202  9A         TXS
+$0203  D8         CLD
+$0204  A9 00      LDA #$00
+$0206  85 03      STA $03
+$0208  85 04      STA $04
+$020A  85 02      STA $02
+$020C  A9 A5      LDA #$A5
+$020E  85 00      STA $00
+$0210  A9 04      LDA #$04
+$0212  85 01      STA $01
+$0214  A9 03      LDA #$03
+$0216  85 05      STA $05
+$0218  A9 02      LDA #$02
+$021A  85 06      STA $06
+$021C  A9 00      LDA #$00
+$021E  AA         TAX
+$021F  9D 00 04   STA $0400,X
+$0222  E8         INX
+$0223  D0 FA      BNE $021F
+$0225  A9 84      LDA #$84
+$0227  85 40      STA $40
+$0229  A9 85      LDA #$85
+$022B  85 41      STA $41
+$022D  A9 86      LDA #$86
+$022F  85 42      STA $42
+$0231  85 0C      STA $0C
+$0233  A9 01      LDA #$01
+$0235  8D 84 04   STA $0484
+$0238  8D 85 04   STA $0485
+$023B  8D 86 04   STA $0486
+$023E  20 3C 03   JSR $033C
+$0241  A9 01      LDA #$01
+$0243  85 0D      STA $0D
+$0245  A5 0D      LDA $0D
+$0247  D0 FC      BNE $0245
+$0249  20 53 02   JSR $0253
+$024C  A9 01      LDA #$01
+$024E  85 0D      STA $0D
+$0250  4C 45 02   JMP $0245
+$0253  A5 03      LDA $03
+$0255  F0 01      BEQ $0258
+$0257  60         RTS
+$0258  A5 02      LDA $02
+$025A  F0 48      BEQ $02A4
+$025C  C9 01      CMP #$01
+$025E  F0 0F      BEQ $026F
+$0260  C9 02      CMP #$02
+$0262  F0 18      BEQ $027C
+$0264  C9 03      CMP #$03
+$0266  F0 21      BEQ $0289
+$0268  C9 04      CMP #$04
+$026A  F0 2A      BEQ $0296
+$026C  4C A0 02   JMP $02A0
+$026F  A5 01      LDA $01
+$0271  C9 02      CMP #$02
+$0273  F0 2B      BEQ $02A0
+$0275  A9 01      LDA #$01
+$0277  85 01      STA $01
+$0279  4C A0 02   JMP $02A0
+$027C  A5 01      LDA $01
+$027E  C9 01      CMP #$01
+$0280  F0 1E      BEQ $02A0
+$0282  A9 02      LDA #$02
+$0284  85 01      STA $01
+$0286  4C A0 02   JMP $02A0
+$0289  A5 01      LDA $01
+$028B  C9 04      CMP #$04
+$028D  F0 11      BEQ $02A0
+$028F  A9 03      LDA #$03
+$0291  85 01      STA $01
+$0293  4C A0 02   JMP $02A0
+$0296  A5 01      LDA $01
+$0298  C9 03      CMP #$03
+$029A  F0 04      BEQ $02A0
+$029C  A9 04      LDA #$04
+$029E  85 01      STA $01
+$02A0  A9 00      LDA #$00
+$02A2  85 02      STA $02
+$02A4  A6 06      LDX $06
+$02A6  B5 40      LDA $40,X
+$02A8  85 09      STA $09
+$02AA  29 0F      AND #$0F
+$02AC  85 07      STA $07
+$02AE  A5 09      LDA $09
+$02B0  4A         LSR A
+$02B1  4A         LSR A
+$02B2  4A         LSR A
+$02B3  4A         LSR A
+$02B4  85 08      STA $08
+$02B6  A5 01      LDA $01
+$02B8  C9 01      CMP #$01
+$02BA  F0 0D      BEQ $02C9
+$02BC  C9 02      CMP #$02
+$02BE  F0 0E      BEQ $02CE
+$02C0  C9 03      CMP #$03
+$02C2  F0 0F      BEQ $02D3
+$02C4  E6 07      INC $07
+$02C6  4C D5 02   JMP $02D5
+$02C9  C6 08      DEC $08
+$02CB  4C D5 02   JMP $02D5
+$02CE  E6 08      INC $08
+$02D0  4C D5 02   JMP $02D5
+$02D3  C6 07      DEC $07
+$02D5  A5 07      LDA $07
+$02D7  29 0F      AND #$0F
+$02D9  85 07      STA $07
+$02DB  A5 08      LDA $08
+$02DD  29 0F      AND #$0F
+$02DF  85 08      STA $08
+$02E1  0A         ASL A
+$02E2  0A         ASL A
+$02E3  0A         ASL A
+$02E4  0A         ASL A
+$02E5  05 07      ORA $07
+$02E7  85 0B      STA $0B
+$02E9  AA         TAX
+$02EA  BD 00 04   LDA $0400,X
+$02ED  C9 01      CMP #$01
+$02EF  F0 32      BEQ $0323
+$02F1  C9 02      CMP #$02
+$02F3  F0 06      BEQ $02FB
+$02F5  20 28 03   JSR $0328
+$02F8  4C 0D 03   JMP $030D
+$02FB  E6 04      INC $04
+$02FD  E6 05      INC $05
+$02FF  A5 05      LDA $05
+$0301  C9 30      CMP #$30
+$0303  90 05      BCC $030A
+$0305  A9 02      LDA #$02
+$0307  85 03      STA $03
+$0309  60         RTS
+$030A  20 3C 03   JSR $033C
+$030D  E6 06      INC $06
+$030F  A5 06      LDA $06
+$0311  29 3F      AND #$3F
+$0313  85 06      STA $06
+$0315  AA         TAX
+$0316  A5 0B      LDA $0B
+$0318  95 40      STA $40,X
+$031A  85 0C      STA $0C
+$031C  AA         TAX
+$031D  A9 01      LDA #$01
+$031F  9D 00 04   STA $0400,X
+$0322  60         RTS
+$0323  A9 01      LDA #$01
+$0325  85 03      STA $03
+$0327  60         RTS
+$0328  A5 06      LDA $06
+$032A  38         SEC
+$032B  E5 05      SBC $05
+$032D  18         CLC
+$032E  69 01      ADC #$01
+$0330  29 3F      AND #$3F
+$0332  AA         TAX
+$0333  B5 40      LDA $40,X
+$0335  AA         TAX
+$0336  A9 00      LDA #$00
+$0338  9D 00 04   STA $0400,X
+$033B  60         RTS
+$033C  A0 20      LDY #$20
+$033E  20 55 03   JSR $0355
+$0341  AA         TAX
+$0342  BD 00 04   LDA $0400,X
+$0345  D0 06      BNE $034D
+$0347  A9 02      LDA #$02
+$0349  9D 00 04   STA $0400,X
+$034C  60         RTS
+$034D  88         DEY
+$034E  D0 EE      BNE $033E
+$0350  A9 02      LDA #$02
+$0352  85 03      STA $03
+$0354  60         RTS
+$0355  A5 00      LDA $00
+$0357  0A         ASL A
+$0358  90 02      BCC $035C
+$035A  49 1D      EOR #$1D
+$035C  85 00      STA $00
+$035E  60         RTS
+; span $0200..$035E = 351 bytes

@@ -45,6 +45,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
 | Designer | The other account: one of the chip's authors, recalling it forty years on. 4 of 5 agree, and the clock generator is derived here for the first time. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
+| Games | <https://games.tinymachines.ai> -- Die Runner: a console on the API. The game is a 6502 ROM, the screen is a page of its memory, the browser draws it. A frame is 600 half-cycles; the round trip is the frame rate. See `games/README.md`. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. Full Wayback sweep complete: 24,429 URLs, 3.01 GB. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
 | Service | 6502 as a service: the `halfwave` stateless engine binary plus a FastAPI reference implementation in `service/`. Proven bit-exact across serialize/resume hops. Launches under a separate site property; only the engine lives here. |
