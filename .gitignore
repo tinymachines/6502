@@ -69,3 +69,7 @@ games/*.cart.gz
 # it in /var/lib/6502-registry, named by the systemd unit.
 service/registry.db
 service/registry.db-*
+
+# The seven programs, assembled by tools/export-programs.mjs for anything
+# that cannot run a browser.
+web/programs.txt

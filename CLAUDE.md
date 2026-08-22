@@ -789,17 +789,55 @@ test reads the program bytes out of its header rather than duplicating them.
 
 ## Performance
 
-~28,500 half-cycles/s native (~14 kHz simulated 6502), against the reference
-JavaScript's 302 half-cycles/s — **94× faster**.
+**~25,800 half-cycles/s native (~12.9 kHz simulated 6502)**, against the
+reference JavaScript's 302 half-cycles/s: **85x faster**. A real 6502 runs at
+1 to 2 MHz, so this is 77x to 155x slower than the part.
 
-Profile (callgrind): ~385k instructions per half-cycle, essentially all inside
-`Engine::settle`, dominated by **gate fan-out** — a clock node gates hundreds of
-transistors, and each toggle queues more work. ~900 node recalcs per half-cycle,
-~15 settle rounds, average group size 2.0.
+```bash
+node tools/export-programs.mjs                                  # web/programs.txt
+cargo run --release -p v6502-sim --example benchmarks           # all seven programs
+REPEAT=9 cargo run --release -p v6502-sim --example benchmarks 25000
+cargo run --release -p v6502-sim --example bench                # one tight loop
+```
 
-Optimisation ideas, none applied: the obvious one — skipping nodes already covered
-by a group processed this round — is **not** safe, because applying a group
-toggles transistors and can change connectivity before the later node is reached.
+`benchmarks` runs the seven shipped programs. `bench` runs `INC $20; JMP` and
+is the older smoke test.
+
+**It is not memory-bound, and that was measured after the opposite was
+guessed.** The instruction mix inside `settle` is a CSR walk with bitset
+probes, which reads like pointer chasing; `perf stat` says otherwise.
+
+| | |
+|---|---|
+| instructions / half-cycle | **393,000** |
+| IPC | **2.04** |
+| L1 dcache miss | **1.28%** |
+| cache miss | 2.15% of references |
+| time in `Engine::settle` | **99.6%**, fully inlined, flat, no line over 3.4% |
+
+The netlist is 31 KiB and stays in cache. The solver is not waiting, it is
+working, so there is no micro-optimisation to find and no hot line to fix.
+
+**The lever is the recalc-to-change ratio: 922 node recalcs per half-cycle
+against 186 nodes that actually change level, so 80% of recalcs resolve to the
+value the node already held.** The change guard in `recalc_node` is already
+there; the waste is upstream of it. Every transistor toggle queues its
+terminals, and finding out that a terminal did not move costs a whole group
+build. Group size averages 2.0 and there are 16.3 settle rounds per
+half-cycle.
+
+- **The workload does not matter.** The seven programs spread about 1.09x
+  against a measured noise floor of about 1.18x, and which one looks slowest
+  changes between runs. The chip does the same fetch, decode and settle work
+  whatever the opcode is. Worth knowing before optimising against one program.
+- **Timed columns need repeats; counted columns do not.** `hc/s` is best-of-N
+  because noise only ever slows a run down. Recalcs, rounds and changed nodes
+  are counters and come back bit-identical.
+- The obvious optimisation, skipping nodes already covered by a group
+  processed this round, is **not** safe: applying a group toggles transistors
+  and can change connectivity before the later node is reached.
+- **Throughput and latency are different problems.** One machine is bounded by
+  the above; machines per second is bounded by cores, and there are 12.
 
 ## 6502 as a service (`halfwave`, `service/`)
 
