@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from assembler import AssemblyError, assemble
-from atlas import MAX_DEPTH, MAX_LIMIT, Atlas, AtlasError
+from atlas import GROUPS_PATH, MAX_DEPTH, MAX_LIMIT, Atlas, AtlasError
 from engine import EngineError, Pool
 from models import (
     AssembleResponse,
@@ -224,6 +224,30 @@ def atlas() -> dict:
     blocks plus the static logic and the residue, the node roles, and the
     bounds a walk is held to. Static, like /v1/nodes."""
     return _at().overview()
+
+
+@app.get("/v1/atlas/full")
+def atlas_full():
+    """The whole atlas in one response: every kind, every group with its
+    members and bundles, every overlapping container, every node with its
+    tags, and the 534 bundles. About 328 KB, 48 KB gzipped, which is less
+    than `/v1/tags` alone costs.
+
+    This is `web/groups.json` byte for byte -- the file `tools/export-groups.mjs`
+    wrote and every other route on this page is answered from -- rather than
+    a re-serialisation of it, so a consumer holding this file is holding
+    exactly what the service is holding. Static, so cached a day like the
+    rest of the family.
+
+    What it does NOT carry is the die's alias table: `nodes[].name` is one
+    name per node, and 125 nodes have more than one. Fetch `/v1/nodes`
+    (4.6 KB gzipped) beside it to resolve any of the 832 names.
+    """
+    a = _at()          # loaded and cross-checked before the file is offered
+    assert a is not None
+    if not GROUPS_PATH.exists():                      # pragma: no cover
+        raise HTTPException(status_code=503, detail=f"{GROUPS_PATH} is missing")
+    return FileResponse(GROUPS_PATH, media_type="application/json")
 
 
 @app.get("/v1/groups", response_model=GroupsResponse)

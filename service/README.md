@@ -93,7 +93,8 @@ network by `web/chip-groups.js` (the module the tracer and the chip map draw
 with) and exported by `tools/export-groups.mjs` into `web/groups.json`.
 
 ```bash
-curl -s localhost:6502/v1/atlas                       # the kinds, blocks, counts
+curl -s localhost:6502/v1/atlas/full                  # ALL of it, one file, 48 KB gzipped
+curl -s localhost:6502/v1/atlas                       # just the kinds, blocks, counts
 curl -s 'localhost:6502/v1/groups?kind=alu'           # the ALU as 17 containers
 curl -s 'localhost:6502/v1/groups/regs:a'             # one, with its wiring
 curl -s 'localhost:6502/v1/tags?multi=true'           # the 88 nodes in more than one

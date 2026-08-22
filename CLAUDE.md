@@ -879,7 +879,10 @@ state that decodes to the wrong chip is worse than one that is rejected.
   832 names by an authored regex table and lands 310 in `other`; it says
   nothing about the 674 static-logic nodes the die never named. The atlas is
   the measured half: `/v1/atlas`, `/v1/groups`, `/v1/groups/{key}`,
-  `/v1/tags`, `/v1/node/{ref}`, `/v1/neighbors`, served from
+  `/v1/tags`, `/v1/node/{ref}`, `/v1/neighbors`, plus `/v1/atlas/full`
+  (the whole thing in one response: **the exporter's own file byte for byte**,
+  328 KB / 48 KB gzipped, less than `/v1/tags` alone costs, so a consumer
+  grabs it once and answers every other route locally), served from
   `service/atlas.py` over `web/groups.json` + `web/graph.json`, holding
   **132 groups over 23 kinds covering all 1547 nodes exactly once**.
   - **`web/chip-groups.js` runs under node, and that is what makes this

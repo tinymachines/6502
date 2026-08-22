@@ -263,7 +263,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
 
 <section id="atlas">
   <p class="eyebrow">The atlas</p>
-  <h2>Five routes that ask what a wire is part of</h2>
+  <h2>Seven routes that ask what a wire is part of</h2>
 
   <p>
     <code>/v1/nodes</code> above answers <em>what can I watch</em>, and its
@@ -303,6 +303,26 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
       three node roles, and the bounds a walk is held to. The counts are the
       chip map's own: 132 groups, 534 bundles carrying 1644 gate legs and 310
       switches between groups, 922 and 313 staying inside one.
+    </p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/atlas/full</h3>
+    <p>
+      <strong>The whole atlas in one response.</strong> Every kind, every
+      group with its members and the bundles it anchors, every overlapping
+      container, every node with its tags, and all 534 bundles. About
+      328&nbsp;KB, <strong>48&nbsp;KB gzipped</strong>, which is less than
+      <code>/v1/tags</code> alone costs. Grab it once and answer every
+      question below locally.
+    </p>
+    <p>
+      It is the exporter's own file byte for byte, not a re-serialisation of
+      it, so a consumer holding this is holding exactly what the service is
+      holding. The one thing it does not carry is the die's alias table:
+      <code>nodes[].name</code> is one name per node and 125 nodes have more
+      than one, so fetch <code>/v1/nodes</code> (4.6&nbsp;KB gzipped) beside
+      it if you need to resolve any of the 832 names.
     </p>
   </div>
 

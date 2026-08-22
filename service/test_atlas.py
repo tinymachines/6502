@@ -475,6 +475,39 @@ def test_a_group_read_as_a_walk_never_loses_nodes_to_the_box(client):
 # ---------------------------------------------------------------------------
 
 
+def test_the_whole_atlas_is_one_url_and_it_is_the_file(client, onfile):
+    """`/v1/atlas/full` must be the exporter's own bytes, not a rebuild of
+    them: a consumer holding it is holding what the service is holding."""
+    r = client.get("/v1/atlas/full")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/json")
+    assert r.content == GROUPS_FILE.read_bytes()
+    j = r.json()
+    assert j["counts"] == onfile["counts"]
+    # And it really is everything the piecemeal routes serve.
+    assert len(j["groups"]) == 132
+    assert len(j["containers"]) == 135
+    assert len(j["nodes"]) == 1547
+    assert len(j["bundles"]) == 534
+    assert all("nodes" in g for g in j["groups"]), "members included, not just counts"
+
+
+def test_the_one_url_answers_the_same_questions_as_the_routes(client):
+    """Anything the Lab could ask a route, it can answer from the dump. Two
+    of them, checked against the routes rather than against each other."""
+    j = client.get("/v1/atlas/full").json()
+    by_key = {g["key"]: g for g in j["groups"]}
+    by_id = {n["id"]: n for n in j["nodes"]}
+
+    served = client.get("/v1/groups/regs:a").json()
+    assert by_key["regs:a"]["nodes"] == [n["id"] for n in served["nodes"]]
+    assert by_key["regs:a"]["children"] == served["children"]
+
+    node = client.get("/v1/node/pipeUNK39").json()
+    assert by_id[node["id"]]["groups"] == [g["key"] for g in node["groups"]]
+    assert by_id[node["id"]]["owner"] == node["owner"]
+
+
 def test_the_service_serves_the_file_it_was_given(client, onfile):
     served = client.get("/v1/atlas").json()
     assert served["counts"] == onfile["counts"]
