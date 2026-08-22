@@ -65,6 +65,9 @@ select{font:inherit;font-size:11.5px;background:var(--panel);color:var(--mid);
 .legend{display:grid;gap:3px;margin-top:7px;font-size:10.5px;color:var(--dim)}
 .legend span{display:grid;grid-template-columns:auto 1fr;gap:7px;align-items:center}
 .legend i{width:16px;height:16px;image-rendering:pixelated;border:1px solid var(--rule)}
+.filebtn{font-size:11.5px;background:var(--panel);color:var(--mid);cursor:pointer;
+  border:1px solid var(--rule);border-radius:2px;padding:7px 10px;display:inline-block}
+.filebtn:hover{color:var(--bright);border-color:var(--metal)}
 .err{color:#E06A96;font-size:11.5px;margin-top:8px;white-space:pre-wrap}
 footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--rule);
   font-size:11px;color:var(--dim)}
@@ -103,6 +106,10 @@ footer a{color:var(--diffusion)}
           <option value="0">Die Runner</option>
           <option value="1">Silicon Snake</option>
         </select>
+      </div>
+      <div class="bar">
+        <label class="filebtn" for="cart-file">load a .cart.gz</label>
+        <input id="cart-file" type="file" accept=".gz,application/gzip" hidden>
       </div>
       <div class="bar">
         <button class="go" id="b-power">power on</button>
@@ -161,6 +168,10 @@ footer a{color:var(--diffusion)}
   <a href="https://6502.tinymachines.ai/api/">6502 as a service</a>.
   The playfield is the die: substrate, diffusion, polysilicon, metal.
   Cartridge zero is <b>Silicon Snake</b>, here to prove the pipe.
+  A cartridge is one gzipped file carrying the ROM, its tiles and the contract
+  it was written to: mint one with
+  <a href="https://6502.tinymachines.ai/api/#cartridges">POST /v1/cartridge</a>,
+  then load it here or link to it with <code>?cart=</code>.
 </footer>
 
 </div>

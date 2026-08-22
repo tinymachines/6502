@@ -45,7 +45,9 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
 | Designer | The other account: one of the chip's authors, recalling it forty years on. 4 of 5 agree, and the clock generator is derived here for the first time. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
-| Games | <https://games.tinymachines.ai> -- Die Runner: a console on the API. The game is a 6502 ROM, the screen is a page of its memory, the browser draws it. A frame is 600 half-cycles; the round trip is the frame rate. See `games/README.md`. |
+| Games | <https://games.tinymachines.ai> -- Die Runner: a console on the API. The game is a 6502 ROM, the screen is a page of its memory, the browser draws it. The round trip is the frame rate. Cartridges are one gzipped file carrying the ROM, its tiles and the contract; the page loads one from `?cart=` or a file picker. See `games/README.md`. |
+| Cartridges | `POST /v1/cartridge` mints one: assemble, refuse a layout that cannot work, **run it on the chip**, pack it. `GET /v1/console` publishes the contract, the memory map and the tile format. |
+| MCP | `POST /api/mcp`, hand-written JSON-RPC, no session and no SSE. Five coarse tools; `run` hands back the screen as hex so a model can read its own picture. |
 | Archive | <https://6502.tinymachines.ai/archive/> — visual6502.org, preserved. Full Wayback sweep complete: 24,429 URLs, 3.01 GB. |
 | Repository | <https://github.com/tinymachines/6502> — **public**. MIT code, NC-SA data. |
 | Service | 6502 as a service: the `halfwave` stateless engine binary plus a FastAPI reference implementation in `service/`. Proven bit-exact across serialize/resume hops. Launches under a separate site property; only the engine lives here. |
@@ -141,10 +143,21 @@ cargo run --release -p v6502-sim --example activity # how much of the chip moves
 # 6502 as a service: the stateless engine, and its HTTP reference implementation
 cargo build --release -p v6502-sim --bin halfwave   # the warm engine process
 cargo test -p v6502-sim --test state                # snapshot/restore, bit-exact
-python3 -m pytest service/test_service.py -q        # the service, end to end
-python3 -m pytest service/test_atlas.py -q          # the chip atlas, 52 tests.
-                                                    # SKIPS without web/groups.json.
-uvicorn app:app --app-dir service --port 6502       # run it
+python3 -m pytest service/ -q                       # 125 tests: the service end to
+                                                    # end, the chip atlas (52),
+                                                    # cartridges (27), MCP (17).
+                                                    # Atlas SKIPS without groups.json.
+uvicorn app:app --app-dir service --port 6510       # run it. NOT 6502: the live
+                                                    # 6502-api service holds that
+                                                    # port on this box, so uvicorn
+                                                    # fails to bind and every request
+                                                    # goes to PRODUCTION while looking
+                                                    # local. `ss -ltn` before believing
+                                                    # a local server is yours.
+
+# Cartridges, end to end: mint from the tree, then play it in a browser.
+python3 games/tools/mint.py --api http://127.0.0.1:6510
+python3 games/tools/cart-test.py                    # see its header for the setup
 
 # Regenerate the oracle (5 MB, gitignored; required by the golden test)
 node tools/golden-trace/gen.js --steps 3000
@@ -1075,6 +1088,112 @@ state that decodes to the wrong chip is worse than one that is rejected.
 - **`Cpu::set_last_fetch` exists for restore and nothing else.** The fetch
   is bookkeeping for disassembly, not silicon, so it travels beside the
   bitsets rather than being lost on every hop.
+
+### Cartridges (`service/cartridge.py`), and what minting found
+
+A game on this chip is a ROM plus the handful of addresses the host and the
+ROM have agreed on, and there is no hardware to consult about either. So the
+console is published (`GET /v1/console`) rather than left to be inferred from
+a game that already works, and a cartridge is **one gzipped JSON file carrying
+the contract WITH the bytes**: the ROM (bytes, labels and source), the tiles in
+both the binary form and as rows of `0..3`, and the console addresses. A
+contract in a different file from the bytes it governs is the copy that
+drifts, which Die Runner proved when its screen moved and one of four places
+naming it was missed.
+
+- **Art arrives in either of two forms and leaves in both.** `chr` is the
+  binary tile format as hex, which is what a converter emits; `pixels` is
+  eight strings of eight `'0'..'3'` a tile, which is the form something
+  writing a cartridge **from text** can actually emit. The Python encoder is
+  checked against `games/art/tiles.chr`, a file it did not write (it came out
+  of the JavaScript encoder by way of a PNG), so agreeing with it is evidence
+  rather than agreeing with itself. `png2chr.py --ascii`'s own `.:o#` glyphs
+  are accepted, because a row that has to be retyped is a row that can be
+  retyped wrong.
+- **The refusals are the point, and one of them was a byte wrong.**
+  `validate()` refuses a ROM overlapping its own screen, a ROM or screen over
+  the stack page, a ROM reaching the vectors, a contract byte inside the ROM
+  or the screen, and two contract fields sharing an address. Every one of
+  those assembles and boots first. **The assembler's `end` is the address of
+  the LAST byte, not one past it**, and reading it as a half-open bound left
+  every check a byte short: a ROM whose final byte was the screen's first
+  minted cleanly. Pinned from both sides now, and proved by reverting the fix
+  and watching only that assertion go red.
+- **Minting runs the thing**, because assembling is not the same as being
+  right: a ROM that assembles, boots and never raises its tick flag is a ROM
+  that does not run on this console. The report carries frames completed, what
+  each cost, whether the screen changed and which tiles are on it. A screen
+  that is one value everywhere is called out, because that is what a program
+  drawing nothing looks like.
+- **The frame cost is measured on an absolute ladder** (128 half-cycles to
+  16k, then 1024) and deliberately **not** seeded from anything the cartridge
+  declares. Sizing the first step from a declared cost is right for a *host*
+  (it makes an ordinary frame one round trip) and exactly wrong for a
+  measurement: the same ROM minted at `frame_cost` 512 and at 20000 measured
+  6400 and 6250, each number being its own request rounded up.
+  **`games/game.js` had carried a declared 12,000 for that reason** -- the
+  console requests `frameCost` and then reports what it spent, so whatever was
+  written there confirmed itself. Measured, Die Runner's steady frame is
+  **8,704**, rock solid over twelve frames, first frame 5,440. The test mints
+  the same ROM under two declared costs and requires the same answer.
+- **What each watched control line opens is derived, not typed.** `joins` was
+  eight strings beside eight names in `game.js`, which is two claims where
+  there is one fact; `_joins_for()` asks the atlas. It agrees on five, and the
+  three it does not are the useful part: `ADDADL` and `ADHPCH` each open one
+  switch a bit and the hand-written pair had named bit 2 and bit 3 where bit 0
+  is canonical (bit 7's transistor happens to carry the lowest number on the
+  die, so "lowest transistor" is arbitrary and "lowest bit" is not); and
+  `XSB` joins `sb0` to a node **the die never named**, so `x0 - sb0` was
+  naming the register a reader knows is there. The atlas says that node is
+  owned by `regs:x`. The pair is unordered and sorted for determinism: a pass
+  transistor conducts both ways, which is why the atlas keeps `channel` apart
+  from `drives`.
+- **`mtime` is zero in the gzip**, so minting the same cartridge twice gives
+  the same bytes and two cartridges can be diffed. A container that changes
+  every time it is written cannot be.
+- **The sample cartridge is minted at deploy time, never committed**
+  (`games/tools/mint.py`, run by `games/deploy.sh`), so it cannot go stale
+  against `rom/dierunner.s` and every deploy exercises the endpoint. It
+  refuses to write a file whose verification did not complete its frames.
+
+### MCP (`service/mcp_server.py`): coarse tools, and why
+
+`POST /api/mcp` speaks the Model Context Protocol over streamable HTTP:
+`initialize`, `tools/list`, `tools/call`. No session id and no SSE stream, for
+the same reason the API keeps no sessions; `GET` returns 405, which is the
+spec's own answer for a server that offers no stream. Hand-written JSON-RPC
+rather than an SDK, for the reason the engine parses a line protocol rather
+than JSON: three methods over one POST is forty lines with nothing in it to be
+wrong about, and this service's promise is that it has no dependencies to go
+stale underneath it.
+
+- **The tools are coarse where the HTTP routes are fine-grained, and that is
+  the same design serving a different kind of client.** The API is stateless
+  because a *program* holds the machine: 2 KB of hex out and back, and the
+  client's copy is the session. An MCP client is a language model, and a model
+  cannot usefully hold 2 KB of hex -- pasting a machine into the next call
+  would spend most of a context window carrying a value it cannot read. So
+  `run` assembles, boots, steps and reports in one call and the machine never
+  leaves the server.
+- **`run` renders the screen as two hex characters a cell**, which is the one
+  thing that turns writing a 6502 game from guessing into working: an
+  assembler says the bytes are legal and only the picture says the program is
+  right. The test drives it with two different controller bytes and requires
+  the drawn cell to move, because a plausible grid that did not answer the
+  input is exactly the failure this exists to prevent.
+- **A tool that refuses is a normal result with `isError`, never a JSON-RPC
+  error.** The model has to read the reason and try again; a protocol error is
+  for the client, and most clients never show it to the model.
+- **Addresses are hex with or without a `$`, or an integer.** A model writes
+  `$0500` and a program writes 1280, and neither should have to learn the
+  other's spelling.
+- The five: `console_spec`, `assemble`, `run`, `mint_cartridge`,
+  `chip_atlas`. `make_handler` asserts at import that every declared tool has
+  an implementation, so a tool cannot be advertised and missing.
+- **`/api/mcp` needs no nginx change**: the existing `/api/` location proxies
+  with the prefix stripped, and uvicorn's `--root-path /api` handles the rest.
+  A deploy that changes any of this still needs
+  `sudo systemctl restart 6502-api`.
 
 ## The reference (`extern/visual6502/`)
 

@@ -19,19 +19,27 @@ The flow a learner follows:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
+import cartridge
+import mcp_server
 from assembler import AssemblyError, assemble
 from atlas import GROUPS_PATH, MAX_DEPTH, MAX_LIMIT, Atlas, AtlasError
 from engine import EngineError, Pool
 from models import (
     AssembleResponse,
+    CartMeta,
+    CartridgeRequest,
+    CartridgeResponse,
+    ConsoleSpec,
     AtlasResponse,
     BootRequest,
     ChipState,
@@ -45,7 +53,9 @@ from models import (
     SparseMemory,
     StepRequest,
     StepResponse,
+    TileArt,
     TraceRows,
+    VerifyReport,
 )
 
 pool: Pool | None = None
@@ -528,4 +538,608 @@ def step(req: StepRequest) -> StepResponse:
         completed=res["completed"],
         trace=[Observation(**t) for t in res["trace"]] if req.trace and not rows else None,
         trace_rows=_pack_rows(res["trace"], req.watch) if rows else None,
+    )
+
+
+# -- cartridges --------------------------------------------------------------
+#
+# A game on this chip is a ROM plus the handful of addresses the host and the
+# ROM have agreed on. There is no video hardware and no interrupt in use, so a
+# "frame" is not something the silicon knows about: it is that agreement, and
+# the agreement IS the console. See cartridge.py for the file it packs into.
+
+
+def _peek(mem: SparseMemory, addr: int) -> int:
+    page = mem.pages.get(f"{addr >> 8:02x}")
+    if page is None:
+        return int(mem.fill, 16)
+    return int(page[(addr & 0xFF) * 2 : (addr & 0xFF) * 2 + 2], 16)
+
+
+def _poke(mem: SparseMemory, addr: int, value: int) -> SparseMemory:
+    """One byte, without expanding 64 KiB to change it. `flat()` is correct
+    and costs a megabyte of hex per write; a frame writes three or four."""
+    key = f"{addr >> 8:02x}"
+    page = mem.pages.get(key) or (mem.fill * 256)
+    off = (addr & 0xFF) * 2
+    page = page[:off] + f"{value & 0xFF:02x}" + page[off + 2 :]
+    return SparseMemory(fill=mem.fill, pages={**mem.pages, key: page})
+
+
+def _step_machine(m: Machine, n: int) -> Machine:
+    return _machine_from(_engine([f"STEP {n}", _state_line(m), *_memory_lines(m.memory)]))
+
+
+# The measurement ladder: absolute, and deliberately not seeded from anything
+# the cartridge declares. It is what makes a measured cost a measurement --
+# see _run_frame.
+_LADDER = ((16384, 128), (65536, 1024), (None, 8192))
+
+
+def _chunk(spent: int) -> int:
+    for edge, size in _LADDER:
+        if edge is None or spent < edge:
+            return size
+    return _LADDER[-1][1]
+
+
+def _run_frame(m: Machine, con: dict, budget: int) -> tuple[Machine, int, bool]:
+    """One frame of the console contract: drop the tick flag, let the ROM go,
+    and come back when it raises the flag again, with the cost measured.
+
+    A step that lands past the flag cannot say when the flag went up, so the
+    number this returns is only as good as the step that found it. The steps
+    therefore come from a **fixed ladder** -- 128 half-cycles until 16k, then
+    1024, then 8192 -- and from nothing the cartridge says about itself.
+
+    That is the whole point, and it was learned twice. Sizing the first step
+    from the declared `frame_cost` is what a host should do (it makes an
+    ordinary frame one round trip) and is exactly wrong for a measurement:
+    the same ROM minted with `frame_cost` at 512 and at 20000 measured 6400
+    and 6250, because each number was its own request rounded up. Die
+    Runner's page had carried a declared 12,000 for the same reason: the
+    console requests `frameCost` and then reports what it spent, so whatever
+    was written there confirmed itself.
+
+    Chip time is what a measurement costs, not requests: this engine runs
+    about 26,000 half-cycles a second against roughly 1.5 ms of request
+    overhead, so walking a frame in 128s costs the frame plus a tenth.
+    """
+    tick = con["tick"]
+    m = Machine(state=m.state, memory=_poke(m.memory, tick, 0))
+    spent = 0
+    while spent < budget:
+        n = min(_chunk(spent), budget - spent)
+        m = _step_machine(m, n)
+        spent += n
+        if _peek(m.memory, tick) != 0:
+            return m, spent, True
+    return m, spent, False
+
+
+def _screen_of(m: Machine, con: dict) -> bytes:
+    base, cells = con["screen"], con["width"] * con["height"]
+    image = m.memory.flat()
+    return bytes(image[base : base + cells])
+
+
+def _verify(doc: dict, frames: int, budget: int) -> VerifyReport:
+    """What the chip did with this cartridge, which is a different claim from
+    "it assembled". A ROM that assembles, boots, and never raises its tick
+    flag is a ROM that does not run on this console, and nothing short of
+    running it says so."""
+    con = doc["console"]
+    rom = doc["rom"]
+    notes: list[str] = []
+
+    memory = _overlay(SparseMemory(), rom["org"], bytes.fromhex(rom["bytes"]))
+    res = _engine(["BOOT", f"VEC {rom['reset']:04x}", *_memory_lines(memory)])
+    m = _machine_from(res)
+
+    costs: list[int] = []
+    completed = 0
+    before = _screen_of(m, con)
+    changed = False
+    for _ in range(frames):
+        if con.get("entropy") is not None:
+            m = Machine(state=m.state, memory=_poke(m.memory, con["entropy"], 0x5A))
+        m, spent, done = _run_frame(m, con, budget)
+        costs.append(spent)
+        if not done:
+            notes.append(
+                f"frame {completed + 1} never raised the tick flag at "
+                f"${con['tick']:04X} within {budget} half-cycles. Either the ROM "
+                f"does not write it, or it costs more than the budget."
+            )
+            break
+        completed += 1
+        after = _screen_of(m, con)
+        changed = changed or after != before
+        before = after
+
+    screen = _screen_of(m, con)
+    used = sorted(set(screen))
+    if used == [0]:
+        notes.append("the screen is one value everywhere: nothing was drawn on it")
+    elif len(used) == 1:
+        notes.append(f"the screen is tile {used[0]} everywhere")
+    if completed >= 2 and not changed:
+        notes.append("the screen never changed between frames")
+    tiles = doc["tiles"]["count"]
+    if tiles and used and max(used) >= tiles:
+        notes.append(
+            f"the screen uses tile {max(used)} and the sheet has {tiles} "
+            f"(0..{tiles - 1}); the host will draw whatever it falls back to"
+        )
+    # The steady cost, not the first: a cartridge that clears its screen or
+    # lays out a level pays for that once, and sizing every later request by
+    # it would spend a round trip's worth of chip time in the spin loop.
+    steady = costs[1:] if len(costs) > 1 else costs
+    return VerifyReport(
+        booted=True,
+        frames_requested=frames,
+        frames_completed=completed,
+        half_cycles=costs,
+        frame_cost=max(steady) if steady else None,
+        screen_changed=changed,
+        tiles_used=used,
+        status=_peek(m.memory, con["status"]) if con.get("status") is not None else None,
+        score=_peek(m.memory, con["score"]) if con.get("score") is not None else None,
+        notes=notes,
+    )
+
+
+_BIT = re.compile(r"(\d+)$")
+
+
+def _joins_for(names: list[str]) -> dict[str, str]:
+    """What each watched control line opens, named: `dpc23_SBAC` -> `sb0 - a0`.
+
+    Derived from the switch network rather than carried as prose. Die Runner
+    had these eight written out by hand beside the eight names, which is two
+    claims where there is one fact. Asked for them, the atlas agrees on five
+    and the three it does not are the interesting part:
+
+    - `dpc40_ADLPCL` opens one switch a bit, and bit 7's transistor happens to
+      carry the LOWEST number on the die. Picking the lowest transistor is
+      therefore arbitrary; picking the lowest bit index is not, and gives the
+      `adl0 - pcl0` a reader expects.
+    - `dpc2_XSB` joins `sb0..sb7` to nodes the die never named. The authored
+      label said `x0 - sb0`, naming the register a reader knows is there; the
+      atlas says those nodes are owned by `regs:x`, so an unnamed end is
+      reported as its container. That is the measured version of the same
+      claim.
+    - The two ends come back in either order, and there is no order to get
+      right: a pass transistor conducts both ways, which is why the atlas
+      keeps `channel` apart from `drives` and `driven_by`. Sorted here for
+      determinism, and the pair is unordered.
+    """
+    try:
+        a = _at()
+    except HTTPException:
+        return {}                       # the atlas is an extra, never the mint
+    out: dict[str, str] = {}
+    for name in names:
+        try:
+            nid = a.resolve(name)
+        except KeyError:
+            continue
+        opened: dict[int, list[dict]] = {}
+        for n in a.neighbors(nid, via="control", direction="both",
+                             depth=1, limit=64)["neighbors"]:
+            if n.get("relation") == "opens":
+                opened.setdefault(n["transistor"], []).append(n)
+        best, rank = None, None
+        for t, ends in sorted(opened.items()):
+            if len(ends) != 2:
+                continue
+            bits = [int(m.group(1)) for e in ends
+                    if e.get("name") and (m := _BIT.search(e["name"]))]
+            here = (min(bits) if bits else 99, t)
+            if rank is None or here < rank:
+                best, rank = ends, here
+        if best:
+            out[name] = " - ".join(sorted(
+                e.get("name") or e.get("owner") or f"#{e['id']}" for e in best))
+    return out
+
+
+@app.get("/v1/console")
+def console_spec() -> dict:
+    """The console: what a ROM has to agree with to be playable, published so
+    it does not have to be inferred from a game that already works.
+
+    Static, and a reading of nothing: these are addresses two programs agree
+    on, not facts about the silicon. The chip has no video and no timer.
+    """
+    return {
+        "console": "tinymachines.die",
+        "contract": {
+            "how": [
+                "the host clears one byte; the ROM notices, runs a frame, and sets it back",
+                "the host writes one byte before each frame; that byte is the controller",
+                "the host reads a page of memory; that page is the screen",
+            ],
+            "why": "there is no video hardware on this die and no interrupt in "
+            "use, so a frame is an agreement rather than a thing the chip knows "
+            "about. The ROM busy-waits on the flag, which is the only way to "
+            "synchronise with the outside when you have no interrupt and no timer.",
+            "addresses": cartridge.CONTRACT,
+        },
+        # Derived from the model that validates a request, never retyped:
+        # a reader following this page has to be writing against the
+        # addresses the service actually defaults to.
+        "defaults": {
+            **{k: v for k, v in ConsoleSpec().model_dump().items() if v not in (None, {}, [])},
+            "org": 0x0200,
+        },
+        "conventional": {
+            "status": 0x0003,
+            "note": "optional, so it has no default; $0003 is what the shipped "
+                    "cartridges use and a host reads it to know the game is over",
+        },
+        "memory_map": [
+            {"range": "$0000-$00FF", "what": "zero page: the contract bytes live here, "
+             "and it is where a 6502 keeps its variables. Two bytes an instruction "
+             "instead of three"},
+            {"range": "$0100-$01FF", "what": "the stack. A cartridge is refused if its "
+             "ROM or its screen covers this"},
+            {"range": "$0200-", "what": "the usual .org for a ROM"},
+            {"range": "the screen", "what": "width x height bytes, one tile index a "
+             "cell, row major. Put it ABOVE the ROM: a ROM that reaches its own "
+             "screen is overwritten by the picture it draws, and it assembles and "
+             "boots first"},
+            {"range": "$FFFA-$FFFF", "what": "the vectors. Booting writes the reset "
+             "vector at $FFFC"},
+        ],
+        "tiles": {
+            "size": cartridge.TILE,
+            "bytes_per_tile": cartridge.BYTES_PER_TILE,
+            "bits_per_pixel": 2,
+            "encoding": cartridge.ENCODING["chr"],
+            "pixels": cartridge.ENCODING["pixels"],
+            "palette": [
+                {"index": 0, "colour": cartridge.PALETTE[0], "layer": "substrate"},
+                {"index": 1, "colour": cartridge.PALETTE[1], "layer": "diffusion"},
+                {"index": 2, "colour": cartridge.PALETTE[2], "layer": "polysilicon"},
+                {"index": 3, "colour": cartridge.PALETTE[3], "layer": "metal"},
+            ],
+            "note": "four colours a tile is the constraint that makes the art look "
+            "like the era. Colour 0 is drawn, not skipped: this is a tiled screen, "
+            "not a sprite layer.",
+        },
+        "cartridge": {
+            "format": cartridge.FORMAT,
+            "version": cartridge.VERSION,
+            "container": cartridge.ENCODING["container"],
+            "mint": "POST /v1/cartridge",
+            "play": "https://games.tinymachines.ai/?cart=<url to the .cart.gz>",
+        },
+        "example": {
+            "note": "the smallest ROM that satisfies the contract: it draws one "
+            "cell and raises the flag. Everything else is a game.",
+            "source": _EXAMPLE_ROM,
+        },
+    }
+
+
+_EXAMPLE_ROM = """        .org $0200
+; The smallest thing that is a cartridge: it fills the screen with
+; substrate, puts one charge packet where the controller says, and raises
+; the tick flag. The host clears that flag to ask for the next frame.
+reset   LDX #$00
+clear   LDA #$00
+        STA $0500,X
+        INX
+        BNE clear
+        LDA $02         ; the controller byte
+        AND #$0F
+        TAX
+        LDA #$02        ; tile 2: a charge packet
+        STA $0500,X
+        LDA #$01
+        STA $0D         ; the frame is finished
+wait    LDA $0D
+        BNE wait        ; the host clears it when it wants another
+        JMP reset"""
+
+
+@app.post("/v1/cartridge")
+def mint(req: CartridgeRequest, format: str = Query("gzip", pattern="^(gzip|json)$")):
+    """Mint a cartridge: assemble, check the layout can work, run it on the
+    chip, and pack the lot into one gzipped file.
+
+    The checking is the part worth having. A ROM that overlaps its own screen
+    assembles perfectly and then draws over itself; a tick flag inside the
+    ROM is written by the host into the code. Both were found here the hard
+    way, and both are refusals now rather than a game that runs and is wrong.
+    """
+    try:
+        res = assemble(req.rom.source, req.rom.org)
+    except AssemblyError as e:
+        raise HTTPException(status_code=422, detail={"error": str(e), "line": e.line}) from e
+    res["source"] = req.rom.source
+
+    try:
+        doc = cartridge.build(
+            meta=req.meta.model_dump(),
+            assembled=res,
+            console=req.console.model_dump(),
+            tiles=req.tiles.model_dump() if req.tiles else None,
+            reset=req.reset_vector,
+        )
+    except cartridge.CartridgeError as e:
+        raise HTTPException(status_code=422, detail={"error": str(e)}) from e
+
+    watched = doc["console"].get("watch") or []
+    if watched:
+        joins = _joins_for(watched)
+        if joins:
+            doc["console"]["joins"] = [joins.get(n, "") for n in watched]
+
+    report = None
+    if req.verify and req.frames:
+        report = _verify(doc, req.frames, req.frame_budget)
+        doc["verify"] = report.model_dump()
+        # A measured cost beats a declared one, and a cartridge with no cost
+        # at all makes every host that plays it guess.
+        if report.frame_cost and not doc["console"].get("frame_cost"):
+            doc["console"]["frame_cost"] = report.frame_cost
+            doc["notes"] = [n for n in doc["notes"] if not n.startswith("no frame_cost")]
+            doc["notes"].append(
+                f"frame_cost {report.frame_cost} was measured here, not declared"
+            )
+
+    blob = cartridge.pack(doc)
+    if format == "json":
+        return CartridgeResponse(
+            cartridge=doc,
+            verify=report,
+            size=len(json.dumps(doc).encode()),
+            packed_size=len(blob),
+            sha256=hashlib.sha256(blob).hexdigest(),
+        )
+    stem = re.sub(r"[^a-z0-9]+", "-", req.meta.name.lower()).strip("-") or "cartridge"
+    return Response(
+        content=blob,
+        media_type="application/gzip",
+        headers={
+            "content-disposition": f'attachment; filename="{stem}.cart.gz"',
+            "x-cartridge-sha256": hashlib.sha256(blob).hexdigest(),
+            "x-cartridge-frames": str(report.frames_completed) if report else "0",
+            "x-cartridge-frame-cost": str(report.frame_cost or 0) if report else "0",
+        },
+    )
+
+
+# -- MCP ---------------------------------------------------------------------
+#
+# The same engine, for a client that is a language model rather than a program.
+# See mcp_server.py for why the tools are coarse where the HTTP routes are
+# fine-grained: a model cannot usefully hold 2 KB of hex, so the machine never
+# leaves the server on this surface.
+
+
+def _mcp_console(override: dict | None) -> dict:
+    con = ConsoleSpec().model_dump()
+    for k, v in (override or {}).items():
+        if k not in con:
+            raise mcp_server.RpcError(
+                mcp_server.BAD_PARAMS,
+                f"console has no field {k!r} ({', '.join(sorted(con))})",
+            )
+        con[k] = mcp_server._addr(v, f"console.{k}") if k in cartridge.CONTRACT or k == "screen" else v
+    return {k: v for k, v in con.items() if v is not None}
+
+
+def _screen_rows(screen: bytes, width: int) -> list[str]:
+    """Two hex characters a cell, row major. A model reading this back is the
+    difference between writing a 6502 game and guessing at one: the assembler
+    says the bytes are legal and only the picture says the program is right."""
+    return [screen[y : y + width].hex() for y in range(0, len(screen), width)]
+
+
+def _tool_assemble(args: dict) -> dict:
+    org = mcp_server._addr(args.get("org", 0x0200), "org")
+    try:
+        res = assemble(args["source"], org)
+    except AssemblyError as e:
+        return {"ok": False, "error": str(e), "line": e.line}
+    return {
+        "ok": True, "org": res["org"], "end": res["end"], "size": res["size"],
+        "bytes": res["bytes"],
+        "labels": {k: f"${v:04X}" for k, v in res["labels"].items()},
+        "listing": res["listing"],
+    }
+
+
+def _tool_run(args: dict) -> dict:
+    org = mcp_server._addr(args.get("org", 0x0200), "org")
+    try:
+        res = assemble(args["source"], org)
+    except AssemblyError as e:
+        return {"ok": False, "error": str(e), "line": e.line}
+
+    given = [k for k in ("half_cycles", "until_pc", "frames") if args.get(k) is not None]
+    if len(given) != 1:
+        raise mcp_server.RpcError(
+            mcp_server.BAD_PARAMS,
+            "give exactly one of half_cycles, until_pc or frames, not "
+            + (", ".join(given) or "none"),
+        )
+    watch = list(args.get("watch") or [])
+    memory = _overlay(SparseMemory(), res["org"], bytes.fromhex(res["bytes"]))
+    lines = ["BOOT", f"VEC {res['org']:04x}", *_memory_lines(memory)]
+    if watch:
+        lines.append("WATCH " + " ".join(watch))
+    boot = _engine(lines)
+    m = _machine_from(boot)
+    out: dict = {"ok": True, "org": res["org"], "size": res["size"]}
+
+    if args.get("frames") is not None:
+        con = _mcp_console(args.get("console"))
+        held = mcp_server._addr(args["input"], "input") & 0xFF if args.get("input") else None
+        costs, completed = [], 0
+        for _ in range(int(args["frames"])):
+            if held is not None:
+                m = Machine(state=m.state, memory=_poke(m.memory, con["input"], held))
+            m, spent, done = _run_frame(m, con, 60000)
+            costs.append(spent)
+            if not done:
+                out["warning"] = (
+                    f"frame {completed + 1} never raised the tick flag at "
+                    f"${con['tick']:04X}. Does the ROM write it, and does it wait "
+                    f"for the host to clear it?"
+                )
+                break
+            completed += 1
+        screen = _screen_of(m, con)
+        out |= {
+            "frames_completed": completed,
+            "half_cycles_per_frame": costs,
+            "screen": {
+                "at": f"${con['screen']:04X}",
+                "size": f"{con['width']}x{con['height']}",
+                "encoding": "two hex characters a cell, row major",
+                "rows": _screen_rows(screen, con["width"]),
+                "tiles_used": sorted(set(screen)),
+            },
+        }
+    elif args.get("until_pc") is not None:
+        target = mcp_server._addr(args["until_pc"], "until_pc")
+        r = _engine([f"RUNTO 200000 {target:04x}", _state_line(m), *_memory_lines(m.memory),
+                     *(["WATCH " + " ".join(watch)] if watch else [])])
+        m, out["reached"] = _machine_from(r), r["completed"]
+        if not r["completed"]:
+            out["warning"] = f"never fetched an opcode at ${target:04X} within 200000 half-cycles"
+    else:
+        n = int(args["half_cycles"])
+        r = _engine([f"STEP {n}", _state_line(m), *_memory_lines(m.memory),
+                     *(["WATCH " + " ".join(watch)] if watch else [])])
+        m = _machine_from(r)
+
+    obs = _engine(["STEP 0", _state_line(m), *_memory_lines(m.memory),
+                   *(["WATCH " + " ".join(watch)] if watch else [])])["observe"]
+    out["half_cycle"] = m.state.half_cycle
+    out["registers"] = {
+        "pc": f"${obs['pc']:04X}", "a": f"${obs['a']:02X}", "x": f"${obs['x']:02X}",
+        "y": f"${obs['y']:02X}", "s": f"${obs['s']:02X}", "p": f"${obs['p']:02X}",
+        "flags": obs["flags"],
+    }
+    if watch:
+        out["watch"] = obs.get("watch")
+    reads = args.get("read") or []
+    if reads:
+        image = m.memory.flat()
+        out["read"] = {
+            str(spec): image[a : a + n].hex()
+            for spec, (a, n) in ((s, mcp_server.parse_read(s)) for s in reads)
+        }
+    return out
+
+
+def _tool_mint(args: dict) -> dict:
+    tiles = args.get("tiles")
+    req = CartridgeRequest(
+        rom=Rom(source=args["source"], org=mcp_server._addr(args.get("org", 0x0200), "org")),
+        console=ConsoleSpec(**_mcp_console(args.get("console"))),
+        tiles=TileArt(pixels=tiles) if tiles else None,
+        meta=CartMeta(
+            name=args.get("name") or "untitled",
+            author=args.get("author"),
+            blurb=args.get("blurb"),
+        ),
+        frames=args.get("frames", 3),
+    )
+    res = mint(req, format="json")
+    blob = cartridge.pack(res.cartridge)
+    return {
+        "ok": True,
+        "verify": res.verify.model_dump() if res.verify else None,
+        "notes": res.cartridge["notes"],
+        "file": {
+            "name": re.sub(r"[^a-z0-9]+", "-", req.meta.name.lower()).strip("-") + ".cart.gz",
+            "bytes": len(blob),
+            "sha256": res.sha256,
+            "base64": mcp_server.b64(blob),
+            "how": "write these bytes to the named file; it is gzipped JSON and "
+                   "carries the ROM, the tiles and the contract together",
+        },
+        "play": "https://games.tinymachines.ai/ , which loads a cartridge from "
+                "?cart=<url> or from the file picker",
+    }
+
+
+def _tool_atlas(args: dict) -> dict:
+    a = _at()
+    if args.get("group"):
+        return a.group_full(args["group"], members=True, layer="partition")
+    if not args.get("node"):
+        return a.overview()
+    try:
+        nid = a.resolve(str(args["node"]))
+    except KeyError as e:
+        raise mcp_server.RpcError(mcp_server.BAD_PARAMS, str(e)) from e
+    out = a.node_full(nid)
+    if args.get("neighbors"):
+        out["neighbors"] = a.neighbors(nid, via="gate", direction="both", depth=1, limit=40)
+    return out
+
+
+_MCP = mcp_server.make_handler({
+    "console_spec": lambda a: console_spec(),
+    "assemble": _tool_assemble,
+    "run": _tool_run,
+    "mint_cartridge": _tool_mint,
+    "chip_atlas": _tool_atlas,
+})
+
+
+@app.post("/mcp", include_in_schema=False)
+async def mcp_endpoint(request: Request):
+    """Streamable HTTP, minus the stream. The spec lets a server answer a POST
+    with a plain JSON body when it has nothing to stream, and this one never
+    does: every tool is a single errand that either finishes or refuses. No
+    session id is issued for the same reason the API keeps no sessions."""
+    try:
+        body = json.loads(await request.body() or b"null")
+    except ValueError as e:
+        return JSONResponse(
+            mcp_server.error_body(None, mcp_server.RpcError(mcp_server.PARSE, str(e))),
+            status_code=400,
+        )
+    batch = isinstance(body, list)
+    msgs = body if batch else [body]
+    if batch and not msgs:
+        return JSONResponse(
+            mcp_server.error_body(None, mcp_server.RpcError(mcp_server.INVALID_REQ, "empty batch")),
+            status_code=400,
+        )
+    out = []
+    for msg in msgs:
+        mid = msg.get("id") if isinstance(msg, dict) else None
+        try:
+            res = _MCP(msg)
+        except mcp_server.RpcError as e:
+            res = mcp_server.error_body(mid, e)
+        except HTTPException as e:
+            res = mcp_server.error_body(
+                mid, mcp_server.RpcError(mcp_server.INTERNAL, str(e.detail))
+            )
+        if res is not None:
+            out.append(res)
+    if not out:
+        # Every message was a notification. 202 with no body is what the
+        # transport asks for, and a client that gets a body here reconnects.
+        return Response(status_code=202)
+    return JSONResponse(out if batch else out[0])
+
+
+@app.get("/mcp", include_in_schema=False)
+def mcp_no_stream() -> Response:
+    """405 is the spec's own answer for a server that offers no SSE stream."""
+    return JSONResponse(
+        {"error": "this server answers MCP on POST only; it opens no SSE stream"},
+        status_code=405,
+        headers={"allow": "POST"},
     )

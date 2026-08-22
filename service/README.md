@@ -117,6 +117,67 @@ family `public, max-age=86400`.
 Rebuild it whenever the die exporters run (`deploy.sh` does), then
 `sudo systemctl restart 6502-api`: the atlas is held in memory.
 
+## Cartridges: a ROM, its tiles, and the contract, in one file
+
+There is no video hardware on this die and no interrupt in use, so a *frame*
+is not something the silicon knows about. It is an agreement between a ROM
+and whatever drives it, and that agreement is the whole console: the host
+clears a byte and the ROM sets it back when a frame is finished; the host
+writes a byte that is the controller; the host reads a page that is the
+screen. It works over HTTP *because* the API is stateless, the frame boundary
+being a memory edit between two `/v1/step` calls.
+
+```bash
+curl -s localhost:6502/v1/console                     # the contract, published
+curl -s localhost:6502/v1/cartridge -d @cart.json \
+     -H 'content-type: application/json' -o mine.cart.gz
+curl -s 'localhost:6502/v1/cartridge?format=json' -d @cart.json ... | jq .verify
+```
+
+A cartridge is **gzipped JSON** carrying the ROM (bytes, labels and source),
+its tiles in both the binary form and as rows of `0..3`, and the console
+addresses it was written to. The contract travels *with* the bytes rather
+than beside them, because it is the part an outside author has to agree with
+and a contract in a different file is the copy that drifts. `mtime` is zero,
+so minting the same cartridge twice gives the same bytes and two of them can
+be diffed.
+
+Two things minting does that assembling cannot:
+
+- **It refuses a layout that cannot work.** A ROM overlapping its own screen
+  assembles perfectly and then draws over itself; a contract byte inside the
+  ROM is the host writing into the code. Each is 422 with the reason. Reading
+  the assembler's inclusive `end` as one-past made every one of those checks a
+  byte short, which `test_cartridge.py` now pins from both sides.
+- **It runs the thing.** A ROM that assembles, boots and never raises its tick
+  flag is a ROM that does not run on this console, and nothing short of
+  running it says so. The report carries frames completed, what each cost,
+  whether the screen changed, and which tiles are on it.
+
+**The frame cost is measured on an absolute ladder** (128 half-cycles to 16k,
+then 1024) and deliberately not seeded from anything the cartridge declares.
+Sizing the first step from a declared cost is right for a *host* and wrong for
+a measurement: the same ROM minted at `frame_cost` 512 and 20000 measured 6400
+and 6250, each number being its own request rounded up. Die Runner's page had
+carried a declared 12,000 for exactly that reason. Measured, it is **8,704**.
+
+## MCP: five tools, each one a whole errand
+
+`POST /mcp` speaks the Model Context Protocol over streamable HTTP, with no
+session and no SSE stream, for the same reason the API keeps no sessions.
+`console_spec`, `assemble`, `run`, `mint_cartridge`, `chip_atlas`.
+
+**The tools are coarse where the HTTP routes are fine-grained, and that is the
+design.** The API is stateless because a *program* holds the machine: 2 KB of
+hex out and back, and the client's copy is the session. An MCP client is a
+language model, and a model cannot usefully hold 2 KB of hex, so `run`
+assembles, boots, steps and reports in one call and the machine never leaves
+the server.
+
+`run` renders the screen as two hex characters a cell. That is the one thing
+that turns writing a 6502 game from guessing into working: an assembler says
+the bytes are legal, and only the picture says the program is right.
+
 ## What to try first
 
 The programs page's "Add two bytes" ($2E + $14): boot it, step 41

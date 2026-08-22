@@ -60,7 +60,13 @@ const DIERUNNER = {
   screen: 0x0500,
   width: 16,
   height: 16,
-  frameCost: 12000,             // measured; the scenery added about 40%
+  // Measured by /v1/cartridge, which brackets the tick flag and then walks
+  // the last chunk in sixteenths. The 12000 that stood here was the chunker's
+  // own arithmetic read back as a measurement: the console requests the first
+  // chunk at frameCost and then reports the half-cycles it spent, so whatever
+  // was written here confirmed itself. The true steady cost is 8704, rock
+  // solid over twelve frames; the first frame is 5440.
+  frameCost: 8704,
   dirs: { up: 0, down: 0, left: 3, right: 4 },
   tiles: {},                    // the ROM addresses tiles directly
   gateMask: 0x0014,
@@ -73,8 +79,19 @@ const DIERUNNER = {
    * always open, which is scenery rather than a gate. */
   watch: ['dpc25_SBDB', 'dpc9_DBADD', 'dpc10_ADLADD', 'dpc21_ADDADL',
           'dpc23_SBAC', 'dpc30_ADHPCH', 'dpc40_ADLPCL', 'dpc2_XSB'],
-  joins: ['sb0 - idb0', 'idb0 - alub0', 'adl0 - alub0', 'alu2 - adl2',
-          'sb0 - a0', 'pch3 - adh3', 'adl0 - pcl0', 'x0 - sb0'],
+  /* What each line opens, DERIVED rather than typed: this is what
+   * /v1/cartridge reads out of the switch network, and it is the same list a
+   * minted cartridge carries. The eight that stood here by hand agreed on
+   * five. The three that moved are the useful part: ADDADL and ADHPCH open
+   * one switch a bit and the hand-written pair had picked bit 2 and bit 3,
+   * where bit 0 is canonical; and XSB joins sb0 to a node THE DIE NEVER
+   * NAMED, so `x0 - sb0` was naming the register a reader knows is there.
+   * The atlas says that node is owned by regs:x, which is the measured
+   * version of the same claim. The pair is unordered: a pass transistor
+   * conducts both ways, so the order here is alphabetical and means nothing.
+   */
+  joins: ['idb0 - sb0', 'alub0 - idb0', 'adl0 - alub0', 'adl0 - alu0',
+          'a0 - sb0', 'adh0 - pch0', 'adl0 - pcl0', 'regs:x - sb0'],
   over: (v) => v !== 0,
   blurb: 'Ride the metal. Thread the gates. A pass transistor conducts on one '
        + 'clock phase and blocks on the other, so a channel that is shut now '
@@ -82,6 +99,96 @@ const DIERUNNER = {
 };
 
 const CARTS = [DIERUNNER, SNAKE];
+
+/* -- cartridges from a file ------------------------------------------------
+ * A .cart.gz is gzipped JSON carrying the ROM, its tiles and the contract it
+ * was written to, all three together. That togetherness is the whole point of
+ * the format: this page needs eight addresses to play a game and there is no
+ * hardware to ask about any of them, so a cartridge whose contract lived in a
+ * different file from its bytes would be the copy that drifts. Die Runner
+ * learned that when its screen moved and one of four places naming it was
+ * missed -- the game drew unrelated memory and nothing errored.
+ *
+ * `?cart=<url>` loads one, and so does the file picker. Minted by
+ * POST /api/v1/cartridge, which refuses a layout that cannot work.
+ */
+async function ungzip(buf) {
+  if (typeof DecompressionStream !== 'function') {
+    throw new Error('this browser cannot un-gzip; DecompressionStream is missing');
+  }
+  const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).text();
+}
+
+function cartFromDoc(doc) {
+  if (doc.format !== 'tinymachines.cartridge') {
+    throw new Error(`format is ${doc.format || 'missing'}, not tinymachines.cartridge`);
+  }
+  const c = doc.console || {};
+  const rom = doc.rom || {};
+  const bytes = Uint8Array.from((rom.bytes || '').match(/../g) || [],
+                                (h) => parseInt(h, 16));
+  if (!bytes.length) throw new Error('the cartridge carries no ROM bytes');
+  return {
+    name: (doc.meta && doc.meta.name) || 'cartridge',
+    blurb: doc.meta && doc.meta.blurb,
+    bytes,
+    org: rom.org ?? 0x0200,
+    reset: rom.reset ?? rom.org ?? 0x0200,
+    tick: c.tick ?? 0x000d,
+    input: c.input ?? 0x0002,
+    status: c.status,
+    score: c.score,
+    entropy: c.entropy,
+    gateMask: c.gate_mask,
+    screen: c.screen ?? 0x0500,
+    width: c.width ?? 16,
+    height: c.height ?? 16,
+    frameCost: c.frame_cost,
+    dirs: c.dirs || {},
+    watch: c.watch || [],
+    joins: c.joins || [],
+    tiles: {},
+    chr: doc.tiles && doc.tiles.chr,
+    over: (v) => v !== 0,
+  };
+}
+
+/** Take a loaded cartridge over: its tiles are its own, so they replace the
+ *  sheet, and the picker gains an entry for it rather than lying about which
+ *  cartridge is on screen. */
+function useCart(cart) {
+  CARTS.push(cart);
+  const opt = document.createElement('option');
+  opt.value = String(CARTS.length - 1);
+  opt.textContent = `${cart.name} (loaded)`;
+  $('#cart').append(opt);
+  $('#cart').value = opt.value;
+  state.cart = cart;
+  state.con = null;
+  state.running = false;
+  state.gen++;
+  if (cart.chr && cart.chr.length >= 32) {
+    const chr = Uint8Array.from(cart.chr.match(/../g), (h) => parseInt(h, 16));
+    const t = decodeCHR(chr);
+    if (t.length) { TILES = t; state.sheet = null; }
+  }
+  $('#note').textContent = cart.blurb || 'A cartridge, loaded from a file.';
+  $('#k-cart').textContent = `${cart.name} · ${cart.bytes.length}B`;
+  $('#b-power').textContent = 'power on';
+  $('#b-pause').disabled = true;
+  fit();
+  legend();
+  preview();
+  say(`${cart.name}: ${cart.bytes.length} bytes, ${TILES.length} tiles. Power on to run it.`);
+}
+
+async function loadCartFrom(url) {
+  say(`loading ${url} ...`);
+  const r = await fetch(url, { cache: 'no-cache' });
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  useCart(cartFromDoc(JSON.parse(await ungzip(await r.arrayBuffer()))));
+}
 
 /* The tile set. `art/tiles.chr` is the shipped sheet; the drawn-in-code
  * starter set is the fallback AND the spec, so a missing or broken sheet costs
@@ -194,7 +301,7 @@ function gates() {
     const high = (con.mask >> g) & 1;
     return `<div class="gate ${high ? 'hi' : 'lo'}">
       <b>${n.replace(/^dpc\d+_/, '')}</b>
-      <span>${c.joins[g]}</span>
+      <span>${(c.joins && c.joins[g]) || ''}</span>
       <i>${high ? 'A' : 'B'}</i></div>`;
   }).join('');
 }
@@ -260,9 +367,14 @@ async function power() {
   $('#b-power').disabled = true;
   $('#b-power').textContent = 'booting...';
   try {
-    const r = await fetch(state.cart.rom);
-    if (!r.ok) throw new Error(`${state.cart.rom}: HTTP ${r.status}`);
-    const rom = new Uint8Array(await r.arrayBuffer());
+    // A loaded cartridge carries its bytes; a built-in one is a file beside
+    // this page. Either way what reaches the console is a Uint8Array.
+    let rom = state.cart.bytes;
+    if (!rom) {
+      const r = await fetch(state.cart.rom);
+      if (!r.ok) throw new Error(`${state.cart.rom}: HTTP ${r.status}`);
+      rom = new Uint8Array(await r.arrayBuffer());
+    }
     $('#k-cart').textContent = `${state.cart.name} · ${rom.length}B`;
     state.con = new Console6502(state.cart, rom, API);
     await state.con.power();
@@ -333,7 +445,23 @@ function preview() {
   drawScreen($('#screen').getContext('2d'), state.sheet, demo, SNAKE.width, SNAKE.height);
   say(`${n} tiles. Power on to run the cartridge.`);
 }
+$('#cart-file').onchange = async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    useCart(cartFromDoc(JSON.parse(await ungzip(await file.arrayBuffer()))));
+  } catch (err) {
+    say(`${file.name}: ${err.message}`, true);
+  }
+  e.target.value = '';
+};
+
 $('#note').textContent = CARTS[0].blurb;
 preview();
 legend();
 loadTiles();
+
+// A cartridge named in the URL wins over the built-in one, because a link
+// naming a cartridge is somebody asking for it.
+const WANT = new URLSearchParams(location.search).get('cart');
+if (WANT) loadCartFrom(WANT).catch((e) => say(`could not load that cartridge: ${e.message}`, true));

@@ -332,3 +332,91 @@ class NeighborsResponse(BaseModel):
     rails: int
     truncated: bool
     neighbors: list[dict]
+
+
+# -- cartridges --------------------------------------------------------------
+#
+# A game on this chip is a ROM plus the addresses the host and the ROM have
+# agreed on, and there is no hardware to consult about either: the console is
+# a contract (see cartridge.py). These shapes are that contract as a request.
+
+
+class TileArt(BaseModel):
+    """The sprite sheet, in either of the two forms it can arrive in.
+
+    `pixels` is eight strings of eight '0'..'3' per tile, which is the form
+    something writing a cartridge from text can actually emit. `chr` is the
+    binary tile format as hex, which is what a converter emits. Give one;
+    both are written into the cartridge either way, so a reader never has to
+    decode and a drawing tool never has to parse ASCII."""
+
+    pixels: Optional[list[list[str]]] = None
+    chr: Optional[str] = None
+
+
+class ConsoleSpec(BaseModel):
+    """Where the host and the ROM meet. `tick`, `input` and the screen are
+    the console; everything else is a cartridge saying what else it uses."""
+
+    tick: int = Field(default=0x000D, ge=0, le=0xFFFF)
+    input: int = Field(default=0x0002, ge=0, le=0xFFFF)
+    screen: int = Field(default=0x0500, ge=0, le=0xFFFF)
+    width: int = Field(default=16, ge=1, le=64)
+    height: int = Field(default=16, ge=1, le=64)
+    status: Optional[int] = Field(default=None, ge=0, le=0xFFFF)
+    score: Optional[int] = Field(default=None, ge=0, le=0xFFFF)
+    entropy: Optional[int] = Field(default=None, ge=0, le=0xFFFF)
+    gate_mask: Optional[int] = Field(default=None, ge=0, le=0xFFFF)
+    frame_cost: Optional[int] = Field(default=None, ge=1, le=200000)
+    dirs: dict[str, int] = Field(default_factory=dict)
+    watch: list[str] = Field(default_factory=list)
+
+
+class CartMeta(BaseModel):
+    name: str = Field(default="untitled", max_length=64)
+    author: Optional[str] = Field(default=None, max_length=64)
+    blurb: Optional[str] = Field(default=None, max_length=400)
+
+
+class CartridgeRequest(BaseModel):
+    """Mint a cartridge: assemble the source, check the layout can work, run
+    it on the chip, and pack the lot into one file."""
+
+    rom: Rom
+    console: ConsoleSpec = Field(default_factory=ConsoleSpec)
+    tiles: Optional[TileArt] = None
+    meta: CartMeta = Field(default_factory=CartMeta)
+    reset_vector: Optional[int] = Field(default=None, ge=0, le=0xFFFF)
+    verify: bool = True
+    frames: int = Field(
+        default=3, ge=0, le=16,
+        description="frames to run when verifying. The first is usually the "
+        "expensive one: a cartridge that clears its screen pays for it once.",
+    )
+    frame_budget: int = Field(default=60000, ge=1, le=200000)
+
+
+class VerifyReport(BaseModel):
+    """What the chip did, not what the cartridge claims. `booted` is the
+    weakest claim here and `frames_completed` the strongest: a ROM that
+    assembles and boots and never raises its tick flag is a ROM that does
+    not run on this console."""
+
+    booted: bool
+    frames_requested: int
+    frames_completed: int
+    half_cycles: list[int]
+    frame_cost: Optional[int]
+    screen_changed: bool
+    tiles_used: list[int]
+    status: Optional[int]
+    score: Optional[int]
+    notes: list[str]
+
+
+class CartridgeResponse(BaseModel):
+    cartridge: dict
+    verify: Optional[VerifyReport] = None
+    size: int
+    packed_size: int
+    sha256: str

@@ -181,6 +181,52 @@ Two things had to be measured rather than designed:
   not difficulty but a death the player could not have avoided. Each gap steps
   -3..+4 from the last, against six frames of travel.
 
+## The cartridge format
+
+A cartridge is one **gzipped JSON** file carrying the ROM (bytes, labels and
+source), its tiles in both the binary form and as rows of `0..3`, and the
+console addresses it was written to. The contract travels *with* the bytes
+rather than beside them, because the contract is the part an outside author
+has to agree with, and this page needs eight addresses to play a game with no
+hardware to ask about any of them. Die Runner already learned what a second
+copy costs: its screen moved and one of the four places naming it was missed,
+and the game drew unrelated memory with nothing erroring.
+
+```bash
+# Minted by the API, which refuses a layout that cannot work and then RUNS it.
+python3 games/tools/mint.py --api https://6502.tinymachines.ai/api
+```
+
+The page loads one from `?cart=<url>` or from the file picker, and a loaded
+cartridge joins the picker rather than quietly replacing what the label says
+is on screen. Its tiles replace the sheet, so a cartridge brings its own art.
+`games/deploy.sh` mints the sample rather than keeping it in the tree, so it
+cannot go stale against `rom/dierunner.s` and every deploy exercises the
+endpoint.
+
+The format, the memory map and the tile encoding are published at
+<https://6502.tinymachines.ai/api/#cartridges>, and `GET /v1/console` is the
+same thing as data.
+
+### What minting found
+
+**The frame cost this page claimed was its own request read back.** The
+console asks for `frameCost` half-cycles and then reports what it spent, so
+whatever was written there confirmed itself: 12,000 was a number this file
+had typed, not a number the chip had produced. The mint measures on a fixed
+ladder that is seeded from nothing the cartridge declares, and Die Runner's
+steady frame is **8,704**, rock solid over twelve frames, with the first at
+5,440. That is about 28% less chip time a frame than the page was buying.
+
+**The eight labels beside the gates are derived now.** `joins` used to be
+eight strings typed beside the eight watched line names, which is two claims
+where there is one fact. The atlas answers instead, and agrees on five. The
+three it does not are the useful part: `ADDADL` and `ADHPCH` each open one
+switch a bit and the hand-written pair had named bit 2 and bit 3 where bit 0
+is canonical, and `XSB` joins `sb0` to a node **the die never named**, so
+`x0 - sb0` was naming the register a reader knows is there. The atlas says
+that node is owned by `regs:x`.
+
 ## Cartridge zero
 
 `rom/snake.rom` -- 351 bytes, here to prove the pipe end to end.

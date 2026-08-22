@@ -60,3 +60,7 @@ __pycache__/
 # copyrighted material rather than carrying it. MOS Technology's manuals are
 # hosted by 6502.org; fetch them with tools/fetch-reference.sh.
 /reference
+
+# Minted by games/tools/mint.py at deploy time, from rom/dierunner.s and
+# art/tiles.chr, so it cannot go stale against either.
+games/*.cart.gz

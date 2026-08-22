@@ -435,6 +435,266 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
   </div>
 </section>
 
+<section id="cartridges">
+  <p class="eyebrow">Cartridges</p>
+  <h2>A ROM, its tiles, and the contract they were written to</h2>
+  <p>
+    There is no video hardware on this die and no interrupt in use, so a
+    <em>frame</em> is not something the silicon knows about. It is an
+    agreement between a ROM and whatever drives it, and that agreement is the
+    whole console:
+  </p>
+  <table>
+    <tr><th>the host</th><th>the ROM</th></tr>
+    <tr><td>clears one byte</td><td>notices, runs a frame, sets it back</td></tr>
+    <tr><td>writes one byte before each frame</td><td>reads it as the controller</td></tr>
+    <tr><td>reads a page of memory</td><td>wrote tile indices into it</td></tr>
+  </table>
+  <p>
+    The ROM busy-waits on that flag, which is the only way to synchronise with
+    the outside world when you have no interrupt and no timer. It works over
+    HTTP <em>because</em> the API is stateless: the frame boundary is a memory
+    edit between two <code>/v1/step</code> calls, and the whole machine travels
+    in each one. Nothing about this was designed for games. It falls out of a
+    design that carries the machine as a value.
+  </p>
+
+  <h3 id="memorymap">The memory map</h3>
+  <p>
+    None of these are facts about the silicon. They are addresses two programs
+    agree on, which is why they are published rather than left to be inferred
+    from a game that already works.
+  </p>
+  <table>
+    <tr><th>range</th><th>what</th></tr>
+    <tr><td><code>$0000-$00FF</code></td><td>zero page. The contract bytes live here,
+      and it is where a 6502 keeps its variables: two bytes an instruction instead
+      of three</td></tr>
+    <tr><td><code>$000D</code></td><td><code>tick</code>. The host clears it; the ROM
+      raises it when a frame is finished</td></tr>
+    <tr><td><code>$0002</code></td><td><code>input</code>. The controller, one byte,
+      written by the host before each frame</td></tr>
+    <tr><td><code>$0003</code></td><td><code>status</code>, optional. The ROM raises it
+      when the game is over</td></tr>
+    <tr><td><code>$0100-$01FF</code></td><td>the stack. A cartridge whose ROM or screen
+      covers this is refused</td></tr>
+    <tr><td><code>$0200</code></td><td>the usual <code>.org</code> for a ROM</td></tr>
+    <tr><td><code>$0500</code></td><td>the screen: <code>width * height</code> bytes,
+      one tile index a cell, row major. Put it <strong>above</strong> the ROM</td></tr>
+    <tr><td><code>$FFFA-$FFFF</code></td><td>the vectors. Booting writes the reset
+      vector at <code>$FFFC</code></td></tr>
+  </table>
+  <p>
+    <strong>A ROM that reaches its own screen is overwritten by the picture it
+    draws</strong>, and it assembles and boots first, so nothing errors: Die
+    Runner grew past <code>$0400</code> when its scenery arrived and drew
+    unrelated memory for a while. That is a refusal here rather than a game
+    that runs and is wrong.
+  </p>
+
+  <h3 id="tiles">Tiles</h3>
+  <p>
+    8x8 pixels, two bits a pixel, sixteen bytes a tile: the NES shape, because
+    it is what every old-school sprite tool emits and because four colours a
+    tile is the constraint that makes the art look like the era rather than
+    like a photograph.
+  </p>
+<pre><code>bytes 0..7    bit 0 of each pixel, one byte a row, MSB the leftmost pixel
+bytes 8..15   bit 1 of each pixel
+colour        (plane1 &lt;&lt; 1) | plane0   -&gt;  0..3</code></pre>
+  <p>
+    The palette is the die's own, the four colours the
+    <a href="https://6502.tinymachines.ai/exploded">exploded view</a> paints the
+    mask layers in: <code>#0B1120</code> substrate, <code>#3E93A6</code>
+    diffusion, <code>#E0A24B</code> polysilicon, <code>#4FBFD4</code> metal.
+    Colour 0 is drawn, not skipped, because this is a tiled screen and not a
+    sprite layer.
+  </p>
+  <p>
+    <strong>Art arrives in either of two forms and leaves in both.</strong>
+    <code>chr</code> is the binary format above as hex, which is what a
+    converter emits. <code>pixels</code> is eight strings of eight
+    <code>'0'</code>..<code>'3'</code> a tile, which is the form something
+    writing a cartridge from text can actually emit. Whichever arrives, both
+    are written into the file, so a reader never has to decode and a drawing
+    tool never has to parse ASCII.
+  </p>
+<pre><code>"pixels": [[<span class="s">"00333300"</span>,
+            <span class="s">"03222230"</span>,
+            <span class="s">"32000023"</span>,
+            <span class="s">"32033023"</span>,
+            <span class="s">"32033023"</span>,
+            <span class="s">"32000023"</span>,
+            <span class="s">"03222230"</span>,
+            <span class="s">"00333300"</span>]]     <span class="c">// one tile: a capacitor</span></code></pre>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/console</h3>
+    <p>
+      Everything above as data: the contract, the memory map, the tile format,
+      the palette, the cartridge format's version, and the smallest ROM that
+      is a cartridge. Static, and a reading of nothing. Read this before
+      writing one.
+    </p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method">POST</span>/v1/cartridge</h3>
+    <p>
+      Mint a cartridge: assemble the source, check the layout can work,
+      <strong>run it on the chip</strong>, and pack the ROM, its tiles and the
+      contract into one gzipped file. Returns
+      <code>application/gzip</code>, or the document itself with
+      <code>?format=json</code>.
+    </p>
+    <table>
+      <tr><th>field</th><th>what</th></tr>
+      <tr><td><code>rom</code></td><td>a <a href="#rom">Rom</a>: the source and its
+        <code>org</code></td></tr>
+      <tr><td><code>console</code></td><td><code>tick</code>, <code>input</code>,
+        <code>screen</code>, <code>width</code>, <code>height</code>, and optionally
+        <code>status</code>, <code>score</code>, <code>entropy</code>,
+        <code>gate_mask</code>, <code>frame_cost</code>, <code>dirs</code>,
+        <code>watch</code></td></tr>
+      <tr><td><code>tiles</code></td><td><code>{pixels: [...]}</code> or
+        <code>{chr: "hex"}</code></td></tr>
+      <tr><td><code>meta</code></td><td><code>name</code>, <code>author</code>,
+        <code>blurb</code></td></tr>
+      <tr><td><code>frames</code></td><td>how many frames to run when verifying,
+        default 3. Zero skips it</td></tr>
+    </table>
+    <p>
+      <strong>The refusals are the part worth having</strong>, and each one is
+      a mistake that has actually been made here: a ROM overlapping its own
+      screen, a ROM or a screen over the stack page, a ROM reaching the
+      vectors, a contract byte inside the ROM (the host would be writing into
+      the code), two contract fields sharing an address. Each comes back 422
+      with the reason and what to do about it.
+    </p>
+    <p>
+      <strong>Verification runs the thing.</strong> Assembling is not the same
+      as being right: a ROM that assembles, boots and never raises its tick
+      flag is a ROM that does not run on this console, and nothing short of
+      running it says so. The report carries frames completed, the half-cycles
+      each one cost, whether the screen changed, and which tile indices are on
+      it. A screen that is one value everywhere is called out, because that is
+      what a program drawing nothing looks like.
+    </p>
+    <p>
+      <strong>The frame cost is measured, not rounded up.</strong> Stepping
+      past the tick flag cannot say when the flag went up, so the first pass
+      doubles its chunks until the flag is set and the second walks the last
+      chunk again in sixteenths. Reporting the chunk total instead was the
+      first version, and it claimed 12,000 half-cycles for a frame costing
+      600: the chunker's arithmetic wearing a measurement's clothes. Die
+      Runner's own page had carried a declared 12,000 for exactly that reason;
+      measured, it is <strong>8,704</strong>, steady over twelve frames.
+    </p>
+  </div>
+
+  <h3 id="cartfile">The file</h3>
+  <p>
+    One gzipped JSON document, and it carries the contract <em>with</em> the
+    ROM rather than beside it, because the contract is the part an outside
+    author has to agree with and a contract in a different file from the bytes
+    it governs is the copy that drifts.
+  </p>
+<pre><code>{
+  <span class="s">"format"</span>: <span class="s">"tinymachines.cartridge"</span>, <span class="s">"version"</span>: 1,
+  <span class="s">"encoding"</span>: { <span class="c">/* how to read every field, in the file */</span> },
+  <span class="s">"contract"</span>: { <span class="c">/* what each console address is for */</span> },
+  <span class="s">"meta"</span>:    { name, author, blurb, minted },
+  <span class="s">"rom"</span>:     { org, end, size, reset, bytes, labels, source },
+  <span class="s">"console"</span>: { tick, input, screen, width, height, ... },
+  <span class="s">"tiles"</span>:   { count, chr, pixels, palette },
+  <span class="s">"verify"</span>:  { <span class="c">/* what the chip did when this was minted */</span> },
+  <span class="s">"notes"</span>:   [ <span class="c">/* what is worth saying and is not fatal */</span> ]
+}</code></pre>
+  <p>
+    The source travels too, so a cartridge can be read, edited and minted
+    again by whoever has the file. Gzip <code>mtime</code> is zero, so minting
+    the same cartridge twice gives the same bytes: a container that changes
+    every time it is written cannot be diffed, and diffing two cartridges is
+    how a person sees what an edit did.
+  </p>
+<pre><code><span class="c"># Mint one, then play it.</span>
+curl -s https://6502.tinymachines.ai/api/v1/console | python3 -m json.tool
+
+curl -s https://6502.tinymachines.ai/api/v1/cartridge -H <span class="s">'content-type: application/json'</span> \
+  -d @cartridge.json -o mine.cart.gz
+
+<span class="c"># games.tinymachines.ai loads one from ?cart=&lt;url&gt; or from its file picker.</span>
+python3 -c <span class="s">'import gzip,json,sys; print(json.load(gzip.open("mine.cart.gz"))["verify"])'</span></code></pre>
+</section>
+
+<section id="mcp">
+  <p class="eyebrow">MCP</p>
+  <h2>Five tools, each one a whole errand</h2>
+  <p>
+    <code>POST /api/mcp</code> speaks the Model Context Protocol over
+    streamable HTTP: <code>initialize</code>, <code>tools/list</code>,
+    <code>tools/call</code>. No session id is issued and no SSE stream is
+    opened, for the same reason the API keeps no sessions. A <code>GET</code>
+    returns 405, which is the spec's own answer for a server that offers no
+    stream.
+  </p>
+  <p>
+    <strong>The tools are coarse where the HTTP routes are fine-grained, and
+    that is the design rather than a shortcut.</strong> The API is stateless
+    because a <em>program</em> holds the machine: 2&nbsp;KB of hex travels out
+    and back, and the client's copy is the session. An MCP client is a
+    language model, and a model cannot usefully hold 2&nbsp;KB of hex. Pasting
+    a machine into the next tool call would spend most of a context window
+    carrying a value it cannot read. So <code>run</code> assembles, boots,
+    steps and reports in one call, and the machine never leaves the server.
+  </p>
+  <table>
+    <tr><th>tool</th><th>what it answers</th></tr>
+    <tr><td><code>console_spec</code></td><td>what a ROM has to agree with. No
+      arguments. Read it first</td></tr>
+    <tr><td><code>assemble</code></td><td>source to bytes, labels and a listing.
+      An error carries the line</td></tr>
+    <tr><td><code>run</code></td><td>what the chip did: registers, flags, memory you
+      name, named wires you watch, and <strong>the screen</strong></td></tr>
+    <tr><td><code>mint_cartridge</code></td><td>source and tiles to one verified
+      file, base64</td></tr>
+    <tr><td><code>chip_atlas</code></td><td>what a wire is part of, out of the 132
+      derived containers that cover all 1725 nodes</td></tr>
+  </table>
+  <p>
+    <strong><code>run</code> renders the screen as two hex characters a cell,
+    row major</strong>, and that is the one thing that turns writing a 6502
+    game from guessing into working: an assembler says the bytes are legal,
+    and only the picture says the program is right. Give it
+    <code>frames</code> and a controller byte to hold down, and it hands back
+    what your ROM drew.
+  </p>
+  <p>
+    Give <code>run</code> exactly one of <code>half_cycles</code>,
+    <code>until_pc</code> (a breakpoint at an opcode fetch) or
+    <code>frames</code>. Addresses are hex with or without a <code>$</code>,
+    because a model writes <code>$0500</code> and a program writes 1280 and
+    neither should have to learn the other's spelling.
+  </p>
+<pre><code><span class="c"># Hand-driving it: initialize, then call a tool.</span>
+curl -s https://6502.tinymachines.ai/api/mcp -H <span class="s">'content-type: application/json'</span> -d <span class="s">'{
+  "jsonrpc":"2.0","id":1,"method":"initialize",
+  "params":{"protocolVersion":"2025-06-18","capabilities":{},
+            "clientInfo":{"name":"curl","version":"0"}}}'</span>
+
+curl -s https://6502.tinymachines.ai/api/mcp -H <span class="s">'content-type: application/json'</span> -d <span class="s">'{
+  "jsonrpc":"2.0","id":2,"method":"tools/call",
+  "params":{"name":"run","arguments":{
+      "source":".org $0200\nstart LDA #$2E\n      CLC\n      ADC #$14\n      STA $82\n      JMP start",
+      "half_cycles":41, "read":["0082"], "watch":["sync"]}}}'</span></code></pre>
+  <p>
+    A tool that refuses comes back as a normal result with
+    <code>isError</code> set and the reason in the text, never as a JSON-RPC
+    error: the model has to be able to read why and try again, and a protocol
+    error is for the client rather than for the model.
+  </p>
+</section>
+
 <section id="objects">
   <p class="eyebrow">Objects</p>
   <h2>The shapes that travel</h2>

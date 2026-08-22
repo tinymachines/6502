@@ -13,6 +13,16 @@ done
 # starter set in chr.js is the fallback, so a missing sheet is a warning
 # rather than a failure.
 [ -s art/tiles.chr ] || echo "games: art/tiles.chr is missing; the starter tiles will be drawn" >&2
+# The sample cartridge is MINTED here rather than kept in the tree, so it
+# cannot go stale against rom/dierunner.s and so every deploy exercises the
+# endpoint that makes it. A failure is not fatal: the page ships two built-in
+# cartridges and the file is a sample of the format, not the site.
+API=${API:-https://6502.tinymachines.ai/api}
+if command -v python3 >/dev/null && [ -f rom/dierunner.s ]; then
+  python3 tools/mint.py --api "$API" --out dierunner.cart.gz \
+    || echo "games: could not mint dierunner.cart.gz from $API; publishing without it" >&2
+fi
+
 # `_*` is excluded the way build-web.py protects the simulator: a harness left
 # in this directory would otherwise be published, and the archive already
 # learned that rsync -a --delete copies EVERYTHING.
