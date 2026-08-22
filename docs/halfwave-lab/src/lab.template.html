@@ -77,6 +77,9 @@ header{
   background:var(--panel);border:1px solid var(--rule);border-radius:2px;
 }
 .themebtn:hover{color:var(--bright);border-color:var(--glow)}
+.themebtn.ok{color:var(--ground);background:var(--alu);border-color:var(--alu)}
+#linkurl{font-size:11.5px;color:var(--dim)}
+#linkpanel .atform{margin-top:8px}
 .themebtn .ic{width:15px;height:15px}
 @media(max-width:860px){.themebtn{margin-left:auto}}
 @media(max-width:860px){.tag{display:none}}
@@ -616,7 +619,9 @@ select{
 <header>
   <div class="brand">Halfwave <em>Lab</em></div>
   <p class="tag">A 6502, half a clock phase at a time. Every value is read out of a storage node on the die.</p>
-  <button class="themebtn" id="theme" data-ic="sun" title="Switch to the light theme"
+  <button class="themebtn" id="share" data-ic="link" title="Copy a link to what you are looking at"
+        aria-label="Copy a link to this view"></button>
+<button class="themebtn" id="theme" data-ic="sun" title="Switch to the light theme"
           aria-label="Switch colour theme"></button>
 <nav class="tabs" role="tablist" aria-label="Panels">
   <button class="tab" role="tab" id="t-map"  aria-controls="p-map"  aria-selected="true">Datapath</button>
@@ -931,6 +936,27 @@ select{
       <div class="ph"><h2 class="eyebrow">Zero page</h2><span class="eyebrow">$0080–$00BF</span></div>
       <div class="pb"><div class="mem" id="zp"></div></div>
     </div>
+    <div class="panel" id="linkpanel">
+      <div class="ph"><h2 class="eyebrow">Hand this machine to somebody</h2>
+        <span class="eyebrow">the server keeps no sessions</span></div>
+      <div class="pb">
+        <p class="inote lede0">
+          Every request to the API carries the whole machine and every response carries it
+          back, so a machine is a value rather than a session. A value fits in a link.
+        </p>
+        <div class="iwatch">
+          <button class="ibtn" id="linkmake">link to this view</button>
+          <button class="ibtn" id="linkmach">link with the machine in it</button>
+          <button class="ibtn" id="linkjson">the machine as JSON</button>
+        </div>
+        <div class="atform">
+          <input id="linkurl" type="text" readonly aria-label="Permalink" spellcheck="false"
+                 placeholder="press a button above">
+          <button class="ibtn" id="linkcopy">copy</button>
+        </div>
+        <p class="inote" id="linknote"></p>
+      </div>
+    </div>
   </section>
 
   <section role="tabpanel" id="p-atlas" aria-labelledby="t-atlas" hidden>
@@ -1019,7 +1045,8 @@ const IC = {
   up:     "M6.5 14.5L12 9l5.5 5.5",
   sun:    "M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6 M12 2.6v2.2 M12 19.2v2.2 M2.6 12h2.2 M19.2 12h2.2 M5.4 5.4l1.6 1.6 M17 17l1.6 1.6 M18.6 5.4L17 7 M7 17l-1.6 1.6",
   moon:   "M20.2 14.8A8.6 8.6 0 0 1 9.2 3.8a7.6 7.6 0 1 0 11 11z",
-  pull:   "M12 4.5v9 M8.2 10l3.8 3.8 3.8-3.8 M5 19h14"
+  pull:   "M12 4.5v9 M8.2 10l3.8 3.8 3.8-3.8 M5 19h14",
+  link:   "M10.3 13.7a3.6 3.6 0 0 0 5.1 0l3-3a3.6 3.6 0 0 0-5.1-5.1l-1.1 1.1 M13.7 10.3a3.6 3.6 0 0 0-5.1 0l-3 3a3.6 3.6 0 0 0 5.1 5.1l1.1-1.1"
 };
 function ic(name,cls){
   const d=IC[name]; if(!d) return "";
@@ -1627,6 +1654,19 @@ document.addEventListener("click", (e) => {
   else inspect(id, [lineNode(id)]);          /* a control line is one node */
 });
 $("#inspclose").onclick = clearInspect;
+$("#share").onclick = async () => {
+  const b = $("#share");
+  /* Which tab is showing is part of the view, so it is read BEFORE the panel
+     opens. Reading it after meant every link made from the header claimed the
+     State tab, whatever the reader was actually looking at. */
+  const tab = currentTab();
+  showTab("t-state");
+  await paintLink(false, tab);
+  const ok = await copyLink();
+  b.title = ok ? "Copied. The link is in the State tab too." : "The link is in the State tab: select and copy it.";
+  b.classList.add("ok");
+  setTimeout(() => b.classList.remove("ok"), 1600);
+};
 
 /* ==========================================================================
    The Atlas tab: browse the containers, and walk a wire
@@ -1893,6 +1933,262 @@ $("#atsearch").addEventListener("submit", (e) => {
   const v = $("#atq").value.trim();
   if (v) atlasSelectNode(v.replace(/^#/, ""));
 });
+
+/* ==========================================================================
+   Permalinks: hand somebody the machine you are looking at
+   ==========================================================================
+   The server keeps no sessions, so a machine is a value and a value fits in a
+   URL. Two forms, and the difference is worth understanding before choosing:
+
+     the view      the program, what was done to it, and where the cursor is.
+                   About 200 characters. It reproduces the machine by BOOTING
+                   the same source and doing the same things to it, which is
+                   exact because the chip is deterministic and resuming from a
+                   serialized state is proven bit-exact over every node at
+                   every half-cycle. The whole recording comes back, so the
+                   reader can step BACKWARD from where you left them.
+
+     the machine   the chip's four state bitsets and its memory, carried
+                   whole. About 1.6 KB after compression. This is the
+                   stateless design's own claim, and it is what you send when
+                   no source reproduces the state -- but it arrives with no
+                   history, so the reader starts where you were and can only
+                   go forward.
+
+   In the hash, not the query: it never reaches the server, never lands in a
+   log or a Referer header, and the service worker caches by URL without it.
+   ========================================================================== */
+
+/* What was done to the recording, in order, so it can be done again. The
+   initial boot and its first 300 half-cycles are implied; everything after
+   is one of these. */
+const HIST = { acts: [] };
+const LINK_BASE = 300;
+
+/* -- packing --------------------------------------------------------------- */
+const b64url = (bytes) => {
+  let s = "";
+  for (let n = 0; n < bytes.length; n += 0x8000) {
+    s += String.fromCharCode.apply(null, bytes.subarray(n, n + 0x8000));
+  }
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+const unb64url = (s) => {
+  const t = s.replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(t + "=".repeat((4 - t.length % 4) % 4));
+  const out = new Uint8Array(raw.length);
+  for (let n = 0; n < raw.length; n++) out[n] = raw.charCodeAt(n);
+  return out;
+};
+async function squeeze(str) {
+  /* CompressionStream is not everywhere. Without it the link still works and
+     is simply longer, which is better than refusing to make one. */
+  const bytes = new TextEncoder().encode(str);
+  if (typeof CompressionStream !== "function") return "u" + b64url(bytes);
+  const cs = new CompressionStream("gzip");
+  const w = cs.writable.getWriter(); w.write(bytes); w.close();
+  const buf = new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  return "z" + b64url(buf);
+}
+async function unsqueeze(s) {
+  const bytes = unb64url(s.slice(1));
+  if (s[0] === "u") return new TextDecoder().decode(bytes);
+  if (typeof DecompressionStream !== "function") throw new Error("this browser cannot read a compressed link");
+  const ds = new DecompressionStream("gzip");
+  const w = ds.writable.getWriter(); w.write(bytes); w.close();
+  return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer());
+}
+
+/* -- building -------------------------------------------------------------- */
+const currentTab = () =>
+  (TABS.find(([t]) => $("#" + t).getAttribute("aria-selected") === "true") || ["t-map"])[0];
+function linkPayload(withMachine, tab) {
+  const src = $("#src").value;
+  const pre = PRESETS.findIndex((p) => p.src.trim() === src.trim());
+  const o = { v: 1, h: i, t: tab || currentTab() };
+  /* A preset travels as its index, so the link stays short and the reader
+     gets the annotated program rather than a wall of pasted source. */
+  if (pre >= 0) o.P = pre; else o.s = src;
+  if (HIST.acts.length) o.a = HIST.acts.slice();
+  if (WGROUPS.size) o.w = [...WGROUPS];
+  if (withMachine && MACHAT) { o.m = MACHAT.machine; o.mh = MACHAT.h; }
+  return o;
+}
+async function buildLink(withMachine, tab) {
+  const s = await squeeze(JSON.stringify(linkPayload(withMachine, tab)));
+  return location.origin + location.pathname + location.search + "#m=" + s;
+}
+
+/* The machine AT THE CURSOR, which the page does not otherwise hold: the
+   trace is rows, and the only machine in hand is the one at the end of it.
+   Fetched on demand, cached against the cursor, so pressing the button twice
+   costs one request. */
+let MACHAT = null;
+async function machineAtCursor() {
+  if (MACHAT && MACHAT.h === i) return MACHAT;
+  if (!LIVE) return null;
+  /* NOT simply "boot, then step i". The recording may have had a pin pulsed
+     part way through it, and a chip that never saw the pulse is a different
+     chip: the harness caught this by comparing the resumed chip's registers
+     against the sender's and finding an interrupt that had not happened. The
+     segments below are exactly how F was built, pins and all. A drive lives
+     in the state bitsets, so stopping inside the low segment hands over a
+     machine still holding the pin down, which is what the chip was doing.
+     Stepping i rather than i+1 is right: the receiving side takes one step to
+     make its first row, so its row 0 is the sender's row i. */
+  const segs = [{ n: LINK_BASE }];
+  for (const a of HIST.acts) {
+    if (a === "g") segs.push({ n: 200 });
+    else if (a.startsWith("p:")) {
+      const p = a.slice(2);
+      segs.push({ n: 16, pins: { [p]: 0 } }, { n: 44, pins: { [p]: 1 } });
+    }
+  }
+  let mach = (await post("boot", bootBody([]))).machine;
+  let left = i;
+  for (const seg of segs) {
+    if (left <= 0) break;
+    const take = Math.min(seg.n, left);
+    const body = { machine: mach, half_cycles: take };
+    if (seg.pins) body.pins = seg.pins;
+    mach = (await post("step", body)).machine;
+    left -= take;
+  }
+  MACHAT = { h: i, machine: mach };
+  return MACHAT;
+}
+
+/* -- reading --------------------------------------------------------------- */
+function readLink() {
+  const h = location.hash.replace(/^#/, "");
+  const q = new URLSearchParams(location.search);
+  const m = /(?:^|&)m=([^&]+)/.exec(h);
+  return (m && m[1]) || q.get("m") || null;
+}
+
+/**
+ * Reproduce what a link describes. Returns "" on success or a message.
+ * The replay is the point: booting the same source and doing the same things
+ * to it lands on the same machine, because the chip is deterministic.
+ */
+async function applyLink(packed) {
+  let o;
+  try { o = JSON.parse(await unsqueeze(packed)); }
+  catch (e) { return "That link is not readable: it is corrupt, or was truncated on the way here."; }
+  if (o.v !== 1) return `That link is version ${o.v}; this page reads version 1.`;
+  if (!LIVE) return "A link carries a program to boot, and there is no API to boot it on.";
+
+  if (typeof o.P === "number" && PRESETS[o.P]) loadPreset(o.P);
+  else if (o.s) { $("#src").value = o.s; $("#preset").value = "0"; $("#presetnote").textContent = "from a link"; }
+  WGROUPS.clear();
+  for (const k of o.w || []) WGROUPS.add(k);
+  HIST.acts = [];
+
+  try {
+    if (o.m) {
+      /* A machine carried whole. There is no history behind it, and the page
+         says so rather than showing a cursor that cannot move back. */
+      const s = await post("step", {
+        machine: o.m, half_cycles: LINK_BASE, trace: true,
+        watch: traceWatch(), format: "rows",
+      });
+      setCols(s.trace_rows.cols, s.trace_rows.watch_names);
+      F = s.trace_rows.rows; MEM0 = o.m.memory; MACH = s.machine;
+      /* The listing is the SENDER's source, assembled for the lane. A machine
+         can outlive the source that made it, so a failure here costs the code
+         view and nothing else. */
+      try { showListing(await post("assemble", { source: $("#src").value })); }
+      catch (e) { $("#listing").innerHTML = ""; $("#asmlen").textContent = "no listing"; }
+      reload(); go(0);
+      $("#hint").textContent = `Resumed from a machine at half-cycle ${o.mh ?? "?"}. `
+        + "It arrived without its history, so this recording starts where it was handed over.";
+    } else {
+      const b = await post("boot", bootBody(traceWatch()));
+      const s = await fetchTrace(b.machine, LINK_BASE);
+      setCols(s.cols, s.watch_names);
+      F = s.rows; MEM0 = b.machine.memory; MACH = s.machine;
+      showListing(b.assembled);
+      for (const act of o.a || []) {
+        if (act === "g") { const a = await fetchTrace(MACH, 200); F = F.concat(a.rows); MACH = a.machine; HIST.acts.push("g"); }
+        else if (act.startsWith("p:")) await firePin(act.slice(2), true);
+      }
+      reload();
+      go(Math.min(o.h || 0, F.length - 1));
+    }
+    $("#more").disabled = false; $("#run").disabled = false;
+    $("#scrub").max = Math.max(0, F.length - 1);
+    if (o.t) showTab(o.t);
+    if (o.w && o.w.length) { paintInspector(); paintAtlas(); }
+    return "";
+  } catch (e) { return e.message; }
+}
+
+/* -- the panel ------------------------------------------------------------- */
+let LINKBUSY = false;
+async function paintLink(withMachine, tab) {
+  const box = $("#linkurl");
+  if (!LIVE) {
+    box.value = "";
+    $("#linknote").textContent = "A link needs the API: it carries a program to boot, "
+      + "and this page is running a trace captured earlier.";
+    return;
+  }
+  LINKBUSY = true;
+  $("#linkmake").disabled = $("#linkmach").disabled = true;
+  try {
+    if (withMachine) { $("#linknote").textContent = "reading the machine at this half-cycle..."; await machineAtCursor(); }
+    const url = await buildLink(withMachine, tab);
+    box.value = url;
+    const acts = HIST.acts.length;
+    $("#linknote").innerHTML = withMachine
+      ? `<b>${url.length} characters.</b> Carries the chip's four state bitsets and its
+         memory at half-cycle ${i}, whole. Whoever opens it starts exactly here and can
+         only go forward: a machine travels without its history. The same object is what
+         <code>/v1/step</code> takes, so it can be handed to the API rather than to a
+         person.`
+      : `<b>${url.length} characters.</b> Carries the program, ${acts
+          ? `the ${acts} thing${acts > 1 ? "s" : ""} done to it, ` : ""}the cursor and
+         the tab. It reproduces the machine by booting the same source again, which is
+         exact because the chip is deterministic, and the whole recording comes back so
+         the reader can step backward from where you left them.`;
+  } catch (e) {
+    $("#linknote").textContent = "Could not build a link: " + e.message;
+  } finally {
+    LINKBUSY = false;
+    $("#linkmake").disabled = $("#linkmach").disabled = !LIVE;
+  }
+}
+async function copyLink() {
+  const v = $("#linkurl").value;
+  if (!v) return false;
+  try { await navigator.clipboard.writeText(v); return true; }
+  catch (e) {
+    /* Clipboard access can be refused outright. Selecting the text is the
+       fallback that always works, and it tells the reader what to do. */
+    $("#linkurl").select();
+    try { return document.execCommand("copy"); } catch (e2) { return false; }
+  }
+}
+async function copyMachineJSON() {
+  const m = await machineAtCursor();
+  if (!m) return false;
+  const s = JSON.stringify({ machine: m.machine, half_cycles: 8, trace: true }, null, 1);
+  try { await navigator.clipboard.writeText(s); $("#linknote").textContent =
+    `The machine at half-cycle ${i}, as a /v1/step request body. ${s.length} bytes.`; return true; }
+  catch (e) { $("#linkurl").value = s.slice(0, 400) + " ..."; return false; }
+}
+
+$("#linkmake").onclick = () => paintLink(false);
+$("#linkmach").onclick = () => paintLink(true);
+$("#linkcopy").onclick = async () => {
+  const b = $("#linkcopy");
+  const ok = await copyLink();
+  b.textContent = ok ? "copied" : "select and copy";
+  setTimeout(() => { b.textContent = "copy"; }, 2000);
+};
+$("#linkjson").onclick = copyMachineJSON;
+$("#linkurl").addEventListener("focus", (e) => e.target.select());
+
 
 
 
@@ -2677,8 +2973,9 @@ function renderInterrupt(o){
   }
   $("#seqwords").innerHTML=w.map(([k,t])=>`<li class="${k?"k":""}">${t}</li>`).join("");
 }
-async function firePin(pin){
+async function firePin(pin,replay){
   if(!LIVE||!MACH) return;
+  if(!replay) HIST.acts.push("p:"+pin);
   for(const id of ["fire-irq","fire-nmi","fire-res"]) $("#"+id).disabled=true;
   const was=$("#irqhint").textContent;
   $("#irqhint").textContent=`${pin.toUpperCase()} low\u2026`;
@@ -3036,7 +3333,8 @@ let growing=false;
 async function growTrace(){
   if(growing||!LIVE||F.length>=MAX_FRAMES) return;
   growing=true;
-  try{ const a=await fetchTrace(MACH,200); F=F.concat(a.rows); MACH=a.machine; reload(); }
+  try{ const a=await fetchTrace(MACH,200); F=F.concat(a.rows); MACH=a.machine;
+       HIST.acts.push("g"); reload(); }
   catch(e){ /* leave the recording as it stands; the loop will stop */ }
   finally{ growing=false; }
 }
@@ -3175,7 +3473,14 @@ function useDemo(reason){
   }catch(e){ /* the Decode tab degrades honestly without them */ }
   $("#scrub").max=0;
   PWBUSY=true; paintPower();
-  const err=await boot();
+  /* A link describes a machine, so it replaces the ordinary boot rather than
+     running after it: booting twice would show the reader the default program
+     for a moment and then take it away. */
+  const packed=readLink();
+  const err=packed ? await applyLink(packed) : await boot();
+  /* boot() writes its own hint, so a link's complaint has to be said AFTER
+     the fallback rather than before it. */
+  if(err&&packed){ await boot(); $("#hint").textContent=err; }
   PWBUSY=false; POWER=!err; paintPower();
   /* The atlas is 50 KB gzipped and cached a day, and nothing on screen needs
      it until something is clicked. Pulled after the trace so it never delays

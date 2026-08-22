@@ -276,6 +276,32 @@ Those are pure pass-transistor links, so they get no arrowhead. `regs:s` and `sb
 clean case: sixteen switches, zero gate, under `dpc4_SSB` and `dpc6_SBS`, and which way a
 value moves is decided by which control line is high.
 
+**A machine is a value, so it fits in a link.** Two forms, and the difference is worth
+knowing before choosing.
+
+The **view** link is about 180 characters: the program, the things that were done to the
+recording, the cursor, the tab and the containers being watched. It reproduces the machine by
+booting the same source again and doing the same things to it, which lands on the same chip
+because the chip is deterministic. The whole recording comes back, so whoever opens it can
+step **backward** from where you left them.
+
+The **machine** link is about 1.7 KB: the chip's four state bitsets and its memory, carried
+whole. It is what you send when no source reproduces the state, and it is the stateless
+design's own claim made concrete. It arrives with no history, so the reader starts exactly
+where you were and can only go forward, and the page says so rather than showing a cursor
+that cannot move.
+
+Both live in the **hash**, not the query: a hash never reaches the server, never lands in a
+log or a `Referer` header, and the service worker caches by URL without it. The header's link
+button copies a view link for whatever tab you are on; the State tab has both, plus the
+machine as a `/v1/step` request body for handing to the API instead of to a person.
+
+**Reading the machine at the cursor is not "boot, then step there".** The recording may have
+had a pin pulsed part way through it, and a chip that never saw the pulse is a different
+chip: the harness caught exactly that by comparing the resumed chip's registers against the
+sender's and finding an interrupt that had not happened. The machine is rebuilt through the
+same segments the recording was, pins and all.
+
 ## Three things worth knowing
 
 **The clock phases are read as pins**, `clk1out` and `clk2out`, not derived from the `phase`

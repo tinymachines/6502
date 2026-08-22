@@ -979,7 +979,44 @@ state that decodes to the wrong chip is worse than one that is rejected.
   - **The die's alias table comes from `/v1/nodes`**, which the Lab already
     fetched for the decode names: the dump carries ONE name per node and 125
     nodes have more (`sb0` is also `dasb0`).
-  - **`docs/atlas-elk.zip` is a reviewer's ELK layout of the atlas, and every
+  - **Machine permalinks: a value fits in a URL, and two forms say two things.**
+  The **view** link (~180 chars) carries the program, what was DONE to the
+  recording (`HIST.acts`: a grow, a pin pulse), the cursor, the tab and the
+  watched containers, and reproduces the machine by booting the same source
+  again -- exact, because the chip is deterministic, and the whole recording
+  comes back so the reader can step BACKWARD. The **machine** link (~1.7 KB)
+  carries the four state bitsets and memory whole, for when no source
+  reproduces the state; it arrives with no history and the page says so.
+  - **In the hash, never the query.** It never reaches the server, never
+    lands in a log or a Referer, and the service worker caches by URL
+    without it. `?m=` is accepted too, which is why the base64 is url-safe:
+    `URLSearchParams` turns a `+` into a space.
+  - **`machineAtCursor` is NOT "boot, then step i".** The recording may have
+    had a pin pulsed part way through, and a chip that never saw the pulse
+    is a different chip. It walks the same segments the recording was built
+    from (300 base, 200 per grow, 16 low + 44 high per pulse), applying each
+    segment's pins. Stepping `i` rather than `i+1` is right: trace rows start
+    at half-cycle 1, so the receiver's first step makes its row 0 equal the
+    sender's row `i`.
+  - **The share button read the tab AFTER opening the State panel**, so every
+    link made from the header claimed the State tab. `currentTab()` is read
+    first and passed in.
+  - **Three testing traps, all mine, all worth keeping:**
+    - **A mutation test whose child iframe loads a different file tests
+      nothing.** Every mutant pointed its iframe at a pristine `plain.html`,
+      so four mutations in the READING half passed. Each mutant now ships its
+      own child page.
+    - **An IRQ pulse on a program that never clears I changes nothing**, so
+      the mutant that dropped `pins` produced a byte-identical machine and
+      passed. Use NMI, which is non-maskable, when the point is that the pin
+      was driven.
+    - **Whether plain base64 contains a `+` is data-dependent**: the same
+      url-safety mutant passed and failed on the same code when the program
+      changed. Assert the claim (the alphabet is url-safe), not a symptom.
+  - The header's 4px of horizontal scroll is `.tabs`, a sideways-scrolling
+    strip that fourteen tabs cannot fit on a phone. Identical before and
+    after; the invariant is that the PAGE does not scroll.
+- **`docs/atlas-elk.zip` is a reviewer's ELK layout of the atlas, and every
     claim in it verified against the live endpoint.** elkjs is NOT bundled --
     it would be five to ten times the Lab's whole size for one view, and the
     chip map already draws the whole chip. Two of its findings are used and
