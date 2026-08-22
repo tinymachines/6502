@@ -21,7 +21,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | | |
 |---|---|
 | Simulation | Complete. 84 tests, bit-exact against the original. |
-| Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. |
+| Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone → desktop), installable PWA, offline. |
 | Controls | Program, transport and clock live in the header and drive every page. The rate is the simulated clock in Hz. |
@@ -179,6 +179,12 @@ python3 tools/serve.py web 8777                    # http://localhost:8777/
 # publish if it fails. (Whether they COMPUTE what they claim needs the chip --
 # that is web/_asm-test.html.)
 node tools/check-programs.mjs
+
+# halfphi lives in two repositories. This diffs the five shared files against the
+# published checkout and deploy.sh refuses to publish on a difference. SKIPS
+# without a sibling clone; REQUIRE_HALFPHI=1 insists, HALFPHI=<path> names one,
+# --fix copies this repo's copy over the published one.
+node tools/check-halfphi.mjs
 
 # Every measured cycle count and byte length against the published instruction
 # table: 138 of its 150 rows in about four seconds, against the 33 the
@@ -621,12 +627,22 @@ part of this project that is about switch networks rather than about a 6502:
   throughout. Do not run `cargo fmt --all` here expecting a no-op on the rest of
   the workspace.
 
-**The source exists in two repositories and nothing keeps them in sync.** The
-five shared files are byte-identical today and drifted on whitespace within
-minutes of the split. `tests/chips.rs` searches two candidate paths for the die
+**The source exists in two repositories, and `tools/check-halfphi.mjs` is what
+keeps them honest.** The five shared files (`src/{lib,source,netlist,engine}.rs`,
+`tests/chips.rs`) were byte-identical the day of the split and drifted on
+whitespace within minutes of it, which is how this project learned that
+"remember to copy it across" is not a mechanism. The check diffs them and
+`deploy.sh` refuses to publish on a difference; `--fix` copies THIS repo's copy
+over the published one, which is the direction that is almost always right (the
+engine is developed here, against three chips, and published there) and never
+the other way, because that would undo work silently rather than reveal it. It
+**SKIPS** when the sibling checkout is absent, like the golden trace and the
+manual, so a clone with only this repo can still deploy; `REQUIRE_HALFPHI=1`
+insists, and an explicit `HALFPHI=<path>` is used ALONE rather than falling back
+to a sibling, or a wrong path would quietly check a different checkout and
+report it fine. `tests/chips.rs` searches two candidate paths for the die
 submodule precisely so one file can be correct in both layouts. The real fix is
-a git or crates.io dependency; until then, changing one copy means changing the
-other and re-checking with `diff`.
+still a git or crates.io dependency.
 
 ### `v6502-netlist`
 
@@ -4485,6 +4501,20 @@ screen to show three things.
 - `_navfit-test.html` measures the transport and the clock the same way it
   measures the picker, and for the same reason: a tap target squeezed to nothing
   still renders and still looks like a control.
+
+**There are TWO source links, and the second carries its name.** The simulator
+is this site; `halfphi` is the switch-level engine underneath it, published on
+its own because it is about switch networks rather than about a 6502 and because
+it embeds no die data, which is the only reason it can be MIT. Two identical
+octocats side by side is a choice with no answer, so the second is `.gh-lib`:
+the mark plus `halfphi` in mono, **hidden below 34rem** where row one is down to
+the wordmark and two buttons. The menu's Developers group carries it at every
+width, which is what makes hiding it honest. Measured at four widths: 44px +
+100px above 34rem, 44px alone below, no header or page overflow anywhere. **The
+`.gh-lib` rule is written twice** -- `style.css` and `shell.py` -- because the
+archive calls the mono token `--mono` and the simulator calls it `--font-mono`,
+the trap this file already documents; and **the archive needs a rebuild** to
+pick the shared `site-nav.js` up, since it deploys separately.
 
 **The source link is injected by `site-nav.js`, and is the one header element
 that is not hand-copied.** Everything else in the header -- wordmark, control

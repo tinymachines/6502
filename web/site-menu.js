@@ -99,7 +99,9 @@ export const MENU = [
       { label: 'API', href: 'api/', off: true,
         hint: 'the chip over HTTP, one half-cycle at a time, stateless' },
       { label: 'Halfwave Lab', href: 'https://halfwave.tinymachines.ai', off: true,
-        hint: 'the API driven as an app: fourteen readings of one half-cycle' },
+        hint: 'the API driven as an app: fifteen readings of one half-cycle' },
+      { label: 'halfphi', href: 'https://github.com/tinymachines/halfphi', off: true,
+        hint: 'the switch-level engine on its own, MIT, no die data' },
     ],
   },
   {

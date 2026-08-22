@@ -117,6 +117,9 @@ border:2px solid color-mix(in srgb,var(--line) 80%,transparent);
 border-radius:.375rem;background:transparent;color:var(--muted);transition:.15s}
 .gh-link:hover{border-color:var(--gold);color:var(--gold)}
 .gh-link svg{width:1.15rem;height:1.15rem;display:block}
+.gh-lib{width:auto;padding:0 .6rem;gap:.4rem}
+.gh-lib span{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em}
+@media(max-width:34rem){.gh-lib{display:none}}
 .menu-btn .mi{display:grid;gap:3px;width:.95rem}
 .menu-btn .mi i{display:block;height:2px;background:currentColor;border-radius:2px;
 transition:.15s}

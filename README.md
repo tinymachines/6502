@@ -1,5 +1,11 @@
 # Visual 6502
 
+[![site](https://img.shields.io/badge/site-6502.tinymachines.ai-0aa?logo=firefox&logoColor=white)](https://6502.tinymachines.ai)
+[![API](https://img.shields.io/badge/API-%2Fapi-0aa)](https://6502.tinymachines.ai/api/)
+[![halfphi](https://img.shields.io/badge/engine-halfphi-blue?logo=github&logoColor=white)](https://github.com/tinymachines/halfphi)
+[![license](https://img.shields.io/badge/code-MIT-blue.svg)](LICENSE)
+[![die data](https://img.shields.io/badge/die%20data-CC%20BY--NC--SA%203.0-orange.svg)](NOTICE.md)
+
 A transistor-level simulation of the MOS 6502, in Rust and WebAssembly, with a
 WebGL renderer of the actual die.
 

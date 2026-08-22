@@ -241,9 +241,10 @@ const shape = (groups) =>
     // unverifiable link could be added and nothing would notice.
     const off = [...d.querySelectorAll('.navlinks a[data-off]')]
       .map((a) => a.getAttribute('href')).sort();
-    ok('the links that cannot be checked here are exactly the three deployed elsewhere',
+    ok('the links that cannot be checked here are exactly the four that live elsewhere',
        JSON.stringify([...new Set(off)])
-         === JSON.stringify(['api/', 'archive/', 'https://halfwave.tinymachines.ai']),
+         === JSON.stringify(['api/', 'archive/', 'https://github.com/tinymachines/halfphi',
+                             'https://halfwave.tinymachines.ai']),
        [...new Set(off)].join(' '));
     const offSet = new Set(off);
     const dead = [];

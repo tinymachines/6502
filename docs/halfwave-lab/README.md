@@ -302,6 +302,18 @@ chip: the harness caught exactly that by comparing the resumed chip's registers 
 sender's and finding an interrupt that had not happened. The machine is rebuilt through the
 same segments the recording was, pins and all.
 
+**The Diff tab answers "what moved", which is the question every other tab makes you
+answer by comparing two screens.** B is the cursor; A follows one half-cycle behind it until
+you pin it, so the common case (what did this edge do) needs no setup and the general case
+(what happened between here and there) is one press away. It lists only what changed: the
+named bytes with the flipped bits marked, the pins and the timing chain as words rather than
+hex, every watched node split into what went high and what went low, and every write to
+memory over the span. All of it out of the trace already in hand, so it costs no request and
+works backwards.
+
+The field table is the Bits tab's own `LANES`, not a second list: two tabs disagreeing about
+what ALUB is would be exactly the drift this project keeps finding.
+
 ## Three things worth knowing
 
 **The clock phases are read as pins**, `clk1out` and `clk2out`, not derived from the `phase`

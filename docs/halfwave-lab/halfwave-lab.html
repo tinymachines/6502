@@ -257,6 +257,57 @@ body.off .tabwrap section[role="tabpanel"]:not(#p-prog){
 .iarrow{font-family:var(--mono);color:var(--mid);flex:0 0 auto}
 .iarrow.pass{color:var(--addr)}
 .inote.lede0{margin-top:0}
+
+/* The diff. A row is name, was, arrow, now, and the bits that flipped; the
+   columns are a grid so the arrows line up down the page rather than sliding
+   about with the width of a label. */
+.dbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:8px}
+.dhead{font-family:var(--mono);font-size:12px;color:var(--mid);flex:1 1 14rem;min-width:0}
+.dhead b{color:var(--bright);font-weight:600}
+.dctl{display:flex;gap:6px;flex:0 0 auto}
+.dsec{margin-top:10px;border:1px solid var(--rule);border-radius:3px;background:var(--panel2);
+  padding:6px 9px 8px}
+.dsech{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;color:var(--dim);
+  text-transform:uppercase;margin-bottom:4px}
+.drow{display:grid;gap:4px 8px;align-items:center;padding:2px 0;
+  grid-template-columns:5.5rem 3.6rem .8rem 3.6rem minmax(0,1fr)}
+/* A flag's value is a WORD ("write", "none", "T0+T2"), so its columns have to
+   give rather than clip: fixed 5rem tracks overflowed the row by 19px at
+   320px. And a memory row has THREE children, not five, so it needs its own
+   template or the "at h 66" lands in the 0.8rem arrow column and hangs 33px
+   out of it. Both measured, at 320 and at 390. */
+.drow.flag{grid-template-columns:5.5rem minmax(0,1fr) .8rem minmax(0,1fr)}
+.drow.mem{grid-template-columns:5.5rem 4rem minmax(0,1fr)}
+.drow.wide{grid-template-columns:5.5rem minmax(0,1fr)}
+@media(max-width:520px){
+  .drow{grid-template-columns:4.6rem 3.2rem .7rem 3.2rem;row-gap:2px}
+  .dbits{grid-column:1/-1}
+  .drow.flag{grid-template-columns:4.6rem minmax(0,1fr) .7rem minmax(0,1fr)}
+  .drow.mem{grid-template-columns:4.6rem 3.6rem minmax(0,1fr)}
+  .drow.wide{grid-template-columns:minmax(0,1fr)}
+}
+.dn{font-family:var(--mono);font-size:10.5px;color:var(--dim);letter-spacing:.05em;
+  min-width:0;overflow-wrap:anywhere}
+.dv,.dmore{min-width:0;overflow-wrap:anywhere}
+.dv{font-family:var(--mono);font-size:12px;font-weight:600}
+.dv.was{color:var(--dim)}
+.dv.now{color:var(--bright)}
+.darr{color:var(--dim);font-size:11px;text-align:center}
+.drow.addr .dv.now{color:var(--addr)}
+.drow.data .dv.now{color:var(--data)}
+.drow.alu .dv.now{color:var(--alu)}
+.dbits{display:flex;gap:1.5px;flex-wrap:nowrap}
+.dbc{width:7px;height:12px;border-radius:1px;background:var(--cell);border:1px solid var(--cellrule)}
+.dbc.on{background:var(--mid);border-color:var(--mid)}
+.dbc.flip{box-shadow:0 0 0 1.5px var(--glow)}
+.dgap{width:5px}
+.dpills{display:flex;flex-wrap:wrap;gap:3px}
+.dpill{font-family:var(--mono);font-size:10px;border-radius:2px;padding:1px 5px;cursor:pointer;
+  border:1px solid var(--rule);background:var(--cell);color:var(--mid)}
+.dpill.up{color:var(--ground);background:var(--alu);border-color:var(--alu)}
+.dpill.down{color:var(--dim)}
+.dpill:hover{border-color:var(--glow)}
+.dmore{font-size:10.5px;color:var(--dim);font-family:var(--mono)}
 .offnote{border-color:var(--power);margin-bottom:12px}
 .offnote .pb{font-size:12.5px;color:var(--mid);line-height:1.55}
 .offnote b{color:var(--power);font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase}
@@ -628,7 +679,8 @@ select{
   <button class="tab" role="tab" id="t-story" aria-controls="p-story" aria-selected="false">Story</button>
   <button class="tab" role="tab" id="t-lat"  aria-controls="p-lat"  aria-selected="false">Latches</button>
   <button class="tab" role="tab" id="t-bits" aria-controls="p-bits" aria-selected="false">Bits</button>
-  <button class="tab" role="tab" id="t-time" aria-controls="p-time" aria-selected="false">Timeline</button>
+  <button class="tab" role="tab" id="t-diff" aria-controls="p-diff" aria-selected="false">Diff</button>
+<button class="tab" role="tab" id="t-time" aria-controls="p-time" aria-selected="false">Timeline</button>
   <button class="tab" role="tab" id="t-dec"  aria-controls="p-dec"  aria-selected="false">Decode</button>
   <button class="tab" role="tab" id="t-add"  aria-controls="p-add"  aria-selected="false">Adder</button>
   <button class="tab" role="tab" id="t-mem"  aria-controls="p-mem"  aria-selected="false">Memory</button>
@@ -751,6 +803,31 @@ select{
         <span class="eyebrow" id="chain"></span>
       </div>
       <div class="pb"><div class="bitgrid" id="bits"></div></div>
+    </div>
+  </section>
+
+  <section role="tabpanel" id="p-diff" aria-labelledby="t-diff" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">What moved between two half-cycles</h2>
+        <span class="eyebrow" id="dcount"></span>
+      </div>
+      <div class="pb">
+        <div class="dbar">
+          <span class="dhead" id="dhead"></span>
+          <span class="dctl">
+            <button class="ibtn" id="dback" title="Move A back one half-cycle">A &minus;</button>
+            <button class="ibtn" id="dfwd" title="Move A forward one half-cycle">A +</button>
+            <button class="ibtn" id="dpin">pin A here</button>
+          </span>
+        </div>
+        <p class="inote lede0">
+          B is where the cursor is. A follows one half-cycle behind it until you pin it,
+          so this reads as "what did this edge do" without any setup, and as "what
+          happened between here and there" once A is somewhere else.
+        </p>
+        <div id="dbody"></div>
+      </div>
     </div>
   </section>
 
@@ -1928,6 +2005,176 @@ document.addEventListener("click", (e) => {
   const n = e.target.closest("[data-anode]");
   if (n) { showTab("t-atlas"); atlasSelectNode(n.dataset.anode); }
 });
+/* ==========================================================================
+   The diff: what changed between two half-cycles
+   ==========================================================================
+   Every other tab answers "what is true now". This one answers "what moved",
+   which is the question a reader actually has once the chip is running: at
+   most edges a tenth of the die changes level and three or four named things
+   move, and finding those three by comparing two screens is the work this
+   removes.
+
+   Built entirely from the trace already in hand -- the same rows every other
+   tab reads -- so it costs no request and works at any cursor, including
+   backwards.
+
+   B is the cursor. A follows one half-cycle behind it until it is pinned,
+   so the common case (what did THIS edge do) needs no setup, and the general
+   case (what happened between here and there) is one press away.
+
+   The field table is `LANES`, the Bits tab's own, rather than a second list:
+   two tabs disagreeing about what ALUB is would be exactly the drift this
+   project keeps finding.
+   ========================================================================== */
+let DIFF_A = null;                       /* pinned index, or null to follow */
+const diffA = () => (DIFF_A === null ? Math.max(0, i - 1) : DIFF_A);
+
+/** The eight (or sixteen) bits of a byte, with the ones that flipped lit. */
+function bitStrip(a, b, w) {
+  let s = "";
+  for (let n = w - 1; n >= 0; n--) {
+    const bb = (b >> n) & 1;
+    const fl = ((a ^ b) >> n) & 1;
+    s += `<span class="dbc${bb ? " on" : ""}${fl ? " flip" : ""}"></span>`;
+    if (w === 16 && n === 8) s += '<span class="dgap"></span>';
+  }
+  return s;
+}
+
+function fieldRow(name, kind, a, b, w) {
+  if (a === b) return "";
+  return `<div class="drow ${kind}">
+    <span class="dn">${name}</span>
+    <span class="dv was">${hx(a, w / 4)}</span>
+    <span class="darr">&rarr;</span>
+    <span class="dv now">${hx(b, w / 4)}</span>
+    <span class="dbits">${bitStrip(a, b, w)}</span>
+  </div>`;
+}
+
+/* Levels, not bytes: the pins and the timing chain are flags and a mask, and
+   printing them as hex would be answering a different question. */
+function flagRow(name, a, b, fmt) {
+  if (a === b) return "";
+  return `<div class="drow flag">
+    <span class="dn">${name}</span>
+    <span class="dv was">${fmt(a)}</span>
+    <span class="darr">&rarr;</span>
+    <span class="dv now">${fmt(b)}</span>
+  </div>`;
+}
+
+function renderDiff() {
+  if (!F.length || $("#p-diff").hidden) return;
+  const ai = Math.min(diffA(), F.length - 1);
+  const bi = i;
+  const lo = Math.min(ai, bi), hi = Math.max(ai, bi);
+  const A = obs(lo), B = obs(hi);
+  if (!A || !B) return;
+
+  $("#dpin").textContent = DIFF_A === null ? "pin A here" : "unpin A";
+  $("#dpin").classList.toggle("on", DIFF_A !== null);
+  $("#dhead").innerHTML = lo === hi
+    ? `<b>h ${A.h}</b> compared with itself: nothing to show. Step, or pin A somewhere else.`
+    : `<b>h ${A.h}</b> ${A.ph2 ? "φ2" : "φ1"} &rarr; <b>h ${B.h}</b> ${B.ph2 ? "φ2" : "φ1"}`
+      + ` &middot; ${hi - lo} half-cycle${hi - lo > 1 ? "s" : ""}`
+      + (bi < ai ? " &middot; you are looking backwards" : "");
+
+  if (lo === hi) {
+    $("#dbody").innerHTML = "";
+    $("#dcount").textContent = "";
+    return;
+  }
+
+  let moved = 0, total = 0, html = "";
+
+  /* 1. the named bytes, by the Bits tab's own grouping */
+  for (const [sec, rows] of LANES) {
+    let body = "";
+    for (const [name, get, w, kind] of rows) {
+      if (get === null) continue;                 /* the pins row is below */
+      total++;
+      const r = fieldRow(name, kind, get(A), get(B), w);
+      if (r) { body += r; moved++; }
+    }
+    if (body) html += `<div class="dsec"><div class="dsech">${sec}</div>${body}</div>`;
+  }
+
+  /* 2. the pins and the timing chain, as levels and states */
+  {
+    let body = "";
+    const yn = (v) => (v ? "high" : "low");
+    const pins = [
+      ["R/W", A.wr, B.wr, (v) => (v ? "write" : "read")],
+      ["SYNC", A.sync, B.sync, yn],
+      ["φ", A.ph2, B.ph2, (v) => (v ? "φ2" : "φ1")],
+      ["T-states", A.t, B.t, (v) => v || "none"],
+      ["hidden", A.hid, B.hid, (v) => v || "none"],
+      ["store data", A.sd, B.sd, (v) => v || "none"],
+    ];
+    for (const [n, a, b, f] of pins) { total++; const r = flagRow(n, a, b, f); if (r) { body += r; moved++; } }
+    if (body) html += `<div class="dsec"><div class="dsech">PINS AND TIMING</div>${body}</div>`;
+  }
+
+  /* 3. every watched node: the control lines, the decode terms, the adder's
+        carries, and whatever containers the reader put in the watch set.
+        This is the part no other tab shows as a difference, and on a busy
+        edge it is where the answer usually is. */
+  {
+    const up = [], down = [];
+    for (const n of WNAMES) {
+      const a = bit(A, n), b = bit(B, n);
+      if (a === b) continue;
+      (b ? up : down).push(n);
+    }
+    total += WNAMES.length;
+    moved += up.length + down.length;
+    const cap = 60;
+    const pills = (list, cls) => list.slice(0, cap)
+      .map((n) => `<button class="dpill ${cls}" data-anode="${n}">${n}</button>`).join("")
+      + (list.length > cap ? `<span class="dmore">and ${list.length - cap} more</span>` : "");
+    if (up.length || down.length) {
+      html += `<div class="dsec"><div class="dsech">WATCHED NODES</div>
+        ${up.length ? `<div class="drow wide"><span class="dn">went high</span>
+          <span class="dpills">${pills(up, "up")}</span></div>` : ""}
+        ${down.length ? `<div class="drow wide"><span class="dn">went low</span>
+          <span class="dpills">${pills(down, "down")}</span></div>` : ""}
+      </div>`;
+    }
+  }
+
+  /* 4. memory. A read is a fact about the bus and is on the Datapath tab
+        already; a WRITE is the only thing here that outlives the chip, so it
+        is the one worth listing over a span. */
+  {
+    const w = [];
+    for (let n = lo + 1; n <= hi; n++) {
+      const r = F[n];
+      if (r[CI.rw] === 1) w.push([r[CI.addr], r[CI.data], obs(n).h]);
+    }
+    if (w.length) {
+      const cap = 40;
+      html += `<div class="dsec"><div class="dsech">MEMORY WRITTEN</div>
+        ${w.slice(0, cap).map(([ad, d, h]) =>
+          `<div class="drow mem"><span class="dn">${hx(ad, 4)}</span>
+           <span class="dv now">${hx(d)}</span>
+           <span class="dmore">at h ${h}</span></div>`).join("")}
+        ${w.length > cap ? `<div class="dmore">and ${w.length - cap} more writes</div>` : ""}
+      </div>`;
+    }
+  }
+
+  $("#dbody").innerHTML = html
+    || `<p class="inote">Nothing on this page moved between those two half-cycles.
+        The chip did: about a tenth of its nodes change level at every edge, and
+        most of them have no name.</p>`;
+  $("#dcount").textContent = `${moved} of ${total} watched things moved`;
+}
+
+$("#dpin").onclick = () => { DIFF_A = DIFF_A === null ? i : null; renderDiff(); };
+$("#dback").onclick = () => { DIFF_A = Math.max(0, diffA() - 1); renderDiff(); };
+$("#dfwd").onclick = () => { DIFF_A = Math.min(F.length - 1, diffA() + 1); renderDiff(); };
+
 $("#atsearch").addEventListener("submit", (e) => {
   e.preventDefault();
   const v = $("#atq").value.trim();
@@ -2562,6 +2809,7 @@ function render(){
   renderLatches(o,p);
   if(SEL) paintInspector();
   if(!$("#p-atlas").hidden) paintAtlas();
+  if(!$("#p-diff").hidden) renderDiff();
 
   /* registers */
   const rv={A:[hx(o.a),p&&p.a!==o.a],X:[hx(o.x),p&&p.x!==o.x],Y:[hx(o.y),p&&p.y!==o.y],
@@ -3215,9 +3463,10 @@ function reload(){ buildLane(); memIndex(); DECBUILT=null; $("#scrub").max=Math.
 function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][CI.sync]&&F[n][CI.phase]===1) return go(n); go(F.length-1); }
 
 /* tabs */
-const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-time","p-time"],["t-dec","p-dec"],["t-add","p-add"],["t-mem","p-mem"],["t-stk","p-stk"],["t-irq","p-irq"],["t-sig","p-sig"],["t-state","p-state"],["t-atlas","p-atlas"],["t-prog","p-prog"]];
+const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-diff","p-diff"],["t-time","p-time"],["t-dec","p-dec"],["t-add","p-add"],["t-mem","p-mem"],["t-stk","p-stk"],["t-irq","p-irq"],["t-sig","p-sig"],["t-state","p-state"],["t-atlas","p-atlas"],["t-prog","p-prog"]];
 function showTab(id){
   if(id==="t-atlas"){ loadAtlas(); setTimeout(paintAtlas,0); }
+  if(id==="t-diff") setTimeout(renderDiff,0);
   for(const [t,p] of TABS){
     const sel=t===id;
     $("#"+t).setAttribute("aria-selected",sel?"true":"false");

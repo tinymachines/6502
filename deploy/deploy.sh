@@ -119,6 +119,13 @@ NODE_BIN=$(pick_node) || {
 # of which were rebuilt above, so it cannot go stale behind them. The API
 # holds it in memory: `sudo systemctl restart 6502-api` after a deploy that
 # changed it.
+# halfphi lives in two repositories and nothing used to keep them in sync. The
+# five shared files were byte-identical the day of the split and drifted on
+# whitespace within minutes of it. SKIPS when the sibling checkout is absent,
+# so a machine with only this repo can still deploy; REQUIRE_HALFPHI=1 insists.
+log "checking halfphi against its published copy"
+"$NODE_BIN" tools/check-halfphi.mjs || exit 1
+
 log "composing the chip atlas"
 "$NODE_BIN" tools/export-groups.mjs || exit 1
 [ -s web/groups.json ] || { echo "deploy: web/groups.json is empty" >&2; exit 1; }
