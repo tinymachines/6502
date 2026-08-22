@@ -5,7 +5,7 @@
  * 0.3 ms and a request is two hundred times that.
  */
 import { Console6502 } from './console.js';
-import { starterTiles, buildSheet, drawScreen, TILE } from './chr.js';
+import { starterTiles, decodeCHR, buildSheet, drawScreen, TILE } from './chr.js';
 
 const $ = (s) => document.querySelector(s);
 const API = new URLSearchParams(location.search).get('api') || `${location.origin}/api`;
@@ -80,6 +80,30 @@ const DIERUNNER = {
 
 const CARTS = [DIERUNNER, SNAKE];
 
+/* The tile set. `art/tiles.chr` is the shipped sheet; the drawn-in-code
+ * starter set is the fallback AND the spec, so a missing or broken sheet costs
+ * the artwork and nothing else -- the game still renders, in shapes that are
+ * by definition the ones the sheet was meant to match. */
+let TILES = starterTiles(16);
+
+async function loadTiles() {
+  try {
+    const r = await fetch('art/tiles.chr', { cache: 'no-cache' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const chr = new Uint8Array(await r.arrayBuffer());
+    if (chr.length < 16) throw new Error(`${chr.length} bytes is not a tile`);
+    const t = decodeCHR(chr);
+    if (!t.length) throw new Error('no tiles in it');
+    TILES = t;
+    state.sheet = null;              // force the atlas to be rebuilt
+    fit();
+    if (state.con) paint(); else preview();
+  } catch (e) {
+    // Not an error the player needs: the starter set is a real tile set.
+    console.info('art/tiles.chr not loaded, drawing the starter set:', e.message);
+  }
+}
+
 const state = {
   con: null, cart: CARTS[0], sheet: null, running: false, input: 0,
   fpsAt: 0, fpsFrames: 0, scale: 2,
@@ -109,7 +133,7 @@ function fit() {
   const s = Math.max(1, Math.min(6, Math.floor(box / (c.width * TILE))));
   if (s === state.scale && state.sheet) return;
   state.scale = s;
-  state.sheet = buildSheet(starterTiles(), s);
+  state.sheet = buildSheet(TILES, s);
   const cv = $('#screen');
   cv.width = c.width * TILE * s;
   cv.height = c.height * TILE * s;
@@ -281,10 +305,13 @@ $('#cart').onchange = () => {
 function preview() {
   fit();
   const demo = new Uint8Array(SNAKE.width * SNAKE.height);
-  for (let i = 0; i < demo.length; i++) demo[i] = 0;
-  for (let t = 0; t < 9; t++) demo[(2 + ((t / 3) | 0) * 2) * SNAKE.width + 6 + (t % 3) * 2] = t;
+  const n = Math.min(TILES.length, 16);
+  for (let t = 0; t < n; t++) {
+    demo[(4 + ((t / 8) | 0) * 3) * SNAKE.width + 1 + (t % 8) * 2] = t;
+  }
   drawScreen($('#screen').getContext('2d'), state.sheet, demo, SNAKE.width, SNAKE.height);
-  say('nine starter tiles. Power on to run the cartridge.');
+  say(`${n} tiles. Power on to run the cartridge.`);
 }
 $('#note').textContent = CARTS[0].blurb;
 preview();
+loadTiles();
