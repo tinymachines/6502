@@ -222,6 +222,38 @@ body.off .tabwrap section[role="tabpanel"]:not(#p-prog){
 .wrow .ikey{flex:0 0 auto}
 .wrow.stack{margin-top:6px}
 .idim{color:var(--dim)}
+/* The Atlas tab: three panes, one file. Each pane scrolls inside its own box
+   so the page never grows a second scrollbar and the three stay level. */
+.atgrid{display:grid;gap:10px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:820px){.atgrid{grid-template-columns:minmax(0,4fr) minmax(0,5fr)}}
+@media(min-width:1180px){.atgrid{grid-template-columns:minmax(0,3fr) minmax(0,4fr) minmax(0,4fr)}}
+.atcol{min-width:0;display:flex;flex-direction:column}
+.atlab{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--dim);margin-bottom:5px}
+.atscroll{border:1px solid var(--rule);border-radius:3px;background:var(--sunk);
+  padding:8px;overflow-y:auto;max-height:min(70vh,620px);flex:1 1 auto;min-height:120px}
+.atk,.atg{display:flex;gap:7px;align-items:baseline;width:100%;text-align:left;cursor:pointer;
+  background:none;border:0;border-radius:2px;padding:4px 6px;color:inherit}
+.atk:hover,.atg:hover{background:var(--hover)}
+.atk.on{background:var(--cell);color:var(--bright)}
+.atg.on{background:var(--alu);color:var(--ground)}
+.atg.on .ikey,.atg.on .ilab,.atg.on .atn{color:var(--ground)}
+.atgroups{margin:2px 0 6px 12px;border-left:1px solid var(--rule);padding-left:6px}
+.atn{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--dim);flex:0 0 auto}
+.atform{display:flex;gap:6px;margin-bottom:6px}
+.atform input{flex:1 1 auto;min-width:0;font-family:var(--mono);font-size:16px;padding:4px 7px;
+  background:var(--sunk);border:1px solid var(--rule);border-radius:2px;color:var(--text)}
+.ilink{font-family:var(--mono);font-size:11px;background:none;border:0;padding:0;cursor:pointer;
+  color:var(--addr);border-bottom:1px dotted currentColor}
+.ilink:hover{color:var(--bright)}
+.ilink.dim{color:var(--dim);font-size:10.5px}
+.ilink.own{color:var(--alu)}
+.ipill.link{cursor:pointer}
+.ipill.link:hover{border-color:var(--glow);color:var(--bright)}
+.ipill.link.hi:hover{color:var(--ground)}
+.iarrow{font-family:var(--mono);color:var(--mid);flex:0 0 auto}
+.iarrow.pass{color:var(--addr)}
+.inote.lede0{margin-top:0}
 .offnote{border-color:var(--power);margin-bottom:12px}
 .offnote .pb{font-size:12.5px;color:var(--mid);line-height:1.55}
 .offnote b{color:var(--power);font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase}
@@ -599,7 +631,8 @@ select{
   <button class="tab" role="tab" id="t-irq"  aria-controls="p-irq"  aria-selected="false">Interrupt</button>
   <button class="tab" role="tab" id="t-sig"  aria-controls="p-sig"  aria-selected="false">Signals</button>
   <button class="tab" role="tab" id="t-state" aria-controls="p-state" aria-selected="false">State</button>
-  <button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
+  <button class="tab" role="tab" id="t-atlas" aria-controls="p-atlas" aria-selected="false">Atlas</button>
+<button class="tab" role="tab" id="t-prog" aria-controls="p-prog" aria-selected="false">Program</button>
 </nav>
 </header>
 
@@ -900,6 +933,41 @@ select{
     </div>
   </section>
 
+  <section role="tabpanel" id="p-atlas" aria-labelledby="t-atlas" hidden>
+    <div class="panel">
+      <div class="ph">
+        <h2 class="eyebrow">The die, as machinery</h2>
+        <span class="eyebrow" id="atstat"></span>
+      </div>
+      <div class="pb">
+        <p class="inote lede0">
+          Not a reading of the names: every container here is walked out of the switch
+          network, and between them they cover every node the netlist touches, exactly
+          once. The same derivation the chip map draws.
+        </p>
+        <div class="atgrid">
+          <div class="atcol">
+            <div class="atlab">containers</div>
+            <div class="atscroll" id="atkinds"></div>
+          </div>
+          <div class="atcol">
+            <div class="atlab">what it is</div>
+            <div class="atscroll" id="atgroup"></div>
+          </div>
+          <div class="atcol">
+            <div class="atlab">one wire</div>
+            <form class="atform" id="atsearch">
+              <input id="atq" type="text" placeholder="sb0, cclk, dpc23_SBAC, 1446"
+                     aria-label="Find a node by die name or number" autocomplete="off" spellcheck="false">
+              <button class="ibtn" type="submit">find</button>
+            </form>
+            <div class="atscroll" id="atnode"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section role="tabpanel" id="p-prog" aria-labelledby="t-prog" hidden>
     <div class="two">
       <div class="panel">
@@ -1020,6 +1088,8 @@ const IX = {}; SHORT.forEach((s,i)=>IX[s]=i);
    list; the hex watch bitset carries any number of names. Empty when the
    trace predates them, and the Decode tab says so. */
 let DECODE_NAMES=[];
+/* node id -> every name the die gives it, from /v1/nodes */
+const NODENAMES=new Map();
 /* The adder's carry chain, by the die's own positive-polarity names: the
    carry INTO bit n is C(n-1)(n); into bit 0 it is alucin, and out of bit 7
    alucout, with aluvout the overflow the V flag reads. */
@@ -1286,6 +1356,7 @@ async function loadAtlas() {
     ATLBUSY = false;
   }
   if (SEL) paintInspector();
+  paintAtlas();
   return ATL;
 }
 
@@ -1436,10 +1507,13 @@ async function toggleWatch(key) {
 
 /* -- painting -------------------------------------------------------------- */
 function pill(name, o, p) {
+  /* Clickable, because "what is this wire" is the question one step past
+     "what is this latch", and the Atlas tab is where it is answered. */
   const has = WNAMES.includes(name);
-  if (!has) return `<span class="ipill">${name}</span>`;
-  const v = bit(o, name), pv = p ? bit(p, name) : v;
-  return `<span class="ipill ${v ? "hi" : "lo"}${v !== pv ? " chg" : ""}">${name}</span>`;
+  const cls = has
+    ? (bit(o, name) ? "hi" : "lo") + (p && bit(o, name) !== bit(p, name) ? " chg" : "")
+    : "";
+  return `<button class="ipill link ${cls}" data-anode="${name}">${name}</button>`;
 }
 function groupCard(key, n, total, o, p) {
   const g = AGRP.get(key);
@@ -1462,7 +1536,7 @@ function groupCard(key, n, total, o, p) {
       : b.gate + " gate"}${b.controls.length ? " under " + b.controls.join(", ") : ""})</span>`)
     .join(" &middot; ");
   return `<div class="icard">
-    <div class="wrow"><span class="ikey">${key}</span><span class="ilab">${g.label}</span></div>
+    <div class="wrow"><button class="ilink" data-agroup="${key}">${key}</button><span class="ilab">${g.label}</span></div>
     <div class="imeta">${share}<b>${kind}</b>${parent}
       &middot; ${g.count} node${g.count > 1 ? "s" : ""}${g.partitioned === false
         ? ' &middot; <b>absorbed</b>: it has no box on the chip map' : ""}
@@ -1510,7 +1584,7 @@ function paintInspector() {
          disjoint boxes. These containers reach the same nodes and are just as derived.</div>
        ${t.also.map(([k, n]) => {
          const g = AGRP.get(k) || {};
-         return `<div class="wrow stack"><span class="ikey">${k}</span>
+         return `<div class="wrow stack"><button class="ilink" data-agroup="${k}">${k}</button>
            <span class="ilab">${g.label || ""} &middot; ${n} node${n > 1 ? "s" : ""}${
              g.partitioned === false ? " &middot; absorbed" : ""}</span></div>`;
        }).join("")}</div>`
@@ -1529,7 +1603,7 @@ function paintInspector() {
          ${watchedNames().length} node${watchedNames().length > 1 ? "s" : ""} in the trace's watch set.</div>
        ${w.map((k) => `<div class="wrow stack">
           <button class="ibtn on" data-watch="${k}">unwatch</button>
-          <span class="ikey">${k}</span>
+          <button class="ilink" data-agroup="${k}">${k}</button>
           <span class="ilab">${(AGRP.get(k) || {}).label || ""}</span></div>`).join("")}</div>`
     : "";
   $("#inspside").innerHTML = also + blocks + watching;
@@ -1553,6 +1627,273 @@ document.addEventListener("click", (e) => {
   else inspect(id, [lineNode(id)]);          /* a control line is one node */
 });
 $("#inspclose").onclick = clearInspect;
+
+/* ==========================================================================
+   The Atlas tab: browse the containers, and walk a wire
+   ==========================================================================
+   Three panes over the one file the inspector already holds. Containers ->
+   one container -> one node, and from a node its neighbours, each carrying
+   the container IT is in, so following a wire is a walk through the same
+   derivation rather than a jump into a different vocabulary.
+
+   Neighbours are the one thing the dump does NOT carry: it has groups,
+   containers, nodes and the 534 bundles, and no node-level adjacency. So a
+   node's neighbours come from `/v1/neighbors`, which is small (a few KB for
+   an ordinary wire) and cached a day like the rest of the family. Kept in a
+   Map here so walking back over a node costs nothing.
+
+   Wiring is pruned and says so, which is the lesson of the ELK experiment in
+   docs/atlas-elk.zip: the median bundle carries ONE transistor and 381 of the
+   534 carry two or fewer, so a list of everything is a list of nothing.
+   Direction is the other lesson, and it is measured, not assumed: `ab + ba`
+   equals `gate` for every bundle, and the 60 bundles with no direction at all
+   are exactly the 60 with `gate == 0` -- pure pass transistors, which conduct
+   both ways and have no direction to have.
+   ========================================================================== */
+const NBCACHE = new Map();
+const AT = { kind: null, group: null, node: null, err: null };
+const WIRE_SHOW = 8;
+
+async function neighborsOf(ref) {
+  if (NBCACHE.has(ref)) return NBCACHE.get(ref);
+  if (!LIVE) return null;
+  try {
+    const r = await fetch(`${API}/v1/neighbors?node=${encodeURIComponent(ref)}&depth=1&limit=200`);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    NBCACHE.set(ref, j);
+    return j;
+  } catch (e) { AT.err = e.message; return null; }
+}
+
+const nodeRef = (n) => (n.name || String(n.id));
+const nodeLab = (n) => (n.name || "#" + n.id);
+
+function atlasSelectKind(k) { AT.kind = AT.kind === k ? null : k; paintAtlas(); }
+async function atlasSelectGroup(key) {
+  AT.group = key;
+  const g = AGRP.get(key);
+  if (g) AT.kind = g.kind;
+  paintAtlas();
+}
+async function atlasSelectNode(ref) {
+  AT.node = ref; AT.err = null;
+  paintAtlas();                       /* draw the card before the fetch lands */
+  await neighborsOf(ref);
+  paintAtlas();
+}
+
+/* -- the wiring of one group, pruned by weight and honest about it --------- */
+function wireRows(key) {
+  const all = (ATL.wiredTo && ATL.wiredTo.get(key)) || [];
+  const show = all.slice(0, WIRE_SHOW);
+  const rest = all.length - show.length;
+  const rows = show.map((b) => {
+    /* Direction is read off the bundle, never off the name. A bundle with no
+       gate legs at all is a pass-transistor link: it conducts both ways, so
+       it gets no arrow and says which control lines open it. */
+    const arrow = b.gate === 0 ? "&harr;"
+      : (b.gate_out && b.gate_in) ? "&harr;"
+      : b.gate_out ? "&rarr;" : "&larr;";
+    const what = [
+      b.gate ? `${b.gate} gate leg${b.gate > 1 ? "s" : ""}` : null,
+      b.switch ? `${b.switch} switch${b.switch > 1 ? "es" : ""}` : null,
+    ].filter((x) => x).join(" + ");
+    const lab = (AGRP.get(b.key) || {}).label || "";
+    return `<div class="wrow stack">
+      <span class="iarrow${b.gate === 0 ? " pass" : ""}">${arrow}</span>
+      <button class="ilink" data-agroup="${b.key}">${b.key}</button>
+      <span class="ilab">${lab} &middot; ${what}${
+        b.controls.length ? ` under <b>${b.controls.join(", ")}</b>` : ""}</span></div>`;
+  }).join("");
+  return { rows, rest, total: all.length,
+           cut: rest ? show[show.length - 1].gate + show[show.length - 1].switch : 0 };
+}
+
+/* -- panes ----------------------------------------------------------------- */
+function paintAtlasList() {
+  const host = $("#atkinds");
+  if (!ATL) { host.innerHTML = ""; return; }
+  host.innerHTML = ATL.kinds.map((k) => {
+    const open = AT.kind === k.key;
+    const kids = open
+      ? `<div class="atgroups">${ATL.groups.filter((g) => g.kind === k.key)
+          .map((g) => `<button class="atg${AT.group === g.key ? " on" : ""}" data-agroup="${g.key}">
+             <span class="ikey">${g.id}</span><span class="ilab">${g.label}</span>
+             <span class="atn">${g.count}</span></button>`).join("")}</div>`
+      : "";
+    return `<button class="atk${open ? " on" : ""}" data-akind="${k.key}">
+        <span class="ikey">${k.key}</span><span class="ilab">${k.label}</span>
+        <span class="atn">${k.groups} &middot; ${k.nodes}</span></button>${kids}`;
+  }).join("");
+}
+
+function paintAtlasGroup() {
+  const host = $("#atgroup");
+  if (!ATL || !AT.group) {
+    host.innerHTML = `<p class="inote">Pick a container on the left. There are
+      ${ATL ? ATL.counts.groups : "132"} of them over ${ATL ? ATL.counts.kinds : "23"} kinds,
+      and between them they cover every one of the ${ATL ? ATL.counts.nodes : "1547"} nodes
+      the netlist touches, exactly once.</p>`;
+    return;
+  }
+  const g = AGRP.get(AT.group);
+  if (!g) { host.innerHTML = `<p class="inote">No container called ${AT.group}.</p>`; return; }
+  const o = obs(i), p = obs(i - 1);
+  const w = wireRows(AT.group);
+  const named = groupNames(AT.group);
+  const watched = WGROUPS.has(AT.group);
+  const members = (g.nodes || []).map((id) => ATL.byId.get(id)).filter((n) => n);
+  const shown = members.slice(0, 64);
+  const kids = (g.children || []).length
+    ? `<div class="imeta">holds ${g.children.map((c) =>
+        `<button class="ilink" data-agroup="${c}">${c.split(":")[1]}</button>`).join(" ")}</div>` : "";
+  const over = (g.overlaps || []).length
+    ? `<div class="icard"><div class="ikey">shares nodes with</div>
+       <div class="imeta">A node can be in several containers; the partition gives it one
+         box only so the chip map can draw it.</div>
+       ${g.overlaps.slice(0, 6).map((x) =>
+         `<div class="wrow stack"><button class="ilink" data-agroup="${x.key}">${x.key}</button>
+          <span class="ilab">${x.shared} node${x.shared > 1 ? "s" : ""} in common</span></div>`).join("")}
+       </div>` : "";
+  host.innerHTML = `
+    <div class="icard">
+      <div class="wrow"><span class="ikey">${g.key}</span><span class="ilab">${g.label}</span></div>
+      <div class="imeta"><b>${ATL.kindLabel[g.kind] || g.kind}</b>
+        ${g.parent && g.parent !== g.kind ? ` &middot; inside <button class="ilink" data-agroup="${g.parent}">${g.parent}</button>` : ""}
+        &middot; ${g.count} node${g.count > 1 ? "s" : ""}, ${named.length} named
+        ${g.partitioned === false ? " &middot; <b>absorbed</b>: no box on the chip map" : ""}
+        ${(g.blocks || []).length ? `<br>filed in ${g.blocks.map((b) => `${b.name} <b>${b.nodes}</b>`).join(" &middot; ")}` : ""}
+      </div>
+      ${kids}
+      <div class="iwatch">
+        <button class="ibtn${watched ? " on" : ""}" data-watch="${g.key}" ${LIVE ? "" : "disabled"}>
+          ${watched ? "unwatch" : "watch"}</button>
+        <span class="ilab">${named.length
+          ? `${named.length} watchable node${named.length > 1 ? "s" : ""}`
+          : "the die names none of these, so there is nothing to watch"}</span>
+      </div>
+    </div>
+    <div class="icard">
+      <div class="ikey">members</div>
+      <div class="ipills">${shown.map((n) =>
+        `<button class="ipill link${WNAMES.includes(n.name) ? (bit(o, n.name) ? " hi" : " lo") : ""}${
+          p && WNAMES.includes(n.name) && bit(o, n.name) !== bit(p, n.name) ? " chg" : ""}"
+          data-anode="${nodeRef(n)}">${nodeLab(n)}</button>`).join("")}</div>
+      ${members.length > shown.length
+        ? `<div class="imeta">${members.length - shown.length} more.</div>` : ""}
+    </div>
+    <div class="icard">
+      <div class="ikey">wired to</div>
+      <div class="imeta">${w.total} bundle${w.total === 1 ? "" : "s"} leave this container.
+        An arrow is a gate leg and has a direction; <span class="iarrow pass">&harr;</span>
+        is a pass transistor, which conducts both ways and has none.</div>
+      ${w.rows || '<div class="imeta">Nothing crosses this container’s boundary.</div>'}
+      ${w.rest ? `<div class="imeta">${w.rest} lighter bundle${w.rest > 1 ? "s" : ""} not shown
+        (below ${w.cut} transistor${w.cut > 1 ? "s" : ""}). The median bundle on this chip
+        carries one.</div>` : ""}
+    </div>
+    ${over}`;
+}
+
+function paintAtlasNode() {
+  const host = $("#atnode");
+  if (!AT.node) {
+    host.innerHTML = `<p class="inote">Search a die name or a node number, or click any
+      member on the left. 832 names sit on 707 nodes, and the other 840 the die never
+      named answer to their number.</p>`;
+    return;
+  }
+  const id = AOWN.has(AT.node) ? AOWN.get(AT.node).id : parseInt(AT.node, 10);
+  const n = ATL ? ATL.byId.get(id) : null;
+  if (!n) {
+    host.innerHTML = `<p class="inote">No node called <b>${AT.node}</b>.
+      Try a die name (<code>sb0</code>, <code>cclk</code>, <code>dpc23_SBAC</code>)
+      or a number.</p>`;
+    return;
+  }
+  const o = obs(i), p = obs(i - 1);
+  const nb = NBCACHE.get(AT.node);
+  const REL = [
+    ["driven_by", "driven by", "gates whose output is this wire"],
+    ["drives", "drives", "gates this wire is an input to"],
+    ["channel", "joined through a switch", "a pass transistor, either way, while its control is high"],
+    ["opens", "opens", "this wire IS a control line: it holds these switches open"],
+  ];
+  const rel = nb ? REL.map(([k, lab, why]) => {
+    const rows = nb.neighbors.filter((x) => x.relation === k);
+    if (!rows.length) return "";
+    return `<div class="icard"><div class="ikey">${lab} <span class="atn">${rows.length}</span></div>
+      <div class="imeta">${why}</div>
+      ${rows.slice(0, 24).map((x) => `<div class="wrow stack">
+        ${x.rail
+          ? `<span class="ipill">${x.name}</span><span class="ilab">a rail: reported, never walked</span>`
+          : `<button class="ilink" data-anode="${x.name || x.id}">${x.name || "#" + x.id}</button>
+             <button class="ilink dim" data-agroup="${x.owner}">${x.owner}</button>`}
+        ${x.control_name ? `<span class="ilab">under <b>${x.control_name}</b></span>` : ""}
+      </div>`).join("")}
+      ${rows.length > 24 ? `<div class="imeta">${rows.length - 24} more.</div>` : ""}</div>`;
+  }).join("") : `<p class="inote">${LIVE
+      ? (AT.err ? "The neighbour walk failed: " + AT.err : "Walking...")
+      : "Neighbours need the API."}</p>`;
+
+  const live = WNAMES.includes(n.name)
+    ? `<span class="ipill ${bit(o, n.name) ? "hi" : "lo"}${
+        p && bit(o, n.name) !== bit(p, n.name) ? " chg" : ""}">${bit(o, n.name) ? "high" : "low"} now</span>`
+    : `<span class="ilab">not in the watch set</span>`;
+
+  host.innerHTML = `
+    <div class="icard">
+      <div class="wrow"><span class="ikey">${nodeLab(n)}</span>
+        <span class="ilab">node ${n.id}</span>${live}</div>
+      <div class="imeta">
+        ${(() => {
+          const all = NODENAMES.get(n.id) || [];
+          const other = all.filter((x) => x !== n.name);
+          return other.length ? `also called ${other.join(", ")}<br>` : "";
+        })()}
+        <b>${ATL.roles[n.role]}</b> &middot; ${n.pullup ? "has a pull-up" : "no pull-up: dynamic, or a driver"}
+        &middot; filed in ${ATL.blockNames[n.block]}
+        ${n.drives ? ` &middot; a static gate driving ${ATL.blockNames[n.drives]}` : ""}
+        <br>at ${Math.round(n.x)}, ${Math.round(n.y)} on the die
+      </div>
+      <div class="imeta">in
+        ${n.groups.map((k) => `<button class="ilink${k === n.owner ? " own" : ""}" data-agroup="${k}">${k}</button>`).join(" ")}
+        ${n.groups.length > 1 ? `<br>The first owns it on the chip map; the rest reach it too.` : ""}
+      </div>
+    </div>${rel}`;
+}
+
+function paintAtlas() {
+  if (!$("#p-atlas")) return;
+  if (!ATL) {
+    $("#atkinds").innerHTML = "";
+    $("#atgroup").innerHTML = `<p class="inote">${LIVE
+      ? (ATLERR ? "The atlas did not load: " + ATLERR : "Loading the atlas...")
+      : "The atlas needs the API. With no API this page has a packed trace and no die index."}</p>`;
+    $("#atnode").innerHTML = "";
+    return;
+  }
+  $("#atstat").textContent = `${ATL.counts.groups} containers · ${ATL.counts.kinds} kinds `
+    + `· ${ATL.counts.nodes} nodes · ${ATL.counts.multiGroupNodes} in more than one`;
+  paintAtlasList(); paintAtlasGroup(); paintAtlasNode();
+}
+
+/* -- wiring ---------------------------------------------------------------- */
+document.addEventListener("click", (e) => {
+  const k = e.target.closest("[data-akind]");
+  if (k) { atlasSelectKind(k.dataset.akind); return; }
+  const g = e.target.closest("[data-agroup]");
+  if (g) { showTab("t-atlas"); atlasSelectGroup(g.dataset.agroup); return; }
+  const n = e.target.closest("[data-anode]");
+  if (n) { showTab("t-atlas"); atlasSelectNode(n.dataset.anode); }
+});
+$("#atsearch").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = $("#atq").value.trim();
+  if (v) atlasSelectNode(v.replace(/^#/, ""));
+});
+
 
 
 /* ---------- the latch diagram: the thirteen pieces of named storage ---------- */
@@ -1924,6 +2265,7 @@ function render(){
   $("#bwpos").textContent=`${bw.filter(x=>x[0]).length} of ${bw.length} moved`;
   renderLatches(o,p);
   if(SEL) paintInspector();
+  if(!$("#p-atlas").hidden) paintAtlas();
 
   /* registers */
   const rv={A:[hx(o.a),p&&p.a!==o.a],X:[hx(o.x),p&&p.x!==o.x],Y:[hx(o.y),p&&p.y!==o.y],
@@ -2576,8 +2918,9 @@ function reload(){ buildLane(); memIndex(); DECBUILT=null; $("#scrub").max=Math.
 function nextFetch(){ for(let n=i+1;n<F.length;n++) if(F[n][CI.sync]&&F[n][CI.phase]===1) return go(n); go(F.length-1); }
 
 /* tabs */
-const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-time","p-time"],["t-dec","p-dec"],["t-add","p-add"],["t-mem","p-mem"],["t-stk","p-stk"],["t-irq","p-irq"],["t-sig","p-sig"],["t-state","p-state"],["t-prog","p-prog"]];
+const TABS=[["t-map","p-map"],["t-story","p-story"],["t-lat","p-lat"],["t-bits","p-bits"],["t-time","p-time"],["t-dec","p-dec"],["t-add","p-add"],["t-mem","p-mem"],["t-stk","p-stk"],["t-irq","p-irq"],["t-sig","p-sig"],["t-state","p-state"],["t-atlas","p-atlas"],["t-prog","p-prog"]];
 function showTab(id){
+  if(id==="t-atlas"){ loadAtlas(); setTimeout(paintAtlas,0); }
   for(const [t,p] of TABS){
     const sel=t===id;
     $("#"+t).setAttribute("aria-selected",sel?"true":"false");
@@ -2817,7 +3160,18 @@ function useDemo(reason){
   LIVE=true;
   try{
     const r=await fetch(API+"/v1/nodes");
-    if(r.ok){ const nn=await r.json(); DECODE_NAMES=Object.keys(nn.groups.decode).sort(); }
+    if(r.ok){
+      const nn=await r.json();
+      DECODE_NAMES=Object.keys(nn.groups.decode).sort();
+      /* The atlas dump carries one name per node; the die's table has 832
+         names over 707 nodes. Kept here so a node can say what else it is
+         called without a request per node. */
+      for(const grp of Object.values(nn.groups)) for(const [name,id] of Object.entries(grp)){
+        if(!NODENAMES.has(id)) NODENAMES.set(id,[]);
+        NODENAMES.get(id).push(name);
+      }
+      for(const v of NODENAMES.values()) v.sort();
+    }
   }catch(e){ /* the Decode tab degrades honestly without them */ }
   $("#scrub").max=0;
   PWBUSY=true; paintPower();

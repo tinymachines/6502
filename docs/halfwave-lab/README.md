@@ -252,6 +252,30 @@ A container the die never named has nothing to watch (most of the chip is unname
 outputs) and the button says so instead of appearing to work. With no API there is no atlas,
 so the inspector shows the names alone and says why.
 
+**The Atlas tab browses the same derivation, and walks a wire.** Three panes over the one
+file: the 23 kinds and their 132 containers, then one container in full (its size, its parent
+and children, the blocks its nodes are filed in, its members, and what it is wired to), then
+one node: every name it carries, its role and pull-up and die position, every container it is
+in, and its neighbours by relation. Clicking a neighbour walks to it; clicking a container in
+the inspector or a wire in a pill opens it here.
+
+**Neighbours are the one thing the dump does not carry.** It has groups, containers, nodes and
+the 534 bundles, and no node-level adjacency, so a node's neighbours come from
+`/v1/neighbors`: a few KB for an ordinary wire, cached a day, and kept in a Map so walking
+back costs nothing. Four relations, kept apart: `driven by`, `drives`, `joined through a
+switch` (with the control line that opens it) and `opens`, which is what a control line does
+and is not a path through it. A rail on a gate leg is shown and never walked.
+
+**Two things in the wiring view come from the ELK experiment in `docs/atlas-elk.zip`**, and
+both were re-derived from the live atlas before being used. The wiring is **pruned**: the
+median bundle on this chip carries one transistor and 381 of the 534 carry two or fewer, so
+eight are shown and the rest are counted, with the weight they were cut at. And **direction is
+measured**: `ab + ba` equals `gate` for every bundle, splitting them into 202 forward, 256
+reverse, 16 both, and 60 with no direction at all, which are exactly the 60 with no gate legs.
+Those are pure pass-transistor links, so they get no arrowhead. `regs:s` and `sbus:sb` is the
+clean case: sixteen switches, zero gate, under `dpc4_SSB` and `dpc6_SBS`, and which way a
+value moves is decided by which control line is high.
+
 ## Three things worth knowing
 
 **The clock phases are read as pins**, `clk1out` and `clk2out`, not derived from the `phase`

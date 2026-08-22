@@ -953,7 +953,47 @@ state that decodes to the wrong chip is worse than one that is rejected.
   - The atlas loads lazily and its name aliasing is best effort, so a
     missing file is a 503 on these routes and nowhere else, and an engine
     that is down costs the 125 aliases rather than the whole atlas.
-  - **`deploy.sh` runs the exporter** after `check-programs.mjs` (where
+  - **The Lab reads the atlas: three ways in, one derivation.** Every readout
+  carries `data-atlas` and a delegated click opens an inspector panel between
+  the scope and the tabs (ONE panel, not one per tab); an **Atlas tab**
+  browses kinds -> containers -> one node with its neighbours; and a
+  container's named members can be pushed into the trace's own watch set.
+  `ANAMES` maps a UI id to die names and is WRITTEN OUT, not derived from the
+  ids: LADH and ADH are two boxes for one latch, ABUS and APIN the same pads
+  on two diagrams, and `p` has no bit 5.
+  - **`/v1/atlas/full` once, in the background, after the trace lands.** 50 KB
+    gzipped, cached a day, `cache: "force-cache"`. Nothing new is on the step
+    path. Bundles have to be indexed per group from the dump's FLAT `bundles`
+    array: `groups[]` do not carry them, only `/v1/groups/{key}` computes them
+    per request, and the harness caught the assumption.
+  - **Watching a container RE-RECORDS, and says so.** A trace row's watch set
+    is fixed when the row is taken, so `toggleWatch` reboots with the wider
+    watch and restores the cursor. `bootBody()` was factored out for it (one
+    home for the preset-memory rule) and `fetchTrace` asks `traceWatch()`, so
+    a watch survives growing the recording and a power cycle. Proven the only
+    way that counts: the eight watched `sb` pills reconstruct exactly the
+    `SB$xx` byte the readout strip already reports, 12 of 12 half-cycles.
+  - **Neighbours are the one thing the dump does not carry** (no node-level
+    adjacency), so they come from `/v1/neighbors`, a few KB per ordinary wire,
+    cached in a Map.
+  - **The die's alias table comes from `/v1/nodes`**, which the Lab already
+    fetched for the decode names: the dump carries ONE name per node and 125
+    nodes have more (`sb0` is also `dasb0`).
+  - **`docs/atlas-elk.zip` is a reviewer's ELK layout of the atlas, and every
+    claim in it verified against the live endpoint.** elkjs is NOT bundled --
+    it would be five to ten times the Lab's whole size for one view, and the
+    chip map already draws the whole chip. Two of its findings are used and
+    are now pinned in `service/test_atlas.py`:
+    - **`ab + ba == gate` for every bundle**, splitting 202 forward / 256
+      reverse / 16 both / **60 with no direction, which are exactly the 60
+      with `gate == 0`**: pure pass-transistor links, which conduct both ways
+      and have no direction to have. The Lab draws those without an
+      arrowhead. `regs:s <-> sbus:sb` is the clean case: 16 switches, no gate,
+      under `dpc4_SSB` and `dpc6_SBS`.
+    - **Pruning is the readability knob, not algorithm tuning**: the median
+      bundle carries ONE transistor and 381 of 534 carry two or fewer, so the
+      wiring view shows eight and states what it cut and at what weight.
+- **`deploy.sh` runs the exporter** after `check-programs.mjs` (where
     `NODE_BIN` is known). The API holds it in memory: `sudo systemctl
     restart 6502-api` after a deploy that changed it.
 - **`Cpu::set_last_fetch` exists for restore and nothing else.** The fetch

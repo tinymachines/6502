@@ -392,6 +392,52 @@ def test_a_groups_bundles_are_the_wiring_leaving_it(client):
     assert any("SBAC" in c or "ACSB" in c for c in sb["controls"])
 
 
+def test_direction_adds_up_and_the_undirected_ones_are_pass_transistors(onfile):
+    """A finding from the ELK layout experiment in `docs/atlas-elk.zip`, kept
+    because the Lab now draws arrows from it.
+
+    `ab + ba == gate` for every one of the 534 bundles: every gate leg
+    crossing a boundary is counted once, in one direction. Splitting on that
+    gives 202 forward-only, 256 reverse-only, 16 both ways, and 60 with no
+    direction at all -- and those 60 are EXACTLY the 60 with `gate == 0`.
+    They are pure pass-transistor links, which conduct both ways and have no
+    direction to have, so the Lab draws them without an arrowhead. That is a
+    measurement, not a rendering choice.
+    """
+    b = onfile["bundles"]
+    assert len(b) == 534
+    for x in b:
+        assert x["ab"] + x["ba"] == x["gate"], f"{x['a']} - {x['b']} loses a gate leg"
+
+    fwd = [x for x in b if x["ab"] and not x["ba"]]
+    rev = [x for x in b if x["ba"] and not x["ab"]]
+    both = [x for x in b if x["ab"] and x["ba"]]
+    none = [x for x in b if not x["ab"] and not x["ba"]]
+    assert (len(fwd), len(rev), len(both), len(none)) == (202, 256, 16, 60)
+    assert all(x["gate"] == 0 for x in none), "an undirected bundle with gate legs"
+    assert all(x["switch"] > 0 for x in none), "an undirected bundle joining nothing"
+    assert not [x for x in b if x["gate"] == 0 and (x["ab"] or x["ba"])]
+
+    # The clean case: S and the special bus, joined by sixteen switches and
+    # no gate at all. Which way a value moves is decided by which of the two
+    # control lines is high, not by the wiring.
+    ss = next(x for x in b if {x["a"], x["b"]} == {"regs:s", "sbus:sb"})
+    assert ss["gate"] == 0 and ss["switch"] == 16
+    assert sorted(ss["controls"]) == ["dpc4_SSB", "dpc6_SBS"]
+
+
+def test_the_wiring_is_a_long_tail_and_pruning_is_the_only_way_to_draw_it(onfile):
+    """The other finding from that experiment, and the reason the Lab shows
+    eight bundles and states what it left out. The median bundle carries ONE
+    transistor; 381 of 534 carry two or fewer. A list of all of them is a
+    list of nothing."""
+    w = sorted(x["gate"] + x["switch"] for x in onfile["bundles"])
+    assert w[len(w) // 2] == 1
+    assert sum(1 for x in w if x <= 2) == 381
+    assert sum(1 for x in w if x >= 8) == 62
+    assert sum(1 for x in w if x >= 16) == 20
+
+
 def test_every_bundle_is_reported_from_both_ends(client, onfile):
     b = max(onfile["bundles"], key=lambda x: x["gate"] + x["switch"])
     a_side = client.get(f"/v1/groups/{b['a']}").json()
