@@ -222,6 +222,15 @@ node tools/check-halfphi.mjs
 python3 tools/check-timing-vs-manual.py
 RESCAN=1 python3 tools/check-timing-vs-manual.py
 
+# The 44 datapath control lines against the visual6502 wiki's own claims: the
+# clock phase each is effective in, measured over four programs, and the
+# three-way Balazs/Hanson/JSSim name table. 37 of 37 agree. SKIPS without the
+# archive or a halfwave build; REQUIRE_DPC=1 insists; MUTATE=1 swaps the two
+# clocks and MUST go red. deploy.sh runs it.
+cargo build --release -p v6502-sim --bin halfwave
+python3 tools/check-dpc-vs-wiki.py
+MUTATE=1 python3 tools/check-dpc-vs-wiki.py     # the proof it can fail
+
 # A halfshot export, checked cold: header, deltas replayed, rails pinned, every
 # access on its edge, reads against the program bytes and earlier writes, and
 # (with the JSON beside it) pins, units, switches and terms recomputed from the
@@ -4632,6 +4641,79 @@ distance from an opcode's own fetch to the next one, both found by watching
   rather than guessed at. `tests/timing.rs` and `_timing-test.html` still cover
   their own hand-typed set, which is why that set is worth keeping rather than
   superseded.
+
+### The datapath control lines, checked against the wiki (`tools/check-dpc-vs-wiki.py`)
+
+A third independent oracle, in the shape of `check-timing-vs-manual.py`. The
+archived visual6502 wiki carries a three-way name table for all 44 datapath
+control lines and, in prose, the clock phase each is effective in. Both are
+re-asked of the running chip. **37 of 37 phase claims agree**, over 3600
+half-cycles of four programs; the two lines the programs never raise
+(`dpc34_PCLC`, `dpc35_PCHC`) are reported rather than counted.
+
+**Where the die names come from, which nothing here recorded before.** The
+question "did MOS have a naming convention, and are we aligned to it" has a
+documented answer in `archive/wiki-raw/wikitext/6502_datapath.wiki`, and it is
+three schemes deep:
+
+- **Hanson** named the signals `SOURCE/DEST` (`Y/SB` drives SB from Y, `SB/Y`
+  loads Y from SB) in the block diagram he drew from the MOS blueprints he
+  received in 1979. `650X_Schematic_Notes.wiki` records that the blueprints
+  themselves carry internal signal names, and `D1x1`, `H1x1` and `C1x5Reset`
+  survive in our name table in that style.
+- **Balazs** used a positional grid, `R1x7`, `R2x14`, `Dkx2`, off his own die
+  photograph.
+- **JSSim** -- the names in `nodenames.js`, and therefore ours -- is
+  **position + Hanson**: `dpc4_SSB` is Hanson's `S/SB` with a prefix assigned
+  by where the line sits across the die. **Measured: the `dpc` index really is
+  a left-to-right ordering, 6 inversions in 43, all adjacent pairs.** So half
+  of every control-line name we use is a coordinate and half is a function,
+  and neither half is ours.
+
+**A negative result worth keeping: Balazs's rows are contiguous in order but
+not separable by position.** Sorted by die X the 39 coded lines come out as
+six clean runs, R1 R2 R3 R4 R5 Dk with no interleaving, which looks like a
+derivable banding. It is not: the largest gap *within* a row is 448 die units
+and the smallest gap *between* rows is 142, so no cut threshold reproduces the
+bands. What does reproduce them is function rather than position -- grouping
+each line by the container its switches operate gives R1 -> `regs` 7 of 7,
+R2 -> `alu` 13 of 14, R4 -> `pcr` (pch) 4 of 4, R5 -> `pcr` (pcl) 4 of 4. Every
+line that lands nowhere gates **no switches at all**: the ALU operation selects
+(`ORS SRS ANDS EORS SUMS DAA DSA`) and the constant generators are gate inputs,
+not pass-transistor controls, which is why a switch-based rule cannot see them
+and should not pretend to.
+
+- **The phase split is 18 phi1-only against 24 both, and nothing is
+  phi2-only.** A transfer is effective on the next phi1; a line that
+  pass-connects two buses, or selects an ALU function, holds across both.
+- **`MUTATE=1` swaps the two clocks and must go red.** It fails exactly the 17
+  phi1 rows and correctly leaves the 24 `both` rows agreeing, because "both" is
+  symmetric under the swap. An all-green comparison is what a broken one
+  produces, so the check ships with the proof that it can tell.
+- **The wiki parser is the part that was wrong first.** A fixed 400-character
+  window from each `;` entry let `Y/SB` inherit `S/SB`'s claim from the entry
+  below it, and 16 rows read as disagreements. An entry is its own `;` line
+  plus the `:` lines under it and nothing past the next `;`. **Sixteen
+  plausible findings, all of them my parser.**
+- **The clock non-overlap is asserted, not assumed**: 0 of 3600 half-cycles
+  have both phases high and 0 have neither.
+
+#### Two corrections to this file, both found in the archive
+
+- **`blog.visual6502.org` IS archived**, 173 MB under
+  `archive/wayback/files/`. The drip picked it up even though the note under
+  "Known gaps" says it is outside the domain index; that note was true of the
+  targeted harvest and is stale for the full sweep.
+- **An intermediate visual6502 staging build had the N and V flag nodes
+  swapped**, and our submodule is the correct one.
+  `archive/wayback/files/visual6502.org/stage/JSSim/nodenames.js` has `p6: 77,
+  p7: 1370` where `extern/visual6502/nodenames.js` has `p6: 1625, p7: 69`.
+  **The functional tests cannot arbitrate this** -- the one case that sets both
+  V and N sets them together, and the case that clears V has a zero result, so
+  N is clear too. The wiring can: a bounded backward walk shows `p6` reaching
+  `aluvout` and `idb6` (overflow, and BIT's copy of bit 6) and `p7` reaching
+  `DBNeg` and `idb7` (the sign bit). Ours is right. Worth knowing before
+  trusting any file out of `stage/`.
 
 ### The Timing table (`timing.html`, `timing.js`, `export-timing.rs`)
 

@@ -140,6 +140,12 @@ log "composing the chip atlas"
 # but takes twenty, which is not worth paying on every publish.
 python3 tools/check-timing-vs-manual.py || exit 1
 
+# The datapath control lines, against the visual6502 wiki's own claims about
+# them: the clock phase each is effective in, and the three-way Balazs/Hanson/
+# JSSim name table resolving to real nodes. A third oracle nobody here wrote.
+# SKIPS without the archive or a halfwave build, like the manual check above.
+python3 tools/check-dpc-vs-wiki.py || exit 1
+
 # The layout blob is the one artefact whose corruption would not be obvious --
 # a truncated file still "loads" and then renders nothing.
 head -c 8 web/layout.bin | grep -q '^V6502LAY' || {
