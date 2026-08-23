@@ -529,7 +529,52 @@ function paintCard() {
     p.append(a);
     card.append(p);
   }
+  addDiagram(card, g);
   paintCardLive();
+}
+
+/** A group key as a filename: five keys carry a slash (`alat:ADL/ABL`), which
+ *  is a directory separator to every filesystem, so `run.sh` flattens `/` and
+ *  `:` the same way. */
+const elkFile = (key) => key.replace(/[/:]/g, '-');
+
+/**
+ * This container as a schematic, if one has been drawn.
+ *
+ * **A computed layout, not a picture of the die.** The tracer draws these same
+ * nodes at their measured centroids; this is where a layout algorithm puts
+ * them instead, which is a different claim and is labelled as one. The two are
+ * worth having side by side and neither approximates the other.
+ *
+ * Drawn by `tools/chip-elk/run.sh` into `web/chip-elk/`, which is generated
+ * and may simply not be there. So the element is added hidden and revealed on
+ * load: a missing file leaves no caption, no broken image and no error,
+ * exactly as the version footer does nothing without its stamp.
+ */
+function addDiagram(card, g) {
+  const wrap = document.createElement('figure');
+  wrap.className = 'cm-elk';
+  wrap.hidden = true;
+  const a = document.createElement('a');
+  const href = `chip-elk/${elkFile(g.key)}.svg`;
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  const img = document.createElement('img');
+  img.alt = `${g.label}, laid out as a schematic`;
+  // The listener goes on BEFORE the src, or a cached image fires `load`
+  // before anything is listening and the figure stays hidden forever.
+  img.addEventListener('load', () => { wrap.hidden = false; });
+  // NOT loading="lazy". A lazy image inside a hidden element is never
+  // fetched, so `load` never fires, so it is never revealed: the
+  // reveal-on-load pattern and lazy loading deadlock each other. One image
+  // per selection, a median of 8 KB, is not worth the trap.
+  img.src = href;
+  a.append(img);
+  const cap = document.createElement('figcaption');
+  cap.textContent = 'Laid out by algorithm, not at die positions. Opens full size.';
+  wrap.append(a, cap);
+  card.append(wrap);
 }
 
 /** The card's live lines, rewritten on every paint rather than rebuilt. */

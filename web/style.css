@@ -3354,6 +3354,18 @@ body.no-scroll #bench { z-index: 70; }
 .cm-name { fill: var(--foreground); font: 600 10px var(--font-mono, monospace); pointer-events: none; }
 
 .cm-card { padding: 0.7rem 1rem; border-top: 1px solid var(--line); }
+/* The container as a schematic, drawn by tools/chip-elk/run.sh. The set is
+   generated and may be absent, so the figure ships hidden and chipmap.js
+   reveals it on load: nothing here should leave a caption over a broken
+   image. The SVG carries its own dark ground, which is why there is no
+   background under it. */
+.cm-elk { margin: 0.6rem 0 0; padding: 0; }
+.cm-elk a { display: block; border: 1px solid var(--line); border-radius: 3px;
+  overflow: hidden; line-height: 0; }
+.cm-elk a:hover { border-color: var(--accent); }
+.cm-elk img { width: 100%; height: auto; display: block; }
+.cm-elk figcaption { margin: 0.3rem 0 0; font-size: 0.68rem; color: var(--muted);
+  line-height: 1.45; }
 .cm-card p { margin: 0 0 0.4rem; }
 .cm-card-head b { color: var(--gold); }
 .cm-pill {

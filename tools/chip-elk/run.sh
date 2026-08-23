@@ -5,9 +5,13 @@
 #
 # 132 of them, a couple of seconds each. The whole chip in one layout is in
 # the README and is not worth looking at; this is the scale that reads.
+#
+# Writes into web/ by default, where the chip map picks them up: a box's card
+# shows its own diagram when one is there and says nothing when it is not.
+# Generated, so gitignored, and the deploy copies whatever it finds.
 set -e
 cd "$(dirname "$0")"
-OUTDIR="${1:-/tmp/chip-elk-svg}"
+OUTDIR="${1:-../../web/chip-elk}"
 [ -d node_modules ] || npm install --silent elkjs
 mkdir -p "$OUTDIR"
 

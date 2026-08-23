@@ -76,3 +76,7 @@ web/programs.txt
 
 # The ELK tool takes one dependency and does not vendor it.
 tools/chip-elk/node_modules/
+
+# The container diagrams, drawn by tools/chip-elk/run.sh. Generated, and the
+# chip map does without them when they are absent.
+web/chip-elk/

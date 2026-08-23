@@ -177,6 +177,22 @@ def main() -> None:
     b = Build(src, out)
 
     # 1. Leaves ------------------------------------------------------------
+    # The container diagrams, if they have been drawn. Copied as a directory
+    # rather than hashed one by one: there are 132, they are named by group
+    # key because the page asks for them by key, and a hashed name would need
+    # a manifest for the page to look them up in. They fall under the short
+    # cache, which is right for something that changes only when a derivation
+    # does. Absent is fine: the chip map shows no diagram and says nothing.
+    elk = src / "chip-elk"
+    if elk.is_dir():
+        n = 0
+        for svg in sorted(elk.glob("*.svg")):
+            b.emit(f"chip-elk/{svg.name}", svg.read_bytes(), hashed=False)
+            n += 1
+        print(f"  chip-elk: {n} container diagrams")
+    else:
+        print("  chip-elk: none drawn (tools/chip-elk/run.sh)")
+
     b.copy_hashed("layout.bin")
     b.copy_hashed("pkg/v6502_wasm_bg.wasm")
     b.copy_hashed("style.css")
