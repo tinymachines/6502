@@ -61,7 +61,7 @@ export const STAGES = ['T0', 'T2', 'T3', 'T4', 'T5', 'T+', 'any'];
 // module's own, at the end where they belong.
 export const KIND_ORDER = ['regs', 'flags', 'alat', 'dbus', 'irp', 'sbus', 'sdp',
   'rdy', 'pcr', 'pipe', 'sync', 'clock', 'intr', 'branch', 'decimal',
-  'alu', 'incr', 'chain', 'control', 'bus', 'stage', 'pins', 'rest', 'logic'];
+  'alu', 'incr', 'chain', 'control', 'bus', 'stage', 'pins', 'rest', 'logic', 'dpc'];
 
 export const KIND_LABEL = {
   regs: 'registers', flags: 'status flags', alat: 'address latches',
@@ -72,6 +72,7 @@ export const KIND_LABEL = {
   decimal: 'decimal correction', alu: 'ALU', incr: 'PC incrementer',
   chain: 'timing chain', bus: 'internal bus', stage: 'decode terms',
   pins: 'pins', rest: 'rest of a block', logic: 'static logic',
+  dpc: 'datapath control by phase',
 };
 
 /**
@@ -284,6 +285,38 @@ export function chipGroups(sch, blocks, timing) {
     }
     for (const [d, ns] of [...perDrives].sort((p, q) => p[0] - q[0])) {
       take('logic', d, d ? `gates driving ${sch.blockNames[d]}` : 'shared static logic', ns);
+    }
+  }
+
+  // The datapath control lines by the clock phase they are effective in,
+  // measured in `export-timing` by watching every `dpc*` node against the two
+  // clock outputs while four programs run. This is the one grouping here that
+  // is not a fact about the wiring: a line is "effective on phi1" only in the
+  // sense that it is high while clk1out is, so it takes a chip run to know.
+  // It rides in timing.json because `chipGroups` already receives that file
+  // and it is already the product of running the chip 256 times.
+  //
+  // It is LAST, so it claims nothing: every one of these nodes already
+  // belongs to the derivation that explains it (`dpc3_SBX` is the X
+  // register's load line before it is a phi1 line). The phase is a second
+  // reading of the same nodes, which is exactly what the overlapping
+  // container layer is for. `timing.dpc` absent leaves the kind out entirely
+  // rather than inventing an empty one.
+  if (Array.isArray(timing?.dpc)) {
+    const byPhase = new Map();
+    for (const d of timing.dpc) {
+      // A line no program raised has a null phase and is grouped as such
+      // rather than guessed at, the same way an untimed opcode is null.
+      const k = d.phase || 'unreached';
+      if (!byPhase.has(k)) byPhase.set(k, []);
+      byPhase.get(k).push(d.node);
+    }
+    const LABEL = {
+      phi1: 'effective on phi1', phi2: 'effective on phi2',
+      both: 'effective on both phases', unreached: 'not raised by the probe programs',
+    };
+    for (const k of ['phi1', 'phi2', 'both', 'unreached']) {
+      if (byPhase.has(k)) take('dpc', k, LABEL[k], byPhase.get(k));
     }
   }
 

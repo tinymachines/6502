@@ -120,16 +120,27 @@ def test_a_node_in_several_containers_reports_all_of_them(client):
     assert sum(1 for g in n["groups"] if not g["partitioned"]) == 1, "sdp:sd1 is absorbed"
 
 
-def test_eighty_eight_nodes_are_in_more_than_one_container(client):
+def test_a_hundred_and_twenty_two_nodes_are_in_more_than_one_container(client):
     page = client.get("/v1/tags?multi=true&limit=2000").json()
-    assert page["total"] == 88
+    # 88 before the `dpc` kind. Those three containers are a SECOND READING of
+    # nodes that all already had an owner -- the clock phase a control line is
+    # effective in, which is not a fact about the wiring -- so every one of
+    # their 46 nodes joins this set and none leaves the partition.
+    assert page["total"] == 122
     assert all(len(n["groups"]) > 1 for n in page["nodes"])
     assert max(len(n["groups"]) for n in page["nodes"]) == 5
 
 
-def test_three_containers_exist_only_in_the_overlapping_layer(client):
+def test_six_containers_exist_only_in_the_overlapping_layer(client):
     rows = client.get("/v1/groups?layer=absorbed").json()["groups"]
-    assert {g["key"] for g in rows} == {"sdp:sd1", "sdp:sd2", "sbus:link"}
+    assert {g["key"] for g in rows} == {
+        "sdp:sd1", "sdp:sd2", "sbus:link",
+        # The three `dpc` phase containers claim nothing by construction: they
+        # are added last, when every one of their nodes is already owned by the
+        # derivation that explains it. `dpc3_SBX` is the X register's load line
+        # before it is a phi1 line.
+        "dpc:phi1", "dpc:both", "dpc:unreached",
+    }
     # SD1 and SD2 are the store-data latches the simulator's own timing
     # readout names. The address latches' ADL/ABL cone reads them and
     # outranks them, which is the ownership joint the chip map documents.
@@ -144,7 +155,7 @@ def test_the_layers_are_different_sizes_and_that_is_the_point(client):
     part = client.get("/v1/groups?layer=partition").json()
     cont = client.get("/v1/groups?layer=containers").json()
     assert part["count"] == 132
-    assert cont["count"] == 135
+    assert cont["count"] == 138
     # Summing the containers over-counts, because they overlap. If it did not,
     # there would be no second layer to serve.
     assert sum(g["count"] for g in cont["groups"]) > 1547
@@ -532,7 +543,7 @@ def test_the_whole_atlas_is_one_url_and_it_is_the_file(client, onfile):
     assert j["counts"] == onfile["counts"]
     # And it really is everything the piecemeal routes serve.
     assert len(j["groups"]) == 132
-    assert len(j["containers"]) == 135
+    assert len(j["containers"]) == 138
     assert len(j["nodes"]) == 1547
     assert len(j["bundles"]) == 534
     assert all("nodes" in g for g in j["groups"]), "members included, not just counts"

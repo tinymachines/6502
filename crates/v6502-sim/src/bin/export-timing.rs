@@ -43,6 +43,8 @@ fn main() -> std::io::Result<()> {
         .collect();
     let reach = pla.trace_terms(&nl, &stages.iter().map(|(_, n)| *n).collect::<Vec<_>>(), &blocked);
 
+    let dpc = dpc_phases(&nl);
+
     let mut records = Vec::with_capacity(256);
     for opcode in 0..=255u8 {
         records.push(trace(&nl, &pla, opcode));
@@ -71,6 +73,17 @@ fn main() -> std::io::Result<()> {
             node,
             terms.join(","),
             if i + 1 < stages.len() { "," } else { "" }
+        );
+    }
+    s.push_str("  ],\n  \"dpc\": [\n");
+    for (i, (name, node, phase)) in dpc.iter().enumerate() {
+        let _ = writeln!(
+            s,
+            "    {{\"name\":\"{}\",\"node\":{},\"phase\":{}}}{}",
+            name,
+            node,
+            phase.map_or_else(|| "null".to_string(), |p| format!("\"{p}\"")),
+            if i + 1 < dpc.len() { "," } else { "" }
         );
     }
     s.push_str("  ],\n  \"opcodes\": [\n");
@@ -151,6 +164,91 @@ struct Timed {
     /// the undocumented JAM/KIL opcodes hang the chip, and the timing chain
     /// simply stops advancing.
     jam: bool,
+}
+
+/// The datapath control lines, and the clock phase each is effective in.
+///
+/// The chip has no phase register. A control line is "effective on phi1" only
+/// in the sense that it is high while `clk1out` is, so this watches every
+/// `dpc*` node against the two clock outputs while four programs run and
+/// reports the phases it was ever high in. Nothing consults a table.
+///
+/// The visual6502 wiki states the answer for 37 of the 44, in Hanson's names,
+/// and `tools/check-dpc-vs-wiki.py` compares the two: 37 of 37 agree. A line
+/// no program here raises is `null` rather than a guess.
+fn dpc_phases(nl: &Arc<Netlist>) -> Vec<(String, u16, Option<&'static str>)> {
+    // Chosen to reach as many lines as possible: loads and the adder, the
+    // logic and shift ops, the stack and calls, indexed addressing and a
+    // branch. Two lines stay unreached (`dpc34_PCLC`, `dpc35_PCHC`, the
+    // program counter's carry detects) and are reported as such.
+    const PROGS: [&[u8]; 4] = [
+        &[0xa9, 0x2e, 0x69, 0x14, 0x85, 0x82, 0xa2, 0x03, 0xa0, 0x05, 0x8a, 0xa8, 0x98, 0x4c, 0x00,
+          0x02],
+        &[0xa9, 0x5a, 0x09, 0x0f, 0x29, 0x3c, 0x49, 0xff, 0x4a, 0x0a, 0x6a, 0x2a, 0xe9, 0x11, 0x4c,
+          0x00, 0x02],
+        &[0xa2, 0xff, 0x9a, 0xba, 0x48, 0x68, 0x08, 0x28, 0x20, 0x10, 0x02, 0x4c, 0x00, 0x02, 0xea,
+          0xea, 0x60],
+        &[0xa2, 0x02, 0xa0, 0x03, 0xbd, 0x00, 0x03, 0xb9, 0x00, 0x03, 0x9d, 0x20, 0x03, 0xc9, 0x00,
+          0xd0, 0x02, 0xe6, 0x10, 0x4c, 0x00, 0x02],
+    ];
+    const STEPS: usize = 900;
+
+    let mut lines: Vec<(String, u16)> =
+        nl.names().filter(|(n, _)| n.starts_with("dpc")).map(|(n, i)| (n.to_string(), i)).collect();
+    // The `dpc` prefix is a position across the die, so sorting by it is
+    // sorting the datapath left to right. Sorting the strings would put 10
+    // before 2.
+    // The `dpc` prefix is a position across the die, and two of them are
+    // NEGATIVE: `dpc-1_ADL/ABL` and `dpc-2_ADH/ABH` are the address latch
+    // loads, which sit to the left of where the datapath's own numbering
+    // starts. Parsing as unsigned puts them last; parsing as signed puts them
+    // where the die does. Sorting the strings would put 10 before 2.
+    lines.sort_by_key(|(n, _)| {
+        n.trim_start_matches("dpc").split('_').next().unwrap_or("").parse::<i32>().unwrap_or(i32::MAX)
+    });
+
+    let (c1, c2) = match (nl.node("clk1out"), nl.node("clk2out")) {
+        (Some(a), Some(b)) => (a, b),
+        _ => return Vec::new(),
+    };
+    let mut hi1 = vec![false; lines.len()];
+    let mut hi2 = vec![false; lines.len()];
+    for prog in PROGS {
+        let mut page = vec![0xeau8; 256];
+        page[..prog.len()].copy_from_slice(prog);
+        let mut mem = FlatMemory::new();
+        mem.load(BASE, &page);
+        mem.set_reset_vector(BASE);
+        let mut cpu = Cpu::new(nl.clone(), mem).expect("signals resolve");
+        cpu.power_cycle();
+        for _ in 0..STEPS {
+            let (a, b) = (cpu.engine().is_high(c1), cpu.engine().is_high(c2));
+            // The two phases are non-overlapping and total, which the check
+            // tool asserts rather than assumes; a half-cycle in neither would
+            // be a clock generator that had stopped.
+            if a != b {
+                for (k, (_, id)) in lines.iter().enumerate() {
+                    if cpu.engine().is_high(*id) {
+                        if a { hi1[k] = true } else { hi2[k] = true }
+                    }
+                }
+            }
+            cpu.half_step();
+        }
+    }
+    lines
+        .into_iter()
+        .enumerate()
+        .map(|(k, (name, id))| {
+            let phase = match (hi1[k], hi2[k]) {
+                (true, true) => Some("both"),
+                (true, false) => Some("phi1"),
+                (false, true) => Some("phi2"),
+                (false, false) => None,
+            };
+            (name, id, phase)
+        })
+        .collect()
 }
 
 fn trace(nl: &Arc<Netlist>, pla: &Pla, opcode: u8) -> Timed {
