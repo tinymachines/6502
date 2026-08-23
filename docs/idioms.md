@@ -224,16 +224,28 @@ is not a stored flag at all but a reading of why the chip is pushing P.
 > two or three places where identical is wrong. **Look for the exceptions;
 > that is where the designer was thinking.**
 
-## Seeing it run
+## Go and watch one
 
-Every structure above is on the running chip, at an address:
+Every idiom above is on the running chip. These links open the page that
+draws it, at the thing itself. **Each parameter below is checked against the
+target page's own source before this file is written**, because this project
+has already shipped a link carrying a parameter no page ever read, and a
+dead deep link looks exactly like a broken feature.
 
-- a register cell: `regs:x:#1` (`x2`)
-- the widest bus wire, its sources arbitrated by decode lines
-- the PLA's terms, one per row, on the Decode page
+| what to look at | where |
+|---|---|
+| the two-inverter ring, one register at a time | [`/tracer?reg=x`](https://6502.tinymachines.ai/tracer?reg=x) |
+| the widest bus, and the lines that reach it | [`/tracer?bus=sb`](https://6502.tinymachines.ai/tracer?bus=sb) |
+| the decimal adjust: the six bits that take the long way | [`/tracer?sb=dasb`](https://6502.tinymachines.ai/tracer?sb=dasb) |
+| the flag that is not stored | [`/tracer?flag=B`](https://6502.tinymachines.ai/tracer?flag=B) |
+| the shifter's own bit slice | [`/chipmap?sel=alu:bit7`](https://6502.tinymachines.ai/chipmap?sel=alu:bit7) |
+| the timing chain as cells, not as a counter | [`/tracer?chain=T3`](https://6502.tinymachines.ai/tracer?chain=T3) |
+| the PLA row that LDA and LAX share | [`/decode?term=28`](https://6502.tinymachines.ai/decode?term=28) |
+| one gate, and what makes it | [`/schematic?signal=sb0`](https://6502.tinymachines.ai/schematic?signal=sb0) |
 
-`docs/atlas.md` gives the address rubric; the chip map draws every container
-and the tracer lights them half-cycle by half-cycle.
+`docs/atlas.md` gives the address rubric, so anything above can be looked up
+by name. A register cell is `regs:x:#1` (`x2`). The chip map draws every container
+the tracer lights them half-cycle by half-cycle.
 
 And the other direction, which is the one that makes it stick: write a
 program for it. Die Runner is a 6502 ROM whose screen is a page of its own

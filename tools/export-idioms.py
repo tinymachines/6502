@@ -334,13 +334,53 @@ w("> you build eight identical slices and then spend your cleverness on the")
 w("> two or three places where identical is wrong. **Look for the exceptions;")
 w("> that is where the designer was thinking.**\n")
 
-w("## Seeing it run\n")
-w("Every structure above is on the running chip, at an address:\n")
-w("- a register cell: `%s` (`%s`)" % (addr(rings[0]), nm(rings[0])))
-w("- the widest bus wire, its sources arbitrated by decode lines")
-w("- the PLA's terms, one per row, on the Decode page\n")
-w("`docs/atlas.md` gives the address rubric; the chip map draws every container")
-w("and the tracer lights them half-cycle by half-cycle.\n")
+w("## Go and watch one\n")
+w("Every idiom above is on the running chip. These links open the page that")
+w("draws it, at the thing itself. **Each parameter below is checked against the")
+w("target page's own source before this file is written**, because this project")
+w("has already shipped a link carrying a parameter no page ever read, and a")
+w("dead deep link looks exactly like a broken feature.\n")
+ring_stem = None
+for n in rings:
+    m = _re.match(r"^([a-z]+)\d$", nm(n))
+    if m: ring_stem = m.group(1); break
+lda_row = idx.get("op-T0-lda")
+LINKS = [
+    ("the two-inverter ring, one register at a time",
+     "tracer", "reg", ring_stem or "a"),
+    ("the widest bus, and the lines that reach it",
+     "tracer", "bus", nm(wide).rstrip("0123456789")),
+    ("the decimal adjust: the six bits that take the long way",
+     "tracer", "sb", "dasb"),
+    ("the flag that is not stored",
+     "tracer", "flag", "B"),
+    ("the shifter's own bit slice",
+     "chipmap", "sel", "alu:bit7"),
+    ("the timing chain as cells, not as a counter",
+     "tracer", "chain", "T3"),
+    ("the PLA row that LDA and LAX share",
+     "decode", "term", str(lda_row) if lda_row is not None else "0"),
+    ("one gate, and what makes it",
+     "schematic", "signal", nm(wide)),
+]
+bad = []
+for _lbl, page, param, _val in LINKS:
+    src = os.path.join(W, page + ".js")
+    if not os.path.exists(src) or ("'%s'" % param) not in open(src).read():
+        bad.append("%s.js does not read ?%s=" % (page, param))
+if bad:
+    for b_ in bad: print("FAIL " + b_)
+    sys.exit(1)
+w("| what to look at | where |")
+w("|---|---|")
+for lbl, page, param, val in LINKS:
+    w("| %s | [`/%s?%s=%s`](https://6502.tinymachines.ai/%s?%s=%s) |"
+      % (lbl, page, param, val, page, param, val))
+w("")
+w("`docs/atlas.md` gives the address rubric, so anything above can be looked up")
+w("by name. A register cell is `%s` (`%s`). The chip map draws every container"
+  % (addr(rings[0]), nm(rings[0])))
+w("the tracer lights them half-cycle by half-cycle.\n")
 w("And the other direction, which is the one that makes it stick: write a")
 w("program for it. Die Runner is a 6502 ROM whose screen is a page of its own")
 w("memory, run on this simulation rather than on an emulator of it, so every")
