@@ -37,6 +37,7 @@ const state = {
   switchesOn: new Map(),  // node -> [switch]
   gatesUsing: new Map(),  // node -> [gate] it is an input to
   switchesBy: new Map(),  // node -> [switch] it opens
+  owners: null,           // node -> container key, once groups.json lands
   dir: 'back',            // 'back' = what makes it, 'fwd' = what it drives
   root: null,
   // One level. The walk merges as you follow signals, so arriving deep means
@@ -938,6 +939,35 @@ function paint(levels) {
  * block a signal sits in, what it gates, which two units a control line joins
  * and on how many bits -- is measured, and is labelled as such.
  */
+/**
+ * A node's address: `<container>:<class>:<slot>`, the rubric in `docs/atlas.md`.
+ *
+ * The class is the shape of the pulldown network, which in NMOS IS the boolean
+ * function rather than a label for it. The slot is the die's own number and is
+ * the only part that cannot drift, which is why it is last and why an address
+ * stripped to it still resolves.
+ */
+function classOf(node) {
+  const g = state.gateOf && state.gateOf.get(node);
+  if (g) {
+    const legs = g.terms.map((t) => t.length);
+    if (g.kind === 'inverter') return 'inv';
+    if (g.kind === 'nor') return `nor${legs.length}`;
+    if (g.kind === 'nand') return `nand${legs[0]}`;
+    if (g.kind === 'aoi') return 'aoi' + legs.slice().sort((a, b) => b - a).join('.');
+    if (g.kind === 'dynamic') return `dyn${legs.length}`;
+  }
+  // A node no gate drives is a bus bit if anything can reach it through a
+  // switch, and inert if nothing can. There is exactly one inert node.
+  return state.switchesOn.has(node) ? 'bus' : 'inert';
+}
+
+function addressOf(node) {
+  const cls = classOf(node);
+  const own = state.owners ? state.owners.get(node) : null;
+  return own ? `${own}:${cls}:#${node}` : `${cls}:#${node}`;
+}
+
 const STEMS = {
   sb: 'special bus', dasb: 'special bus (its other name)',
   idb: 'internal data bus', idl: 'input data latch',
@@ -999,6 +1029,16 @@ function signalHtml(node) {
     add('Name', 'unnamed. <span class="muted">An internal node the die trace did not label; '
       + 'most gate outputs are unnamed, because nobody needed to refer to them.</span>');
   }
+
+  // --- where it is, in the address rubric ----------------------------------
+  // `docs/atlas.md` is the full rule: <container>:<class>:<slot>, parsed from
+  // the right. The class and the slot come from schematic.json, which is
+  // already loaded; the container needs groups.json, which is fetched in the
+  // background because most visits never need it. Until it lands the row shows
+  // what it can rather than nothing, and says which half is missing.
+  add('Address <span class="tagm">measured</span>',
+      `<span class="mono">${addressOf(node) || '?'}</span>`
+      + (state.owners ? '' : ' <span class="muted">(container still loading)</span>'));
 
   // --- what was measured ---------------------------------------------------
   const role = d.nodeRole[node];
@@ -2051,7 +2091,23 @@ async function boot() {
       }),
     ]);
     state.data = data;
-    draw = createDraw(data);
+    draw = createDraw(data, { addressOf });
+
+    // The container half of an address needs groups.json, which is 320 KB and
+    // which most visits never look at. Fetch it after the page is up, upgrade
+    // the addresses in place when it lands, and carry on without it if it does
+    // not: the class and the slot are already correct, and a partial address
+    // that says so beats a spinner.
+    fetch('groups.json')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((g) => {
+        const m = new Map();
+        for (const n of g.nodes) m.set(n.id, n.owner);
+        state.owners = m;
+        if (state.root != null) renderSignal(state.root);
+        render();
+      })
+      .catch(() => { /* addresses stay class-and-slot; nothing else depends on it */ });
 
     for (const [out, kind, precharge, terms] of data.gates) {
       state.gateOf.set(out, { out, kind: data.kinds[kind], precharge, terms });

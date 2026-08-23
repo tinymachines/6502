@@ -67,8 +67,13 @@ export function el(tag, attrs, parent) {
  * second spelling of "an unnamed node is called #1234" would show up as two
  * pages labelling the same wire differently.
  */
-export function createDraw(data) {
+export function createDraw(data, opts = {}) {
   const nameOf = (n) => data.names[n] ?? `#${n}`;
+  // An address for a pill, when the caller can supply one. It goes in an SVG
+  // <title>, which is a hover tooltip, and NEVER in the label: pill width is
+  // measured from the label text and column width from the pills, so putting
+  // `logic:4:nor2:#602` where `#602` was would relayout the whole drawing.
+  const addressOf = opts.addressOf || null;
   const isNamed = (n) => data.names[n] != null;
 
   /** Width of a signal's pill, from its label. */
@@ -302,6 +307,11 @@ export function createDraw(data) {
       blocksHere.add(block);
       el('rect', { x: p.flip ? 0 : -p.w, y: -NODE_H / 2, width: p.w, height: NODE_H,
                    rx: 3, class: 'sch-pill' }, g);
+      if (addressOf) {
+        // First child, which is where SVG looks for a tooltip.
+        const a = addressOf(node);
+        if (a) el('title', {}, g).textContent = a;
+      }
       const t = el('text', { x: (p.flip ? 1 : -1) * p.w / 2, y: 4, class: 'sch-name' }, g);
       t.textContent = nameOf(node);
       // A marked signal says what it is, under its pill. Without it a port is

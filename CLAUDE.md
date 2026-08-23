@@ -3259,6 +3259,37 @@ about what colour the ALU is.
   `build-web.py` rewrites it with `replace_once`, whose entire value is failing
   when there is more than one.
 
+#### The address, on the drawing
+
+The panel carries an **Address** row, `<container>:<class>:<slot>`, which is
+`docs/atlas.md`'s rubric applied to whatever is selected. It is the answer to
+the thing the drawing could not previously say: an unnamed node was `#602` and
+nothing else, and it is now `regs:x.XSB:inv:#602` -- an inverter in the X
+register's XSB load line.
+
+- **The class and the slot are free; the container is not.** Both come out of
+  `schematic.json`, which is already loaded, so they are on the first paint.
+  The container needs `groups.json` (320 KB, 48 KB gzipped), fetched **in the
+  background after the page is up** and applied in place when it lands. If it
+  never lands the row shows the class and the slot and says the container is
+  still loading, because a partial address that says so beats a spinner.
+- **The address goes in an SVG `<title>`, never in the label.** Pill width is
+  measured from the label text and column width from the pills, so putting
+  `logic:4:nor2:#602` where `#602` was would relayout the entire drawing.
+  `createDraw` takes an optional `addressOf` in a second argument, so
+  `block.js` and `halfshot.js` are untouched.
+- **`groups.json` was in no build until now**, because no page had ever
+  fetched it -- it existed for the exporter and the API. `build-web.py` emits
+  and rewrites it now. The failure it would otherwise have caused is the quiet
+  kind: the fetch is backgrounded and caught, so production would have shown
+  class-and-slot forever while `web/` worked perfectly. **Boot `dist/` before
+  believing a build**, for the third time in this file.
+- **The harness matches the address's SHAPE, not "the next non-whitespace
+  run".** `textContent` runs one panel row into the next row's label, so a
+  greedy match returns `regs:x.SBX:dyn3:#1186Role`. Same trap the primer's
+  stray-digit scan documents. Mutation-proved: dropping the container half
+  fails exactly the two assertions about it.
+
 #### Explaining it to a reader
 
 The page carries a **key** drawn with the same primitives as the diagram (so a

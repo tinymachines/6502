@@ -211,6 +211,43 @@ try {
      document.querySelectorAll('#sch-signal-info .tagm').length >= 3,
      `${document.querySelectorAll('#sch-signal-info .tagm').length} tags`);
 
+  // The address, `docs/atlas.md`'s rubric, on the page. The class and the slot
+  // come from schematic.json and are there on the first paint; the container
+  // needs groups.json, fetched in the background, so this waits for it and
+  // then checks BOTH halves. Waiting for a fixed time instead would pass on a
+  // fetch that never happened.
+  // Match the address's SHAPE, not "the next non-whitespace run": textContent
+  // runs one row straight into the next row's label, so a greedy match returns
+  // `regs:x.SBX:dyn3:#1186Role`. Same trap the primer's digit scan documents.
+  const addrOf = () => (info().match(/Address\s*measured\s*([A-Za-z0-9:.\/_#+-]*?#\d+)/) || [])[1] || '';
+  ok('the panel carries an address at all', /:#\d+$/.test(addrOf()), addrOf());
+  ok('...whose slot is the die number, and last',
+     addrOf().split(':').pop() === '#' + iSBX, addrOf());
+  // dpc3_SBX is precharged with three pulldown legs, so the rubric's class for
+  // it is dyn3. Read off schematic.json here rather than trusting the page.
+  const gSBX = data.gates.find((g) => g[0] === iSBX);
+  const want = { inverter: 'inv', nor: 'nor', nand: 'nand', aoi: 'aoi', dynamic: 'dyn' }[data.kinds[gSBX[1]]];
+  ok('...and a class that matches its gate',
+     addrOf().split(':').slice(-2)[0].startsWith(want),
+     `${addrOf()} against a ${data.kinds[gSBX[1]]}`);
+  for (let i = 0; i < 120 && addrOf().split(':').length < 3; i++) await sleep(100);
+  ok('...and gains its container when groups.json lands',
+     addrOf().split(':').length >= 3 && addrOf().startsWith('regs:'), addrOf());
+
+  // Every pill carries the same address as a tooltip. It is NOT in the label:
+  // pill width is measured from the label and column width from the pills, so
+  // a longer label would relayout the drawing.
+  const titles = [...document.querySelectorAll('#sch-svg .sch-node title')];
+  ok('every drawn signal carries its address as a tooltip',
+     titles.length === document.querySelectorAll('#sch-svg .sch-node').length && titles.length > 0,
+     `${titles.length} of ${document.querySelectorAll('#sch-svg .sch-node').length}`);
+  ok('...and the label is still the short name',
+     [...document.querySelectorAll('#sch-svg .sch-name')].every((t) => !t.textContent.includes(':')),
+     (document.querySelector('#sch-svg .sch-name') || {}).textContent);
+  ok('an unnamed node gets a container from its address, not a bare number',
+     titles.some((t) => /^[a-z]+:[^:]*:[a-z0-9.]+:#\d+$/.test(t.textContent)),
+     titles.slice(0, 3).map((t) => t.textContent).join(' | '));
+
   // An unnamed internal node must still say something useful rather than
   // rendering an empty panel.
   const anon = [...svg.querySelectorAll('.sch-node.anon')][0];

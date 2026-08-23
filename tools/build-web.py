@@ -265,6 +265,7 @@ def main() -> None:
     # for the clock generator, and it is the file to hand anyone who wants the
     # network without learning the gate and switch encoding.
     b.copy_hashed("graph.json")
+    b.copy_hashed("groups.json")
     b.copy_hashed("blueprint.json")
     b.copy_hashed("decode.json")
     b.copy_hashed("timing.json")
@@ -435,7 +436,12 @@ def main() -> None:
                        where="schematic.js")
     sch = replace_once(sch, "'./solo-palette.js'", f"'./{b.ref('solo-palette.js')}'",
                        where="schematic.js")
-    for original in ["schematic.json", "blocks.json"]:
+    # groups.json arrived with the address rubric: the schematic's signal panel
+    # shows `<container>:<class>:<slot>`, and the container half is the only
+    # part that needs it. Fetched in the background, so a miss here is silent --
+    # the page keeps working and the addresses just never grow their container.
+    # That is exactly the kind of failure `replace_once` exists to refuse.
+    for original in ["schematic.json", "blocks.json", "groups.json"]:
         sch = replace_once(sch, f"fetch('{original}')", f"fetch('{b.ref(original)}')",
                            where="schematic.js")
     b.emit("schematic.js", sch.encode())
