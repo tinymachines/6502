@@ -45,6 +45,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Talk | Where the die data came from, and the source talk's claims re-asked of the chip. 6 of 7 agree, and the page computes that itself. |
 | Designer | The other account: one of the chip's authors, recalling it forty years on. 4 of 5 agree, and the clock generator is derived here for the first time. |
 | Hosting | <https://6502.tinymachines.ai> — nginx + a oneshot systemd deploy. |
+| Backup | The registry replicates continuously to `/mnt/backup/6502-registry` (Litestream, `deploy/litestream.yml`). Restore proven, twice: the initial snapshot, and a change made twelve seconds earlier. Survives a disk, not a fire: it is the same machine, and off-box is a second destination in the same file whenever there is somewhere to put it. |
 | Games | <https://games.tinymachines.ai> -- Die Runner: a console on the API. The game is a 6502 ROM, the screen is a page of its memory, the browser draws it. The round trip is the frame rate. Cartridges are one gzipped file carrying the ROM, its tiles and the contract; the page loads one from `?cart=` or a file picker. See `games/README.md`. |
 | Cartridges | `POST /v1/cartridge` mints one: assemble, refuse a layout that cannot work, **run it on the chip**, pack it. `GET /v1/console` publishes the contract, the memory map and the tile format. |
 | MCP | `POST /api/mcp`, hand-written JSON-RPC, no session and no SSE. Five coarse tools; `run` hands back the screen as hex so a model can read its own picture. |

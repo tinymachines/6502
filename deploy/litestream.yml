@@ -1,0 +1,25 @@
+# Continuous replication of the registry, to a different physical disk.
+#
+# Installed to /etc/litestream.yml. The repo copy is the source of truth and
+# is not read live; copy it over after editing, as with the nginx configs.
+#
+# WHY THIS EXISTS. The registry is the only stateful thing behind the API:
+# every builder page and every published cartridge. Nothing else replicates
+# it, so losing the box lost all of it. That is a real gap where a network
+# SQLite server would have been an imagined one.
+#
+# WHY LITESTREAM RATHER THAN A NIGHTLY COPY. A plain `cp` of a WAL-mode
+# database can catch it mid-transaction and produce a file that opens and is
+# wrong, which is the worst kind of backup. Litestream streams WAL frames, so
+# a restore lands on a transaction boundary. `sqlite3 .backup` would also be
+# safe, and would lose everything since the last run; this loses seconds.
+#
+# WHERE IT GOES. /mnt/backup is /dev/sdn1, a different physical disk from the
+# root filesystem the database sits on, so a dead disk does not take both.
+# **It is still the same machine**, which is the honest limit of this setup:
+# it survives a disk, not a fire. Off-box replication is a second destination
+# in this same file (s3://, sftp://) whenever there is somewhere to put it.
+dbs:
+  - path: /var/lib/6502-registry/registry.db
+    replica:
+      path: /mnt/backup/6502-registry
