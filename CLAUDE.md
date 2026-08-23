@@ -139,6 +139,13 @@ cargo clippy --workspace --all-targets
 cargo run --release -p v6502-sim --example bench   # throughput
 cargo run --release -p v6502-sim --example trace   # per-half-cycle state dump
 cargo run --release -p v6502-sim --example activity # how much of the chip moves
+# What the solver LOOKS AT, joined against the chip atlas. A recalc is a search:
+# build_group walks out from one seed. Behind halfphi's `probe` feature, which
+# is off by default and costs nothing when off.
+cargo run --release -p v6502-sim --features probe \
+    --example search-profile -- 120 > /tmp/searches.json
+python3 tools/export-atlas-doc.py --json /tmp/addr.json
+python3 tools/analyse-searches.py /tmp/searches.json /tmp/addr.json
                                     # per half-cycle. Run this before designing
                                     # anything that wants to draw "what changed".
 
@@ -900,6 +907,38 @@ half-cycle.
     about the state must invalidate there, or it will trust stamps taken
     against a different machine, and the failure lands on the one path whose
     promise is bit-exact resume.
+- **The searches were profiled against the atlas, and the result closes a
+  door.** `examples/search-profile.rs` (behind `halfphi`'s `probe` feature)
+  records every recalc: its seed, the group it reached, and whether anything
+  moved. `tools/analyse-searches.py` joins that to the address table.
+  Measured over 120 half-cycles: **927 searches per half-cycle, mean group
+  2.03, 79.6% changing nothing** -- which reproduces the figures above from a
+  different instrument, so the profiler is sound.
+  - **The 80% waste is NOT redundancy, and that is the finding.** **82.6% of
+    searches are the first look at that node this half-cycle**; only 17.4% are
+    repeats, only 40% of those return an identical group, and only **7.0% of
+    all searches are both memoisable and worthless.** That 7% is the ceiling
+    for caching by seed *before* any bookkeeping, which is why the global
+    epoch pre-filter could not win and why a smarter cache will not either.
+    Four searches in five are a correct first look that finds nothing.
+  - **87.9% of searches never leave one container**, and the crossings that do
+    are exactly the datapath transfers: `dbus:idb ~ sbus:sb` (SBDB),
+    `bus:adl ~ pcr:pclp` (PCLADL), `bus:adh ~ pcr:pchp`, `dbus:idb ~ dbus:idl`
+    (DL/DB), `alu:b ~ dbus:idb` (DBADD), `alu:a ~ sbus:sb` (SBADD). The
+    solver's runtime behaviour recovers the bus architecture without being
+    told it.
+  - **Waste concentrates by class, not by place.** Seeds of class `bus` are
+    33% of all searches and waste **93.5%** of them: a pure bus bit is joined
+    to dozens of switches, so anything toggling anywhere on the bus re-queues
+    it, and its level almost never moves. By container kind the worst is
+    `stage` (the decode terms) at **97.4%**, then `regs` at 91.8%.
+  - The most-searched single nodes are the precharged control lines,
+    `regs:s.SS:dyn3:#654` (`dpc7_SS`) at 420 searches in 120 half-cycles, each
+    gating eight switches.
+  - **The feature costs nothing when off**, and that was checked rather than
+    assumed: zero `probe` strings in the default rlib, and throughput
+    unchanged at 25,045 half-cycles/s best of three.
+
 - **Throughput and latency are different problems.** One machine is bounded by
   the above; machines per second is bounded by cores, and there are 12.
 

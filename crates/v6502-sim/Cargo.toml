@@ -13,6 +13,10 @@ license.workspace = true
 # is what lets a WebAssembly package be MIT the way `halfphi` is.
 default = ["mos6502"]
 mos6502 = ["dep:v6502-netlist"]
+# Passes halfphi's recording through. Only `examples/search-profile.rs` wants
+# it, and it declares it as a required feature, so an ordinary build never
+# compiles the recording in.
+probe = ["halfphi/probe"]
 
 [dependencies]
 halfphi = { path = "../halfphi" }
@@ -49,3 +53,7 @@ required-features = ["mos6502"]
 [[example]]
 name = "trace"
 required-features = ["mos6502"]
+
+[[example]]
+name = "search-profile"
+required-features = ["mos6502", "probe"]

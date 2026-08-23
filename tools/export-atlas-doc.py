@@ -332,6 +332,20 @@ w("- **Anything about node 866.** It classifies as `inert` and that is correct:"
 w("  it gates one transistor and nothing in the chip can drive it, so no run can")
 w("  ever observe it.\n")
 
+# The address table, for anything that wants to join against it. One
+# implementation of the rubric: a consumer that recomputed the class rule
+# would be the copy that drifts.
+if "--json" in sys.argv:
+    jp = sys.argv[sys.argv.index("--json") + 1]
+    json.dump({
+        "format": "chip-address/1",
+        "nodes": {str(n): {"addr": A[n], "owner": owner[n], "class": klass(n),
+                           "name": names[n], "tags": tags(n)} for n in U},
+        "transistors": {str(t): a for t, a in taddr.items()},
+    }, open(jp, "w"))
+    print("wrote %s: %d node addresses, %d transistor addresses"
+          % (jp, len(A), len(taddr)))
+
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 open(OUT, "w").write("\n".join(L) + "\n")
 print("wrote %s (%d lines): %d addresses, %d groups, %d containers, %d classes"
