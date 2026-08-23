@@ -4701,6 +4701,43 @@ distance from an opcode's own fetch to the next one, both found by watching
   their own hand-typed set, which is why that set is worth keeping rather than
   superseded.
 
+### The Snake series, part one (`tools/export-walk.py`, `docs/walk-snake.md`)
+
+One instruction out of the real Snake ROM, followed through five cycles, with
+the vocabulary set on the way: RAM against ROM, gates against dynamic nodes
+against paths, the address rubric, and how a keypress actually arrives. Written
+for a reader who has never seen inside a chip.
+
+- **The state is measured by running Snake on the simulation**, and the
+  schematics are **pulled from the live schematic page** (`tools/walk/grab-svg.py`)
+  rather than drawn again. A second drawing of an NMOS gate would eventually
+  draw it differently, which is the failure `sch-draw.js` exists to prevent.
+  The grabber inlines the `.sch-*` rules with `var()` resolved, because a
+  standalone SVG inherits no stylesheet and an unresolved token drops the whole
+  declaration silently.
+- **The subject is `STA $0400,X` at `$021F`**, the screen clear, taken at a pass
+  where X is non-zero so the adder has work to do. Five cycles, ten
+  half-cycles, and **only two of them are the write**: a store spends most of
+  its life working out where to put the byte.
+- **A `#` in a URL starts the fragment, and that produced a perfectly good
+  schematic of the wrong wire.** `?signal=#WR` was truncated to `?signal=`, the
+  page fell back to its default (`dpc3_SBX`), and the figure looked entirely
+  plausible. Values are URL-encoded now, **and the grabber checks the drawing
+  names the signal it asked for**, because a fallback renders perfectly.
+- **Three fields on a halfwave observation are strings, not what they look
+  like.** `rw` is `"read"`/`"write"`, so `if o["rw"]` is always true and every
+  cycle reads as a read. `tstates` is a string, so `",".join(...)` splits it
+  into `T,2`. Both produced confident wrong output. **Check the type of a
+  field before formatting it**; this cost two rounds in one sitting.
+- **The prose is held to what the figure shows.** A first draft said the write
+  control checks ready and reset; those inputs are not in the depth-2 cone and
+  not in depth 3 either, so the text now says what the labels say (opcode bits,
+  T-states, the two store-data latches) and names the ready interlock as a fact
+  that is deliberately *not* in the picture.
+- **Registers are only meaningful at instruction boundaries**, and the walk
+  says so with an example from its own data: X reads a value mid-store that it
+  never held, because it is a dynamic node with the bus driving past it.
+
 ### The circuit idioms, counted (`tools/export-idioms.py`, `docs/idioms.md`)
 
 The other half of the atlas: the atlas says *where* a part is, this says *what

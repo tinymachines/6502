@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="sch-svg" role="img" aria-label="Gate-level schematic" viewBox="0 0 284.2 144" width="284.2" height="144"><style>.sch-stage{overflow: auto; background: #080c15; padding: .5rem; max-height: 68vh;}
+.sch-caption{margin: 0; padding: .5rem 1rem; font-size: .7rem; color: #9fb3cc; border-top: 2px solid #3d5573;}
+.sch-wire{stroke: #43506b; stroke-width: 1.6; fill: none;}
+.sch-body{fill: #17203a; stroke: #22d3ee; stroke-width: 1.6;}
+.sch-bubble{fill: #080c15; stroke: #22d3ee; stroke-width: 1.6;}
+.sch-kind{fill: #cfe3ff; font: 600 9px "SFMono-Regular", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace; text-anchor: middle;}
+.sch-dynamic .sch-body{stroke: #f0a500;}
+.sch-dynamic .sch-bubble{stroke: #f0a500;}
+.sch-sw-lead{stroke: #43506b; stroke-width: 1.6;}
+.sch-sw-plate{stroke: #7f8db0; stroke-width: 2;}
+.sch-sw-gate{stroke: #7f8db0; stroke-width: 1.4; stroke-dasharray: 2 2;}
+.sch-switch.open .sch-sw-plate, .sch-switch.open .sch-sw-gate{stroke: #22d3ee;}
+.sch-ctrl{fill: #8fa3c8; font: 500 8.5px "SFMono-Regular", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace; text-anchor: middle;}
+.sch-ctrl:hover{fill: #22d3ee;}
+.sch-pill{fill: #101829; stroke: inherit; stroke-width: 1.4;}
+.sch-node{cursor: pointer;}
+.sch-node:hover .sch-pill{stroke: #22d3ee;}
+.sch-node.root .sch-pill{stroke: #22d3ee; stroke-width: 2.2; fill: #14243c;}
+.sch-node.anon .sch-pill{stroke-dasharray: 3 2;}
+.sch-node.hot .sch-pill{fill: #1d3b57; stroke: #6fd3ff;}
+.sch-name{fill: #dce9ff; font: 500 10px "SFMono-Regular", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace; text-anchor: middle;}
+.sch-node.anon .sch-name{fill: #7e8db0;}
+.sch-compare{display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; padding: .8rem 1rem; border-top: 2px solid #3d5573; font-size: .8rem;}
+.sch-cmp-label{color: #9fb3cc;}
+.sch-differ{color: #ffd166;}
+.sch-same{color: #6ee7a8;}
+.sch-rail{stroke: #6b7a99; stroke-width: 2.4;}
+.sch-rail-label{fill: #6b7a99; font: 500 8.5px "SFMono-Regular", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace; text-anchor: middle;}
+.sch-keybox{border-top: 2px solid #3d5573; padding: .7rem 1rem 1rem;}
+.sch-keybox > summary{cursor: pointer; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: #9fb3cc;}
+.sch-keybox > summary:hover{color: #22d3ee;}
+.sch-key{display: grid; gap: .5rem; margin-top: .7rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));}
+.sch-key-item{display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: .5rem; align-items: center; margin: 0; padding: .35rem .45rem; background: #1a2740; border: 2px solid #3d5573; border-radius: 2px;}
+.sch-key-svg{width: 70px; height: 44px; background: #080c15; border-radius: 2px;}
+.sch-key-item figcaption{display: grid; gap: .1rem; min-width: 0;}
+.sch-key-item b{font-size: .76rem;}
+.sch-key-item span{font-size: .68rem; color: #9fb3cc;}
+.sch-key-note{margin: .8rem 0 0; font-size: .74rem; color: #9fb3cc;}
+.sch-sig-name{margin: 0 0 .5rem; font-family: "SFMono-Regular", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace; font-size: .95rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline;}
+.sch-sig-id{font-size: .64rem; color: #9fb3cc; font-weight: 400;}
+.sch-compare{display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; align-items: center;}
+.sch-cmp-label, .sch-compare .btn{grid-column: 1 / -1;}
+.sch-compare .muted{display: none;}
+.sch-key{grid-template-columns: minmax(0, 1fr);}
+.sch-stage{max-height: 56vh;}
+.sch-cmp-sep{color: #9fb3cc; font-size: .74rem;}
+.sch-el.cmp-differs .sch-sw-plate, .sch-el.cmp-differs .sch-sw-gate{stroke: #ffd166;}
+.sch-el.cmp-differs .sch-sw-lead{stroke: #ffd166;}
+.sch-bench-card{fill: rgba(34, 211, 238, .055); stroke: rgba(34, 211, 238, .22); stroke-width: 2; pointer-events: none;}
+.sch-dir{display: flex; gap: .3rem;}
+.sch-dir-btn{flex: 1; min-width: 0; font: inherit; font-size: .74rem; padding: .35rem .5rem; cursor: pointer; color: #9fb3cc; background: #1a2740; border: 2px solid #3d5573; border-radius: .25rem; white-space: nowrap;}
+.sch-dir-btn:hover{color: #22d3ee;}
+.sch-dir-btn.on{color: #22d3ee; border-color: #22d3ee;}
+.sch-dir-btn[disabled]{opacity: .38; cursor: default;}
+.sch-dir-btn[disabled]:hover{color: #9fb3cc;}
+.sch-blockkey{display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem; margin: .1rem 0 .8rem; font-family: "SFMono-Regular", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace; font-size: .68rem;}
+.sch-blockkey-label{color: #9fb3cc; letter-spacing: .1em; text-transform: uppercase; font-size: .6rem; font-weight: 700;}
+.sch-blockkey-item{display: inline-flex; align-items: center; gap: .35rem; color: #9fb3cc;}
+.sch-blockkey-item i{width: .7rem; height: .7rem; border-radius: 2px; display: inline-block; box-shadow: 0 0 0 1px rgba(0, 0, 0, .5) inset;}
+.sch-node.pin .sch-pill{stroke: #7dd3fc; stroke-width: 2.2; fill: #2a2210;}
+.sch-node.pin .sch-name{fill: #7dd3fc; font-weight: 700;}
+.sch-pinio{font-size: .8rem;}
+.sch-node.port .sch-pill{stroke-dasharray: 4 2; opacity: .85;}
+.sch-node.port{cursor: default;}
+.sch-node.logic .sch-pill{fill: #0a1120; stroke-dasharray: 2 2;}
+.sch-port-label{fill: #7e8db0; font: 500 7.5px "SFMono-Regular", "SF Mono", ui-monospace, Consolas, "Liberation Mono", monospace; text-anchor: middle;}</style><rect x="-2" y="-2" width="288.2" height="148" fill="#0b1120"/><g class="sch-cam"><g class="sch-graph"><g class="sch-wires"><path d="M 63 82 H 87 L 101 56" class="sch-wire" data-from="1033"></path><path d="M 137 56 H 173 M 173 56 V 82 H 171" class="sch-wire"></path><path d="M 75 108 H 101" class="sch-wire"></path><line x1="75" y1="100" x2="75" y2="116" class="sch-rail"></line><path d="M 137 108 H 173 M 173 108 V 82 H 171" class="sch-wire"></path></g><g class="sch-parts"><g class="sch-el sch-gate sch-dynamic"><path d="M 101 40 L 101 72 L 127 56 Z" class="sch-body"></path><circle cx="132" cy="56" r="5" class="sch-bubble"></circle><text x="110" y="60" class="sch-kind">φ</text></g><g class="sch-el sch-switch open" data-control="241"><line x1="105" y1="108" x2="115" y2="108" class="sch-sw-lead"></line><line x1="123" y1="108" x2="133" y2="108" class="sch-sw-lead"></line><line x1="115" y1="99" x2="115" y2="117" class="sch-sw-plate"></line><line x1="123" y1="99" x2="123" y2="117" class="sch-sw-plate"></line><line x1="119" y1="88" x2="119" y2="99" class="sch-sw-gate"></line></g><g class="sch-node root hot" data-node="1015" transform="translate(264.2,82)" data-block="4" style="--block: rgb(209 107 255);"><rect x="-93.19999999999999" y="-11" width="93.19999999999999" height="22" rx="3" class="sch-pill"></rect><text x="-46.599999999999994" y="4" class="sch-name">dpc21_ADDADL</text></g><g class="sch-node anon" data-node="1033" transform="translate(67,82)" data-block="13" style="--block: rgb(148 140 179);"><rect x="-47" y="-11" width="47" height="22" rx="3" class="sch-pill"></rect><text x="-23.5" y="4" class="sch-name">#1033</text></g></g><g class="sch-labels"><text x="119" y="32" class="sch-ctrl">pre #241</text><text x="75" y="124" class="sch-rail-label">Vcc</text><text x="119" y="84" class="sch-ctrl" data-node="241" style="cursor: pointer;">#241</text></g></g></g></svg>

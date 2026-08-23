@@ -13,6 +13,8 @@ fails its own checks.
 | [`atlas.md`](atlas.md) | the address rubric, and an entry per container | **generated** |
 | [`atlas-matrix.svg`](atlas-matrix.svg) | the whole chip as a 132 x 132 container matrix | **generated** |
 | [`idioms.md`](idioms.md) | how the chip is built: the recurring circuit patterns, counted | **generated** |
+| [`walk-snake.md`](walk-snake.md) | one Snake instruction followed through the silicon, with schematics | **generated** |
+| [`walk/`](walk) | the schematics that walk uses, pulled from the live page | **generated** |
 | [`elk/`](elk) | two sample ELK layouts; the other 130 are generated | sample committed |
 | [`atlas-elk.zip`](atlas-elk.zip) | a reviewer's own ELK layout of the atlas, with their findings | received |
 | [`findings-answers.md`](findings-answers.md) | the engine side of the Halfwave Lab review | written |
@@ -84,6 +86,20 @@ The findings that carry the most teaching weight, all measured:
   constrains. The PLA does not know what an instruction is; it matches
   patterns, and every pattern it can match, it will.
 
+## The series
+
+[`walk-snake.md`](walk-snake.md) is part one of a series on writing a game for a
+chip you can see inside. It takes one instruction out of the real Snake ROM
+(`STA $0400,X`, the screen clear), follows it through five cycles, and sets the
+vocabulary on the way: RAM against ROM, gates against dynamic nodes against
+paths, the address rubric, and how a player's keypress actually arrives.
+
+Everything in it is measured by running Snake on the simulation, and the
+schematics are **pulled from the live schematic page** rather than drawn again,
+because a second drawing of an NMOS gate would eventually draw it differently.
+
+The remaining parts are listed at the end of that document.
+
 ## Regenerating
 
 ```bash
@@ -92,6 +108,8 @@ The findings that carry the most teaching weight, all measured:
 python3 tools/export-atlas-doc.py        # -> docs/atlas.md
 python3 tools/export-atlas-matrix.py     # -> docs/atlas-matrix.svg
 python3 tools/export-idioms.py           # -> docs/idioms.md
+python3 tools/export-walk.py             # -> docs/walk-snake.md + docs/walk/*.svg
+#   needs target/release/halfwave and a browser; FRESH=1 re-grabs the SVGs
 
 # the 132 container diagrams -> web/chip-elk/ (generated, gitignored)
 cd tools/chip-elk && npm install elkjs && bash run.sh
