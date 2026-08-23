@@ -8,6 +8,7 @@
 #   scripts/deploy.sh all             everything
 #   scripts/deploy.sh --verify        check what is live, publish nothing
 #   scripts/deploy.sh --dry-run       print the steps, run none of them
+#   scripts/deploy.sh --direct        skip systemd, run deploy/deploy.sh here
 #
 # This ORCHESTRATES; it does not duplicate. The build itself is
 # `deploy/deploy.sh`, run through its systemd unit so it gets that unit's
@@ -21,13 +22,16 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST="${HOST:-6502.tinymachines.ai}"
+SITE_DIR="${SITE_DIR:-/var/www/6502.tinymachines.ai}"
+SUDO_OK=0
 cd "$REPO"
 
-DRY=0; ONLY_VERIFY=0; TARGETS=()
+DRY=0; ONLY_VERIFY=0; DIRECT=0; TARGETS=()
 for a in "$@"; do
   case "$a" in
     --dry-run) DRY=1 ;;
     --verify)  ONLY_VERIFY=1 ;;
+    --direct)  DIRECT=1 ;;
     -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     all)       TARGETS=(site api archive games lab) ;;
     site|api|archive|games|lab) TARGETS+=("$a") ;;
@@ -76,6 +80,22 @@ preflight() {
     || note "note: no archive/wiki-raw, so the wiki check will SKIP"
   [ -f reference/mcs6500_family_programming_manual.pdf ] \
     || note "note: no reference/ manual, so the timing check will SKIP"
+
+  # The one privileged thing here is systemctl. Probe it rather than
+  # discovering it as a password prompt with no terminal to type into, which
+  # is a hang that looks exactly like a slow build.
+  if sudo -n true 2>/dev/null; then
+    SUDO_OK=1; note "sudo works without a password"
+  else
+    SUDO_OK=0
+    note "NOTE: sudo needs a password here, and this may have no terminal."
+    note "      The site publishes fine without it: $SITE_DIR is owned by"
+    note "      $(whoami), which is the user the unit runs as anyway. Falling"
+    note "      back to running deploy/deploy.sh directly."
+    note "      The API restart DOES need sudo and will be skipped; run"
+    note "      'sudo systemctl restart 6502-api' yourself afterwards."
+    DIRECT=1
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -83,6 +103,18 @@ preflight() {
 # and its exit status is the build's.
 # ---------------------------------------------------------------------------
 deploy_site() {
+  if [ "$DIRECT" = 1 ]; then
+    say "site: deploy/deploy.sh (direct, no systemd)"
+    # Worth knowing which one ran. The unit is the environment production
+    # actually uses -- a minimal PATH, PrivateTmp, a 1800s timeout -- and this
+    # shell is richer than that. A bug that only bites under systemd (the
+    # node-v12 trap this repo has already paid for) can hide here.
+    note "NOTE: a richer environment than the unit's, so an env-dependent"
+    note "      failure could hide. Prefer the unit when sudo is available."
+    if [ "$DRY" = 1 ]; then note "would run: deploy/deploy.sh"; return 0; fi
+    deploy/deploy.sh || { say "site: DEPLOY FAILED"; exit 1; }
+    return 0
+  fi
   say "site: sudo systemctl start 6502-deploy"
   note "this builds wasm and the geometry; a cold build is a couple of minutes"
   if [ "$DRY" = 1 ]; then note "would run: sudo systemctl start 6502-deploy"; return 0; fi
@@ -97,6 +129,12 @@ deploy_site() {
 # The API holds groups.json and the atlas exporter's output in memory, so a
 # deploy that changed either is not live until this runs.
 restart_api() {
+  if [ "$SUDO_OK" != 1 ] && [ "$DRY" != 1 ]; then
+    say "api: SKIPPED, needs sudo"
+    note "run: sudo systemctl restart 6502-api"
+    note "until then the API keeps serving the groups.json it started with"
+    return 0
+  fi
   say "api: sudo systemctl restart 6502-api"
   run sudo systemctl restart 6502-api
   [ "$DRY" = 1 ] && return 0
