@@ -165,6 +165,12 @@ node tools/golden-trace/gen.js --steps 3000
 # ...without it the golden test SKIPS. Set V6502_REQUIRE_GOLDEN=1 to make its
 # absence a failure instead (use this in CI).
 
+# The data-free wasm build ships no die data. Fast: it reads the dependency
+# tree, and checks a built bundle only if one is lying around.
+python3 tools/check-wasm-nodata.py
+wasm-pack build crates/v6502-wasm --target nodejs --out-dir /tmp/pkg-nodata \
+  -- --no-default-features
+
 # One engine, two ways in: a machine crossing between the browser and the API.
 # SKIPS without a nodejs-target build; REQUIRE_WASM=1 makes that a failure.
 wasm-pack build crates/v6502-wasm --target nodejs --out-dir /tmp/pkg-node
@@ -1413,6 +1419,52 @@ into an RGBA8 framebuffer (id low byte in R, high byte in G, layer in B, alpha a
 "something is here") and `readPixels` reads one pixel. It is only re-rendered when
 the *camera* moves — node IDs are geometry, so a running chip does not invalidate
 it.
+
+### Two builds of the wasm crate, and why the die data is a feature
+
+`v6502-wasm` builds two ways. **Two builds of one crate rather than two
+crates**, for the reason every shared module here exists: a second copy of the
+bindings would drift, and a reader comparing them would have no way to tell
+which was lying.
+
+| | | |
+|---|---|---|
+| default | **117 KB**, embeds `netlist.bin` | what the site ships. Carries **CC BY-NC-SA** |
+| `--no-default-features` | **85 KB**, embeds nothing | can be **MIT**, like `halfphi`. Takes a netlist at runtime |
+
+The 32,628-byte blob is derived from the die data, so it drags NonCommercial
+and ShareAlike into anything that ships it, whatever the code's licence file
+says. A published JavaScript package that wants to be MIT must therefore
+embed none, which is the whole point of the split.
+
+- **The split was shallower than it looked.** `v6502-sim` embeds nothing
+  itself, and `Cpu::new(netlist, bus)` already took a netlist. The only ties
+  were `mos6502()` and two modules importing `Netlist` and `NodeId` from
+  `v6502-netlist`, which **re-exports them from halfphi anyway**. Naming the
+  original means `cpu.rs` and `timing.rs` compile with no die data near them.
+- **`Machine.fromNetlist(bytes)`** is the data-free constructor. The format is
+  halfphi's own, magic `HALFPHI1`, and `Netlist::decode` refuses anything else
+  rather than building a chip out of the wrong bytes. It is not 6502-specific,
+  though the clock and bus layer around it expects a 6502's signal names.
+- **Every binary and example in `v6502-sim` declares
+  `required-features = ["mos6502"]`.** They call `mos6502()` or `boot()`, so
+  without that declaration `--no-default-features` builds the library fine and
+  then fails compiling tools that cannot work without a chip.
+- **`tools/check-wasm-nodata.py` is the guard, and it needs to exist.** This
+  property regresses silently: somebody adds a convenience, reaches for
+  `mos6502()`, the dependency comes back, and nothing fails. The build works,
+  the tests pass, and the package has quietly stopped being MIT. The check
+  reads the dependency tree, which is fast and catches it at the source, and
+  **also asserts the crate IS present with the feature** so it cannot pass on
+  a workspace where the crate was simply deleted.
+- **Proof it works rather than merely compiles:** the data-free bundle, handed
+  `netlist.bin` at runtime, reports 1725 nodes and 3510 transistors and
+  reaches the project witness, A=$42 and `$0082`=$42 at half-cycle 41.
+- **`new Machine()` on the data-free build returns an empty JS object rather
+  than throwing**, because wasm-bindgen classes are plain JS classes and there
+  is no constructor in the generated glue. Using it throws `null pointer
+  passed to rust`. That looked like a leak and is not one; the binary carries
+  no `HALFPHI1` and the dependency tree has no `v6502-netlist` in it.
 
 ### The machine as a value, in the browser too
 

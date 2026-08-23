@@ -41,7 +41,17 @@ pub mod history;
 pub mod state;
 pub mod timing;
 
-pub use v6502_netlist::{mos6502, Netlist, NodeId, TransId};
+// The types are halfphi's and always available; only the chip is optional.
+pub use halfphi::netlist::{Netlist, NodeId, TransId};
+
+/// The 6502's own netlist, decoded from die data embedded at build time.
+///
+/// Behind the default `mos6502` feature, because that data is CC BY-NC-SA and
+/// travels into anything that ships it. Without the feature this crate is a
+/// clock, a bus and a timing readout with no chip in them, and a netlist
+/// arrives through `Cpu::new` from wherever the caller got one.
+#[cfg(feature = "mos6502")]
+pub use v6502_netlist::mos6502;
 
 pub use bus::{Bus, FlatMemory};
 pub use cpu::{BusState, Cpu, CycleState, ReadWrite, Registers, Signals};
@@ -51,11 +61,16 @@ pub use halfphi::engine::{ChipState, Drive, Engine, Stats};
 pub use history::{History, RewindError};
 pub use timing::{Hidden, Phase, StoreData, TimingState};
 
+#[cfg(feature = "mos6502")]
 use std::sync::Arc;
 
 /// Build a 6502 attached to 64 KiB of RAM, with `program` loaded at
 /// `load_addr` and the reset vector pointing at it. Already reset and ready to
 /// step.
+///
+/// Needs the `mos6502` feature: it is the embedded netlist that makes this a
+/// one-line convenience rather than a two-line one.
+#[cfg(feature = "mos6502")]
 pub fn boot(load_addr: u16, program: &[u8]) -> Cpu<FlatMemory> {
     let mut mem = FlatMemory::new();
     mem.load(load_addr, program);

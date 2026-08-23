@@ -4,6 +4,48 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+# On by default, so every existing caller is unaffected. Turning it OFF drops
+# `v6502-netlist`, and with it the only thing in this workspace that embeds
+# die data: `netlist.bin`, which is derived from CC BY-NC-SA material and
+# carries NonCommercial and ShareAlike into anything that ships it. A build
+# without this feature has no chip in it and takes a netlist at runtime, which
+# is what lets a WebAssembly package be MIT the way `halfphi` is.
+default = ["mos6502"]
+mos6502 = ["dep:v6502-netlist"]
+
 [dependencies]
 halfphi = { path = "../halfphi" }
-v6502-netlist = { path = "../v6502-netlist" }
+v6502-netlist = { path = "../v6502-netlist", optional = true }
+
+# Every binary and example here is about the 6502 specifically: they call
+# `mos6502()` or `boot()`, which only exist with the die data. Declaring that
+# is what lets `--no-default-features` build the library without trying to
+# build tools that cannot work without a chip.
+[[bin]]
+name = "halfwave"
+required-features = ["mos6502"]
+
+[[bin]]
+name = "export-decode"
+required-features = ["mos6502"]
+
+[[bin]]
+name = "export-timing"
+required-features = ["mos6502"]
+
+[[example]]
+name = "bench"
+required-features = ["mos6502"]
+
+[[example]]
+name = "benchmarks"
+required-features = ["mos6502"]
+
+[[example]]
+name = "activity"
+required-features = ["mos6502"]
+
+[[example]]
+name = "trace"
+required-features = ["mos6502"]

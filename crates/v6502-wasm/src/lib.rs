@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use v6502_sim::state::{self, MachineState};
-use v6502_sim::{bus::FlatMemory, cpu::Cpu, cpu::Fetch, history::History, mos6502, ReadWrite};
+use v6502_sim::{bus::FlatMemory, cpu::Cpu, cpu::Fetch, history::History, ReadWrite};
 use wasm_bindgen::prelude::*;
 
 /// A 6502 with 64 KiB of RAM and a rewind buffer.
@@ -29,12 +29,39 @@ pub struct Machine {
 impl Machine {
     /// Build a machine with the embedded 6502 netlist. Not yet reset -- load a
     /// program and set the reset vector first.
+    ///
+    /// Only in the default build. A build without the `mos6502` feature
+    /// embeds no die data and has no chip to construct from: use
+    /// [`Machine::from_netlist`].
+    #[cfg(feature = "mos6502")]
     #[wasm_bindgen(constructor)]
     pub fn new() -> Machine {
-        let netlist = Arc::new(mos6502());
+        Machine::with(std::sync::Arc::new(v6502_sim::mos6502()))
+    }
+
+    /// Build a machine from a netlist supplied at runtime.
+    ///
+    /// This is the constructor a package that ships **no die data** has, and
+    /// the reason it can be MIT: the 32 KB blob is CC BY-NC-SA and travels
+    /// into anything that embeds it, so a caller fetches it and passes it in
+    /// rather than receiving it inside the bundle. The format is halfphi's
+    /// own, magic `HALFPHI1`, and `Netlist::decode` refuses anything else
+    /// rather than building a chip out of the wrong bytes.
+    ///
+    /// It is not 6502-specific. Any netlist halfphi can decode works, though
+    /// the clock and bus layer around it expects a 6502's signal names and
+    /// will refuse a chip that lacks them.
+    #[wasm_bindgen(js_name = fromNetlist)]
+    pub fn from_netlist(blob: &[u8]) -> Result<Machine, JsError> {
+        let netlist = halfphi::netlist::Netlist::decode(blob)
+            .map_err(|e| JsError::new(&format!("netlist: {e:?}")))?;
+        Ok(Machine::with(std::sync::Arc::new(netlist)))
+    }
+
+    fn with(netlist: Arc<v6502_sim::Netlist>) -> Machine {
         let node_count = netlist.node_count();
         let cpu = Cpu::new(netlist, FlatMemory::new())
-            .expect("embedded netlist has every required signal");
+            .expect("netlist has every required signal");
         Machine {
             cpu,
             // 256 keyframes at stride 16 => 4096 half-cycles of scrubbable
@@ -467,6 +494,8 @@ impl Machine {
     }
 }
 
+/// A default only exists where there is a chip to default to.
+#[cfg(feature = "mos6502")]
 impl Default for Machine {
     fn default() -> Self {
         Self::new()
@@ -474,8 +503,21 @@ impl Default for Machine {
 }
 
 /// Netlist facts, available without constructing a machine.
+///
+/// Needs the embedded chip, for the obvious reason: without the `mos6502`
+/// feature there is no netlist here to report on until a caller supplies one.
+#[cfg(feature = "mos6502")]
 #[wasm_bindgen(js_name = netlistInfo)]
 pub fn netlist_info() -> String {
-    let nl = mos6502();
+    let nl = v6502_sim::mos6502();
     format!("{} nodes, {} transistors", nl.node_count(), nl.transistor_count())
+}
+
+/// The same facts for a netlist the caller already has, so the no-data build
+/// is not silent about what it was handed.
+#[wasm_bindgen(js_name = netlistInfoOf)]
+pub fn netlist_info_of(blob: &[u8]) -> Result<String, JsError> {
+    let nl = halfphi::netlist::Netlist::decode(blob)
+        .map_err(|e| JsError::new(&format!("netlist: {e:?}")))?;
+    Ok(format!("{} nodes, {} transistors", nl.node_count(), nl.transistor_count()))
 }

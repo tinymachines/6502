@@ -7,7 +7,19 @@ license.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# Two builds of one crate, rather than two crates that drift.
+#
+#   default            embeds the 6502's die data. What the site ships, and
+#                      what carries CC BY-NC-SA with it.
+#   --no-default-...   no die data at all. `Machine.fromNetlist(bytes)` takes
+#                      one at runtime, which is what lets the published
+#                      package be MIT the way `halfphi` is.
+default = ["mos6502"]
+mos6502 = ["v6502-sim/mos6502"]
+
 [dependencies]
 wasm-bindgen = "0.2.127"
+halfphi = { path = "../halfphi" }
 
-v6502-sim = { path = "../v6502-sim" }
+v6502-sim = { path = "../v6502-sim", default-features = false }

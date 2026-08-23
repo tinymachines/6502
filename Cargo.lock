@@ -125,6 +125,7 @@ dependencies = [
 name = "v6502-wasm"
 version = "0.1.0"
 dependencies = [
+ "halfphi",
  "v6502-sim",
  "wasm-bindgen",
 ]

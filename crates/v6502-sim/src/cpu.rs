@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use v6502_netlist::{Netlist, NodeId};
+use halfphi::netlist::{Netlist, NodeId};
 
 use crate::bus::Bus;
 use halfphi::engine::Engine;

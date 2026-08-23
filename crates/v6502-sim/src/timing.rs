@@ -9,7 +9,7 @@
 //! numbers, which have no entry in the name table:
 //! <http://visual6502.org/wiki/index.php?title=6502_Timing_States>
 
-use v6502_netlist::{Netlist, NodeId};
+use halfphi::netlist::{Netlist, NodeId};
 
 /// Node 862 is the internal T1 state -- active while the *next* instruction's
 /// first cycle overlaps the current one's last.
