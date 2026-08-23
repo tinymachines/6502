@@ -167,12 +167,57 @@ they are not a special case in the silicon. They are the absence of one.
 
 ## 7. Eight of everything, except where it matters
 
-The datapath is eight copies of one bit slice, and the exceptions are where
-the design is. Bit 7 of the special bus has its own control line
-(`dpc19_ADDSB7`) where bits 0 to 6 share one (`dpc20_ADDSB06`): that split
-**is** the shifter. The address bus high byte carries constant generators on
-two bits only, which is how `$00` and `$01` reach it for zero-page and stack
-addressing.
+The datapath is eight copies of one bit slice. **The exceptions are where
+the design is**, so here is every one of them, found by comparing the eight
+bits of each measured bus and reporting any that differs from its siblings.
+Nothing in this list was looked up.
+
+| bus | bit | how it differs from its siblings |
+|---|---|---|
+| `ab` | 0 | its gate has 3 pulldown legs where the others have 4 |
+| `adl` | 0 | driven by a dynamic where the others are bus |
+| `adl` | 1 | driven by a dynamic where the others are bus |
+| `adl` | 2 | driven by a dynamic where the others are bus |
+| `alu` | 7 | reached by `dpc19_ADDSB7` and they are not; **not** reached by `dpc20_ADDSB06` |
+| `db` | 1 | its gate has 8 pulldown legs where the others have 9 |
+| `db` | 3 | its gate has 8 pulldown legs where the others have 9 |
+| `db` | 5 | its gate has 8 pulldown legs where the others have 9 |
+| `db` | 7 | its gate has 5 pulldown legs where the others have 9 |
+| `idb` | 5 | **not** reached by `H1x1` |
+| `p` | 5 | **does not exist** |
+| `p` | 4 | driven by an inverter where the others are bus; reached by `H1x1` and they are not; **not** reached by `cp1` |
+| `sb` | 0 | reached by `dpc23_SBAC` and they are not |
+| `sb` | 4 | reached by `dpc23_SBAC` and they are not |
+| `sb` | 7 | reached by `dpc19_ADDSB7` and they are not; **not** reached by `dpc20_ADDSB06` |
+
+**15 exceptions across 24 buses.** Four are worth reading closely,
+because each is a whole feature of the instruction set showing up as one
+wire that is not like its neighbours.
+
+**The shifter.** Bit 7 of `sb` and of `alu` is opened by `dpc19_ADDSB7`
+where bits 0 to 6 share `dpc20_ADDSB06`. Two control lines instead of one,
+for the one bit that has to be treated separately when a value is rotated.
+
+**The decimal adjust.** `sb0` and `sb4` reach the accumulator directly under
+`dpc23_SBAC`; the other six bits do not, and the die has a second set of
+wires named `dasb` for exactly those six. BCD correction adds six, which is
+`0110` in binary, so **bits 0 and 4 can never change** and the designers did
+not run them through the adjusting circuit. The instruction set's decimal
+mode is visible as two wires taking a shortcut.
+
+**The interrupt vectors.** `adl0`, `adl1` and `adl2` are driven by gates
+named `0/ADL0..2`; every other bit of that bus is a pure wire nothing
+drives. Three bits, because the six vector addresses a 6502 can fetch
+(`$FFFA` and `$FFFB` for NMI, `$FFFC` and `$FFFD` for reset, `$FFFE` and
+`$FFFF` for IRQ and BRK) **differ only in their low three bits**. The rest
+of the address is all ones and can come from anywhere; the part that
+selects which interrupt you are taking is exactly three wires.
+
+**The flag that is not stored.** `p` has no bit 5, and `idb5` is the only
+data bus bit that `H1x1` does not reach. `H1x1` is the line that puts the
+status register on the bus, and it cannot put a bit there that does not
+exist. Bit 4 of `p` is odd too: an inverter rather than storage, because B
+is not a stored flag at all but a reading of why the chip is pushing P.
 
 > **Why (authored).** Regularity is free to lay out and free to verify. So
 > you build eight identical slices and then spend your cleverness on the

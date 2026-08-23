@@ -253,12 +253,82 @@ w("> already built. **When the answer is 'do nothing special', that is usually")
 w("> what the silicon does.**\n")
 
 w("## 7. Eight of everything, except where it matters\n")
-w("The datapath is eight copies of one bit slice, and the exceptions are where")
-w("the design is. Bit 7 of the special bus has its own control line")
-w("(`dpc19_ADDSB7`) where bits 0 to 6 share one (`dpc20_ADDSB06`): that split")
-w("**is** the shifter. The address bus high byte carries constant generators on")
-w("two bits only, which is how `$00` and `$01` reach it for zero-page and stack")
-w("addressing.\n")
+w("The datapath is eight copies of one bit slice. **The exceptions are where")
+w("the design is**, so here is every one of them, found by comparing the eight")
+w("bits of each measured bus and reporting any that differs from its siblings.")
+w("Nothing in this list was looked up.\n")
+
+import re as _re
+stems = set()
+for _nm in names:
+    if not _nm: continue
+    m = _re.match(r"^([A-Za-z]+)0$", _nm)
+    if m and not m.group(1).startswith("not") and \
+       sum(1 for b in range(8) if (m.group(1) + str(b)) in set(x for x in names if x)) >= 7:
+        stems.add(m.group(1))
+have_name = {x: i for i, x in enumerate(names) if x}
+def bitsig(n):
+    g = gate.get(n, ("bus", None))
+    prof = tuple(sorted((len(x) for x in legs[n]), reverse=True)) if n in legs else ()
+    ctl = tuple(sorted({names[c] for o, c in sw.get(n, []) if names[c]}))
+    return (g[0], prof, ctl)
+
+w("| bus | bit | how it differs from its siblings |")
+w("|---|---|---|")
+nexc = 0
+for st in sorted(stems):
+    got = {b: have_name[st + str(b)] for b in range(8) if (st + str(b)) in have_name}
+    if len(got) < 7: continue
+    sigs = {b: bitsig(i) for b, i in got.items()}
+    modal = Counter(sigs.values()).most_common(1)[0][0]
+    miss = [b for b in range(8) if b not in got]
+    odd = [b for b in sorted(sigs) if sigs[b] != modal]
+    if not odd and not miss: continue
+    for b in miss:
+        w("| `%s` | %d | **does not exist** |" % (st, b)); nexc += 1
+    base = set(modal[2])
+    for b in odd:
+        g, prof, ctl = sigs[b]
+        parts = []
+        if g != modal[0]:
+            art = "an" if g[0] in "aeiou" else "a"
+            parts.append("driven by %s %s where the others are %s" % (art, g, modal[0]))
+        elif prof != modal[1]:
+            # Same kind, different pulldown network. The leg count IS the
+            # difference, so saying only the kind ("a dynamic where the others
+            # are dynamic") reports a difference and then hides it.
+            parts.append("its gate has %d pulldown legs where the others have %d"
+                         % (len(prof), len(modal[1])))
+        add, sub = sorted(set(ctl) - base), sorted(base - set(ctl))
+        if add: parts.append("reached by `%s` and they are not" % "`, `".join(add))
+        if sub: parts.append("**not** reached by `%s`" % "`, `".join(sub))
+        w("| `%s` | %d | %s |" % (st, b, "; ".join(parts))); nexc += 1
+w("")
+w("**%d exceptions across %d buses.** Four are worth reading closely,"
+  % (nexc, len(stems)))
+w("because each is a whole feature of the instruction set showing up as one")
+w("wire that is not like its neighbours.\n")
+w("**The shifter.** Bit 7 of `sb` and of `alu` is opened by `dpc19_ADDSB7`")
+w("where bits 0 to 6 share `dpc20_ADDSB06`. Two control lines instead of one,")
+w("for the one bit that has to be treated separately when a value is rotated.\n")
+w("**The decimal adjust.** `sb0` and `sb4` reach the accumulator directly under")
+w("`dpc23_SBAC`; the other six bits do not, and the die has a second set of")
+w("wires named `dasb` for exactly those six. BCD correction adds six, which is")
+w("`0110` in binary, so **bits 0 and 4 can never change** and the designers did")
+w("not run them through the adjusting circuit. The instruction set's decimal")
+w("mode is visible as two wires taking a shortcut.\n")
+w("**The interrupt vectors.** `adl0`, `adl1` and `adl2` are driven by gates")
+w("named `0/ADL0..2`; every other bit of that bus is a pure wire nothing")
+w("drives. Three bits, because the six vector addresses a 6502 can fetch")
+w("(`$FFFA` and `$FFFB` for NMI, `$FFFC` and `$FFFD` for reset, `$FFFE` and")
+w("`$FFFF` for IRQ and BRK) **differ only in their low three bits**. The rest")
+w("of the address is all ones and can come from anywhere; the part that")
+w("selects which interrupt you are taking is exactly three wires.\n")
+w("**The flag that is not stored.** `p` has no bit 5, and `idb5` is the only")
+w("data bus bit that `H1x1` does not reach. `H1x1` is the line that puts the")
+w("status register on the bus, and it cannot put a bit there that does not")
+w("exist. Bit 4 of `p` is odd too: an inverter rather than storage, because B")
+w("is not a stored flag at all but a reading of why the chip is pushing P.\n")
 w("> **Why (authored).** Regularity is free to lay out and free to verify. So")
 w("> you build eight identical slices and then spend your cleverness on the")
 w("> two or three places where identical is wrong. **Look for the exceptions;")

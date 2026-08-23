@@ -4729,6 +4729,28 @@ launders one into the other.
   **The line names come out in load/drive pairs** (`SBAC`/`ACSB`, `SBX`/`XSB`,
   `SBY`/`YSB`, `SSB`/`SBS`), which is Hanson's `SOURCE/DEST` convention
   falling out of the data.
+- **Every bit-slice exception is derived, and each one is a feature of the
+  instruction set showing up as a wire that is not like its neighbours.**
+  Comparing the eight bits of each measured bus finds **15 exceptions across
+  24 buses**, and four of them name themselves:
+  - **The shifter**: bit 7 of `sb` and `alu` is opened by `dpc19_ADDSB7` where
+    bits 0..6 share `dpc20_ADDSB06`.
+  - **The decimal adjust**: `sb0` and `sb4` reach the accumulator directly
+    under `dpc23_SBAC` and the other six bits do not, because BCD correction
+    adds `0110` and **bits 0 and 4 can never change**. `dasb` exists for
+    exactly the other six. Verified both ways before it was written down.
+  - **The interrupt vectors**: `adl0..2` are driven by `0/ADL0..2` where every
+    other bit of that bus is a pure wire. Three bits, because the six vector
+    addresses differ only in their low three.
+  - **The flag that is not stored**: `p` has no bit 5, and `idb5` is the only
+    data bus bit `H1x1` does not reach, because the status register cannot put
+    a bit on the bus that it does not have. `p4` is an inverter rather than
+    storage: B is a reading of why P is being pushed, not a stored flag.
+- **"Driven by a dynamic where the others are dynamic" is a bug in a
+  report, not a finding.** When two bits share a gate kind but differ in the
+  pulldown network, the leg count IS the difference; printing only the kind
+  announces a difference and then hides it.
+
 - **`LAX` is derived, not told.** `op-T0-lda` fires for 16 opcodes and
   `op-T0-ldx/tax/tsx` for 15; **both fire for exactly 8**, `$A3 $A7 $AB $AF
   $B3 $B7 $BB $BF`, every one with low two bits `11`, which is the bit neither
