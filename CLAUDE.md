@@ -243,6 +243,7 @@ MUTATE=1 python3 tools/check-dpc-vs-wiki.py     # the proof it can fail
 # fails. Reads the four web/*.json exports; run it after regenerating those.
 python3 tools/export-atlas-doc.py
 python3 tools/export-atlas-matrix.py            # -> docs/atlas-matrix.svg
+python3 tools/export-idioms.py                 # -> docs/idioms.md
 # (the whole chip as a 132 x 132 container matrix, ordered by measured hop
 #  distance from the pins. DIRECTED: cell (row a, col b) is the gate edges by
 #  which a drives b, so a pair bright in both triangles is feedback. 534 of
@@ -4699,6 +4700,53 @@ distance from an opcode's own fetch to the next one, both found by watching
   rather than guessed at. `tests/timing.rs` and `_timing-test.html` still cover
   their own hand-typed set, which is why that set is worth keeping rather than
   superseded.
+
+### The circuit idioms, counted (`tools/export-idioms.py`, `docs/idioms.md`)
+
+The other half of the atlas: the atlas says *where* a part is, this says *what
+shape* it is. A knowledge base of how the chip is BUILT, derived rather than
+recalled, for the eventual purpose of teaching somebody to think like a chip
+designer. Every count comes out of `web/*.json`; the one-line "why a designer
+would do this" on each idiom is authored and marked as such, the same split
+`block-notes.js` keeps, because mixing a reading in with a measurement
+launders one into the other.
+
+- **There is no AND gate and no OR gate anywhere on this die**, and the
+  technology's cost model is visible in the mix: **354 NORs against 39 NANDs**,
+  because parallel transistors are cheap and series ones are slow.
+- **The 386 storage nodes partition into six shapes**, and the generator
+  refuses to write unless they partition exactly: `latch` 236, `ring` 53,
+  `chain` 27, `mux` 25, `gated` 24, `precharge` 21. **The guard is checked
+  immediately after classification rather than at the end**, so a rule that
+  drops a node is caught by the claim it violates instead of by whatever
+  crashes first; mutation-proved by dropping five nodes.
+- **Every register bit is the same two-inverter ring broken by a switch, 53 of
+  53, all depth 2.** Four transistors where a static cell needs six, and the
+  price is the 6502's minimum clock: it forgets if you stop it. That
+  uniformity is the finding; nothing here asserted it.
+- **The widest wire is `sb0` with 12 sources**, each a pass transistor under
+  its own decode line, and the doc prints the list rather than summarising it.
+  **The line names come out in load/drive pairs** (`SBAC`/`ACSB`, `SBX`/`XSB`,
+  `SBY`/`YSB`, `SSB`/`SBS`), which is Hanson's `SOURCE/DEST` convention
+  falling out of the data.
+- **`LAX` is derived, not told.** `op-T0-lda` fires for 16 opcodes and
+  `op-T0-ldx/tax/tsx` for 15; **both fire for exactly 8**, `$A3 $A7 $AB $AF
+  $B3 $B7 $BB $BF`, every one with low two bits `11`, which is the bit neither
+  row constrains. The PLA does not know what an instruction is: it matches
+  patterns, and every pattern it can match, it will.
+
+- **Two motif detectors were wrong before they were right, both the same way.**
+  A hand-written detector for "the recirculating latch" found **3** instances
+  when the chip has 53, because it assumed the feedback arrives as a gate
+  input; on a storage node it arrives through a *switch*. The fix was not a
+  better guess: it was to dump one known instance (`a0`, `s0`, `pipeUNK01`),
+  read the shape off it, and write the detector from that. **Then classify
+  every node and require the shapes to partition**, so a leaky detector cannot
+  hide behind the ones that work.
+- **A mutation that only re-labels proves nothing.** The first attempt deleted
+  the `gated` branch, those nodes fell through to `chain`, the total still came
+  to 386 and the guard passed. Dropping nodes is the mutation that tests a
+  partition claim.
 
 ### The address rubric, and `docs/atlas.md`
 

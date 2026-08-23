@@ -12,6 +12,7 @@ fails its own checks.
 |---|---|---|
 | [`atlas.md`](atlas.md) | the address rubric, and an entry per container | **generated** |
 | [`atlas-matrix.svg`](atlas-matrix.svg) | the whole chip as a 132 x 132 container matrix | **generated** |
+| [`idioms.md`](idioms.md) | how the chip is built: the recurring circuit patterns, counted | **generated** |
 | [`elk/`](elk) | two sample ELK layouts; the other 130 are generated | sample committed |
 | [`atlas-elk.zip`](atlas-elk.zip) | a reviewer's own ELK layout of the atlas, with their findings | received |
 | [`findings-answers.md`](findings-answers.md) | the engine side of the Halfwave Lab review | written |
@@ -58,6 +59,31 @@ worth having and **neither is a picture of the die.**
   16-node clock generator, derived) and [`alu-bit3.svg`](elk/alu-bit3.svg)
   (one ALU bit slice).
 
+## How the chip is built
+
+[`idioms.md`](idioms.md) is the other half of the atlas. The atlas says *where*
+everything is; this says *what shape* it is and why a designer in 1975 would
+choose that shape. Every count is derived; the one-line "why" on each idiom is
+authored and marked as such, the same split `block-notes.js` keeps.
+
+The findings that carry the most teaching weight, all measured:
+
+- **There is no AND gate and no OR gate anywhere on this die.** NMOS builds an
+  inverted sum of products and nothing else, so the technology's cost model is
+  visible in the gate mix: 354 NORs against 39 NANDs, because series
+  transistors are slow and parallel ones are cheap.
+- **Every register bit is the same two-inverter ring with a switch in it**, 53
+  of 53, no exceptions. Four transistors instead of a static cell's six, and
+  the price is that the 6502 forgets if you stop the clock.
+- **The 386 storage nodes fall into six shapes and the generator refuses to
+  write unless they partition exactly.**
+- **The widest wire has 12 sources**, each a pass transistor with a decode line
+  of its own, and the line names come in load/drive pairs.
+- **`LAX` is derived, not asserted**: `op-T0-lda` and `op-T0-ldx/tax/tsx` both
+  match for exactly 8 opcodes, all with low bits `11`, the bit neither row
+  constrains. The PLA does not know what an instruction is; it matches
+  patterns, and every pattern it can match, it will.
+
 ## Regenerating
 
 ```bash
@@ -65,6 +91,7 @@ worth having and **neither is a picture of the die.**
 # if the die data or a derivation changed.
 python3 tools/export-atlas-doc.py        # -> docs/atlas.md
 python3 tools/export-atlas-matrix.py     # -> docs/atlas-matrix.svg
+python3 tools/export-idioms.py           # -> docs/idioms.md
 
 # the 132 container diagrams -> web/chip-elk/ (generated, gitignored)
 cd tools/chip-elk && npm install elkjs && bash run.sh
