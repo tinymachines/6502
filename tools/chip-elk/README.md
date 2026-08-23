@@ -62,6 +62,30 @@ one this ran into from the other end: *pruning is the readability knob, not
 algorithm tuning.* The median bundle carries one transistor and 381 of 534
 carry two or fewer.
 
+## All 132, as a set
+
+```bash
+bash tools/chip-elk/run.sh [outdir]      # 132 diagrams, about 40 seconds
+```
+
+Measured: **132 drawn, 0 failed, 1.8 MB total.** The median is **408 x 256px
+at 7.8 KB**, which is a diagram you can put on a page rather than a poster you
+have to pan around.
+
+The spread is the interesting part, because it is structural rather than
+arbitrary:
+
+| container | size | why |
+|---|---|---|
+| `irp:ir` | 5121 x 4364 | the instruction register feeds **all 122 product terms**, so its boundary is most of the decode PLA |
+| `stage:T0` | 2265 x 1451 | 33 terms, the largest decode stage |
+| `incr:pc` | 2035 x 1089 | 86 nodes, the biggest container there is |
+| `rest:0` | 76 x 80 | one node |
+
+A key can carry a slash (`alat:ADL/ABL`, `op-T2-ADL/ADD`), which is a directory
+separator to every filesystem, so the filename flattens `/` and `:` to `-` and
+the diagram keeps the real key.
+
 ## Notes
 
 - Rails are excluded, as everywhere here: `vss` and `vcc` touch hundreds of
