@@ -1284,6 +1284,15 @@ thing, WAL on so a publish does not block every reader while the chip runs.
     brightness to within 0.2 of 255** and differ only in hue. A luminance ramp
     therefore has three steps rather than four and throws the warm half of the
     palette away. Floyd-Steinberg in RGB keeps amber and cyan apart.
+- **The issuer's copy lives in `tools/keys.py`**, a SQLite store at
+  `~/.tinymachines/keys.db`, directory 700 and file 600. The registry is the
+  *verifier* and keeps no secrets; that is the other half, the issuer's
+  notebook, and it keeps nothing else. Losing it costs the ability to re-send
+  a token to whoever holds it and lets nobody in, because the registry
+  authenticates against its own hashes and never reads it. **SQLite has no
+  server**: it is a file and a lock, reachable by one account on one machine,
+  and putting credentials on a network port would be a different decision with
+  a different threat model.
 - **A token is shown once and never stored.** The table holds its SHA-256, so
   a copy of the database is not a copy of everybody's credentials; a lost
   token is re-minted, never recovered. An unknown token and a revoked one get
