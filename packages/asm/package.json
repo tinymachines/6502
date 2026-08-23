@@ -1,0 +1,24 @@
+{
+  "name": "@tinymachines/6502-asm",
+  "version": "0.1.0",
+  "description": "A 6502 assembler and disassembler. No die data, no dependencies, no chip.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Tiny Machines",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tinymachines/6502.git",
+    "directory": "packages/asm"
+  },
+  "exports": {
+    ".": "./dist/asm.js",
+    "./disasm": "./dist/disasm.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node build.mjs && node test.mjs",
+    "prepack": "node build.mjs && node test.mjs"
+  }
+}
