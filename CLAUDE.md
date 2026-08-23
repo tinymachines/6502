@@ -231,6 +231,11 @@ cargo build --release -p v6502-sim --bin halfwave
 python3 tools/check-dpc-vs-wiki.py
 MUTATE=1 python3 tools/check-dpc-vs-wiki.py     # the proof it can fail
 
+# The address rubric and an entry per container -> docs/atlas.md. Derives all
+# 8365 addresses, checks them, and refuses to write a document whose table
+# fails. Reads the four web/*.json exports; run it after regenerating those.
+python3 tools/export-atlas-doc.py
+
 # A halfshot export, checked cold: header, deltas replayed, rails pinned, every
 # access on its edge, reads against the program bytes and earlier writes, and
 # (with the JSON beside it) pins, units, switches and terms recomputed from the
@@ -4641,6 +4646,59 @@ distance from an opcode's own fetch to the next one, both found by watching
   rather than guessed at. `tests/timing.rs` and `_timing-test.html` still cover
   their own hand-typed set, which is why that set is worth keeping rather than
   superseded.
+
+### The address rubric, and `docs/atlas.md`
+
+Every node, transistor and wire gets exactly one address, and a prefix of one
+is a valid way to name the set beneath it. **8365 addresses: 1547 nodes, 3510
+transistors, 3308 wires**, all unique across the three namespaces.
+`tools/export-atlas-doc.py` derives them, checks them, and only then writes
+`docs/atlas.md` -- the rubric plus an entry per container. Nothing in that
+document is typed by hand, so it cannot drift from the derivations.
+
+```
+<container> : <class> : <slot>
+```
+
+- **Parse from the right.** Slot after the last colon, class before it,
+  container is the rest. A fixed field count does not work: container keys
+  contain colons (`alat:ADL/ABL`) and a bundle names two (`regs:a~sbus:sb`).
+- **The separator is measured, not chosen.** A colon appears in **zero** of the
+  die's 707 names, and `kind:id` is already the spelling everywhere here. `.`
+  is in 33 names and 14 keys and `/` in 47 and 5, so both were out.
+- **The class is the shape of the pulldown network, which in NMOS IS the
+  boolean function.** Legs in parallel are the ORs, series are the ANDs, the
+  pullup inverts: `aoi2.1` is `NOT((A AND B) OR C)`. **34 tokens** cover the
+  die and ten of them cover 90% of it.
+- **The slot is the die's own number, always, and that is the load-bearing
+  decision.** Every other field is a derivation, and derivations here move.
+  The generator proves the property rather than asserting it: reversing the
+  kind ownership order **re-owns 88 of 1547 nodes and moves 0 slots**. Strip an
+  address to its last field and the part is still findable.
+- **Facts ride as tags, never as fields** (`bit=3@sb`, `depth=6`, `opens=243`,
+  `precharged`, `phase=phi1`, `also=sdp:sd1`). An address needs exactly one
+  discriminator and it must be immutable; everything else is a query.
+- **The taxonomy has exactly one hole and it is provably unobservable.** Node
+  866 classifies as `inert`: no driver, in no switch. It gates one transistor
+  and nothing in the chip can drive it, which is one of the two inert
+  structures this file already documents.
+
+Three things the address deliberately cannot carry, each stated in the doc:
+**direction** (a pass transistor conducts both ways, so only Hanson's authored
+`SOURCE/DEST` names record it), **neighbourhood** (`depth=` is a distance from
+a pin, and "what is within two hops" is a query), and **which container is most
+interesting** (the partition picks one owner so a box can be drawn; `also=`
+carries the rest).
+
+- **Two traps hit while building it, both already in this file and both hit
+  anyway.** Keying wires on `(a, b, control)` silently dropped **70 of 3308**
+  edges, which is exactly the parallel-pair case `graph.json` carries `t` for.
+  And a generated sentence claiming the rare class tail was "all AOI shapes"
+  was false the moment it was written (`nor9`, `dyn6`, `inert` are in it); it
+  is computed now. **Generated prose can go stale in the same breath it is
+  generated.**
+- **Mutation-proved**: dropping the slot from the address makes the generator
+  fail "addresses unique across all three namespaces" and refuse to write.
 
 ### The datapath control lines, checked against the wiki (`tools/check-dpc-vs-wiki.py`)
 
