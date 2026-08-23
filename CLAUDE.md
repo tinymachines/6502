@@ -262,6 +262,15 @@ python3 tools/build-info.py web --kind simulator
 sudo systemctl start 6502-deploy
 journalctl -u 6502-deploy -n 40
 
+# ...or the orchestrator, which is the one to reach for. It does NOT duplicate
+# the build: it runs the same unit, then restarts the API (which holds
+# groups.json in memory, so a deploy that moved it is not live until this
+# happens), then checks what actually landed.
+scripts/deploy.sh                 # the site, then the API, then verify
+scripts/deploy.sh --verify        # check what is live, publish nothing
+scripts/deploy.sh --dry-run       # print the steps, run none
+scripts/deploy.sh all             # site, api, archive, games, lab
+
 # The preservation archive, deployed separately (see its own section below).
 python3 archive/tools/build-archive.py && bash deploy/archive-deploy.sh
 
@@ -5493,6 +5502,27 @@ Live on this box. Entirely static; there is no application process.
 | Halfwave Lab | <https://halfwave.tinymachines.ai> — `deploy/halfwave.tinymachines.ai.nginx` + `deploy/halfwave-deploy.sh`: the reviewer's package at `docs/halfwave-lab/` (template + `build.sh`, reproducible byte for byte), its built `halfwave-lab.html` served as index.html, with its own `/api/` proxy to the same engine so `location.origin + "/api"` just works. DNS in both split-horizon views; cert via the same webroot flow. Engine-side answers live in `docs/findings-answers.md`, NOT in the package's findings.md, which the reviewer's export tool overwrites wholesale |
 | nginx site | `deploy/6502.tinymachines.ai.nginx` → `sites-available/` (symlinked) |
 | Served from | `/var/www/6502.tinymachines.ai/current` (symlink into `releases/`) |
+
+**`scripts/deploy.sh` is the orchestrator, and it orchestrates rather than
+rebuilds.** The build is `deploy/deploy.sh` run through its own unit, so it
+gets that unit's environment and its 1800s timeout instead of the invoking
+shell's; anything this script knew about building would be the second copy that
+drifts. What it adds is the ORDER and the AFTERWARDS: preflight (uncommitted
+changes, unpushed commits, and which of the three SKIP-able checks will
+actually run), the unit, the API restart, then a verify against the live site.
+
+- **The verify reads the numbers from the build, never from itself.** The
+  container count comes out of `web/groups.json`, so the script cannot become a
+  second place that knows how many containers there are. It compares live
+  commit against HEAD, `no-cache` on `/`, the CSP, the manifest MIME and
+  `immutable` on a hashed asset.
+- **The manifest and the hashed asset are found by reading `/`, not by
+  guessing a path.** `build-web.py` content-hashes both, so there is no bare
+  `/manifest.webmanifest` to ask for: the first version asked anyway, got a 404
+  and reported it as a wrong MIME type. A checker that is wrong about where a
+  file lives reads exactly like a site that is broken.
+- `--verify` alone is read-only and is the fastest way to answer "is what is
+  live what I think is live".
 
 ```bash
 sudo systemctl start 6502-deploy      # rebuild + publish
