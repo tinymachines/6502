@@ -62,6 +62,22 @@ try {
     m.importState(s.value, s.pullup, s.pulldown, s.trans_on, s.half_cycle,
                   s.last_fetch ? s.last_fetch.addr : -1,
                   s.last_fetch ? s.last_fetch.opcode : 0);
+  } else if (req.op === 'resume-whole') {
+    // The same restore in one call. Kept as a separate op rather than
+    // replacing the one above, because check-wasm-import.py runs both over the
+    // same machine and requires the answers to be identical: a convenience
+    // that is subtly not equivalent is worse than no convenience.
+    const s = req.machine.state;
+    const ids = [], bytes = [];
+    for (const [page, hex] of Object.entries(req.machine.memory.pages || {})) {
+      ids.push(parseInt(page, 16));
+      bytes.push(...hexBytes(hex));
+    }
+    m.importMachine(s.value, s.pullup, s.pulldown, s.trans_on, s.half_cycle,
+                    s.last_fetch ? s.last_fetch.addr : -1,
+                    s.last_fetch ? s.last_fetch.opcode : 0,
+                    parseInt(req.machine.memory.fill ?? '00', 16),
+                    Uint8Array.from(ids), Uint8Array.from(bytes));
   } else {
     throw new Error(`unknown op ${req.op}`);
   }

@@ -116,6 +116,8 @@ impl Machine {
 
     /// Run to the next opcode fetch. Returns false if the chip did not reach
     /// one within `max_half_cycles` (a jammed opcode, or a stalled bus).
+    /// Over HTTP this is `{"until": "instruction", "max_half_cycles": n}`.
+    /// Same reasoning as `runHalfCycles` above for why the names differ.
     #[wasm_bindgen(js_name = stepInstruction)]
     pub fn step_instruction(&mut self, max_half_cycles: u32) -> bool {
         let start = self.cpu.half_cycle();
@@ -132,6 +134,14 @@ impl Machine {
 
     /// Advance `n` half-cycles. Batching here rather than in JS keeps the
     /// boundary crossing count at one per frame instead of one per phase.
+    /// Over HTTP this is `{"half_cycles": n}` on `POST /v1/step`. The names
+    /// differ and are being left that way on purpose: renaming either side is
+    /// a breaking change to a published surface (`runHalfCycles` has six
+    /// callers in `web/` alone, and `half_cycles` appears in `app.py`,
+    /// `mcp_server.py` and the reference page), and what it would buy is the
+    /// deletion of a two-line mapping in a JavaScript wrapper. The
+    /// correspondence is written down here instead, which is the part a reader
+    /// actually needed.
     #[wasm_bindgen(js_name = runHalfCycles)]
     pub fn run_half_cycles(&mut self, n: u32) {
         for _ in 0..n {
@@ -398,8 +408,17 @@ impl Machine {
         out
     }
 
-    /// Restore the chip half of a machine. Memory travels separately: fill it
-    /// and write the pages with `fillMemory` and `load`, which already exist.
+    /// Restore the chip half of a machine, and ONLY the chip half.
+    ///
+    /// Memory does not come with it. Fill it and write the pages with
+    /// `fillMemory` and `load`, or use `importMachine`, which does both in one
+    /// call and is the reason not to reach for this one.
+    ///
+    /// The failure this warns about is quiet. A caller who restores the chip
+    /// and forgets the memory does not get an error or an empty machine: they
+    /// get the PREVIOUS program still sitting in RAM under a program counter
+    /// that belongs to a different one. It runs, and what it does looks like a
+    /// simulation bug rather than a missing call.
     ///
     /// The fields are passed one by one rather than as a parsed object, for
     /// the reason above. `halfCycle` is an `f64` so it stays an ordinary
@@ -443,6 +462,74 @@ impl Machine {
         // The rewind buffer belongs to the run that just ended. Keeping it
         // would let `stepBack` walk into a machine this one never was.
         self.history = History::new(16, 256);
+        Ok(())
+    }
+
+    /// A whole machine: the chip and its memory, in one call.
+    ///
+    /// This is the counterpart to `exportMachine`, and the pair is what lets a
+    /// run started here be finished on the API or the other way round. Over
+    /// HTTP a machine is one value and arrives whole; this makes it one call
+    /// here too, so the two surfaces differ in shape rather than in what a
+    /// caller has to remember.
+    ///
+    /// It takes decoded bytes rather than the JSON `exportMachine` emits, and
+    /// that is deliberate rather than lazy. This crate emits JSON and never
+    /// parses it: emitting is a format string, parsing is a parser, and the
+    /// dependency list is `wasm-bindgen`, `halfphi` and `v6502-sim`. Adding
+    /// serde here to save a caller five lines of `JSON.parse` would be paying
+    /// for it in every build of the data-free package, whose whole point is to
+    /// be small enough that nobody minds shipping it.
+    ///
+    /// Memory arrives the way the sparse format already describes it:
+    ///
+    /// - `fill` is the byte every page not listed is made of.
+    /// - `page_ids` is one entry per page present, each the high byte of that
+    ///   page's address.
+    /// - `page_bytes` is those pages back to back, 256 bytes each, in the same
+    ///   order.
+    ///
+    /// Refused rather than guessed at: if `page_bytes` is not exactly 256
+    /// times `page_ids`, the pages cannot be cut apart unambiguously, and
+    /// writing whatever happens to line up would produce a machine that is
+    /// wrong somewhere the caller will not look.
+    #[allow(clippy::too_many_arguments)]
+    #[wasm_bindgen(js_name = importMachine)]
+    pub fn import_machine(
+        &mut self,
+        value: &str,
+        pullup: &str,
+        pulldown: &str,
+        trans_on: &str,
+        half_cycle: f64,
+        fetch_addr: i32,
+        fetch_opcode: u8,
+        fill: u8,
+        page_ids: &[u8],
+        page_bytes: &[u8],
+    ) -> Result<(), JsError> {
+        if page_bytes.len() != page_ids.len() * 256 {
+            return Err(JsError::new(&format!(
+                "importMachine: {} page ids but {} bytes of page data. \
+                 Expected {} (256 per page), so the pages cannot be cut apart.",
+                page_ids.len(),
+                page_bytes.len(),
+                page_ids.len() * 256,
+            )));
+        }
+
+        // The chip first. If the state is malformed this returns before memory
+        // is touched, so a refused import leaves the machine as it was rather
+        // than half replaced.
+        self.import_state(
+            value, pullup, pulldown, trans_on, half_cycle, fetch_addr, fetch_opcode,
+        )?;
+
+        self.fill_memory(fill);
+        for (i, &page) in page_ids.iter().enumerate() {
+            let from = i * 256;
+            self.load(u16::from(page) << 8, &page_bytes[from..from + 256]);
+        }
         Ok(())
     }
 
