@@ -165,6 +165,11 @@ node tools/golden-trace/gen.js --steps 3000
 # ...without it the golden test SKIPS. Set V6502_REQUIRE_GOLDEN=1 to make its
 # absence a failure instead (use this in CI).
 
+# One engine, two ways in: a machine crossing between the browser and the API.
+# SKIPS without a nodejs-target build; REQUIRE_WASM=1 makes that a failure.
+wasm-pack build crates/v6502-wasm --target nodejs --out-dir /tmp/pkg-node
+python3 tools/check-wasm-parity.py
+
 # Web app, development: no build step, no service worker. Serve web/ directly.
 wasm-pack build crates/v6502-wasm --target web --out-dir ../../web/pkg
 cargo run -p v6502-netlist --bin export-layout -- web/layout.bin
@@ -1408,6 +1413,47 @@ into an RGBA8 framebuffer (id low byte in R, high byte in G, layer in B, alpha a
 "something is here") and `readPixels` reads one pixel. It is only re-rendered when
 the *camera* moves — node IDs are geometry, so a running chip does not invalidate
 it.
+
+### The machine as a value, in the browser too
+
+`exportMachine`, `importState` and `fillMemory` on the wasm `Machine`. The
+codec is `v6502-sim`'s, not a second one, so **what the browser exports is the
+object the HTTP API passes**: `{state: {half_cycle, last_fetch, value, pullup,
+pulldown, trans_on}, memory: {fill, pages}}`, memory sparse by the service's
+own rule.
+
+- **Nothing new had to be true for this to work.** The service is stateless
+  because a machine IS a value, and `tests/state.rs` already proved the codec
+  restores bit-exact into a machine that never ran the first half. What was
+  missing was any way to get one in or out of the browser.
+- **JSON is emitted here and parsed in JavaScript, never the reverse.**
+  Emitting it is a format string; parsing it would be a parser, and this crate
+  has one dependency. Same asymmetry as the engine's line protocol:
+  `importState` takes the fields one by one for that reason.
+- **`halfCycle` crosses as an `f64`**, so it stays an ordinary JavaScript
+  number. A `u64` arrives as a BigInt, and no run reaches 2^53 half-cycles at
+  fourteen kilohertz.
+- **`importState` throws the rewind buffer away.** It belongs to the run that
+  just ended, and keeping it would let `stepBack` walk into a machine this one
+  never was.
+- **Memory travels separately and must be written first.** `fillMemory` then
+  `load` per page. A chip resumed over the wrong RAM fetches the wrong opcode
+  on its very next cycle, which is why `wasm-bridge.mjs` does memory before
+  the state.
+- **`tools/check-wasm-parity.py` splits a run in half and hands it across,
+  both directions**, and requires the answer a single uninterrupted run gives:
+  A=$42 at half-cycle 41, and the `value` bitset identical over all 1725
+  nodes. It also resumes one half-cycle short and requires that to differ,
+  because an assertion that cannot fail is not an assertion.
+  `tools/wasm-bridge.mjs` drives the wasm from outside a browser, the same
+  shape as `service/asm-bridge.mjs`.
+- **The site ships `--target web`, which cannot be `require`d.** The parity
+  check needs a `--target nodejs` build, and it skips without one.
+- **The bundle embeds the die data** (`v6502-wasm` -> `v6502-sim` ->
+  `v6502-netlist`, which `include_bytes!`s `netlist.bin`), so those 106 KB
+  carry CC BY-NC-SA whatever the code's licence says. A published JS package
+  that wants to be MIT the way `halfphi` is must ship no die data and take it
+  at runtime. See `NOTICE.md`.
 
 ### The Lab (`lab.js`)
 

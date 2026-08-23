@@ -11,7 +11,8 @@
 
 use std::sync::Arc;
 
-use v6502_sim::{bus::FlatMemory, cpu::Cpu, history::History, mos6502, ReadWrite};
+use v6502_sim::state::{self, MachineState};
+use v6502_sim::{bus::FlatMemory, cpu::Cpu, cpu::Fetch, history::History, mos6502, ReadWrite};
 use wasm_bindgen::prelude::*;
 
 /// A 6502 with 64 KiB of RAM and a rewind buffer.
@@ -297,6 +298,131 @@ impl Machine {
     #[wasm_bindgen(js_name = memorySlice)]
     pub fn memory_slice(&self, addr: u16, len: u32) -> Vec<u8> {
         (0..len).map(|i| self.cpu.bus.peek(addr.wrapping_add(i as u16))).collect()
+    }
+
+    // -- the machine as a value -------------------------------------------
+    //
+    // The same object the HTTP API passes, so a machine can start here and
+    // finish there, or the reverse. That interchangeability is not a feature
+    // anyone had to build: the service is stateless because a machine IS a
+    // value, and `v6502-sim`'s codec is already proven bit-exact restoring
+    // into a machine that never ran the first half. What was missing was any
+    // way to get one in or out of the browser.
+    //
+    // JSON is emitted here and parsed in JavaScript, never the other way
+    // round. Emitting it is a format string; parsing it would be a parser,
+    // and this crate has one dependency and does not need a second. The same
+    // asymmetry the engine's line protocol runs on: parse simple, emit rich.
+
+    /// The whole machine as the API's own JSON: `{state, memory}`.
+    ///
+    /// Memory is sparse by the service's rule, a fill byte plus only the
+    /// pages that differ from it, so an idle 64 KiB costs a few hundred bytes
+    /// rather than 128 KB of hex.
+    #[wasm_bindgen(js_name = exportMachine)]
+    pub fn export_machine(&self) -> String {
+        let st = state::snapshot(&self.cpu);
+        let [value, pullup, pulldown, trans_on] = st.chip_hex();
+        let mut out = String::with_capacity(4096);
+        out.push_str("{\"state\":{\"half_cycle\":");
+        out.push_str(&st.half_cycle.to_string());
+        out.push_str(",\"last_fetch\":");
+        match st.last_fetch {
+            Some(f) => {
+                out.push_str("{\"addr\":");
+                out.push_str(&f.addr.to_string());
+                out.push_str(",\"opcode\":");
+                out.push_str(&f.opcode.to_string());
+                out.push('}');
+            }
+            None => out.push_str("null"),
+        }
+        for (k, v) in [
+            ("value", &value),
+            ("pullup", &pullup),
+            ("pulldown", &pulldown),
+            ("trans_on", &trans_on),
+        ] {
+            out.push_str(",\"");
+            out.push_str(k);
+            out.push_str("\":\"");
+            out.push_str(v);
+            out.push('"');
+        }
+        out.push_str("},\"memory\":{\"fill\":\"00\",\"pages\":{");
+        let image = self.cpu.bus.as_slice();
+        let mut first = true;
+        for page in 0..256usize {
+            let bytes = &image[page * 256..(page + 1) * 256];
+            if bytes.iter().all(|&b| b == 0) {
+                continue;
+            }
+            if !first {
+                out.push(',');
+            }
+            first = false;
+            out.push_str(&format!("\"{page:02x}\":\""));
+            for &b in bytes {
+                out.push_str(&format!("{b:02x}"));
+            }
+            out.push('"');
+        }
+        out.push_str("}}}");
+        out
+    }
+
+    /// Restore the chip half of a machine. Memory travels separately: fill it
+    /// and write the pages with `fillMemory` and `load`, which already exist.
+    ///
+    /// The fields are passed one by one rather than as a parsed object, for
+    /// the reason above. `halfCycle` is an `f64` so it stays an ordinary
+    /// JavaScript number: a `u64` would arrive as a BigInt, and no run will
+    /// reach 2^53 half-cycles at fourteen kilohertz.
+    ///
+    /// `fetchAddr` of -1 means no fetch has happened, matching `lastFetchAddr`.
+    #[allow(clippy::too_many_arguments)]
+    #[wasm_bindgen(js_name = importState)]
+    pub fn import_state(
+        &mut self,
+        value: &str,
+        pullup: &str,
+        pulldown: &str,
+        trans_on: &str,
+        half_cycle: f64,
+        fetch_addr: i32,
+        fetch_opcode: u8,
+    ) -> Result<(), JsError> {
+        let (nodes, transistors) = {
+            let nl = self.cpu.engine().netlist();
+            (nl.node_count(), nl.transistor_count())
+        };
+        let last_fetch = if fetch_addr < 0 {
+            None
+        } else {
+            Some(Fetch { addr: fetch_addr as u16, opcode: fetch_opcode })
+        };
+        let st = MachineState::from_hex(
+            nodes,
+            transistors,
+            value,
+            pullup,
+            pulldown,
+            trans_on,
+            half_cycle as u64,
+            last_fetch,
+        )
+        .map_err(|e| JsError::new(&e))?;
+        state::restore(&mut self.cpu, &st);
+        // The rewind buffer belongs to the run that just ended. Keeping it
+        // would let `stepBack` walk into a machine this one never was.
+        self.history = History::new(16, 256);
+        Ok(())
+    }
+
+    /// Set all 64 KiB to one byte, so a sparse image can be written over it.
+    #[wasm_bindgen(js_name = fillMemory)]
+    pub fn fill_memory(&mut self, byte: u8) {
+        self.cpu.bus.load(0, &vec![byte; 0x10000]);
     }
 
     // -- input pins -------------------------------------------------------
