@@ -73,3 +73,6 @@ service/registry.db-*
 # The seven programs, assembled by tools/export-programs.mjs for anything
 # that cannot run a browser.
 web/programs.txt
+
+# The ELK tool takes one dependency and does not vendor it.
+tools/chip-elk/node_modules/
