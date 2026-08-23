@@ -754,7 +754,45 @@ curl -s https://6502.tinymachines.ai/api/v1/registry/claim \
   <div class="endpoint">
     <h3><span class="method get">GET</span>/v1/registry</h3>
     <p>Everyone with a page, the most recently published ROMs, and the limits
-      every write is held to.</p>
+      every write is held to. <code>limit</code> 1..200, <code>offset</code>.</p>
+    <p><code>art=none</code> replaces every CHR block with a URL and keeps the
+      dimensions. Worth knowing what it saves: a cover is 6,173 of the 7,016
+      bytes a ROM entry occupies and an avatar 2,075 of a builder's, so a full
+      page of builders is most of half a megabyte of art before any ROM data.
+      The dimensions stay because they are what lets a client lay out a box
+      before the bytes arrive.</p>
+    <p>Answers <code>ETag</code>, and a request carrying
+      <code>If-None-Match</code> gets a <code>304</code> when nothing has
+      changed. The tag is a hash of the body rather than of the newest
+      timestamp, so <code>art=none</code> and <code>art=inline</code> cannot
+      share one.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/registry/roms</h3>
+    <p>Every cartridge, newest first. <code>limit</code> 1..200,
+      <code>offset</code>, <code>handle</code> for one builder's, and
+      <code>since</code> for everything updated after an ISO 8601 timestamp.
+      <code>count</code> is the number matching the filter rather than the
+      number returned, so a caller can page without asking twice.</p>
+    <p>The index carries a <code>latest</code> slice and a per-builder count.
+      Enumerating what has actually been published meant one request per
+      builder, each dragging that builder's avatar and every one of its
+      covers. Takes <code>art</code> and answers <code>ETag</code> like the
+      index.</p>
+  </div>
+
+  <div class="endpoint">
+    <h3><span class="method get">GET</span>/v1/registry/b/{handle}/avatar</h3>
+    <h3><span class="method get">GET</span>/v1/registry/b/{handle}/roms/{slug}/cover</h3>
+    <p>One piece of art on its own, in the same
+      <code>{"w", "h", "chr"}</code> shape it has inline, so a client that can
+      already draw a CHR block does not learn a second format. This is the
+      other half of <code>art=none</code>: the listing says where the art is,
+      and this is where it is.</p>
+    <p><code>404</code> when there is none, which is a different fact from
+      there being no such builder and is reported as a different message. Both
+      answer <code>ETag</code>.</p>
   </div>
 
   <div class="endpoint">
@@ -773,7 +811,8 @@ curl -s https://6502.tinymachines.ai/api/v1/registry/claim \
   <div class="endpoint">
     <h3><span class="method get">GET</span>/v1/registry/b/{handle}</h3>
     <p>One builder's page as data: name, bio, links, avatar, and every ROM
-      they publish. Public, no token.</p>
+      they publish. Public, no token. Takes <code>art</code> and answers
+      <code>ETag</code> like the index.</p>
   </div>
 
   <div class="endpoint">
