@@ -52,6 +52,7 @@ boundaries cannot show you this, because it isn't true of the silicon.
 | `v6502-sim` | Switch-level solver, 6502 clock/bus layer, rewind. |
 | `v6502-wasm` | `wasm-bindgen` surface. |
 | `web/` | WebGL2 renderer and UI. Plain ES modules, no framework, no build step. |
+| `docs/` | The chip addressed and mapped, plus received artifacts. See [`docs/README.md`](docs/README.md). |
 
 A node's logic level is not a property of the node but of the **group** of nodes
 currently shorted together through conducting transistors. Settling means

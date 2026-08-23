@@ -235,6 +235,11 @@ MUTATE=1 python3 tools/check-dpc-vs-wiki.py     # the proof it can fail
 # 8365 addresses, checks them, and refuses to write a document whose table
 # fails. Reads the four web/*.json exports; run it after regenerating those.
 python3 tools/export-atlas-doc.py
+python3 tools/export-atlas-matrix.py            # -> docs/atlas-matrix.svg
+# (the whole chip as a 132 x 132 container matrix, ordered by measured hop
+#  distance from the pins. DIRECTED: cell (row a, col b) is the gate edges by
+#  which a drives b, so a pair bright in both triangles is feedback. 534 of
+#  8646 possible pairs wired, 6.2%. `docs/README.md` indexes all of this.)
 
 # A halfshot export, checked cold: header, deltas replayed, rails pinned, every
 # access on its edge, reads against the program bytes and earlier writes, and
