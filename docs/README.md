@@ -21,6 +21,31 @@ fails its own checks.
 | [`halfwave-lab/`](halfwave-lab) | the reviewer's Lab, its source and its build | received |
 | `SuperMarioBros.html` | a SourceGen disassembly, kept for reading 6502 in the wild | received |
 
+## The engineering notes (`notes/`)
+
+One handbook per area: what each part claims, how it derives it, and every trap
+it cost. This is the log `CLAUDE.md` used to carry inline, until that file grew
+past the context window it exists to fill. **Read the note for the area you are
+about to touch before touching it.** Nothing here is generated; it is written by
+whoever last got it wrong.
+
+| | what is in it |
+|---|---|
+| [`notes/engine.md`](notes/engine.md) | the crates, the `halfphi` split and why it is a licence boundary, the solver, the ported invariants in full, the two oracles, the performance measurements and the search profile, `graph.json`, the two wasm builds, the machine as a value |
+| [`notes/service.md`](notes/service.md) | `halfwave`'s line protocol, the stateless state model, the pool measurements, every API route, cartridges and what minting found, the registry, MCP |
+| [`notes/web-shell.md`](notes/web-shell.md) | the site menu, the harnesses, the transport, responsive layout and PWA, the CSP, the renderer invariants, the hashed bundle and service worker, the version footer |
+| [`notes/tracer-and-chipmap.md`](notes/tracer-and-chipmap.md) | all twenty-five container kinds and how each is derived, the partition into 132 groups, the node grids, the ADC tour, the optimizer |
+| [`notes/schematic-and-blocks.md`](notes/schematic-and-blocks.md) | gate recognition from the switch network, the walk both ways, the study view, pin chains, the address on the drawing, the twelve block pages |
+| [`notes/pages.md`](notes/pages.md) | Lab, Trace, Exploded, Blueprint, Decode, Programs, Halfshot, Primer, talk, block diagram, pinout, die graph, designer, Timing |
+| [`notes/derivations.md`](notes/derivations.md) | the address rubric behind `atlas.md`, the idiom catalogue, the Snake walk, and where the die's names come from |
+| [`notes/hosting.md`](notes/hosting.md) | the deploy, the nginx configuration and its silent failures, DNS and TLS, the repository rules |
+| [`notes/archive.md`](notes/archive.md) | what is wrong with visual6502.org, what was recovered and how, the drip, and the invariants that keep the archive honest |
+
+A note is prose, not an API reference: it is worth reading end to end once for
+an area you are new to, and worth grepping afterwards. Where one says "the X
+section", it means either the matching note here or the section still in
+`CLAUDE.md`.
+
 ## Documents that live elsewhere, and why
 
 Not everything is here, deliberately. A component's handbook belongs beside the
@@ -31,7 +56,7 @@ that gets edited. So this is the index rather than the container.
 | | what it covers |
 |---|---|
 | [`../README.md`](../README.md) | the project: what it is, how to build it, how to verify it |
-| [`../CLAUDE.md`](../CLAUDE.md) | the working notes. Every trap this project has paid for, written down |
+| [`../CLAUDE.md`](../CLAUDE.md) | the operating guide: commands, the invariants that must not be tidied away, and the digest of traps this project keeps re-learning |
 | [`../NOTICE.md`](../NOTICE.md) | **licensing. The die data is CC BY-NC-SA and it propagates** |
 | [`../service/README.md`](../service/README.md) | the 6502 as a service: the stateless engine and its HTTP reference |
 | [`../games/README.md`](../games/README.md) | the console, the cartridge format, and how to build a ROM |
