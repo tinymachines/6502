@@ -147,17 +147,27 @@ class HeadAsGet:
 
 app.add_middleware(HeadAsGet)
 
-# Open on purpose: the server holds no user state and no credentials, so a
-# third-party notebook or classroom page POSTing a machine here risks
-# nothing. This is what lets the API be used from anywhere.
+# Open on purpose: the server holds no user state and, for everything except
+# the registry, no credentials, so a third-party notebook or classroom page
+# POSTing a machine here risks nothing. This is what lets the API be used
+# from anywhere.
 #
 # HEAD is listed because the middleware above answers it, and a preflight for
 # a method the policy does not name is refused before it reaches the app.
+#
+# PATCH, PUT, DELETE and the authorization header are the registry's writing
+# half (#12). Before these, tinymachines.ai/6502/builders could read the
+# registry cross-origin but a browser there could not send a bearer token at
+# all: the preflight refused the header, the request was never made, and the
+# server log had nothing to show for it. Naming them costs nothing to the
+# open POST surface: allow_origins stays *, and a bearer in a header is not a
+# cookie, so no credentialed-request rules are involved. A token is only ever
+# sent by a page that holds one, and the routes verify it either way.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "HEAD", "POST", "OPTIONS"],
-    allow_headers=["content-type"],
+    allow_methods=["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["content-type", "authorization"],
     # So a cross-origin caller can revalidate. A browser hides every response
     # header from script except a short safelist, and ETag is not on it: the
     # tag would arrive, be invisible to the page, and If-None-Match would never

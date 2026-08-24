@@ -458,6 +458,25 @@ def test_cors_is_open_for_any_origin(client):
     assert r.headers["access-control-allow-origin"] == "*"
 
 
+def test_cors_admits_the_registrys_writing_half(client):
+    """#12: the builders pages under the apex could read the registry
+    cross-origin and could not write to it, and it was a header rather than
+    a decision: the preflight refused `authorization`, so the browser never
+    sent the request and the server log had nothing to show. Every verb the
+    registry writes with is asked for here, each with the bearer header,
+    which is how the editor gets to live on another origin."""
+    for verb in ("POST", "PATCH", "PUT", "DELETE"):
+        r = client.options(
+            "/v1/registry/b/somebody",
+            headers={"Origin": "https://tinymachines.ai",
+                     "Access-Control-Request-Method": verb,
+                     "Access-Control-Request-Headers": "authorization, content-type"},
+        )
+        assert r.status_code == 200, f"preflight for {verb} was refused"
+        assert "authorization" in r.headers["access-control-allow-headers"].lower()
+        assert verb in r.headers["access-control-allow-methods"]
+
+
 def test_rdy_low_stalls_and_the_pin_persists_in_the_machine(client):
     """pins are levels driven onto the pad, and the drive is a pull that
     lives in the state bitsets: set rdy low once and every later machine
