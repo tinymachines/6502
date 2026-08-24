@@ -21,6 +21,25 @@ fails its own checks.
 | [`halfwave-lab/`](halfwave-lab) | the reviewer's Lab, its source and its build | received |
 | `SuperMarioBros.html` | a SourceGen disassembly, kept for reading 6502 in the wild | received |
 
+## Documents that live elsewhere, and why
+
+Not everything is here, deliberately. A component's handbook belongs beside the
+component: moving `service/README.md` into this directory would separate it from
+the code it describes, and the copy that gets read would drift from the copy
+that gets edited. So this is the index rather than the container.
+
+| | what it covers |
+|---|---|
+| [`../README.md`](../README.md) | the project: what it is, how to build it, how to verify it |
+| [`../CLAUDE.md`](../CLAUDE.md) | the working notes. Every trap this project has paid for, written down |
+| [`../NOTICE.md`](../NOTICE.md) | **licensing. The die data is CC BY-NC-SA and it propagates** |
+| [`../service/README.md`](../service/README.md) | the 6502 as a service: the stateless engine and its HTTP reference |
+| [`../games/README.md`](../games/README.md) | the console, the cartridge format, and how to build a ROM |
+| [`../packages/asm/README.md`](../packages/asm/README.md) | the assembler, published on its own |
+| [`../archive/README.md`](../archive/README.md) | the visual6502.org preservation archive |
+| [`../crates/halfphi/README.md`](../crates/halfphi/README.md) | the switch-level engine, which names no chip |
+| [`../tools/chip-elk/README.md`](../tools/chip-elk/README.md) | the ELK layouts, and why the whole-chip one does not work |
+
 ## The chip, addressed and mapped
 
 Three views of the same 132 containers, and none of them approximates another.
