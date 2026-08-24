@@ -129,7 +129,7 @@ python3 tools/analyse-searches.py /tmp/searches.json /tmp/addr.json
 # 6502 as a service: the stateless engine, and its HTTP reference implementation
 cargo build --release -p v6502-sim --bin halfwave   # the warm engine process
 cargo test -p v6502-sim --test state                # snapshot/restore, bit-exact
-python3 -m pytest service/ -q                       # 125 tests: the service end to
+python3 -m pytest service/ -q                       # 174 tests: the service end to
                                                     # end, the chip atlas (52),
                                                     # cartridges (27), MCP (17).
                                                     # Atlas SKIPS without groups.json.

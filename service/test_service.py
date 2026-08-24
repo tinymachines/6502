@@ -200,7 +200,16 @@ def test_the_api_page_documents_what_the_service_does(client):
     import re
 
     from fastapi.routing import APIRoute
-    served = [r.path for r in app.routes if isinstance(r, APIRoute) and r.path != "/"]
+    # include_in_schema=False routes are the framework furniture: the schema
+    # document itself and the two viewers that render it. They were invisible
+    # to this filter when FastAPI declared them (plain starlette Routes), and
+    # they stay out of it now that app.py declares them per door (APIRoutes):
+    # the page documents the API, and the schema does not document itself.
+    served = [
+        r.path
+        for r in app.routes
+        if isinstance(r, APIRoute) and r.path != "/" and r.include_in_schema
+    ]
     assert any(":path}" in p for p in served), "no route uses a converter; drop the stripping"
     for path in served:
         shown = re.sub(r"\{(\w+):\w+\}", r"{\1}", path)
@@ -570,3 +579,46 @@ def test_memory_stays_sparse_and_fill_is_honoured(client):
     r2 = client.post("/v1/step", json={"machine": res["machine"], "half_cycles": 20}).json()
     o = r2["observe"]
     assert o["ir"] == 0xEA, "the chip is executing the fill byte"
+
+
+def test_the_schema_names_the_door_it_was_fetched_through():
+    """One service, several front doors, and each door's schema is honest.
+
+    The unit's --root-path /api is the fallback every existing vhost relies
+    on; the apex mounts this service at /6502/api and says so with
+    X-Forwarded-Prefix. The dangerous case is the third assertion: FastAPI's
+    own openapi route accumulates every root path it has seen into one
+    servers list, so after one fetch through each door a subdomain client
+    could read servers[0] as /6502/api, resolve it against its own origin,
+    and call a path that is not there. The routes in app.py exist to make
+    that impossible; this proves it stays impossible.
+    """
+    c = TestClient(app, root_path="/api")
+
+    plain = c.get("/openapi.json").json()
+    assert plain["servers"] == [{"url": "/api"}]
+
+    fronted = c.get(
+        "/openapi.json", headers={"x-forwarded-prefix": "/6502/api"}
+    ).json()
+    assert fronted["servers"] == [{"url": "/6502/api"}]
+
+    # The regression: the apex fetch above must not leak into anyone else's
+    # document. Same request as the first; must be the same answer.
+    again = c.get("/openapi.json").json()
+    assert again["servers"] == [{"url": "/api"}]
+
+    # A malformed prefix is ignored, not obeyed: the fallback applies and the
+    # door still works. Nothing but nginx can reach the port, so this is
+    # about malformed values, not hostile ones.
+    for bad in ("https://evil.example", "no-slash", "/a//b", "/spa ce"):
+        got = c.get("/openapi.json", headers={"x-forwarded-prefix": bad}).json()
+        assert got["servers"] == [{"url": "/api"}], f"prefix {bad!r} was obeyed"
+
+
+def test_the_docs_ask_for_the_schema_at_their_own_door():
+    c = TestClient(app, root_path="/api")
+    assert "/api/openapi.json" in c.get("/docs").text
+    fronted = c.get("/docs", headers={"x-forwarded-prefix": "/6502/api"})
+    assert "/6502/api/openapi.json" in fronted.text
+    assert c.get("/redoc").status_code == 200

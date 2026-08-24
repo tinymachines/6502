@@ -30,7 +30,8 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 import cartridge
 import mcp_server
@@ -89,6 +90,16 @@ app = FastAPI(
     description="A transistor-level MOS 6502, one half-cycle at a time. "
     "State travels with the request; the server remembers nothing.",
     lifespan=lifespan,
+    # The built-in /openapi.json, /docs and /redoc are declared per-door below
+    # instead. FastAPI's own openapi route ACCUMULATES root paths into the
+    # schema's servers list (self.servers.insert on every new root_path it
+    # sees), which is harmless with one front door and wrong with two: after
+    # one fetch through each, every schema fetch from either door lists both
+    # servers, and a client resolving servers[0] against the wrong origin
+    # calls a path that is not there, or a different service that is.
+    openapi_url=None,
+    docs_url=None,
+    redoc_url=None,
 )
 
 class HeadAsGet:
@@ -154,6 +165,75 @@ app.add_middleware(
     # tinymachines.ai, which is where the roof reads this service from.
     expose_headers=["ETag"],
 )
+
+
+class ForwardedPrefix:
+    """Let the proxy say where this service is mounted, per request.
+
+    One service, several front doors. Each site's nginx proxies its own /api
+    to this process, and since 2026-08-24 the apex proxies /6502/api here too.
+    The unit's --root-path /api covers every door that mounts at /api without
+    those vhosts changing anything; a door mounted anywhere else says so with
+    X-Forwarded-Prefix, and this middleware makes the generated URLs (the
+    schema's servers entry, /docs asking for its schema) tell the truth for
+    the door the request actually came through.
+
+    Trusting the header is the same argument entropy-gate makes for
+    X-Forwarded-For: this binds 127.0.0.1, so nginx on this box is the only
+    thing that can send anything at all. The check below is not a defence
+    against nginx; it keeps a malformed value from becoming a malformed URL.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            prefix = None
+            for name, value in scope.get("headers", []):
+                if name == b"x-forwarded-prefix":
+                    prefix = value.decode("latin-1")
+                    break
+            # A mount point is an absolute path: leading slash, no scheme, no
+            # doubled slashes, nothing a URL would have to escape. Anything
+            # else is ignored rather than obeyed, so the fallback root path
+            # still applies and the door still works.
+            if (
+                prefix
+                and prefix.startswith("/")
+                and "//" not in prefix
+                and re.fullmatch(r"[A-Za-z0-9/_.-]+", prefix)
+            ):
+                scope = dict(scope, root_path=prefix.rstrip("/"))
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(ForwardedPrefix)
+
+
+# The schema and the documents that render it, declared here per door rather
+# than by the framework, for the accumulation reason on the constructor. Each
+# response names exactly one server: the door the request came through. The
+# schema itself is generated once and cached by app.openapi(); only the
+# servers entry is per-request, on a shallow copy so the cache stays clean.
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_at_this_door(request: Request) -> JSONResponse:
+    doc = dict(app.openapi())
+    root = request.scope.get("root_path", "").rstrip("/")
+    doc["servers"] = [{"url": root or "/"}]
+    return JSONResponse(doc)
+
+
+@app.get("/docs", include_in_schema=False)
+async def docs_at_this_door(request: Request) -> HTMLResponse:
+    root = request.scope.get("root_path", "").rstrip("/")
+    return get_swagger_ui_html(openapi_url=f"{root}/openapi.json", title=f"{app.title} - docs")
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_at_this_door(request: Request) -> HTMLResponse:
+    root = request.scope.get("root_path", "").rstrip("/")
+    return get_redoc_html(openapi_url=f"{root}/openapi.json", title=f"{app.title} - redoc")
 
 
 def _state_line(m: Machine) -> str:
