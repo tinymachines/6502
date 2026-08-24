@@ -204,7 +204,20 @@ class ForwardedPrefix:
                 and "//" not in prefix
                 and re.fullmatch(r"[A-Za-z0-9/_.-]+", prefix)
             ):
-                scope = dict(scope, root_path=prefix.rstrip("/"))
+                # Both fields move together. Under the current ASGI reading
+                # (uvicorn 0.26+), scope["path"] INCLUDES the root path: the
+                # unit's --root-path /api makes uvicorn deliver
+                # path=/api/openapi.json, root_path=/api. Replacing root_path
+                # alone leaves a path that no longer starts with it, and
+                # Starlette then routes the full old path, which is a 404 for
+                # everything. Measured on the live door, not deduced: the
+                # first version of this changed only root_path, passed a test
+                # that sent the wrong scope shape, and 404d in production.
+                new_root = prefix.rstrip("/")
+                old_root = scope.get("root_path", "")
+                path = scope.get("path", "")
+                inner = path[len(old_root):] if old_root and path.startswith(old_root) else path
+                scope = dict(scope, root_path=new_root, path=new_root + inner)
         await self.app(scope, receive, send)
 
 

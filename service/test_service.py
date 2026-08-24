@@ -593,32 +593,37 @@ def test_the_schema_names_the_door_it_was_fetched_through():
     and call a path that is not there. The routes in app.py exist to make
     that impossible; this proves it stays impossible.
     """
+    # The requests here are shaped the way uvicorn actually delivers them:
+    # under the current ASGI reading, scope["path"] INCLUDES the root path,
+    # so the unit's --root-path /api means the app sees /api/openapi.json.
+    # The first version of this test sent /openapi.json bare, which passed
+    # against a middleware that 404d every request on the live door.
     c = TestClient(app, root_path="/api")
 
-    plain = c.get("/openapi.json").json()
+    plain = c.get("/api/openapi.json").json()
     assert plain["servers"] == [{"url": "/api"}]
 
     fronted = c.get(
-        "/openapi.json", headers={"x-forwarded-prefix": "/6502/api"}
+        "/api/openapi.json", headers={"x-forwarded-prefix": "/6502/api"}
     ).json()
     assert fronted["servers"] == [{"url": "/6502/api"}]
 
     # The regression: the apex fetch above must not leak into anyone else's
     # document. Same request as the first; must be the same answer.
-    again = c.get("/openapi.json").json()
+    again = c.get("/api/openapi.json").json()
     assert again["servers"] == [{"url": "/api"}]
 
     # A malformed prefix is ignored, not obeyed: the fallback applies and the
     # door still works. Nothing but nginx can reach the port, so this is
     # about malformed values, not hostile ones.
     for bad in ("https://evil.example", "no-slash", "/a//b", "/spa ce"):
-        got = c.get("/openapi.json", headers={"x-forwarded-prefix": bad}).json()
+        got = c.get("/api/openapi.json", headers={"x-forwarded-prefix": bad}).json()
         assert got["servers"] == [{"url": "/api"}], f"prefix {bad!r} was obeyed"
 
 
 def test_the_docs_ask_for_the_schema_at_their_own_door():
     c = TestClient(app, root_path="/api")
-    assert "/api/openapi.json" in c.get("/docs").text
-    fronted = c.get("/docs", headers={"x-forwarded-prefix": "/6502/api"})
+    assert "/api/openapi.json" in c.get("/api/docs").text
+    fronted = c.get("/api/docs", headers={"x-forwarded-prefix": "/6502/api"})
     assert "/6502/api/openapi.json" in fronted.text
-    assert c.get("/redoc").status_code == 200
+    assert c.get("/api/redoc").status_code == 200
