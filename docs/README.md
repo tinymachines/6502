@@ -117,6 +117,12 @@ Everything in it is measured by running Snake on the simulation, and the
 schematics are **pulled from the live schematic page** rather than drawn again,
 because a second drawing of an NMOS gate would eventually draw it differently.
 
+It ends by going all the way down: the control line the walk follows is four
+transistors, and the document gives their addresses, their real dimensions, and
+the fact that **the median channel on this die is 7.8 micrometres** -- derived
+from polygon coordinates measured against the die width someone marked on a MOS
+blueprint in 1975, not looked up. The 6502 was made on an eight-micron process.
+
 The remaining parts are listed at the end of that document.
 
 ## Regenerating

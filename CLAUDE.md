@@ -4769,6 +4769,32 @@ for a reader who has never seen inside a chip.
   says so with an example from its own data: X reads a value mid-store that it
   never held, because it is a dynamic node with the bus driving past it.
 
+#### The walk ends at the silicon
+
+`docs/walk-snake.md` finishes at the transistor: `dpc2_XSB` is **4 devices**,
+listed with their addresses and their real geometry out of `transdefs.js`.
+Three findings there, and the second corrects the first.
+
+- **`dpc2_XSB` has no pull-up flag**, so nothing holds it high: it is charged
+  through one transistor and then holds by charge alone. The minimum clock, as
+  four devices.
+- **The naive `pullup` class is misleading exactly here, and the document says
+  so rather than hiding it.** `t2468` has one end on vcc, which is what
+  `graph.json`'s per-transistor `kind` reads; it is a **precharge** device, not
+  a load. **A depletion load and a precharge transistor are indistinguishable
+  from one transistor's terminals** and do different jobs. The real loads are
+  not in the transistor table at all: they are a polygon flag, on **1018**
+  nodes.
+- **The median channel is 7.8 micrometres, derived rather than looked up**:
+  polygon coordinates against the 168 mil die width marked on sheet 1 of the
+  MOS blueprint gives 0.487 um per die unit, and a median channel length of 16
+  units. The 6502 was fabricated on an eight-micron process.
+- A first draft said the pulldown-to-pullup size ratio "is why NMOS works",
+  from the 7:1 seen on this one gate. **Die-wide it is 1.5:1**, because the
+  234 vcc-connected devices are not the loads. Measured before it shipped.
+- The section is skipped whole when `extern/` is absent rather than
+  half-written, and that was checked by pointing it at a missing file.
+
 ### The circuit idioms, counted (`tools/export-idioms.py`, `docs/idioms.md`)
 
 The other half of the atlas: the atlas says *where* a part is, this says *what

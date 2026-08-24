@@ -336,6 +336,102 @@ w("convention: it is two transistors in the clock generator holding each phase")
 w("off until the other has gone.\n")
 w("---\n")
 
+# ------------------------------------------------------- all the way down
+# The die data is a read-only submodule and a clone may not have it, so the
+# whole section is skipped rather than half-written.
+TD = os.path.join(ROOT, "extern/visual6502/transdefs.js")
+SUBJ = "dpc2_XSB"
+if os.path.exists(TD):
+    import re as _re2, statistics as _st
+    _rows = _re2.findall(r"\['t(\d+)',\s*(\d+),\s*(\d+),\s*(\d+),\s*\[([\d,\s-]+)\],\s*\[([\d,\s-]+)\]",
+                         open(TD).read())
+    TR = {}
+    for _t, _g, _a, _b, _bb, _ge in _rows:
+        TR[int(_t)] = dict(gate=int(_g), c1=int(_a), c2=int(_b),
+                           bb=[int(x) for x in _bb.split(",")],
+                           ge=[int(x) for x in _ge.split(",")])
+    sch = json.load(open(os.path.join(ROOT, "web/schematic.json")))
+    grp = json.load(open(os.path.join(ROOT, "web/groups.json")))
+    gph = json.load(open(os.path.join(ROOT, "web/graph.json")))
+    nm2 = sch["names"]; by2 = {n: i for i, n in enumerate(nm2) if n}
+    own2 = {n["id"]: n["owner"] for n in grp["nodes"]}
+    node = by2[SUBJ]; VSS2, VCC2 = sch["vss"], sch["vcc"]
+    kof = {t["id"]: gph["transistorKinds"][t["kind"]] for t in gph["transistors"]}
+    mine = sorted(t for t, d in TR.items() if node in (d["c1"], d["c2"]))
+    bnds = gph["bounds"]; span = bnds["xmax"] - bnds["xmin"]
+    UM = 168 * 25.4 / span            # 168 mil across, off the MOS blueprint
+    lens = [d["ge"][2] for d in TR.values()]
+    medlen = _st.median(lens)
+
+    w("## All the way down\n")
+    w("Every schematic above stops at a symbol. A symbol is not the bottom.\n")
+    w("`%s` is the line that opens X onto the special bus, and underneath the"
+      % SUBJ)
+    w("triangle it is drawn as, it is **%d transistors**. Here they are, with"
+      % len(mine))
+    w("their addresses, their gates, and their actual size on the silicon.\n")
+    w("| address | its gate is | joins | width at each end / length | area |")
+    w("|---|---|---|---|---|")
+    for t in mine:
+        d = TR[t]; ge = d["ge"]
+        far = d["c1"] if d["c2"] == node else d["c2"]
+        joins = ("**vcc**" if far == VCC2 else "**vss**" if far == VSS2
+                 else "`%s`" % (nm2[far] or "#%d" % far))
+        w("| `t:%s:%s:#%d` | `%s` | %s | %d x %d / %d | %d |"
+          % (own2.get(node, "?"), kof.get(t, "?"), t,
+             nm2[d["gate"]] or "#%d" % d["gate"], joins, ge[0], ge[1], ge[2], ge[4]))
+    w("")
+    w("### The one that is missing\n")
+    hasflag = [n for n in gph["nodes"] if n and n.get("pullup")]
+    w("A static gate needs something holding its output high. **There is no such")
+    w("transistor in that table**, and there is no oversight either: on this die")
+    w("the load is a *depletion-mode* device, recorded as a flag on the polygon")
+    w("rather than as a row in the transistor list. **%d nodes carry that flag.**"
+      % len(hasflag))
+    w("`%s` is not one of them.\n" % SUBJ)
+    w("Which makes the first row of that table misleading, and it is worth saying")
+    w("why rather than quietly fixing it. The class `pullup` there is the *naive*")
+    w("reading: a transistor with one end on vcc. That is what the shape is; it")
+    w("is not what the job is. `t%d` is a **precharge** device, opened once a"
+      % next(t for t in mine if VCC2 in (TR[t]["c1"], TR[t]["c2"])))
+    w("cycle to put charge on a wire that has no permanent load. A depletion load")
+    w("and a precharge transistor look identical in a list of terminals and do")
+    w("completely different jobs. **The die data does not know the difference,")
+    w("and neither does any rule that only looks at one transistor at a time.**\n")
+    w("So this wire has nothing holding it up. It is charged through `t%d`, and"
+      % next(t for t in mine if VCC2 in (TR[t]["c1"], TR[t]["c2"])))
+    w("then it simply **stays** charged until something pulls it down or the")
+    w("charge leaks away. That is the dynamic idiom from earlier, and here it is")
+    w("as four devices: one small one to put charge on, three big ones to take it")
+    w("off. **This is where the 6502's minimum clock speed comes from.** Not a")
+    w("design rule someone wrote down: a wire with nothing holding it up.\n")
+    w("### How big is a transistor\n")
+    w("The die data carries real coordinates, and sheet 1 of the MOS blueprint")
+    w("marks the die as **168 mil** across including the scribe lane. The drawn")
+    w("die spans %d units, so one unit is about **%.3f micrometres**.\n"
+      % (span, UM))
+    w("| | die units | micrometres |")
+    w("|---|---|---|")
+    w("| median channel length | %d | **%.1f** |" % (medlen, medlen * UM))
+    for t in mine[:2]:
+        ge = TR[t]["ge"]
+        w("| `t%d` channel | %d long, %d wide | %.1f x %.1f |"
+          % (t, ge[2], (ge[0] + ge[1]) // 2, ge[2] * UM, (ge[0] + ge[1]) / 2 * UM))
+    w("")
+    w("**%.1f micrometres.** The 6502 was made on an eight-micron process, and"
+      % (medlen * UM))
+    w("that number was not looked up: it is polygon coordinates measured against")
+    w("a die width someone wrote on a blueprint in 1975. A human hair is about")
+    w("70 micrometres across, so about **nine channel lengths would fit across")
+    w("one hair** (the whole device is bigger than its channel, so fewer whole")
+    w("transistors than that).\n")
+    w("There are **%s** of them. That is the entire processor: no microcode, no"
+      % "{:,}".format(len(TR)))
+    w("hidden layer, nothing below this. Four of them make one control line, and")
+    w("the control line opens a path, and the path carries X to a bus, and that")
+    w("is how a snake moves.\n")
+    w("---\n")
+
 w("## Where this goes next\n")
 w("This was one instruction. The series it belongs to:\n")
 w("1. **This.** One store, five cycles, and the vocabulary.")

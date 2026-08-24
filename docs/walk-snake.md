@@ -333,6 +333,71 @@ off until the other has gone.
 
 ---
 
+## All the way down
+
+Every schematic above stops at a symbol. A symbol is not the bottom.
+
+`dpc2_XSB` is the line that opens X onto the special bus, and underneath the
+triangle it is drawn as, it is **4 transistors**. Here they are, with
+their addresses, their gates, and their actual size on the silicon.
+
+| address | its gate is | joins | width at each end / length | area |
+|---|---|---|---|---|
+| `t:regs:x.XSB:pullup:#2468` | `#133` | **vcc** | 23 x 23 / 19 | 457 |
+| `t:regs:x.XSB:pulldown:#2761` | `#602` | **vss** | 230 x 229 / 14 | 3333 |
+| `t:regs:x.XSB:pulldown:#2793` | `#1247` | **vss** | 229 x 227 / 14 | 3200 |
+| `t:regs:x.XSB:pulldown:#2932` | `cclk` | **vss** | 62 x 62 / 18 | 1154 |
+
+### The one that is missing
+
+A static gate needs something holding its output high. **There is no such
+transistor in that table**, and there is no oversight either: on this die
+the load is a *depletion-mode* device, recorded as a flag on the polygon
+rather than as a row in the transistor list. **1018 nodes carry that flag.**
+`dpc2_XSB` is not one of them.
+
+Which makes the first row of that table misleading, and it is worth saying
+why rather than quietly fixing it. The class `pullup` there is the *naive*
+reading: a transistor with one end on vcc. That is what the shape is; it
+is not what the job is. `t2468` is a **precharge** device, opened once a
+cycle to put charge on a wire that has no permanent load. A depletion load
+and a precharge transistor look identical in a list of terminals and do
+completely different jobs. **The die data does not know the difference,
+and neither does any rule that only looks at one transistor at a time.**
+
+So this wire has nothing holding it up. It is charged through `t2468`, and
+then it simply **stays** charged until something pulls it down or the
+charge leaks away. That is the dynamic idiom from earlier, and here it is
+as four devices: one small one to put charge on, three big ones to take it
+off. **This is where the 6502's minimum clock speed comes from.** Not a
+design rule someone wrote down: a wire with nothing holding it up.
+
+### How big is a transistor
+
+The die data carries real coordinates, and sheet 1 of the MOS blueprint
+marks the die as **168 mil** across including the scribe lane. The drawn
+die spans 8769 units, so one unit is about **0.487 micrometres**.
+
+| | die units | micrometres |
+|---|---|---|
+| median channel length | 16 | **7.8** |
+| `t2468` channel | 19 long, 23 wide | 9.2 x 11.2 |
+| `t2761` channel | 14 long, 229 wide | 6.8 x 111.7 |
+
+**7.8 micrometres.** The 6502 was made on an eight-micron process, and
+that number was not looked up: it is polygon coordinates measured against
+a die width someone wrote on a blueprint in 1975. A human hair is about
+70 micrometres across, so about **nine channel lengths would fit across
+one hair** (the whole device is bigger than its channel, so fewer whole
+transistors than that).
+
+There are **3,510** of them. That is the entire processor: no microcode, no
+hidden layer, nothing below this. Four of them make one control line, and
+the control line opens a path, and the path carries X to a bus, and that
+is how a snake moves.
+
+---
+
 ## Where this goes next
 
 This was one instruction. The series it belongs to:
