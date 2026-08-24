@@ -372,3 +372,173 @@ def test_a_reserved_handle_needs_the_admin_path(client, token):
     db.close()
     assert out["handle"] == "tinymachines"
     assert client.get("/v1/registry/b/tinymachines").status_code == 200
+
+
+# -- listings that can be paged through ---------------------------------------
+#
+# The four below are what tinymachines/6502#9 asked for, and each one is here
+# because the roof could not do something without it.
+
+
+@pytest.fixture()
+def populated(client, token):
+    """One builder with an avatar and two published ROMs, both with covers.
+
+    Enough to make the listings interesting: art on every object, two rows to
+    sort, and a builder to filter by.
+    """
+    client.post("/v1/registry/claim", json={"handle": "ada", "name": "Ada"}, headers=auth(token))
+    # The shapes the live registry actually holds: an 8x8 avatar, which is the
+    # limit, and a 16x12 cover. The size assertion below is about what a real
+    # listing weighs, and a one-tile avatar would make it pass on nothing.
+    client.patch("/v1/registry/b/ada", headers=auth(token), json={"avatar": art(8, 8)})
+    for slug, name in (("first", "First"), ("second", "Second")):
+        r = client.put(f"/v1/registry/b/ada/roms/{slug}", headers=auth(token),
+                       json={"cart": b64(mint_cart(client, name)), "frames": 2,
+                             "cover": art(16, 12)})
+        assert r.status_code == 200, r.text
+    return token
+
+
+def test_art_can_be_declined_and_the_dimensions_stay(client, populated):
+    """The one that blocked a listing UI outright.
+
+    A cover is most of what a ROM entry weighs and an avatar most of a
+    builder's, and there was no way to ask for the listing without them. The
+    dimensions stay, because they are what lets a client lay out a box before
+    the bytes arrive, and they are eight bytes rather than eight kilobytes.
+    """
+    full = client.get("/v1/registry").json()
+    lean = client.get("/v1/registry?art=none").json()
+
+    assert "chr" in full["builders"][0]["avatar"]
+    assert "chr" not in lean["builders"][0]["avatar"]
+    assert lean["builders"][0]["avatar"]["url"] == "/v1/registry/b/ada/avatar"
+    assert lean["builders"][0]["avatar"]["w"] == full["builders"][0]["avatar"]["w"]
+
+    assert "chr" not in lean["latest"][0]["cover"]
+    assert lean["latest"][0]["cover"]["url"].endswith("/cover")
+
+    # The point of the parameter, stated as a measurement rather than a hope.
+    # On the live registry a cover is 6,173 of the 7,016 bytes a ROM entry
+    # occupies and an avatar 2,075 of a builder's; this fixture carries the
+    # same shapes, so the ratio here is the ratio there.
+    big, small = len(json.dumps(full)), len(json.dumps(lean))
+    assert small * 4 < big, (
+        f"art=none took {big} bytes to {small}, which is not the order of "
+        "magnitude that makes a listing pageable"
+    )
+
+
+def test_the_art_is_where_the_listing_says_it_is(client, populated):
+    """A url in a listing that does not resolve is worse than no url."""
+    lean = client.get("/v1/registry?art=none").json()
+    for url in (lean["builders"][0]["avatar"]["url"], lean["latest"][0]["cover"]["url"]):
+        r = client.get(url)
+        assert r.status_code == 200, f"{url} -> {r.status_code}"
+        assert set(r.json()) == {"w", "h", "chr"}, "a different shape from the inline one"
+
+    # Absent and unknown are different facts, and a caller redrawing a page
+    # needs to tell them apart.
+    client.post("/v1/registry/claim", json={"handle": "bare", "name": "B"},
+                headers=auth(registry_token(client)))
+    assert client.get("/v1/registry/b/bare/avatar").status_code == 404
+    assert client.get("/v1/registry/b/nobody/avatar").status_code == 404
+
+
+def registry_token(client):
+    db = registry.connect()
+    registry.init(db)
+    t = registry.mint_token(db, "second")
+    db.close()
+    return t
+
+
+def test_every_cartridge_in_one_listing(client, populated):
+    """Enumerating what has been published used to mean one request per
+    builder, each dragging that builder's avatar and every cover."""
+    body = client.get("/v1/registry/roms?art=none").json()
+    assert body["count"] == 2
+    assert [r["slug"] for r in body["roms"]] == ["second", "first"], "not newest first"
+
+    page = client.get("/v1/registry/roms?limit=1&art=none").json()
+    assert len(page["roms"]) == 1 and page["count"] == 2, (
+        "count is the number matching the filter, not the number returned, or a "
+        "caller cannot page without asking twice"
+    )
+    second = client.get("/v1/registry/roms?limit=1&offset=1&art=none").json()
+    assert second["roms"][0]["slug"] != page["roms"][0]["slug"]
+
+    assert client.get("/v1/registry/roms?handle=ada").json()["count"] == 2
+    assert client.get("/v1/registry/roms?handle=nobody").json()["count"] == 0
+
+
+def test_since_asks_for_what_changed(client, populated):
+    """A poller's parameter. `updated` is ISO 8601 in UTC and they all have the
+    same shape, so lexical order is chronological order."""
+    all_of_them = client.get("/v1/registry/roms?art=none").json()
+    newest = all_of_them["roms"][0]["updated"]
+    # Passed exactly as a caller would copy it out of the previous response,
+    # `+00:00` and all. A query string turns that `+` into a space, and the
+    # filter used to match everything as a result.
+    assert client.get(f"/v1/registry/roms?since={newest}&art=none").json()["count"] == 0
+    assert client.get("/v1/registry/roms",
+                      params={"since": newest, "art": "none"}).json()["count"] == 0
+    assert client.get("/v1/registry/roms?since=1970-01-01T00:00:00+00:00&art=none").json()["count"] == 2
+
+
+@pytest.mark.parametrize("path", [
+    "/v1/registry",
+    "/v1/registry/roms",
+    "/v1/registry/b/ada",
+    "/v1/registry/b/ada/avatar",
+])
+def test_a_client_that_already_has_it_is_told_so(client, populated, path):
+    """These were `no-store` with no validator, so a client watching for
+    changes re-downloaded everything or showed stale data with nothing to say
+    how stale."""
+    first = client.get(path)
+    assert first.status_code == 200
+    tag = first.headers.get("etag")
+    assert tag, f"{path} sends no ETag"
+
+    again = client.get(path, headers={"if-none-match": tag})
+    assert again.status_code == 304, f"{path} did not honour If-None-Match"
+    assert again.headers.get("etag") == tag
+    assert not again.content, "a 304 must carry no body"
+
+    # A tag that is not this one still gets the document.
+    assert client.get(path, headers={"if-none-match": 'W/"nope"'}).status_code == 200
+
+
+def test_the_tag_follows_the_representation_not_the_row(client, populated):
+    """`?art=none` and `?art=inline` are different bytes from the same rows.
+    A tag derived from max(updated) would have given them the same one, and a
+    client switching between them would have been served the wrong body."""
+    inline = client.get("/v1/registry").headers["etag"]
+    lean = client.get("/v1/registry?art=none").headers["etag"]
+    assert inline != lean
+
+
+def test_the_tag_changes_when_something_is_published(client, populated):
+    before = client.get("/v1/registry/roms?art=none").headers["etag"]
+    r = client.put("/v1/registry/b/ada/roms/third", headers=auth(populated),
+                   json={"cart": b64(mint_cart(client, "Third")), "frames": 2})
+    assert r.status_code == 200, r.text
+    assert client.get("/v1/registry/roms?art=none").headers["etag"] != before, (
+        "the tag survived a publish, which makes it a promise the service cannot keep"
+    )
+
+
+@pytest.mark.parametrize("path", ["/healthz", "/v1/registry", "/v1/registry/roms", "/v1/meta"])
+def test_head_is_answered_wherever_get_is(client, populated, path):
+    """HEAD was 405 everywhere. RFC 9110 defines it as GET without a body, so a
+    resource that answers one answers the other, and a 405 tells a monitor the
+    endpoint is broken rather than that it is fine."""
+    get, head = client.get(path), client.head(path)
+    assert head.status_code == get.status_code == 200
+    assert not head.content, "HEAD returned a body"
+    assert head.headers.get("content-length") == get.headers.get("content-length"), (
+        "the headers should be the ones GET would send, so a client can ask how "
+        "big something is without fetching it"
+    )

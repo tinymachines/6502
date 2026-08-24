@@ -338,7 +338,31 @@ def update_builder(db: sqlite3.Connection, handle: str, patch: dict) -> dict:
     return builder(db, handle)
 
 
-def builder(db: sqlite3.Connection, handle: str, with_roms: bool = True) -> dict:
+def art_of(row: sqlite3.Row, prefix: str, url: str, art: str) -> dict | None:
+    """One art field, either inline or as a reference.
+
+    `art="none"` is what makes a listing usable. A cover is 6,173 bytes of the
+    7,016 a ROM entry occupies, and an avatar 2,075 of a builder's, so a page
+    of two hundred builders is about 415 KB of CHR before any ROM data and
+    there was no way to decline it. Callers that want to draw the art fetch it
+    per URL, where it caches on its own.
+
+    The dimensions stay either way. They are what a client needs to lay out a
+    box before the bytes arrive, and they are eight bytes rather than eight
+    kilobytes.
+    """
+    if not row[prefix]:
+        return None
+    out = {"w": row[f"{prefix}_w"], "h": row[f"{prefix}_h"]}
+    if art == "none":
+        out["url"] = url
+    else:
+        out["chr"] = row[prefix].hex()
+    return out
+
+
+def builder(db: sqlite3.Connection, handle: str, with_roms: bool = True,
+            art: str = "inline") -> dict:
     row = db.execute("SELECT * FROM builders WHERE handle = ?", (handle,)).fetchone()
     if row is None:
         raise RegistryError(f"no builder {handle!r}", 404)
@@ -347,18 +371,18 @@ def builder(db: sqlite3.Connection, handle: str, with_roms: bool = True) -> dict
         "name": row["name"],
         "bio": row["bio"],
         "links": json.loads(row["links"]),
-        "avatar": ({"w": row["avatar_w"], "h": row["avatar_h"], "chr": row["avatar"].hex()}
-                   if row["avatar"] else None),
+        "avatar": art_of(row, "avatar", f"/v1/registry/b/{row['handle']}/avatar", art),
         "created": row["created"],
         "updated": row["updated"],
     }
     if with_roms:
-        out["roms"] = [rom_brief(r) for r in db.execute(
+        out["roms"] = [rom_brief(r, art) for r in db.execute(
             "SELECT * FROM roms WHERE handle = ? ORDER BY updated DESC", (handle,))]
     return out
 
 
-def builders(db: sqlite3.Connection, limit: int = 100, offset: int = 0) -> dict:
+def builders(db: sqlite3.Connection, limit: int = 100, offset: int = 0,
+             art: str = "inline") -> dict:
     rows = db.execute(
         "SELECT b.*, (SELECT COUNT(*) FROM roms r WHERE r.handle = b.handle) AS roms "
         "FROM builders b ORDER BY b.updated DESC LIMIT ? OFFSET ?", (limit, offset))
@@ -368,22 +392,21 @@ def builders(db: sqlite3.Connection, limit: int = 100, offset: int = 0) -> dict:
         "builders": [{
             "handle": r["handle"], "name": r["name"], "bio": r["bio"],
             "roms": r["roms"], "updated": r["updated"],
-            "avatar": ({"w": r["avatar_w"], "h": r["avatar_h"], "chr": r["avatar"].hex()}
-                       if r["avatar"] else None),
+            "avatar": art_of(r, "avatar", f"/v1/registry/b/{r['handle']}/avatar", art),
         } for r in rows],
     }
 
 
 # -- roms --------------------------------------------------------------------
 
-def rom_brief(r: sqlite3.Row) -> dict:
+def rom_brief(r: sqlite3.Row, art: str = "inline") -> dict:
     return {
         "slug": r["slug"], "handle": r["handle"], "title": r["title"], "blurb": r["blurb"],
         "rom_size": r["rom_size"], "tiles": r["tiles"], "frame_cost": r["frame_cost"],
         "sha256": r["sha256"], "bytes": len(r["cart"]),
         "measured": json.loads(r["measured"]),
-        "cover": ({"w": r["cover_w"], "h": r["cover_h"], "chr": r["cover"].hex()}
-                  if r["cover"] else None),
+        "cover": art_of(r, "cover",
+                        f"/v1/registry/b/{r['handle']}/roms/{r['slug']}/cover", art),
         "created": r["created"], "updated": r["updated"],
         "cart_url": f"/v1/registry/b/{r['handle']}/roms/{r['slug']}/cart",
         "play_url": f"https://games.tinymachines.ai/b/{r['handle']}/{r['slug']}",
@@ -467,6 +490,85 @@ def unpublish(db: sqlite3.Connection, handle: str, slug: str) -> dict:
     return {"removed": f"{handle}/{slug}"}
 
 
-def latest(db: sqlite3.Connection, limit: int = 24) -> list[dict]:
-    return [rom_brief(r) for r in db.execute(
+def latest(db: sqlite3.Connection, limit: int = 24, art: str = "inline") -> list[dict]:
+    return [rom_brief(r, art) for r in db.execute(
         "SELECT * FROM roms ORDER BY updated DESC LIMIT ?", (limit,))]
+
+
+def roms(db: sqlite3.Connection, limit: int = 100, offset: int = 0,
+         handle: str | None = None, since: str | None = None,
+         art: str = "inline") -> dict:
+    """Every cartridge, newest first.
+
+    The index carries a `latest` slice and a per-builder count, and that is
+    enough to render a front page and nothing else: enumerating what has been
+    published meant walking one document per builder, each dragging that
+    builder's avatar and every one of its covers. With the documented limit of
+    32 ROMs a builder, a fifty builder walk is fifty-one requests and about a
+    megabyte, almost all of it art.
+
+    `since` filters on `updated`, which is an ISO 8601 string in UTC written by
+    now(). They all have the same shape, so lexical order is chronological
+    order and a string comparison is the right one. It is a poller's parameter:
+    ask for what changed rather than for everything and a diff.
+
+    `count` is the number matching the filter rather than the number returned,
+    so a caller can page without asking twice.
+    """
+    where, args = [], []
+    if handle:
+        where.append("handle = ?")
+        args.append(handle.lower())
+    if since:
+        # `+` in a query string means a space, so an ISO timestamp copied
+        # straight out of an `updated` field arrives as
+        # "2026-08-23T22:07:16 00:00" unless the caller percent-encoded it.
+        # That string sorts BEFORE every stored value, so the filter silently
+        # matched everything: the one failure mode a "what changed" parameter
+        # must not have, because the answer looks like a working answer.
+        #
+        # Repaired rather than documented. Every timestamp written here uses
+        # `T` between the date and the time, so a space can only be a mangled
+        # `+` and putting it back is not a guess.
+        where.append("updated > ?")
+        args.append(since.replace(" ", "+"))
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+
+    total = db.execute(f"SELECT COUNT(*) FROM roms{clause}", args).fetchone()[0]
+    rows = db.execute(
+        f"SELECT * FROM roms{clause} ORDER BY updated DESC, slug ASC LIMIT ? OFFSET ?",
+        (*args, limit, offset))
+    return {
+        "count": total,
+        "limit": limit,
+        "offset": offset,
+        "roms": [rom_brief(r, art) for r in rows],
+    }
+
+
+def art_bytes(db: sqlite3.Connection, handle: str, slug: str | None = None) -> dict:
+    """One avatar or one cover, on its own.
+
+    The other half of `art=none`: a listing says where the art is, and this is
+    where it is. Same shape it had inline, so a client that already knows how
+    to draw a CHR block does not learn a second format.
+
+    404 rather than an empty block when there is none, because "this builder
+    has no avatar" and "there is no such builder" are different facts and a
+    caller redrawing a page needs to tell them apart.
+    """
+    if slug is None:
+        row = db.execute("SELECT * FROM builders WHERE handle = ?", (handle,)).fetchone()
+        if row is None:
+            raise RegistryError(f"no builder {handle!r}", 404)
+        if not row["avatar"]:
+            raise RegistryError(f"{handle!r} has no avatar", 404)
+        return {"w": row["avatar_w"], "h": row["avatar_h"], "chr": row["avatar"].hex()}
+
+    row = db.execute("SELECT * FROM roms WHERE handle = ? AND slug = ?",
+                     (handle, slug)).fetchone()
+    if row is None:
+        raise RegistryError(f"no rom {handle}/{slug}", 404)
+    if not row["cover"]:
+        raise RegistryError(f"{handle}/{slug} has no cover", 404)
+    return {"w": row["cover_w"], "h": row["cover_h"], "chr": row["cover"].hex()}

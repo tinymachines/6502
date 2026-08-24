@@ -91,14 +91,68 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+class HeadAsGet:
+    """Answer HEAD wherever GET is answered.
+
+    Every route here replied 405 to HEAD. That is the wrong answer twice over:
+    RFC 9110 defines HEAD as GET without a body, so a resource that answers one
+    answers the other, and a 405 tells a monitor the endpoint is broken rather
+    than that it is fine.
+
+    FastAPI's APIRoute registers only the methods named on the decorator.
+    Starlette's own Route quietly adds HEAD to any GET; APIRoute does not, and
+    the difference is invisible until something sends one.
+
+    Done here rather than by adding methods=["GET", "HEAD"] to two dozen
+    decorators, for a documentation reason: that would put a HEAD operation on
+    every path in openapi.json, describing something HTTP already guarantees,
+    in a document whose whole claim is that every line earns its place. This is
+    transport behaviour, so it lives in the transport.
+
+    The headers are the ones GET would send, Content-Length included, so a
+    client can ask how big something is without fetching it. more_body is
+    forced off so a streaming response cannot leave the connection waiting for
+    a chunk that will never come.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http" or scope.get("method") != "HEAD":
+            await self.app(scope, receive, send)
+            return
+
+        scope = dict(scope, method="GET")
+
+        async def send_without_body(message):
+            if message["type"] == "http.response.body":
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
+                return
+            await send(message)
+
+        await self.app(scope, receive, send_without_body)
+
+
+app.add_middleware(HeadAsGet)
+
 # Open on purpose: the server holds no user state and no credentials, so a
 # third-party notebook or classroom page POSTing a machine here risks
 # nothing. This is what lets the API be used from anywhere.
+#
+# HEAD is listed because the middleware above answers it, and a preflight for
+# a method the policy does not name is refused before it reaches the app.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "HEAD", "POST", "OPTIONS"],
     allow_headers=["content-type"],
+    # So a cross-origin caller can revalidate. A browser hides every response
+    # header from script except a short safelist, and ETag is not on it: the
+    # tag would arrive, be invisible to the page, and If-None-Match would never
+    # be sent. Naming it here is what makes the validator reachable from
+    # tinymachines.ai, which is where the roof reads this service from.
+    expose_headers=["ETag"],
 )
 
 
@@ -1159,6 +1213,51 @@ def mcp_no_stream() -> Response:
     )
 
 
+
+# -- conditional requests -----------------------------------------------------
+#
+# The registry's listings were `cache-control: no-store` with no validator at
+# all, so a client watching for changes re-downloaded everything or showed
+# stale data with nothing to say how stale. Neither is necessary: the answer
+# only changes when somebody publishes.
+#
+# The tag is a hash of the body rather than of `updated`, and that is the
+# cheaper thing to be right about. A max(updated) tag has to know which rows
+# an answer depended on, and gets it wrong the first time a parameter changes
+# which rows those are: `?art=none` and `?art=inline` are different bytes from
+# the same rows, and would have shared a tag. Hashing what is about to be sent
+# cannot disagree with what is sent.
+#
+# Weak, because that is what this is. A strong tag promises byte equality for
+# range requests; this promises the representation is unchanged, which is what
+# If-None-Match is asked.
+
+def _etag(payload: object) -> str:
+    body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return 'W/"' + hashlib.sha256(body).hexdigest()[:32] + '"'
+
+
+def _conditional(request: Request, payload: object) -> Response:
+    """A 304 when the client already has this, or the payload with its tag.
+
+    max-age=0 with must-revalidate rather than no-store: the client keeps the
+    copy and asks whether it is still good, which is the whole point of having
+    a validator. no-store told it to keep nothing, which made the tag useless.
+    """
+    tag = _etag(payload)
+    headers = {"ETag": tag, "Cache-Control": "max-age=0, must-revalidate"}
+
+    # If-None-Match is a list, and a proxy may have added the W/ prefix or
+    # taken it off. Compare on the opaque part so a weak tag matches itself.
+    def bare(t: str) -> str:
+        return t.strip().removeprefix("W/").strip()
+
+    seen = [bare(t) for t in (request.headers.get("if-none-match") or "").split(",") if t.strip()]
+    if bare(tag) in seen or "*" in seen:
+        return Response(status_code=304, headers=headers)
+    return JSONResponse(payload, headers=headers)
+
+
 # -- the registry ------------------------------------------------------------
 #
 # Builders, their pages, and the cartridges they publish. See registry.py for
@@ -1193,15 +1292,45 @@ def _measure_cartridge(doc: dict, frames: int) -> VerifyReport:
     return _verify(doc, frames, 60000)
 
 
+ART = Query("inline", pattern="^(inline|none)$",
+            description="`none` replaces every CHR block with a URL, keeping the "
+                        "dimensions. A cover is most of a ROM entry's bytes, so a "
+                        "listing that cannot decline the art is a listing that cannot "
+                        "be paged through.")
+
+
 @app.get("/v1/registry")
-def registry_index(limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)) -> dict:
+def registry_index(request: Request,
+                   limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0),
+                   art: str = ART) -> Response:
     """Everyone with a page, and the most recently published ROMs."""
     db = _reg()
     try:
-        out = registry.builders(db, limit=limit, offset=offset)
-        out["latest"] = registry.latest(db)
+        out = registry.builders(db, limit=limit, offset=offset, art=art)
+        out["latest"] = registry.latest(db, art=art)
         out["limits"] = registry.LIMITS
-        return out
+        return _conditional(request, out)
+    finally:
+        db.close()
+
+
+@app.get("/v1/registry/roms")
+def registry_roms(request: Request,
+                  limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0),
+                  handle: str | None = Query(None, description="Only this builder's."),
+                  since: str | None = Query(None, description="Only those updated after this "
+                                                              "ISO 8601 timestamp."),
+                  art: str = ART) -> Response:
+    """Every cartridge, newest first.
+
+    The index carries a `latest` slice and a per-builder count. Enumerating
+    what has actually been published meant walking one document per builder,
+    each one dragging that builder's avatar and every one of its covers.
+    """
+    db = _reg()
+    try:
+        return _conditional(request, registry.roms(
+            db, limit=limit, offset=offset, handle=handle, since=since, art=art))
     finally:
         db.close()
 
@@ -1238,11 +1367,39 @@ def registry_claim(req: ClaimRequest, request: Request) -> dict:
 
 
 @app.get("/v1/registry/b/{handle}")
-def registry_builder(handle: str) -> dict:
+def registry_builder(request: Request, handle: str, art: str = ART) -> Response:
     """One builder's page as data: who they are and everything they publish."""
     db = _reg()
     try:
-        return registry.builder(db, handle.lower())
+        return _conditional(request, registry.builder(db, handle.lower(), art=art))
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+
+
+@app.get("/v1/registry/b/{handle}/avatar")
+def registry_avatar(request: Request, handle: str) -> Response:
+    """One builder's avatar, on its own.
+
+    The other half of `art=none`. Same shape it has inline, so a client that
+    can already draw a CHR block does not learn a second format.
+    """
+    db = _reg()
+    try:
+        return _conditional(request, registry.art_bytes(db, handle.lower()))
+    except registry.RegistryError as e:
+        raise _reg_error(e) from e
+    finally:
+        db.close()
+
+
+@app.get("/v1/registry/b/{handle}/roms/{slug}/cover")
+def registry_cover(request: Request, handle: str, slug: str) -> Response:
+    """One ROM's cover art, on its own."""
+    db = _reg()
+    try:
+        return _conditional(request, registry.art_bytes(db, handle.lower(), slug.lower()))
     except registry.RegistryError as e:
         raise _reg_error(e) from e
     finally:
