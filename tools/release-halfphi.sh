@@ -94,15 +94,22 @@ DIGEST=$(digest "$HERE")
 log "shared-file digest $DIGEST"
 
 # --- the gates, on the bytes being tagged ---------------------------------
+# Each test run goes to a file and is then read, not piped into grep -q: a
+# grep that exits on its match sends SIGPIPE to what feeds it, and under
+# pipefail that race reads as a failed gate. It did, on the first dry run.
+three_chips() {
+  local out; out=$(mktemp)
+  ( cd "$1" && HALFPHI_REQUIRE_CHIPS=1 cargo test -q "${@:2}" >"$out" 2>&1 ) || { cat "$out" >&2; rm -f "$out"; return 1; }
+  grep -q 'test result: ok. 3 passed' "$out" || { cat "$out" >&2; rm -f "$out"; return 1; }
+  rm -f "$out"
+}
 log "gates in $THERE (what its CI runs)"
-( cd "$THERE" \
-  && cargo fmt --all -- --check \
-  && cargo clippy -q --all-targets -- -D warnings \
-  && HALFPHI_REQUIRE_CHIPS=1 cargo test -q 2>&1 | tee /dev/stderr | grep -q 'test result: ok. 3 passed' \
-  && cargo doc -q --no-deps ) || refuse "a gate failed in $THERE"
+( cd "$THERE" && cargo fmt --all -- --check ) || refuse "fmt in $THERE"
+( cd "$THERE" && cargo clippy -q --all-targets -- -D warnings ) || refuse "clippy in $THERE"
+three_chips "$THERE" || refuse "the three-chip test in $THERE"
+( cd "$THERE" && cargo doc -q --no-deps ) || refuse "cargo doc in $THERE"
 log "gates here"
-( cd "$ROOT" && HALFPHI_REQUIRE_CHIPS=1 cargo test -q -p halfphi 2>&1 | tee /dev/stderr | grep -q 'test result: ok. 3 passed' ) \
-  || refuse "crates/halfphi's test failed here"
+three_chips "$ROOT" -p halfphi || refuse "crates/halfphi's test here"
 
 if [ -n "$DRY" ]; then
   log "dry run: every gate passed; nothing written. Would tag halfphi v$VERSION and 6502 halfphi-v$VERSION at $DIGEST"
