@@ -259,6 +259,9 @@ def main() -> None:
     # leaf: imports nothing.
     b.copy_hashed("solo-palette.js")
     b.copy_hashed("chip-controls.js")
+    # One chip across the pages: the snapshot a page leaves and the driver
+    # every page hands the store. A leaf: imports nothing.
+    b.copy_hashed("chip-machine.js")
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
     # The chip as one node-and-edge graph (export-graph): the tracer reads it
@@ -351,6 +354,7 @@ def main() -> None:
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./chip-machine.js", "./" + b.ref("chip-machine.js")),
     ]:
         app = replace_once(app, f"'{original}'", f"'{resolved}'", where="app.js")
     app = replace_once(app, "fetch('layout.bin')", f"fetch('{b.ref('layout.bin')}')", where="app.js")
@@ -366,6 +370,7 @@ def main() -> None:
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./chip-machine.js", "./" + b.ref("chip-machine.js")),
         ("./blueprint-draw.js", "./" + b.ref("blueprint-draw.js")),
     ]:
         bp = replace_once(bp, f"'{original}'", f"'{resolved}'", where="blueprint.js")
@@ -386,6 +391,7 @@ def main() -> None:
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./chip-machine.js", "./" + b.ref("chip-machine.js")),
     ]:
         exp = replace_once(exp, f"'{original}'", f"'{resolved}'", where="exploded.js")
     exp = replace_once(exp, "fetch('layout.bin')",
@@ -424,6 +430,7 @@ def main() -> None:
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./chip-machine.js", "./" + b.ref("chip-machine.js")),
         # Both arrived with the block bench: the boundary is computed by
         # block-cone.js, and the slug a `?block=` link names is resolved through
         # block-notes.js. Miss either and the hashed bundle 404s at runtime
@@ -465,6 +472,8 @@ def main() -> None:
     #     lamp strip on another about which end bit 7 is on.
     dm = b.read("demos.js").decode()
     dm = replace_once(dm, "'./chip-controls.js'", f"'./{b.ref('chip-controls.js')}'",
+                      where="demos.js")
+    dm = replace_once(dm, "'./chip-machine.js'", f"'./{b.ref('chip-machine.js')}'",
                       where="demos.js")
     b.emit("demos.js", dm.encode())
 
@@ -519,6 +528,7 @@ def main() -> None:
         ("./programs.js", "./" + b.ref("programs.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./chip-machine.js", "./" + b.ref("chip-machine.js")),
     ]:
         bk = replace_once(bk, f"'{original}'", f"'{resolved}'", where="block.js")
     for original in ["schematic.json", "blocks.json"]:
@@ -659,6 +669,7 @@ def main() -> None:
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./chip-machine.js", "./" + b.ref("chip-machine.js")),
         ("./chip-groups.js", "./" + b.ref("chip-groups.js")),
         ("./die-centroids.js", "./" + b.ref("die-centroids.js")),
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
@@ -684,6 +695,7 @@ def main() -> None:
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./chip-machine.js", "./" + b.ref("chip-machine.js")),
         ("./block-palette.js", "./" + b.ref("block-palette.js")),
         ("./sch-draw.js", "./" + b.ref("sch-draw.js")),
         ("./die-centroids.js", "./" + b.ref("die-centroids.js")),

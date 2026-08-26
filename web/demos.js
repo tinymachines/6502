@@ -15,6 +15,7 @@ import {
   isRunning, setRunning, step as stepChip, stepBack, reset as resetChip,
   registerDriver, subscribe, halfCyclesFor,
 } from './chip-controls.js';
+import { adopt, chipDriver } from './chip-machine.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 
@@ -75,12 +76,7 @@ export function createChip({ Machine, program, loadAddr }) {
   // Whether it is running and how fast are the header's, not this chip's. It
   // does know how to step, though, so it registers itself as what the header
   // drives -- and repaints its own transports whenever the store moves.
-  registerDriver({
-    step: advance,
-    back: () => { m.stepBack(); announce(); },
-    reset: () => { m.powerCycle(); announce(); },
-    halfCycle: () => m.halfCycle(),
-  });
+  registerDriver(chipDriver(m, { reset: () => m.powerCycle(), after: announce }));
   subscribe(announce);
 
   function frame(now) {

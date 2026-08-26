@@ -13,7 +13,7 @@
 // 'unsafe-inline'.
 
 import {
-  CLOCKS, clockHz, isRunning, setClock, toggleRunning, step, reset,
+  CLOCKS, clockHz, isRunning, isPowered, setClock, toggleRunning, step, reset,
   subscribe, registerDriver, initClock, chipHalfCycle,
 } from './chip-controls.js';
 
@@ -22,8 +22,10 @@ import {
  *
  * `driver` is how the header reaches the page's machine: `step` advances one
  * half-cycle, `reset` power-cycles, `back` steps backwards if the page can.
- * Running and the clock rate are not the page's to hold -- they live in the
- * store, and the page reads them.
+ * chip-machine.js builds the full one (capabilities, opcode step, seek,
+ * power) for any page that runs a wasm Machine. Running and the clock rate
+ * are not the page's to hold -- they live in the store, and the page reads
+ * them.
  */
 export function setupChipNav(driver, { root = document } = {}) {
   // Omitted when the chip registered itself -- demos.js does, because there the
@@ -58,9 +60,13 @@ export function setupChipNav(driver, { root = document } = {}) {
 
     const run = btn('is-run', '▶', 'Run', () => toggleRunning());
     run.setAttribute('aria-pressed', 'false');
-    btn('', '▶❙', 'One half-cycle', () => step());
-    btn('', '⏻', 'Power cycle', () => reset());
+    const half = btn('', '▶❙', 'One half-cycle', () => step());
+    const cycle = btn('', '⏻', 'Power cycle', () => reset());
     runs.push(run);
+    // A chip switched off (the floor strip on tinymachines.ai has the switch)
+    // is not one these can act on, and a button that presses at nothing is
+    // the bug this module exists to prevent.
+    const gate = () => { for (const b of [run, half, cycle]) b.disabled = !isPowered(); };
 
     const rate = document.createElement('select');
     rate.className = 'nav-clock-select';
@@ -73,6 +79,7 @@ export function setupChipNav(driver, { root = document } = {}) {
     host.append(group, rate);
 
     subscribe(() => {
+      gate();
       const on = isRunning();
       run.textContent = on ? '❚❚' : '▶';
       run.title = on ? 'Pause' : 'Run';

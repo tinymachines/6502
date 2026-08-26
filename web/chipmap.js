@@ -34,6 +34,7 @@ import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
 import { setupChipNav } from './chip-nav.js';
+import { adopt, chipDriver } from './chip-machine.js';
 import {
   halfCyclesFor, CLOCKS, clockHz, setClock, toggleRunning, isRunning,
   step as stepChip, stepBack as stepBackChip, reset as resetChip, subscribe,
@@ -1332,6 +1333,7 @@ async function boot() {
     state.machine = m;
     state.reader = readerOf(m);
     loadTheProgram(selectedProgram(location.search));
+    adopt(m, selectedProgram(location.search));
     // Choosing a program leaves the tour: the tour's program is its own.
     setupProgramNav({ onChange: (i) => {
       setSelectedProgram(i);
@@ -1339,12 +1341,10 @@ async function boot() {
       loadTheProgram(i);
       paint();
     } });
-    setupChipNav({
-      step: () => { m.halfStep(); paint(); },
-      back: () => { m.stepBack(); paint(); },
-      reset: () => { m.powerCycle(); state.prev = null; paint(); },
-      halfCycle: () => m.halfCycle(),
-    });
+    setupChipNav(chipDriver(m, {
+      reset: () => { m.powerCycle(); state.prev = null; },
+      after: paint,
+    }));
     paint();
     requestAnimationFrame(tick);
 

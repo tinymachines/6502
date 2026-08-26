@@ -21,6 +21,7 @@ import { blockCss } from './block-palette.js';
 import { setupProgramNav } from './program-nav.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupChipNav } from './chip-nav.js';
+import { adopt, chipDriver } from './chip-machine.js';
 import { halfCyclesFor } from './chip-controls.js';
 import { SLUGS, NOTES, DOES } from './block-notes.js';
 import { createBlockView } from './block-cone.js';
@@ -867,15 +868,11 @@ async function boot() {
         m.powerCycle();
       };
       loadProgram(selectedProgram(location.search));
+      adopt(m, selectedProgram(location.search));
       setupProgramNav({
         onChange: (i) => { setSelectedProgram(i); loadProgram(i); paint(); },
       });
-      setupChipNav({
-        step: () => { m.halfStep(); paint(); },
-        back: () => { m.stepBack(); paint(); },
-        reset: () => { m.powerCycle(); paint(); },
-        halfCycle: () => m.halfCycle(),
-      });
+      setupChipNav(chipDriver(m, { reset: () => m.powerCycle(), after: paint }));
       requestAnimationFrame(tick);
     } else {
       setupProgramNav();

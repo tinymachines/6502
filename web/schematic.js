@@ -19,6 +19,7 @@ import { SLUGS } from './block-notes.js';
 import { setupFullscreen } from './fullscreen.js';
 import { createPalette } from './solo-palette.js';
 import { setupChipNav } from './chip-nav.js';
+import { adopt, chipDriver } from './chip-machine.js';
 import {
   CLOCKS, clockHz, isRunning, setClock, toggleRunning,
   step as stepChip, stepBack, reset as resetChip, subscribe, halfCyclesFor,
@@ -2142,6 +2143,7 @@ async function boot() {
     // console grew a memory and a stack readout.
     m.setResetVector(LOAD_ADDR);
     m.powerCycle();
+    adopt(m, state.program);
 
     // The pins, resolved once. Their level is read back out of these nodes
     // rather than remembered, so a button cannot disagree with the chip.
@@ -2194,12 +2196,10 @@ async function boot() {
     // The header owns the transport; this page's own buttons and the study
     // view's are two more views of it. The study view is fullscreen, with no
     // header to reach, so it carries the clock select as well.
-    setupChipNav({
-      step: () => { state.machine.halfStep(); refresh(); },
-      back: () => { state.machine.stepBack(); refresh(); },
-      reset: () => { state.machine.powerCycle(); refresh(); },
-      halfCycle: () => state.machine.halfCycle(),
-    });
+    setupChipNav(chipDriver(state.machine, {
+      reset: () => state.machine.powerCycle(),
+      after: refresh,
+    }));
     const soloClock = $('solo-clock-select');
     for (const c of CLOCKS) soloClock.add(new Option(c.label, String(c.hz)));
     soloClock.addEventListener('change', () => setClock(Number(soloClock.value)));

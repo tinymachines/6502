@@ -33,11 +33,13 @@ iframe{width:1280px;height:760px;border:0}pre{padding:1rem;white-space:pre-wrap}
 <script type="module">
 import {
   CLOCKS, DEFAULT_HZ, clockHz, isRunning, setClock, setRunning, halfCyclesFor,
-  resetControls,
+  resetControls, registerDriver, driverCaps, isPowered, isBooting, setPower,
+  step, stepOp, seek, chipEarliest, chipLength, chipHalfCycle, hasDriver,
 } from './chip-controls.js';
+import { chipDriver } from './chip-machine.js';
 
 const results = [];
-const ok = (n, c, d) => results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`);
+const ok = (n, c, d) => { results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`); document.title = `running ${results.length}`; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const f = document.getElementById('f');
 const load = (src) => new Promise((r) => {
@@ -111,6 +113,126 @@ function pace(seconds, frameMs) {
     resetControls();
 
     // --------------------------------------------------------------------
+    // 1b. Power, capabilities, the opcode step and seek
+    // --------------------------------------------------------------------
+    //
+    // Driven against a fake machine with the wasm Machine's surface, so the
+    // arithmetic is exact and the store's refusals are what is tested. The
+    // fake fetches (SYNC high) every fourth half-cycle and rewinds over the
+    // last 16.
+
+    const fake = () => {
+      const f = { h: 0, boots: 0, log: [] };
+      f.halfCycle = () => f.h;
+      f.halfStep = () => { f.h += 1; f.log.push('step'); };
+      f.stepBack = () => { if (f.h > 0) { f.h -= 1; return true; } return false; };
+      f.sync = () => f.h % 4 === 0;
+      f.stepInstruction = (max) => { for (let i = 0; i < max; i++) { f.h += 1; if (f.sync()) return true; } return false; };
+      f.earliestHalfCycle = () => Math.max(0, f.h - 16);
+      f.rewindTo = (h) => { if (h < f.earliestHalfCycle()) return false; f.h = h; return true; };
+      f.runHalfCycles = (n) => { f.h += n; };
+      return f;
+    };
+
+    // Nothing registered: no capabilities, no power, and nothing to seek.
+    resetControls();
+    ok('with no driver the store offers nothing',
+       Object.keys(driverCaps()).length === 0 && !isPowered() && chipEarliest() === null && chipLength() === null);
+
+    // A driver from chip-machine.js declares the whole set.
+    let m = fake();
+    let painted = 0;
+    registerDriver(chipDriver(m, { reset: () => { m.h = 0; m.boots += 1; }, after: () => { painted += 1; } }));
+    const caps = driverCaps();
+    ok('a wasm driver offers power, back, step, cycle, op, rate and seek',
+       ['power', 'back', 'step', 'cycle', 'op', 'rate', 'seek'].every((k) => caps[k] === true),
+       JSON.stringify(caps));
+    ok('registering a driver powers the chip on', isPowered() && hasDriver());
+
+    // The bare four-method driver the pages used to write is read off its methods.
+    registerDriver({ step() {}, reset() {}, halfCycle: () => 0 });
+    const bare = driverCaps();
+    ok('a driver without caps is read off its methods',
+       bare.step === true && bare.cycle === true && bare.back === false && bare.op === false && bare.seek === false,
+       JSON.stringify(bare));
+
+    // The opcode step lands on the next fetch, and one press is one opcode.
+    m = fake(); painted = 0;
+    registerDriver(chipDriver(m, { reset: () => { m.h = 0; }, after: () => { painted += 1; } }));
+    step();                                   // h 1
+    stepOp();                                 // to the next SYNC: h 4
+    const op1 = m.h;
+    stepOp();                                 // h 8
+    ok('the opcode step goes to the next fetch, and only the next',
+       op1 === 4 && m.h === 8 && !isRunning(), `h ${op1} then ${m.h}`);
+    ok('every action repaints the page once', painted === 3, `${painted} paints for three actions`);
+
+    // A driver with sync but no op is stepped until it fetches, bounded.
+    const s2 = fake();
+    registerDriver({ step: () => s2.halfStep(), sync: () => s2.sync(), halfCycle: () => s2.h, reset() {} });
+    s2.h = 1;
+    stepOp();
+    const never = fake(); never.sync = () => false;
+    registerDriver({ step: () => never.halfStep(), sync: () => never.sync(), halfCycle: () => never.h, reset() {} });
+    stepOp(50);
+    ok('a driver with only sync is stepped to the fetch; one that never fetches is bounded',
+       s2.h === 4 && never.h === 50, `${s2.h}, ${never.h}`);
+
+    // Seek: back within the window, forward by running, refused outside.
+    m = fake();
+    registerDriver(chipDriver(m, { reset: () => { m.h = 0; } }));
+    m.h = 40;
+    seek(30);
+    const back = m.h;
+    seek(45);
+    const fwd = m.h;
+    seek(2);                                  // outside the 16-half-cycle window
+    ok('seek rewinds inside the window, runs forward, and refuses what it cannot reach',
+       back === 30 && fwd === 45 && m.h === 45 && chipEarliest() === 29,
+       `back ${back}, forward ${fwd}, refused at ${m.h}, earliest ${chipEarliest()}`);
+    ok('a live machine has no length', chipLength() === null);
+    const rec = { caps: { seek: true }, seek(h) { rec.at = h; }, halfCycle: () => rec.at, length: () => 120, earliest: () => 0, at: 5 };
+    registerDriver(rec);
+    ok('a recording reports its length and starts at 0', chipLength() === 120 && chipEarliest() === 0);
+
+    // Power. Off refuses to run or step and remembers itself; on boots again.
+    m = fake();
+    registerDriver(chipDriver(m, { reset: () => { m.h = 0; m.boots += 1; } }));
+    m.h = 12;
+    setRunning(true);
+    await setPower(false);
+    const offStopped = !isRunning() && !isPowered();
+    setRunning(true);
+    step();
+    const refused = !isRunning() && m.h === 12;
+    ok('power off stops the chip and refuses run and step', offStopped && refused, `running ${isRunning()}, h ${m.h}`);
+    ok('the switch is written down', sessionStorage.getItem('v6502.power') === '0');
+    const m2 = fake();
+    registerDriver(chipDriver(m2, { reset: () => { m2.boots += 1; } }));
+    ok('the next page opens with the switch still off', !isPowered());
+    let sawBooting = false;
+    const unsubB = (await import('./chip-controls.js')).subscribe(() => { if (isBooting()) sawBooting = true; });
+    await setPower(true);
+    unsubB();
+    ok('power on boots a new machine, and says so while it does',
+       isPowered() && m2.boots === 1 && sawBooting && sessionStorage.getItem('v6502.power') === '1',
+       `boots ${m2.boots}, booting seen ${sawBooting}`);
+
+    // A driver that holds its own power (the Lab) is asked, not assumed.
+    let labOn = false;
+    registerDriver({ caps: { power: true }, powered: () => labOn, power: async (on) => { labOn = on; }, reset() {}, halfCycle: () => 0 });
+    const askedOff = !isPowered();
+    await setPower(true);
+    ok('a driver with power of its own is asked whether it is on', askedOff && isPowered() && labOn);
+
+    // Unregistering: a page that leaves takes its chip with it.
+    registerDriver(null);
+    ok('registerDriver(null) leaves nothing to press',
+       !hasDriver() && !isPowered() && !isRunning() && chipHalfCycle() === null);
+
+    resetControls();
+
+    // --------------------------------------------------------------------
     // 2. The wiring
     // --------------------------------------------------------------------
 
@@ -164,6 +286,35 @@ function pace(seconds, frameMs) {
       && headRun.textContent === '▶' && headRun.title === 'Run';
     ok('the run button becomes a pause button, and back',
        pressedOn && pressedOff, `on: ${pressedOn}, off: ${pressedOff}`);
+
+    // One chip across pages. The machine a page leaves is the machine the
+    // next page opens on: run the explorer to half-cycle 51, leave, come back
+    // with no deep link, and the count is still 51 rather than 0.
+    sessionStorage.removeItem('v6502.machine');
+    await load('index.html?steps=51');
+    d = f.contentDocument;
+    for (let i = 0; i < 400 && Number(d.getElementById('b-half').textContent) !== 51; i++) await sleep(50);
+    const left = Number(d.getElementById('b-half').textContent);
+    await load('index.html');
+    d = f.contentDocument;
+    for (let i = 0; i < 400 && !d.querySelector('.nav-transport'); i++) await sleep(50);
+    await sleep(200);
+    const arrived = Number(d.getElementById('b-half').textContent);
+    ok('the machine you left is the machine you arrive at',
+       left === 51 && arrived === 51, `left at ${left}, arrived at ${arrived}`);
+    // And a different program does not inherit it.
+    await load('index.html?program=2');
+    d = f.contentDocument;
+    for (let i = 0; i < 400 && !d.querySelector('.nav-transport'); i++) await sleep(50);
+    await sleep(200);
+    const fresh = Number(d.getElementById('b-half').textContent);
+    ok('a different program boots fresh rather than inheriting the snapshot',
+       fresh === 0, `arrived at ${fresh}`);
+    sessionStorage.removeItem('v6502.machine');
+    await load('index.html');
+    d = f.contentDocument;
+    for (let i = 0; i < 400 && !d.querySelector('.nav-transport'); i++) await sleep(50);
+
 
     // The picker shows the short name, and the full one is still reachable as
     // a tooltip. A name clipped mid-word is worse than a shortened one: the

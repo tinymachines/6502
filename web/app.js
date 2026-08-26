@@ -7,6 +7,7 @@ import { createLab } from './lab.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
 import { setupChipNav } from './chip-nav.js';
+import { adopt, chipDriver, forget } from './chip-machine.js';
 import {
   CLOCKS, clockHz, isMaxClock, isRunning, setClock, setRunning, toggleRunning,
   step as stepChip, stepBack, reset as resetChip, subscribe, halfCyclesFor,
@@ -138,6 +139,12 @@ function applyUrlParams() {
   $('program-select').value = String(index);
   if (state.nav) state.nav.set(index);
   loadProgram(index);
+  // The machine the previous page left, if it was running this program. A
+  // link that names a half-cycle (`?steps=`) is asking for that one, and
+  // outranks it: the snapshot is where you were, the link is where you are
+  // being sent.
+  if (p.has('steps')) forget();
+  if (adopt(state.machine, index)) syncToChip();
 
   // ?speed= is read by chip-controls.js, which owns the rate.
 
@@ -250,12 +257,7 @@ function setupUI() {
   // The header owns run/pause, the half-cycle step, the power cycle and the
   // clock rate. This console has its own copies plus two steps the header has
   // no room for, and all of them act through the same store.
-  setupChipNav({
-    step: () => { state.machine.halfStep(); syncToChip(); },
-    back: () => { state.machine.stepBack(); syncToChip(); },
-    reset: () => { resetMachine(); syncToChip(); },
-    halfCycle: () => state.machine.halfCycle(),
-  });
+  setupChipNav(chipDriver(state.machine, { reset: resetMachine, after: syncToChip }));
 
   $('btn-run').onclick = () => toggleRunning();
   $('btn-half').onclick = () => stepChip();

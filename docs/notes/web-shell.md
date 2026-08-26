@@ -919,6 +919,26 @@ A cycle is two half-cycles, so 1 Hz is two half-cycles a second.
 - `demos.js`'s `createChip` registers *itself* as the driver, so the primer's
   five examples and the programs page's run panel are driven by the header too.
   `setupChipNav()` is then called with no argument.
+- **The driver says what it can do, and one chip crosses the pages**
+  (2026-08-26, for the strip on tinymachines.ai, which is the store's other
+  view). `chip-machine.js` builds the driver for any page that runs a wasm
+  Machine: `caps`, `sync`/`op` (the next fetch, `stepInstruction`), `earliest`
+  and `seek` (the Machine's rewind window, forward by running), `power`.
+  The store gained `driverCaps()`, `isPowered()`/`isBooting()`/`setPower()`,
+  `stepOp()`, `seek()`, `chipEarliest()`/`chipLength()`, and honours
+  `registerDriver(null)`. Off refuses to run or step and is written to
+  `sessionStorage` (`v6502.power`) so the next page opens off. A store with
+  no driver still runs, because halfshot paces its recording off it without
+  registering one. `adopt(m, program)` restores the machine the previous
+  page left (its own `exportMachine()` in `sessionStorage`, same program
+  only) and arms `pagehide` to leave one; a deep link that names a
+  half-cycle (`?steps=`) forgets it first, since the link is where you are
+  being sent and the snapshot is where you were. Eight pages hand the store
+  `chipDriver(m, { reset, after })` instead of four methods each. Not yet on
+  the store: the Lab (its own player, its own `POWER`), halfshot (no driver),
+  trace.js (a private `setRunning`). `_chipnav-test.html` section 1b holds
+  all of it against a fake Machine, and the wiring half proves the count
+  survives a page load.
 - **The rate control blinks on the chip's own phase.** `.tick` is held while
   the half-cycle count is even, so it goes on and off once per *cycle* — which
   is what a cycle is here, two half-cycles. It reads `halfCycle()` back off the

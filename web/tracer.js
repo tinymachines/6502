@@ -23,6 +23,7 @@ import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
 import { setupChipNav } from './chip-nav.js';
+import { adopt, chipDriver } from './chip-machine.js';
 import {
   CLOCKS, clockHz, isRunning, setClock, setRunning, toggleRunning,
   step as stepChip, reset as resetChip, subscribe, halfCyclesFor,
@@ -4265,15 +4266,17 @@ async function boot() {
     select.value = String(chosen);
     if (state.nav) state.nav.set(chosen);
     loadProgram(chosen);
+    adopt(state.m, chosen);
 
     // The header owns run/pause, the step, the power cycle and the rate; the
-    // console's buttons are a second view of the same store.
-    setupChipNav({
+    // console's buttons are a second view of the same store. The tracer's
+    // own step and back record every fetch, so they stand in for the driver's.
+    setupChipNav(chipDriver(state.m, {
+      reset: () => loadProgram(Number(select.value)),
+      after: paint,
       step: () => stepOnce(),
       back: () => stepBack(),
-      reset: () => { loadProgram(Number(select.value)); paint(); },
-      halfCycle: () => state.m.halfCycle(),
-    });
+    }));
     $('tc-run').onclick = () => toggleRunning();
     $('tc-step').onclick = () => stepChip();
     $('tc-back').onclick = () => { setRunning(false); stepBack(); };

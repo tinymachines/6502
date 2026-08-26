@@ -48,7 +48,12 @@ const state = {
   hz: DEFAULT_HZ,
   debt: 0,      // fractional half-cycles carried between frames
   last: 0,      // wall clock of the previous pacing call
+  powered: false, // a machine is registered and holds state
+  booting: false, // setPower(true) is in flight
 };
+
+/** Written when power is switched off, so the next page opens off too. */
+const POWER_KEY = 'v6502.power';
 
 const views = new Set();
 let driver = null;
@@ -76,6 +81,55 @@ export function chipHalfCycle() {
   return Number.isFinite(hc) ? hc : null;
 }
 
+/**
+ * What the registered driver can do, so a transport shows exactly that.
+ *
+ * A driver may state `caps` itself; otherwise they are read off the methods it
+ * has. An empty object when nothing is registered. `power` and `rate` are the
+ * store's own and are true for any driver.
+ */
+export function driverCaps() {
+  if (!driver) return {};
+  if (driver.caps) return { ...driver.caps };
+  return {
+    power: true,
+    rate: true,
+    back: typeof driver.back === 'function',
+    step: typeof driver.step === 'function',
+    cycle: typeof driver.step === 'function',
+    op: typeof driver.op === 'function',
+    seek: typeof driver.seek === 'function',
+  };
+}
+
+export function isPowered() { return state.powered; }
+export function isBooting() { return state.booting; }
+
+/**
+ * The oldest half-cycle the driver can seek to, or null. A wasm machine keeps
+ * a rewind window; a recording starts at 0; a driver without `earliest`
+ * cannot seek back at all, and says so by returning the current count.
+ */
+export function chipEarliest() {
+  if (!driver || !driver.seek) return null;
+  if (driver.earliest) {
+    const e = driver.earliest();
+    return Number.isFinite(e) ? e : null;
+  }
+  return chipHalfCycle();
+}
+
+/**
+ * The last half-cycle the driver can seek to, or null for a live machine,
+ * which has no end: it can be run further but not seeked past what it has
+ * done. A recording (the Lab, halfshot) has a length.
+ */
+export function chipLength() {
+  if (!driver || !driver.seek || !driver.length) return null;
+  const n = driver.length();
+  return Number.isFinite(n) ? n : null;
+}
+
 export function clockLabel(hz = state.hz) {
   const step = CLOCKS.find((c) => c.hz === hz);
   return step ? step.label : `${hz} Hz`;
@@ -86,7 +140,10 @@ export function clockLabel(hz = state.hz) {
 // --------------------------------------------------------------------------
 
 export function setRunning(on) {
-  const next = !!on;
+  // A chip that is registered and switched off does not run. With no driver
+  // the store still runs (halfshot paces its recording off it without
+  // registering one), as it always did.
+  const next = !!on && !(driver && !state.powered);
   if (next === state.running) return;
   state.running = next;
   // Starting fresh rather than carrying a debt across a pause: a long pause
@@ -108,27 +165,111 @@ export function setClock(hz) {
   announce();
 }
 
-/** Register the page's chip. The header transport acts through this. */
+/**
+ * Register the page's chip. The header transport acts through this.
+ *
+ * `null` unregisters: a page that leaves takes its machine with it, and the
+ * store must not go on offering a step into something that is gone. Power
+ * comes on with the driver unless the driver says otherwise (`powered()`),
+ * or the switch was left off on the previous page, in which case the new
+ * machine sits booted and idle until power is pressed: the choice made once
+ * holds across a navigation, the way the clock does.
+ */
 export function registerDriver(d) {
-  driver = d;
+  driver = d || null;
+  if (!driver) {
+    state.running = false;
+    state.powered = false;
+    state.booting = false;
+    announce();
+    return;
+  }
+  let off = false;
+  try { off = sessionStorage.getItem(POWER_KEY) === '0'; } catch { /* private mode */ }
+  state.powered = driver.powered ? !!driver.powered() : !off;
+  if (!state.powered) state.running = false;
   announce();
 }
 
+/**
+ * Power. Off: the chip stops and the store refuses to run or step it; what
+ * it holds is the driver's business (the Lab holds nothing, a wasm machine
+ * keeps its last state so the page does not jump). On: the driver boots a
+ * new machine (`power(true)`, which may be async), or is reset where it has
+ * no power of its own, which for a wasm page is the same thing. `booting`
+ * is exposed while that settles, so a transport can show it rather than
+ * flicker between the two states.
+ */
+export async function setPower(on) {
+  const next = !!on;
+  if (!driver) return;
+  if (next === state.powered && !state.booting) return;
+  if (!next) {
+    setRunning(false);
+    state.powered = false;
+    if (driver.power) await driver.power(false);
+    try { sessionStorage.setItem(POWER_KEY, '0'); } catch { /* private mode */ }
+    announce();
+    return;
+  }
+  state.booting = true;
+  announce();
+  try {
+    if (driver.power) await driver.power(true);
+    else if (driver.reset) driver.reset();
+    state.powered = driver.powered ? !!driver.powered() : true;
+  } finally {
+    state.booting = false;
+  }
+  try { sessionStorage.setItem(POWER_KEY, state.powered ? '1' : '0'); } catch { /* private mode */ }
+  announce();
+}
+
+export function togglePower() { return setPower(!state.powered); }
+
 export function step() {
   setRunning(false);
-  if (driver && driver.step) driver.step();
+  if (driver && driver.step && state.powered) driver.step();
   announce();
 }
 
 export function stepBack() {
   setRunning(false);
-  if (driver && driver.back) driver.back();
+  if (driver && driver.back && state.powered) driver.back();
   announce();
 }
 
 export function reset() {
   setRunning(false);
-  if (driver && driver.reset) driver.reset();
+  if (driver && driver.reset && state.powered) driver.reset();
+  announce();
+}
+
+/**
+ * One opcode: forward to the next fetch. The driver's own `op` where it has
+ * one (a wasm machine's stepInstruction); otherwise stepped a half-cycle at a
+ * time until the driver reports SYNC, bounded so a program that never
+ * fetches again cannot hang the page. Refused, silently as the others are,
+ * when the driver has neither.
+ */
+export function stepOp(maxHalfCycles = 400) {
+  setRunning(false);
+  if (!driver || !state.powered) { announce(); return; }
+  if (driver.op) driver.op();
+  else if (driver.sync && driver.step) {
+    for (let i = 0; i < maxHalfCycles; i++) {
+      driver.step();
+      if (driver.sync()) break;
+    }
+  }
+  announce();
+}
+
+/** Go to half-cycle `h`. Stops the chip first; a seek is a choice of where to look. */
+export function seek(h) {
+  setRunning(false);
+  const n = Number(h);
+  if (driver && driver.seek && state.powered && Number.isFinite(n)) driver.seek(n);
   announce();
 }
 
@@ -228,6 +369,9 @@ export function resetControls() {
   state.hz = DEFAULT_HZ;
   state.debt = 0;
   state.last = 0;
+  state.powered = false;
+  state.booting = false;
   driver = null;
+  try { sessionStorage.removeItem(POWER_KEY); } catch { /* private mode */ }
   announce();
 }

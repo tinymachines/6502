@@ -19,6 +19,7 @@ import { layOut, draw, placeLabels, unitValue, label } from './blueprint-draw.js
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
 import { setupChipNav } from './chip-nav.js';
+import { adopt, chipDriver } from './chip-machine.js';
 import {
   CLOCKS, clockHz, isRunning, setClock, setRunning, toggleRunning,
   step as stepChip, reset as resetChip, subscribe, halfCyclesFor,
@@ -168,12 +169,10 @@ function wireUp(svg) {
     refresh(svg, state.bp, state.machine);
     updateReadout();
   };
-  setupChipNav({
-    step: () => { state.machine.halfStep(); paint(); },
-    back: () => { state.machine.stepBack(); paint(); },
-    reset: () => { loadProgram(Number(select.value)); paint(); },
-    halfCycle: () => state.machine.halfCycle(),
-  });
+  setupChipNav(chipDriver(state.machine, {
+    reset: () => loadProgram(Number(select.value)),
+    after: paint,
+  }));
 
   $('bp-run').onclick = () => toggleRunning();
   $('bp-step').onclick = () => stepChip();

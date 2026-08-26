@@ -15,6 +15,7 @@ import { ExplodedRenderer, HEIGHT_NAMES, BLOCK_COLOR, applyZoom, wireOrbit }
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
 import { setupProgramNav } from './program-nav.js';
 import { setupChipNav } from './chip-nav.js';
+import { adopt, chipDriver } from './chip-machine.js';
 import {
   isRunning, toggleRunning, step as stepChip, reset as resetChip,
   subscribe, halfCyclesFor,
@@ -204,12 +205,9 @@ function wireControls() {
   // a frame -- a chip flickering rather than a chip working, on the one page
   // whose filaments are per-transistor and whose whole point is watching an
   // individual gate open.
-  setupChipNav({
-    step: () => state.machine.halfStep(),
-    back: () => state.machine.stepBack(),
+  setupChipNav(chipDriver(state.machine, {
     reset: () => loadProgram(Number($('ex-program').value)),
-    halfCycle: () => state.machine.halfCycle(),
-  });
+  }));
 
   $('ex-run').addEventListener('click', () => toggleRunning());
   $('ex-step').addEventListener('click', () => stepChip());
@@ -242,6 +240,7 @@ function wireControls() {
 
   // The URL if it names a program, otherwise the one chosen elsewhere.
   choose(selectedProgram(location.search), { fromNav: true });
+  adopt(state.machine, selectedProgram(location.search));
 
   // Layer toggles, named by physical height rather than by segdef index: three
   // heights, not six, because three of the six are the same layer.
