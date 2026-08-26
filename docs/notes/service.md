@@ -93,6 +93,13 @@ state that decodes to the wrong chip is worse than one that is rejected.
   when tracing, both in `/v1/meta`. `until="instruction"` on a JAM opcode
   returns `completed: false` at the cap — the honest answer, since twelve
   opcodes never reach another fetch.
+- **The engine names itself**: `halfwave --version` and the `META` reply
+  carry the workspace version and the commit the binary was built from,
+  stamped by `crates/v6502-sim/build.rs` out of `.git` (no `git` on the
+  PATH needed; `-dirty` when the tree was not clean, `unknown` outside a
+  checkout). `/v1/meta` passes both through, so a site in front of this
+  service can check which engine is answering rather than hashing the file.
+  A release does not rebuild halfwave, which is exactly when that matters.
 - **The reviewer's findings (`docs/findings.md`) drove a second round, all
   live**: `GET /v1/nodes` (every resolvable name, grouped by an authored
   reading of the names; **832**, because the die's 846 raw entries hold 12

@@ -19,7 +19,7 @@
 //!
 //! Request: one block of lines, terminated by `GO`.
 //!
-//!     META                        ask who I am (counts, limits, encoding)
+//!     META                        ask who I am (counts, limits, encoding, version, commit)
 //!     NODES                       every named node, name to id
 //!     BOOT                        power-cycle into the supplied memory
 //!     VEC <hex4>                  (with BOOT) write the reset vector first
@@ -305,6 +305,7 @@ fn handle(cpu: &mut Cpu<FlatMemory>, extra: &ExtraBuses, req: &Request) -> Strin
     if verb == "META" {
         return format!(
             "{{\"ok\":true,\"meta\":{{\"chip\":\"mos6502\",\"nodes\":1725,\"transistors\":3510,\
+             \"version\":\"{VERSION}\",\"commit\":\"{COMMIT}\",\
              \"max_step\":{MAX_STEP},\"max_traced\":{MAX_TRACED},\
              \"encoding\":\"lowercase hex; bit i of a set is byte i/8, LSB first; \
 node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 bytes\"}}}}"
@@ -462,7 +463,18 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
     )
 }
 
+/// The workspace version and the commit this binary was built from, as
+/// `build.rs` stamped them. `--version` prints it and the META reply carries
+/// it, so the thing answering behind a service can say what it is rather than
+/// being identified by a file digest.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const COMMIT: &str = env!("V6502_COMMIT");
+
 fn main() {
+    if std::env::args().skip(1).any(|a| a == "--version" || a == "-V") {
+        println!("halfwave {VERSION} {COMMIT}");
+        return;
+    }
     let netlist = Arc::new(mos6502());
     let extra = ExtraBuses::resolve(&netlist);
     let mut cpu = Cpu::new(netlist, FlatMemory::new()).expect("6502 signals resolve");

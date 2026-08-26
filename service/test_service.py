@@ -12,6 +12,7 @@ programs page's own: $2E + $14 landing at $82 as $42 by half-cycle 41.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -59,6 +60,16 @@ def test_meta_reports_the_die(client):
     assert m["nodes"] == 1725
     assert m["transistors"] == 3510
     assert m["max_step"] > 0
+
+
+def test_meta_names_the_engine_that_answered(client):
+    """halfwave stamps itself with the commit it was built from (build.rs), so
+    a service can say which engine is behind it rather than being identified
+    by a binary's digest. A build outside a checkout says "unknown", a dirty
+    tree says "-dirty": both are answers, and neither is a plausible sha."""
+    m = client.get("/v1/meta").json()
+    assert re.fullmatch(r"\d+\.\d+\.\d+", m["version"]), m["version"]
+    assert re.fullmatch(r"[0-9a-f]{40}(-dirty|\?)?|unknown", m["commit"]), m["commit"]
 
 
 def test_assemble_matches_hand_assembly(client):
