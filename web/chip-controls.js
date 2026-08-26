@@ -50,7 +50,12 @@ const state = {
   last: 0,      // wall clock of the previous pacing call
   powered: false, // a machine is registered and holds state
   booting: false, // setPower(true) is in flight
+  engine: 'local', // 'local': the page's wasm steps; 'api': halfwave steps, over HTTP
+  latency: null,   // ms of the last API round trip, or null when none has happened
+  engineError: null, // the last API failure's message, cleared by the next success
 };
+
+const ENGINE_KEY = 'v6502.engine';
 
 /** Written when power is switched off, so the next page opens off too. */
 const POWER_KEY = 'v6502.power';
@@ -90,7 +95,7 @@ export function chipHalfCycle() {
  */
 export function driverCaps() {
   if (!driver) return {};
-  if (driver.caps) return { ...driver.caps };
+  if (driver.caps) return { ...(typeof driver.caps === 'function' ? driver.caps() : driver.caps) };
   return {
     power: true,
     rate: true,
@@ -103,6 +108,20 @@ export function driverCaps() {
 }
 
 export function isPowered() { return state.powered; }
+
+/**
+ * Which engine steps the chip. `local` is the page's own wasm Machine.
+ * `api` is halfwave behind /v1/step: the machine travels out whole and
+ * comes back stepped, and the page's Machine is loaded with the answer, so
+ * every view draws exactly as before. The same machine JSON crosses both
+ * ways, which is what makes switching mid-run a transfer rather than a
+ * reboot (chip-machine.js does the crossing).
+ */
+export function engine() { return state.engine; }
+export function isApiEngine() { return state.engine === 'api'; }
+/** The last API round trip in ms, or null; and the last failure, or null. */
+export function engineLatency() { return state.latency; }
+export function engineError() { return state.engineError; }
 export function isBooting() { return state.booting; }
 
 /**
@@ -227,6 +246,30 @@ export async function setPower(on) {
 
 export function togglePower() { return setPower(!state.powered); }
 
+/**
+ * Choose the engine. Stops the chip first: a switch is a choice of who steps
+ * next, and a half-cycle in flight on one engine must land before the other
+ * takes over. Written down, like the clock, so the next page opens on it.
+ */
+export function setEngine(which) {
+  const next = which === 'api' ? 'api' : 'local';
+  if (next === state.engine) return;
+  setRunning(false);
+  state.engine = next;
+  state.debt = 0;
+  state.last = 0;
+  if (next === 'local') { state.latency = null; state.engineError = null; }
+  try { localStorage.setItem(ENGINE_KEY, next); } catch { /* private mode */ }
+  announce();
+}
+
+/** The API engine reports each round trip here (ms), or its failure. */
+export function noteEngine({ latency = null, error = null } = {}) {
+  state.latency = latency;
+  state.engineError = error;
+  announce();
+}
+
 export function step() {
   setRunning(false);
   if (driver && driver.step && state.powered) driver.step();
@@ -312,7 +355,11 @@ export function announce() {
  *
  * One caller per page: it advances the pacing clock as a side effect.
  */
-export function halfCyclesFor(now = performance.now()) {
+export function halfCyclesFor(now = performance.now(), who = 'page') {
+  // In API mode the page's own loop advances nothing: the runner in
+  // chip-machine.js is the one caller, and asks as 'api'. Two callers sharing
+  // one debt would each take half the rate.
+  if (state.engine === 'api' && who !== 'api') return 0;
   // The clamp is what stops a tab backgrounded for ten minutes coming back and
   // running a million half-cycles in one frame. It is 500ms rather than
   // something tighter because the software rasteriser the headless checks run
@@ -349,6 +396,13 @@ export function halfCycleRate() {
  */
 export function initClock(search = location.search) {
   const p = new URLSearchParams(search);
+  // The engine, the same way: the link first, then the saved choice.
+  if (p.get('engine') === 'api' || p.get('engine') === 'local') {
+    state.engine = p.get('engine');
+    try { localStorage.setItem(ENGINE_KEY, state.engine); } catch { /* private mode */ }
+  } else {
+    try { const e = localStorage.getItem(ENGINE_KEY); if (e === 'api' || e === 'local') state.engine = e; } catch { /* private mode */ }
+  }
   if (p.has('speed')) {
     const v = Number(p.get('speed'));
     if (Number.isFinite(v) && v >= 0) { setClock(v); return state.hz; }
@@ -371,7 +425,10 @@ export function resetControls() {
   state.last = 0;
   state.powered = false;
   state.booting = false;
+  state.engine = 'local';
+  state.latency = null;
+  state.engineError = null;
   driver = null;
-  try { sessionStorage.removeItem(POWER_KEY); } catch { /* private mode */ }
+  try { sessionStorage.removeItem(POWER_KEY); localStorage.removeItem(ENGINE_KEY); } catch { /* private mode */ }
   announce();
 }

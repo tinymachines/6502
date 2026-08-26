@@ -19,9 +19,33 @@
 //    rewind window, power. Eight pages wrote the four-method driver by hand
 //    and would have written the ten-method one by hand eight times.
 //
-// A leaf: imports nothing, so build-web.py hashes it like solo-palette.js.
+// 3. The API engine. When the store's engine is `api`, the driver's step,
+//    opcode step and forward seek go to halfwave over HTTP: the Machine is
+//    exported whole, /v1/step steps it, and the answer is imported back into
+//    the same Machine, so the page draws exactly as it did. A runner paces
+//    the running chip the same way, one request per frame's worth. What the
+//    API does not keep is history, so back and rewind are refused in API
+//    mode (the driver's caps say so) and the strip greys them. Every round
+//    trip's latency is reported to the store; a failure stops the chip and is
+//    reported too, rather than a page that goes quietly still.
+//
+// Imports the store (for the engine choice and the pacing), so build-web.py
+// rewrites that one import as it does for demos.js.
+
+import {
+  isApiEngine, halfCyclesFor, noteEngine, setRunning, isRunning,
+} from './chip-controls.js';
 
 const KEY = 'v6502.machine';
+
+/** Half-cycles a single API request may run at max clock: a frame's worth. */
+const API_BATCH_MAX = 512;
+
+/** Where the API answers: the page says (`data-chip-api`), else this origin. */
+export function chipApiBase() {
+  const el = document.querySelector('[data-chip-api]');
+  return (el && el.dataset.chipApi) || `${location.origin}/api`;
+}
 
 /** The furthest a seek forward will run, so a slider dragged to the end is bounded. */
 const SEEK_FORWARD_MAX = 4096;
@@ -92,21 +116,65 @@ function importWhole(m, machine) {
  * did rather than jumping, which is what the Lab's off state does too. Power
  * on is a reset: memory back to the program image, every pin released.
  */
-export function chipDriver(m, { reset, after = () => {}, ...overrides } = {}) {
+export function chipDriver(m, { reset, after = () => {}, api = null, fetch: f = null, ...overrides } = {}) {
   if (typeof reset !== 'function') throw new Error('chipDriver: a reset is required');
-  return {
-    caps: { power: true, back: true, step: true, cycle: true, op: true, rate: true, seek: true },
-    step() { m.halfStep(); after(); },
-    back() { m.stepBack(); after(); },
+  const doFetch = (...a) => (f || globalThis.fetch)(...a);
+  let busy = false;
+
+  /**
+   * One request to halfwave: the whole machine out, the stepped machine
+   * back and into `m`. `body` is the step's own fields (`half_cycles`, or
+   * `until` with `max_half_cycles`). Resolves true when the machine moved.
+   */
+  async function remote(body) {
+    if (busy) return false;
+    busy = true;
+    const t0 = performance.now();
+    try {
+      const res = await doFetch(`${api || chipApiBase()}/v1/step`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ machine: JSON.parse(m.exportMachine()), ...body }),
+      });
+      if (!res.ok) throw new Error(`/v1/step answered ${res.status}`);
+      const out = await res.json();
+      importWhole(m, out.machine || out);
+      noteEngine({ latency: Math.round(performance.now() - t0) });
+      after();
+      return true;
+    } catch (e) {
+      // A chip that stops answering is stopped, and says why. It is not a
+      // chip that goes quietly still.
+      setRunning(false);
+      noteEngine({ latency: null, error: String((e && e.message) || e) });
+      return false;
+    } finally {
+      busy = false;
+    }
+  }
+
+  const driver = {
+    caps: () => (isApiEngine()
+      ? { power: true, back: false, step: true, cycle: true, op: true, rate: true, seek: false, engine: true }
+      : { power: true, back: true, step: true, cycle: true, op: true, rate: true, seek: true, engine: true }),
+    step() {
+      if (isApiEngine()) { remote({ half_cycles: 1 }); return; }
+      m.halfStep(); after();
+    },
+    back() { if (isApiEngine()) return; m.stepBack(); after(); },
     reset() { reset(); after(); },
     halfCycle: () => m.halfCycle(),
     sync: () => m.sync(),
-    op() { m.stepInstruction(400); after(); },
+    op() {
+      if (isApiEngine()) { remote({ until: 'instruction', max_half_cycles: 400 }); return; }
+      m.stepInstruction(400); after();
+    },
     earliest() {
       const e = m.earliestHalfCycle();
       return e < 0 ? m.halfCycle() : e;
     },
     seek(h) {
+      if (isApiEngine()) return false;
       const cur = m.halfCycle();
       if (h < cur) {
         if (!m.rewindTo(h)) return false;
@@ -117,6 +185,25 @@ export function chipDriver(m, { reset, after = () => {}, ...overrides } = {}) {
       return true;
     },
     power(on) { if (on) reset(); after(); },
+    /**
+     * The API runner's one tick: what the pacing owes, as one request. The
+     * page's own loop gets nothing from halfCyclesFor while the engine is
+     * the API, so this is the only thing that moves the chip. Exposed so a
+     * harness can drive it with its own clock.
+     */
+    pump(now = performance.now()) {
+      if (!isApiEngine() || !isRunning() || busy) return Promise.resolve(false);
+      const n = Math.min(halfCyclesFor(now, 'api'), API_BATCH_MAX);
+      if (n <= 0) return Promise.resolve(false);
+      return remote({ half_cycles: n });
+    },
     ...overrides,
   };
+
+  // The runner: a frame loop that only ever does anything in API mode.
+  if (typeof requestAnimationFrame === 'function') {
+    const tick = (now) => { driver.pump(now); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+  return driver;
 }

@@ -35,6 +35,7 @@ import {
   CLOCKS, DEFAULT_HZ, clockHz, isRunning, setClock, setRunning, halfCyclesFor,
   resetControls, registerDriver, driverCaps, isPowered, isBooting, setPower,
   step, stepOp, seek, chipEarliest, chipLength, chipHalfCycle, hasDriver,
+  engine, setEngine, isApiEngine, engineLatency, engineError,
 } from './chip-controls.js';
 import { chipDriver } from './chip-machine.js';
 
@@ -224,6 +225,96 @@ function pace(seconds, frameMs) {
     const askedOff = !isPowered();
     await setPower(true);
     ok('a driver with power of its own is asked whether it is on', askedOff && isPowered() && labOn);
+
+    // --------------------------------------------------------------------
+    // 1c. The API engine
+    // --------------------------------------------------------------------
+    //
+    // A fake /v1/step: it reads the machine it is sent, adds the half-cycles
+    // asked for (or runs to the next fetch, every fourth), and answers with
+    // the machine. The fake Machine exports and imports the same shape, so
+    // what is checked is the crossing, the pacing gate, the caps, the
+    // latency and the refusal.
+
+    const apiFake = () => {
+      const f = fake();
+      f.exportMachine = () => JSON.stringify({ state: { value: '', pullup: '', pulldown: '', trans_on: '', half_cycle: f.h, last_fetch: null }, memory: { fill: '00', pages: {} } });
+      f.importMachine = (v, pu, pd, t, h) => { f.h = h; f.imports = (f.imports || 0) + 1; };
+      return f;
+    };
+    const calls = [];
+    let failNext = false;
+    const fakeFetch = async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ url, body });
+      if (failNext) { failNext = false; return { ok: false, status: 503, json: async () => ({}) }; }
+      let h = body.machine.state.half_cycle;
+      if (body.half_cycles) h += body.half_cycles;
+      else if (body.until === 'instruction') { do { h += 1; } while (h % 4 !== 0); }
+      return { ok: true, status: 200, json: async () => ({ machine: { state: { ...body.machine.state, half_cycle: h }, memory: body.machine.memory }, stepped: h - body.machine.state.half_cycle }) };
+    };
+
+    resetControls();
+    let am = apiFake(); let apaints = 0;
+    const adrv = chipDriver(am, { reset: () => { am.h = 0; }, after: () => { apaints += 1; }, api: 'http://api.test', fetch: fakeFetch });
+    registerDriver(adrv);
+    ok('the engine starts local, and a local driver offers the switch',
+       engine() === 'local' && driverCaps().engine === true && driverCaps().back === true);
+
+    setRunning(true);
+    setEngine('api');
+    ok('switching stops the chip and writes the choice down',
+       !isRunning() && isApiEngine() && localStorage.getItem('v6502.engine') === 'api');
+    const apiCaps = driverCaps();
+    ok('in API mode the driver refuses back and seek, the API keeps no history',
+       apiCaps.back === false && apiCaps.seek === false && apiCaps.step === true && apiCaps.op === true,
+       JSON.stringify(apiCaps));
+
+    am.h = 10;
+    step();
+    await sleep(20);
+    ok('a step crosses to the API and comes back into the machine',
+       calls.length === 1 && calls[0].url === 'http://api.test/v1/step' && calls[0].body.half_cycles === 1
+         && calls[0].body.machine.state.half_cycle === 10 && am.h === 11 && am.imports === 1,
+       `h ${am.h}, ${calls.length} call(s)`);
+    ok('and its latency is measured', Number.isFinite(engineLatency()) && engineError() === null, `${engineLatency()} ms`);
+
+    stepOp();
+    await sleep(20);
+    ok('an opcode step asks the API for the next fetch',
+       calls[1].body.until === 'instruction' && am.h === 12, `h ${am.h}`);
+
+    // The page's loop gets nothing; the runner gets the rate.
+    setClock(20); setRunning(true);
+    halfCyclesFor(1000); halfCyclesFor(1000, 'api');
+    const pageGot = halfCyclesFor(1500);
+    const apiGot = halfCyclesFor(1500, 'api');
+    ok('in API mode the page\'s own loop advances nothing; the runner takes the rate',
+       pageGot === 0 && apiGot >= 19 && apiGot <= 21, `page ${pageGot}, api ${apiGot}`);
+
+    // The runner: one request per tick's worth, none while stopped.
+    const nBefore = calls.length;
+    halfCyclesFor(2000, 'api');
+    await adrv.pump(2500);          // half a second at 20 Hz: 20 half-cycles
+    const ran = calls[calls.length - 1].body.half_cycles;
+    setRunning(false);
+    const halted = await adrv.pump(3000);
+    ok('the runner sends a frame\'s worth in one request, and nothing while stopped',
+       calls.length === nBefore + 1 && ran === 20 && halted === false, `sent ${ran}`);
+
+    // A failure stops the chip and says so.
+    setRunning(true); failNext = true;
+    halfCyclesFor(4000, 'api');
+    await adrv.pump(4100);
+    ok('an API that stops answering stops the chip, with the reason',
+       !isRunning() && engineError() !== null && engineLatency() === null, String(engineError()));
+
+    // Back to local: the machine holds the API's last answer and steps on.
+    setEngine('local');
+    const hBefore = am.h;
+    step();
+    ok('switching back to local continues from the API\'s last state',
+       engine() === 'local' && engineError() === null && am.h === hBefore + 1 && driverCaps().back === true);
 
     // Unregistering: a page that leaves takes its chip with it.
     registerDriver(null);

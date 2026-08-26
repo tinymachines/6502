@@ -261,7 +261,10 @@ def main() -> None:
     b.copy_hashed("chip-controls.js")
     # One chip across the pages: the snapshot a page leaves and the driver
     # every page hands the store. A leaf: imports nothing.
-    b.copy_hashed("chip-machine.js")
+    cmach = b.read("chip-machine.js").decode()
+    cmach = replace_once(cmach, "'./chip-controls.js'", f"'./{b.ref('chip-controls.js')}'",
+                         where="chip-machine.js")
+    b.emit("chip-machine.js", cmach.encode())
     b.copy_hashed("blocks.json")
     b.copy_hashed("schematic.json")
     # The chip as one node-and-edge graph (export-graph): the tracer reads it

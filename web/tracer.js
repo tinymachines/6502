@@ -26,7 +26,7 @@ import { setupChipNav } from './chip-nav.js';
 import { adopt, chipDriver } from './chip-machine.js';
 import {
   CLOCKS, clockHz, isRunning, setClock, setRunning, toggleRunning,
-  step as stepChip, reset as resetChip, subscribe, halfCyclesFor,
+  step as stepChip, reset as resetChip, subscribe, halfCyclesFor, isApiEngine,
 } from './chip-controls.js';
 import { blockCss } from './block-palette.js';
 import { el } from './sch-draw.js';
@@ -4271,12 +4271,14 @@ async function boot() {
     // The header owns run/pause, the step, the power cycle and the rate; the
     // console's buttons are a second view of the same store. The tracer's
     // own step and back record every fetch, so they stand in for the driver's.
-    setupChipNav(chipDriver(state.m, {
-      reset: () => loadProgram(Number(select.value)),
-      after: paint,
-      step: () => stepOnce(),
-      back: () => stepBack(),
-    }));
+    // In API mode the base driver steps (halfwave, over HTTP) and the fetch
+    // record has nothing per half-cycle to observe; locally the tracer's own
+    // step records every fetch.
+    const base = chipDriver(state.m, { reset: () => loadProgram(Number(select.value)), after: paint });
+    const localStep = base.step;
+    base.step = () => (isApiEngine() ? localStep() : stepOnce());
+    base.back = () => { if (!isApiEngine()) stepBack(); };
+    setupChipNav(base);
     $('tc-run').onclick = () => toggleRunning();
     $('tc-step').onclick = () => stepChip();
     $('tc-back').onclick = () => { setRunning(false); stepBack(); };

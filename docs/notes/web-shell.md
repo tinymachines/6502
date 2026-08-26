@@ -939,6 +939,20 @@ A cycle is two half-cycles, so 1 Hz is two half-cycles a second.
   trace.js (a private `setRunning`). `_chipnav-test.html` section 1b holds
   all of it against a fake Machine, and the wiring half proves the count
   survives a page load.
+- **The API engine, and the switch** (2026-08-26, one-engine step 3 on the
+  roof). The store holds `engine` (`local` | `api`, `?engine=`, then
+  `localStorage` `v6502.engine`; `setEngine` stops the chip first) and the
+  API's measure (`noteEngine`, `engineLatency`, `engineError`). In API mode
+  `halfCyclesFor(now)` gives the page's own loop nothing and the runner in
+  `chip-machine.js` asks as `'api'`, so one caller takes the rate. The
+  driver's `step`, `op` and the runner's `pump` export the Machine whole,
+  POST `/v1/step` (`half_cycles`, or `until: instruction`), and import the
+  answer into the same Machine, so every page draws unchanged; `caps` is a
+  function now and refuses `back` and `seek` on the API, which keeps no
+  history. A failure stops the chip and reports why. The API base is the
+  page's `[data-chip-api]`, else this origin. The tracer's own step records
+  fetches locally and defers to the base on the API. `_chipnav-test` 1c
+  drives it against a fake `/v1/step`.
 - **The rate control blinks on the chip's own phase.** `.tick` is held while
   the half-cycle count is even, so it goes on and off once per *cycle* — which
   is what a cycle is here, two half-cycles. It reads `halfCycle()` back off the
