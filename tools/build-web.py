@@ -461,6 +461,8 @@ def main() -> None:
         ("./pkg/v6502_wasm.js", "./" + b.ref("pkg/v6502_wasm.js")),
         ("./disasm.js", "./" + b.ref("disasm.js")),
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
+        ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
+        ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
     ]:
         tr = replace_once(tr, f"'{original}'", f"'{resolved}'", where="trace.js")
     tr = replace_once(tr, "fetch('schematic.json')",

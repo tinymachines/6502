@@ -22,6 +22,8 @@ import { OPCODES, instructionLength } from './disasm.js';
 // is why the control says so instead of implying that something on screen
 // just changed.
 import { setupProgramNav } from './program-nav.js';
+import { setupChipNav } from './chip-nav.js';
+import { isRunning, setRunning, toggleRunning, halfCyclesFor, subscribe } from './chip-controls.js';
 
 
 const $ = (id) => document.getElementById(id);
@@ -93,10 +95,11 @@ const state = {
   endHalf: 0,
   watch: [],           // [{ stem, node }] for the chosen bit
   controlOf: new Map(),// control node -> [{a, b}] switches it opens
-  running: false,
-  lastFrame: 0,
+  // Running and the rate are the site's store's (chip-controls.js), not this
+  // page's: until 2026-08-26 this page kept a private flag and a fixed three
+  // half-cycles a second, so the strip on tinymachines.ai could pause every
+  // page but this one.
   acc: 0,
-  rate: 3,             // half-cycles per second: slow enough to read
 };
 
 const nameOf = (n) => state.data.names[n] ?? `#${n}`;
@@ -448,9 +451,8 @@ function step(dir) {
   seek(cursor() + dir);
 }
 
-function setRunning(on) {
-  state.running = on;
-  state.acc = 0;
+function paintRun() {
+  const on = isRunning();
   const b = $('tr-run');
   b.textContent = on ? 'Pause' : 'Run';
   b.classList.toggle('on', on);
@@ -463,17 +465,14 @@ function restart() {
 }
 
 function tick(now = 0) {
-  if (state.running) {
-    const dt = state.lastFrame ? Math.min(now - state.lastFrame, 250) : 0;
-    state.acc += (dt / 1000) * state.rate;
-    while (state.acc >= 1) {
-      state.acc -= 1;
+  const n = halfCyclesFor(now);
+  if (n > 0) {
+    for (let k = 0; k < n; k++) {
       if (cursor() >= state.rows.length - 1) { setRunning(false); break; }
       state.m.halfStep();
     }
     refresh();
   }
-  state.lastFrame = now;
   requestAnimationFrame(tick);
 }
 
@@ -556,14 +555,31 @@ async function boot() {
     $('tr-bit').addEventListener('input', (e) => { setBit(Number(e.target.value)); refresh(); });
     $('tr-step').addEventListener('click', () => step(+1));
     $('tr-back').addEventListener('click', () => step(-1));
-    $('tr-run').addEventListener('click', () => setRunning(!state.running));
+    $('tr-run').addEventListener('click', () => toggleRunning());
     $('tr-restart').addEventListener('click', restart);
+    subscribe(paintRun);
+
+    // The header's transport and the strip on tinymachines.ai drive this
+    // page through the store: a position in the traced instruction rather
+    // than the chip's own count, since the rows are what the page shows.
+    // No power switch (the trace is re-run, not booted) and no opcode step
+    // (the page IS one opcode).
+    setupChipNav({
+      caps: { power: false, back: true, step: true, cycle: true, op: false, rate: true, seek: true },
+      step: () => step(+1),
+      back: () => step(-1),
+      reset: () => restart(),
+      halfCycle: () => cursor(),
+      earliest: () => 0,
+      length: () => Math.max(0, state.rows.length - 1),
+      seek: (h) => { seek(h); return true; },
+    });
 
     document.addEventListener('keydown', (ev) => {
       if (ev.target instanceof HTMLInputElement || ev.target instanceof HTMLSelectElement) return;
       if (ev.key === 'ArrowRight') { step(+1); ev.preventDefault(); }
       else if (ev.key === 'ArrowLeft') { step(-1); ev.preventDefault(); }
-      else if (ev.key === ' ') { setRunning(!state.running); ev.preventDefault(); }
+      else if (ev.key === ' ') { toggleRunning(); ev.preventDefault(); }
       else if (ev.key === 'r' || ev.key === 'R') { restart(); ev.preventDefault(); }
     });
 

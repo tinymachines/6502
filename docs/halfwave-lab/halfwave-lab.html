@@ -3588,13 +3588,16 @@ async function growTrace(){
   finally{ growing=false; }
 }
 let lastT=0, acc=0;
-function stopPlay(){ if(timer){cancelAnimationFrame(timer);timer=null;} setPlaying(false); }
+function stopPlay(){ if(timer){cancelAnimationFrame(timer);timer=null;} setPlaying(false); if(STORE&&STORE.isRunning()) STORE.setRunning(false); }
 function tick(t){
   if(!timer) return;
-  const hz=rateHz(), dt=Math.min(500,lastT?t-lastT:0); lastT=t;
   let steps;
-  if(hz===0){ steps=256; acc=0; }
-  else { acc+=dt/1000*hz*2; steps=Math.floor(acc); acc-=steps; }
+  if(STORE){ steps=STORE.halfCyclesFor(t); }
+  else {
+    const hz=rateHz(), dt=Math.min(500,lastT?t-lastT:0); lastT=t;
+    if(hz===0){ steps=256; acc=0; }
+    else { acc+=dt/1000*hz*2; steps=Math.floor(acc); acc-=steps; }
+  }
   if(steps>0){
     if(i+steps>=F.length-1){
       go(F.length-1);
@@ -3604,12 +3607,49 @@ function tick(t){
   }
   timer=requestAnimationFrame(tick);
 }
-$("#b-play").onclick=()=>{
-  if(timer){stopPlay();return;}
-  if(i>=F.length-1&&!LIVE) return;
+function startPlay(){
+  if(timer) return;
+  if(i>=F.length-1&&!LIVE){ if(STORE&&STORE.isRunning()) STORE.setRunning(false); return; }
   setPlaying(true); lastT=0; acc=0;
   timer=requestAnimationFrame(tick);
+}
+$("#b-play").onclick=()=>{
+  if(STORE){ STORE.toggleRunning(); return; }
+  if(timer) stopPlay(); else startPlay();
 };
+
+/* ---------- the site's chip store, when a host provides one ----------
+   On tinymachines.ai this page sits above a floor strip that drives every
+   instrument through one store (web/chip-controls.js). The host hands the
+   store over as window.tmChipStore, or announces it with a 'tm:chip-store'
+   event when this script ran first. The Lab then registers as the store's
+   driver, paces its play off the store's clock, and marks its own player
+   `driven` so the host can hide it: one strip, one set of keys. Standalone
+   (halfwave.tinymachines.ai) nothing is provided and nothing changes. */
+let STORE=null;
+function attachStore(store){
+  if(STORE||!store||typeof store.registerDriver!=="function") return;
+  STORE=store;
+  store.registerDriver({
+    caps:{power:true,back:true,step:true,cycle:true,op:true,rate:true,seek:true},
+    powered:()=>POWER&&!PWBUSY,
+    power:async(on)=>{
+      if(PWBUSY) return;
+      if(on){ if(!POWER) await powerOn(); }
+      else { stopPlay(); POWER=false; paintPower(); }
+    },
+    step:()=>go(i+1), back:()=>go(i-1), reset:()=>go(0),
+    halfCycle:()=>i,
+    sync:()=>!!(F[i]&&F[i][CI.sync]&&F[i][CI.phase]===1),
+    op:()=>nextFetch(),
+    earliest:()=>0, length:()=>Math.max(0,F.length-1),
+    seek:(h)=>{ go(h); return true; },
+  });
+  $(".player").classList.add("driven");
+  store.subscribe(()=>{ const on=store.isRunning(); if(on&&!timer) startPlay(); else if(!on&&timer) stopPlay(); });
+}
+if(window.tmChipStore) attachStore(window.tmChipStore);
+addEventListener("tm:chip-store",e=>attachStore(e.detail));
 addEventListener("keydown",e=>{
   if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   if(!POWER||PWBUSY) return;

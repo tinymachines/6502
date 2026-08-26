@@ -29,6 +29,7 @@ import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './prog
 // belong beside Back and Next.
 import {
   CLOCKS, clockHz, initClock, isRunning, setClock, setRunning, toggleRunning, subscribe,
+  registerDriver,
   halfCyclesFor,
 } from './chip-controls.js';
 import { layOut, draw, placeLabels, unitValue, label } from './blueprint-draw.js';
@@ -825,6 +826,21 @@ async function boot() {
       else if (ev.key === ' ') { toggleRunning(); ev.preventDefault(); }
       else if (ev.key === 'Home') { setRunning(false); seek(0); ev.preventDefault(); }
       else if (ev.key === 'End') { setRunning(false); seek(state.frames.length - 1); ev.preventDefault(); }
+    });
+
+    // The header's transport and the strip on tinymachines.ai drive the
+    // recording through the store. The frame index is the position; the
+    // recording has a length; no power (a recording is not booted) and no
+    // opcode step (the frames carry no SYNC of their own to stop on).
+    registerDriver({
+      caps: { power: false, back: true, step: true, cycle: true, op: false, rate: true, seek: true },
+      step: () => seek(state.cur + 1),
+      back: () => seek(state.cur - 1),
+      reset: () => resetRecording(),
+      halfCycle: () => state.cur,
+      earliest: () => 0,
+      length: () => Math.max(0, state.frames.length - 1),
+      seek: (h) => seek(h),
     });
 
     $('hs-boot').hidden = true;
