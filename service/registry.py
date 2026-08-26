@@ -405,6 +405,7 @@ def rom_brief(r: sqlite3.Row, art: str = "inline") -> dict:
         "rom_size": r["rom_size"], "tiles": r["tiles"], "frame_cost": r["frame_cost"],
         "sha256": r["sha256"], "bytes": len(r["cart"]),
         "measured": json.loads(r["measured"]),
+        "kind": json.loads(r["measured"]).get("kind", "console"),
         "cover": art_of(r, "cover",
                         f"/v1/registry/b/{r['handle']}/roms/{r['slug']}/cover", art),
         "created": r["created"], "updated": r["updated"],

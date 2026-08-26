@@ -354,10 +354,31 @@ class TileArt(BaseModel):
     chr: Optional[str] = None
 
 
+class Peek(BaseModel):
+    """A byte a headless cartridge asks to have read out after its run."""
+
+    addr: int = Field(ge=0, le=0xFFFF)
+    name: str = Field(max_length=24, pattern=r"^[A-Za-z0-9_.$-]+$")
+
+
 class ConsoleSpec(BaseModel):
     """Where the host and the ROM meet. `tick`, `input` and the screen are
-    the console; everything else is a cartridge saying what else it uses."""
+    the console; everything else is a cartridge saying what else it uses.
 
+    `kind: "headless"` is a cartridge that draws nothing: a program on the
+    chip with no screen page and no tick flag. It is run for `half_cycles`
+    and what is read out is the registers and the bytes it names in `peek`.
+    The seven programs the explorer boots are this kind, and it exists so
+    they can be minted, listed and measured like any other cartridge rather
+    than living in a JavaScript file."""
+
+    kind: Literal["console", "headless"] = "console"
+    half_cycles: int = Field(
+        default=2000, ge=1, le=200000,
+        description="headless only: how long to run when verifying",
+    )
+    peek: list[Peek] = Field(default_factory=list, max_length=8,
+                             description="headless only: bytes to read out after the run")
     tick: int = Field(default=0x000D, ge=0, le=0xFFFF)
     input: int = Field(default=0x0002, ge=0, le=0xFFFF)
     screen: int = Field(default=0x0500, ge=0, le=0xFFFF)
@@ -412,6 +433,16 @@ class VerifyReport(BaseModel):
     status: Optional[int]
     score: Optional[int]
     notes: list[str]
+    # A headless cartridge has no frames to complete; what it has is a run.
+    kind: Literal["console", "headless"] = "console"
+    draws_nothing: bool = False
+    registers: Optional[dict[str, int]] = Field(
+        default=None, description="headless: pc, a, x, y, s, p after the run, read off the silicon")
+    flags: Optional[str] = None
+    peeked: Optional[dict[str, int]] = Field(
+        default=None, description="headless: the bytes the cartridge named, after the run")
+    pc_moved: Optional[bool] = Field(
+        default=None, description="headless: whether the pc changed over the last quarter of the run")
 
 
 class CartridgeResponse(BaseModel):

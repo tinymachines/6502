@@ -741,6 +741,11 @@ def _step_machine(m: Machine, n: int) -> Machine:
     return _machine_from(_engine([f"STEP {n}", _state_line(m), *_memory_lines(m.memory)]))
 
 
+def _step_observed(m: Machine, n: int) -> tuple[Machine, dict]:
+    res = _engine([f"STEP {n}", _state_line(m), *_memory_lines(m.memory)])
+    return _machine_from(res), res["observe"]
+
+
 # The measurement ladder: absolute, and deliberately not seeded from anything
 # the cartridge declares. It is what makes a measured cost a measurement --
 # see _run_frame.
@@ -794,11 +799,53 @@ def _screen_of(m: Machine, con: dict) -> bytes:
     return bytes(image[base : base + cells])
 
 
+def _verify_headless(doc: dict) -> VerifyReport:
+    """A headless cartridge has no frame to complete. What running it says
+    is where it got to: boot, run for the half-cycles it declares, and read
+    the registers and the bytes it named off the silicon. The last quarter is
+    run apart so the report can say whether the pc still moves, which is
+    the difference between a loop and a JAM, and between a program that
+    finished (a BRK loop moves, too) and one that never started."""
+    con = doc["console"]
+    rom = doc["rom"]
+    total = int(con.get("half_cycles") or 2000)
+    memory = _overlay(SparseMemory(), rom["org"], bytes.fromhex(rom["bytes"]))
+    m = _machine_from(_engine(["BOOT", f"VEC {rom['reset']:04x}", *_memory_lines(memory)]))
+    first = max(1, total - total // 4)
+    m, obs = _step_observed(m, first)
+    # The last quarter in four pieces, so "the pc moved" is four readings
+    # apart rather than two instants that a short loop can land on twice:
+    # a BRK loop three bytes long read as stopped when it was sampled at
+    # two points a whole number of laps apart.
+    rest = total - first
+    pcs = [obs["pc"]]
+    for i in range(4):
+        n = rest // 4 + (1 if i < rest % 4 else 0)
+        if n <= 0:
+            continue
+        m, obs = _step_observed(m, n)
+        pcs.append(obs["pc"])
+    peeked = {p["name"]: _peek(m.memory, p["addr"]) for p in con.get("peek") or []}
+    regs = {k: obs[k] for k in ("pc", "a", "x", "y", "s", "p")}
+    notes = ["draws nothing: a headless cartridge has no screen"]
+    moved = len(set(pcs)) > 1
+    if not moved:
+        notes.append(f"the pc stayed at ${obs['pc']:04X} over the last {rest} half-cycles")
+    return VerifyReport(
+        booted=True, frames_requested=0, frames_completed=0, half_cycles=[total],
+        frame_cost=None, screen_changed=False, tiles_used=[], status=None, score=None,
+        notes=notes, kind="headless", draws_nothing=True, registers=regs,
+        flags=obs.get("flags"), peeked=peeked, pc_moved=moved,
+    )
+
+
 def _verify(doc: dict, frames: int, budget: int) -> VerifyReport:
     """What the chip did with this cartridge, which is a different claim from
     "it assembled". A ROM that assembles, boots, and never raises its tick
     flag is a ROM that does not run on this console, and nothing short of
     running it says so."""
+    if doc["console"].get("kind") == "headless":
+        return _verify_headless(doc)
     con = doc["console"]
     rom = doc["rom"]
     notes: list[str] = []
@@ -1049,7 +1096,7 @@ def mint(req: CartridgeRequest, format: str = Query("gzip", pattern="^(gzip|json
             doc["console"]["joins"] = [joins.get(n, "") for n in watched]
 
     report = None
-    if req.verify and req.frames:
+    if req.verify and (req.frames or req.console.kind == "headless"):
         report = _verify(doc, req.frames, req.frame_budget)
         doc["verify"] = report.model_dump()
         # A measured cost beats a declared one, and a cartridge with no cost
@@ -1572,7 +1619,7 @@ def registry_publish(handle: str, slug: str, req: PublishRequest, request: Reque
             raise registry.RegistryError(f"cart is not base64: {e}") from e
         doc = registry.read_cartridge(blob)
         report = _measure_cartridge(doc, req.frames)
-        if report.frames_completed < req.frames:
+        if report.kind == "console" and report.frames_completed < req.frames:
             raise registry.RegistryError(
                 f"that cartridge completed {report.frames_completed} of {req.frames} "
                 f"frames on the chip here, so it is not publishable. "

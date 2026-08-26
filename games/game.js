@@ -126,6 +126,12 @@ function cartFromDoc(doc) {
   }
   const c = doc.console || {};
   const rom = doc.rom || {};
+  if (c.kind === 'headless') {
+    // No screen page and no tick flag: nothing here could draw it, and a
+    // console that booted it would show a blank screen and call it a game.
+    throw new Error(`${(doc.meta && doc.meta.name) || 'this cartridge'} is headless: it draws nothing. `
+      + 'Its page in the registry shows what it computed; the explorer runs it.');
+  }
   const bytes = Uint8Array.from((rom.bytes || '').match(/../g) || [],
                                 (h) => parseInt(h, 16));
   if (!bytes.length) throw new Error('the cartridge carries no ROM bytes');

@@ -335,3 +335,80 @@ def test_a_minted_cartridge_carries_them(client):
     r = mint(client, console={"watch": WATCH[:3], "screen": 0x0500})
     joins = r.json()["cartridge"]["console"]["joins"]
     assert len(joins) == 3 and all(" - " in j for j in joins)
+
+
+# -- the headless kind -------------------------------------------------------
+#
+# A cartridge that draws nothing: no screen page, no tick flag. The seven
+# programs the explorer boots are this kind. What verifying one says is where
+# it got to, read off the silicon, and the layout checks are only the ones
+# that still mean something.
+
+COUNTER = """        .org $0200
+start:  LDA #$00
+loop:   JSR bump
+        JMP loop
+        .org $0210
+bump:   INX
+        DEY
+        INC $0F
+        SEC
+        ADC #$02
+        RTS"""
+
+JAM = """        .org $0200
+        LDA #$07
+        STA $0F
+        .byte $02"""
+
+
+def mint_headless(client, source=COUNTER, **console):
+    body = {"rom": {"source": source, "org": 0x0200},
+            "console": {"kind": "headless", "half_cycles": 800,
+                        "peek": [{"addr": 0x000F, "name": "counter"}], **console},
+            "meta": {"name": "counter"}}
+    return client.post("/v1/cartridge?format=json", json=body)
+
+
+def test_a_headless_cartridge_mints_with_no_screen_and_no_tiles(client):
+    r = mint_headless(client)
+    assert r.status_code == 200, r.text
+    doc = r.json()["cartridge"]
+    assert doc["console"]["kind"] == "headless"
+    assert "screen" not in doc["console"] and "tick" not in doc["console"], doc["console"]
+    assert doc["tiles"]["count"] == 0
+    assert any(n.startswith("headless: this cartridge draws nothing") for n in doc["notes"])
+
+
+def test_verifying_a_headless_cartridge_reads_the_run_off_the_silicon(client):
+    v = mint_headless(client).json()["verify"]
+    assert v["kind"] == "headless" and v["draws_nothing"] is True
+    assert v["half_cycles"] == [800] and v["frames_requested"] == 0
+    # The counter loop INCs $0F every pass and the pc keeps moving.
+    assert v["peeked"]["counter"] > 0, v
+    assert v["pc_moved"] is True
+    assert set(v["registers"]) == {"pc", "a", "x", "y", "s", "p"}
+    assert 0x0200 <= v["registers"]["pc"] < 0x0220
+
+
+def test_a_headless_cartridge_that_jams_says_the_pc_stopped(client):
+    v = mint_headless(client, source=JAM).json()["verify"]
+    assert v["peeked"]["counter"] == 7, "the store landed before the JAM"
+    assert v["pc_moved"] is False
+    assert any("stayed at" in n for n in v["notes"]), v["notes"]
+
+
+def test_the_headless_layout_checks_are_the_ones_that_still_mean_something(client):
+    # No screen, so no screen overlap; the stack and the vectors still count.
+    r = mint_headless(client, source=COUNTER.replace("$0200", "$0100"))
+    assert r.status_code == 422 and "stack page" in r.json()["detail"]["error"]
+    r = client.post("/v1/cartridge?format=json", json={
+        "rom": {"source": COUNTER, "org": 0x0200},
+        "console": {"kind": "headless", "peek": [{"addr": 1, "name": "a"}, {"addr": 2, "name": "a"}]}})
+    assert r.status_code == 422 and "both called" in r.json()["detail"]["error"]
+
+
+def test_a_console_cartridge_does_not_carry_the_headless_fields(client):
+    doc = mint(client).json()["cartridge"]
+    assert "kind" not in doc["console"] and "peek" not in doc["console"]
+    assert mint(client).json()["verify"]["kind"] == "console"

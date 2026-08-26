@@ -70,6 +70,10 @@ VECTORS = (0xFFFA, 0x10000)
 # the wire: a consumer reading a cartridge should not have to be told what
 # `tick` means by a human.
 CONTRACT = {
+    "kind": ("console: a screen page and a tick flag, run a frame at a time; "
+             "headless: draws nothing, run for half_cycles and read out"),
+    "half_cycles": "headless only: how long the run is when the cartridge is verified",
+    "peek": "headless only: bytes read out after the run, by name",
     "tick": "host clears it, the ROM raises it when a frame is finished",
     "input": "the controller, one byte, written by the host before each frame",
     "status": "the ROM raises it when the game is over",
@@ -191,14 +195,46 @@ def validate(rom: dict, console: dict, tile_count: int) -> list[str]:
     # overlap check one byte short -- a ROM whose final byte was the screen's
     # first minted cleanly, which is precisely the failure this refuses.
     rom_span = (rom["org"], rom["org"] + rom["size"])
-    cells = console["width"] * console["height"]
-    screen = (console["screen"], console["screen"] + cells)
     notes: list[str] = []
 
     if rom["size"] == 0:
         raise CartridgeError("the ROM assembled to no bytes")
     if rom_span[1] > 0x10000:
         raise CartridgeError(f"the ROM ends at ${rom_span[1]:04X}, past the top of memory")
+    if _overlap(rom_span, VECTORS):
+        raise CartridgeError(
+            f"the ROM reaches ${VECTORS[0]:04X}, where the reset and interrupt vectors "
+            f"live. Booting writes the reset vector, so those bytes would be replaced."
+        )
+    if _overlap(rom_span, STACK):
+        raise CartridgeError(
+            f"the ROM covers the stack page (${STACK[0]:04X}..${STACK[1] - 1:04X}). "
+            f"Any JSR or interrupt would write into the code."
+        )
+
+    if console.get("kind") == "headless":
+        # No screen, no flag: the checks above are the whole layout. What a
+        # headless cartridge names is read, never written, so a peek may sit
+        # anywhere, the ROM included.
+        reset = rom["reset"]
+        if not rom_span[0] <= reset < rom_span[1]:
+            notes.append(
+                f"the reset vector (${reset:04X}) is outside the ROM "
+                f"(${rom_span[0]:04X}..${rom_span[1] - 1:04X}); the chip will start on "
+                f"whatever is there"
+            )
+        seen_names: set[str] = set()
+        for p in console.get("peek") or []:
+            if p["name"] in seen_names:
+                raise CartridgeError(f"two peeks are both called {p['name']!r}")
+            seen_names.add(p["name"])
+        notes.append("headless: this cartridge draws nothing; what it computes is read out after the run")
+        if tile_count:
+            notes.append(f"{tile_count} tiles travel with a cartridge that has no screen to draw them on")
+        return notes
+
+    cells = console["width"] * console["height"]
+    screen = (console["screen"], console["screen"] + cells)
     if screen[1] > 0x10000:
         raise CartridgeError(f"the screen ends at ${screen[1]:04X}, past the top of memory")
 
@@ -209,16 +245,6 @@ def validate(rom: dict, console: dict, tile_count: int) -> list[str]:
             f"the ROM (${rom_span[0]:04X}..${rom_span[1] - 1:04X}) covers its own screen "
             f"(${screen[0]:04X}..${screen[1] - 1:04X}). It will be overwritten by the "
             f"picture it draws. Move the screen to a higher page, or shorten the ROM."
-        )
-    if _overlap(rom_span, VECTORS):
-        raise CartridgeError(
-            f"the ROM reaches ${VECTORS[0]:04X}, where the reset and interrupt vectors "
-            f"live. Booting writes the reset vector, so those bytes would be replaced."
-        )
-    if _overlap(rom_span, STACK):
-        raise CartridgeError(
-            f"the ROM covers the stack page (${STACK[0]:04X}..${STACK[1] - 1:04X}). "
-            f"Any JSR or interrupt would write into the code."
         )
     if _overlap(screen, STACK):
         raise CartridgeError(
@@ -281,6 +307,16 @@ def build(meta: dict, assembled: dict, console: dict, tiles: dict | None,
         "source": assembled.get("source", ""),
     }
     console = {k: v for k, v in console.items() if v is not None}
+    if console.get("kind") == "headless":
+        # The console's fields have no meaning without a screen, and a
+        # default `screen: 1280` in a file that draws nothing is a claim
+        # somebody will read as one. Only what a headless run uses travels.
+        keep = ("kind", "half_cycles", "peek", "watch", "joins")
+        console = {k: v for k, v in console.items() if k in keep}
+    else:
+        console.pop("kind", None)
+        console.pop("half_cycles", None)
+        console.pop("peek", None)
     notes = validate(rom, console, len(pixels))
     doc = {
         "format": FORMAT,

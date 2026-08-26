@@ -542,3 +542,25 @@ def test_head_is_answered_wherever_get_is(client, populated, path):
         "the headers should be the ones GET would send, so a client can ask how "
         "big something is without fetching it"
     )
+
+
+def test_a_headless_cartridge_publishes_and_is_listed_as_one(client, token):
+    """The registry runs it (a headless run, not frames) and the listing
+    carries the kind, so a page can say "draws nothing" beside it rather
+    than a frame cost it does not have."""
+    client.post("/v1/registry/claim", json={"handle": "quiet", "name": "Q"}, headers=auth(token))
+    r = client.post("/v1/cartridge", json={
+        "rom": {"source": "        .org $0200\nloop    INC $0F\n        JMP loop", "org": 0x0200},
+        "console": {"kind": "headless", "half_cycles": 400, "peek": [{"addr": 0x0F, "name": "n"}]},
+        "meta": {"name": "quiet counter"}})
+    assert r.status_code == 200, r.text
+    r = client.put("/v1/registry/b/quiet/roms/counter", headers=auth(token),
+                   json={"cart": b64(r.content), "frames": 3})
+    assert r.status_code == 200, r.text
+    got = r.json()
+    assert got["kind"] == "headless"
+    assert got["frame_cost"] is None and got["tiles"] == 0
+    assert got["measured"]["draws_nothing"] is True
+    assert got["measured"]["peeked"]["n"] > 0
+    listed = client.get("/v1/registry/b/quiet").json()["roms"][0]
+    assert listed["kind"] == "headless"

@@ -72,6 +72,22 @@ art exists and so the spec is executable -- whatever a tool produces has to
 decode to exactly that shape. `encodeCHR` is the inverse, so the art pipeline
 and the console share one definition rather than two that drift.
 
+## The headless kind
+
+A cartridge that draws nothing. `console.kind: "headless"` is a program on
+the chip with no screen page and no tick flag: the seven programs the
+explorer boots (`web/programs.js`) and the API's worked example, minted so
+they are listed, measured and kept like any other cartridge instead of living
+in a JavaScript file. Verifying one boots it, runs it for `console.half_cycles`
+(the last quarter apart), and reads the registers and the bytes it names in
+`console.peek` off the silicon; the report says whether the pc still moves,
+which is a loop or a finished program on one side and a JAM on the other. The
+layout checks that still mean something (the stack, the vectors) still apply;
+the screen ones do not, and the file carries no screen fields, so nobody reads
+a default `screen` off a cartridge that has none. The console refuses to boot
+one, with the reason. `games/tools/mint-pack.mjs` mints and publishes the
+pack.
+
 ## Cartridge one: Die Runner
 
 `rom/dierunner.s` -> **339 bytes**, written for this console and assembled by
