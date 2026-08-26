@@ -26,6 +26,83 @@ cd "$REPO"
 log "rustc $(rustc --version | awk '{print $2}'), $(wasm-pack --version)"
 
 # ---------------------------------------------------------------------------
+# Test, before anything is built to publish
+# ---------------------------------------------------------------------------
+#
+# Until 2026-08-26 this script ran no tests: the mirror's CI tests the mirror,
+# and a commit here went from `git push` to the release symlink with nothing
+# in between proving the engine. The site in front of this one
+# (tinymachines/public, scripts/board-engine.py) runs these suites itself
+# before it will serve a release; this makes the release carry its own
+# evidence too, in build-info.json beside the commit, so a reader of the
+# footer's file can see what passed and when.
+#
+# The require flags are the point, not a flourish: under `cargo test` a
+# skipped test's message is captured and it counts as passed, so a suite
+# with nothing to load reads as green. HALFPHI_REQUIRE_CHIPS makes the three
+# chips' absence a failure. The golden oracle (tools/golden-trace/golden.txt,
+# 5 MB, generated, gitignored) is required when it is present and its
+# absence is LOGGED when it is not, because a box that has never generated
+# it must still be able to deploy; the file says which happened.
+
+TESTS_JSON=$(mktemp)
+export TESTS_JSON
+count_cargo() {
+  # Sum every "test result:" line of a cargo test run on stdin; print "passed failed".
+  awk '/^test result:/ {p+=$4; f+=$6} END {printf "%d %d\n", p+0, f+0}'
+}
+
+log "building halfwave"
+# The engine behind the API, built here so the binary on disk is from the
+# commit being published rather than from whenever somebody last remembered.
+# The API holds the old one in memory: this script cannot restart it (it runs
+# unprivileged), so it says so below when the binary changed.
+HALFWAVE_BEFORE=$(sha256sum target/release/halfwave 2>/dev/null | cut -c1-64 || true)
+cargo build --release --quiet -p v6502-sim --bin halfwave
+
+GOLDEN=tools/golden-trace/golden.txt
+if [ -s "$GOLDEN" ]; then
+  export V6502_REQUIRE_GOLDEN=1
+  log "testing the workspace (golden oracle present: the differential test is required)"
+else
+  log "testing the workspace (NO golden oracle at $GOLDEN: the differential test will skip; node tools/golden-trace/gen.js --steps 3000 makes it)"
+fi
+export HALFPHI_REQUIRE_CHIPS=1
+CARGO_OUT=$(mktemp)
+if ! cargo test --quiet --workspace >"$CARGO_OUT" 2>&1; then
+  tail -60 "$CARGO_OUT" >&2
+  echo "deploy: cargo test --workspace failed; nothing published" >&2
+  exit 1
+fi
+read -r CARGO_PASSED CARGO_FAILED < <(count_cargo <"$CARGO_OUT")
+[ "$CARGO_PASSED" -gt 0 ] || { echo "deploy: cargo test reported 0 passed; that would pass on nothing" >&2; exit 1; }
+log "  cargo: $CARGO_PASSED passed, $CARGO_FAILED failed"
+
+log "testing the service"
+PYTEST_OUT=$(mktemp)
+if ! python3 -m pytest service/ -q >"$PYTEST_OUT" 2>&1; then
+  tail -40 "$PYTEST_OUT" >&2
+  echo "deploy: pytest service/ failed; nothing published" >&2
+  exit 1
+fi
+SERVICE_PASSED=$(grep -oE '[0-9]+ passed' "$PYTEST_OUT" | tail -1 | awk '{print $1}')
+[ -n "$SERVICE_PASSED" ] && [ "$SERVICE_PASSED" -gt 0 ] || { echo "deploy: pytest reported no passes" >&2; exit 1; }
+log "  service: $SERVICE_PASSED passed"
+
+python3 - "$TESTS_JSON" "$CARGO_PASSED" "$CARGO_FAILED" "$SERVICE_PASSED" "${V6502_REQUIRE_GOLDEN:-}" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+out, cp, cf, sp, golden = sys.argv[1:]
+json.dump({
+    "ran": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    "cargo": {"command": "cargo test --workspace", "passed": int(cp), "failed": int(cf),
+              "require_chips": True, "require_golden": golden == "1"},
+    "service": {"command": "pytest service/", "passed": int(sp)},
+}, open(out, "w"), indent=2)
+PY
+rm -f "$CARGO_OUT" "$PYTEST_OUT"
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 
@@ -337,6 +414,8 @@ if [ -f "$SITE/current/build-info.json" ]; then
 fi
 PREVIOUS_DEPLOY="$PREV_COMMIT" python3 tools/build-info.py web --kind simulator
 
+rm -f "$TESTS_JSON"
+
 log "hashing assets"
 python3 tools/build-web.py web dist
 
@@ -410,3 +489,9 @@ for f in "$DEST"/layout.*.bin "$DEST"/pkg/v6502_wasm_bg.*.wasm; do
   [ -f "$f" ] || continue
   log "$(basename "$f") $(stat -c%s "$f" | numfmt --to=iec) -> gz $(stat -c%s "$f.gz" | numfmt --to=iec)"
 done
+
+
+HALFWAVE_AFTER=$(sha256sum target/release/halfwave | cut -c1-64)
+if [ "$HALFWAVE_AFTER" != "$HALFWAVE_BEFORE" ]; then
+  log "halfwave was rebuilt ($(./target/release/halfwave --version)); the API still holds the old one: sudo systemctl restart 6502-api"
+fi

@@ -131,6 +131,13 @@ def main() -> None:
         "kind": kind,
         "repo": "https://github.com/tinymachines/6502",
     }
+    # What deploy.sh proved before it built anything: the suites and their
+    # counts, written to a file it names in TESTS_JSON. Absent when this tool
+    # is run by hand, and then the key is absent rather than a zero, because a
+    # zero would read as "ran and nothing passed".
+    tests_file = os.environ.get("TESTS_JSON", "")
+    if tests_file and Path(tests_file).is_file():
+        info["tests"] = json.loads(Path(tests_file).read_text())
     prev = os.environ.get("PREVIOUS_DEPLOY", "")
     info["previousDeploy"] = prev[:40] if prev else None
     # An empty list when there was no previous deploy to compare against is not

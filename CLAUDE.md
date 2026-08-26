@@ -102,6 +102,11 @@ says which one it found if it cannot. **Anything the deploy shells out to is
 running under systemd's environment, not yours** — check the version, do not
 assume the binary.
 
+`deploy/deploy.sh` runs `cargo test --workspace` (chips and golden required
+where the oracle exists) and `pytest service/` before it builds anything, and
+writes the counts into `build-info.json` beside the commit. A release that
+carries no `tests` key was made by hand.
+
 ```bash
 cargo test --workspace              # 91 tests: netlist, functional, golden,
                                     # rewind, state, blueprint, pla, decode,
