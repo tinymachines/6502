@@ -91,7 +91,10 @@ export function chipHalfCycle() {
  *
  * A driver may state `caps` itself; otherwise they are read off the methods it
  * has. An empty object when nothing is registered. `power` and `rate` are the
- * store's own and are true for any driver.
+ * store's own and are true for any driver. `engine` says whether the driver
+ * honours the local/api switch; a driver that runs in one place only says
+ * where in `runsOn` ('local' | 'api'), so a transport shows the engine that
+ * is actually stepping rather than the store's choice.
  */
 export function driverCaps() {
   if (!driver) return {};

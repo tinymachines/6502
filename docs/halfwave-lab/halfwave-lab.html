@@ -3634,7 +3634,7 @@ function attachStore(store){
   if(STORE||!store||typeof store.registerDriver!=="function") return;
   STORE=store;
   store.registerDriver({
-    caps:{power:true,back:true,step:true,cycle:true,op:true,rate:true,seek:true},
+    caps:{power:true,back:true,step:true,cycle:true,op:true,rate:true,seek:true,engine:false,runsOn:"api"},
     powered:()=>POWER&&!PWBUSY,
     power:async(on)=>{
       if(PWBUSY) return;
