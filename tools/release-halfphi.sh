@@ -138,10 +138,13 @@ PY
 MSG="halfphi $VERSION
 
 Shared-file digest: $DIGEST"
-( cd "$THERE" && git add Cargo.toml Cargo.lock CHANGELOG.md \
+# `add -u` with paths: the standalone ignores its Cargo.lock (a library's
+# lockfile is not published), and a plain `git add` of an ignored file is an
+# error that stopped the first release between the bump and the commit.
+( cd "$THERE" && git add -u Cargo.toml Cargo.lock CHANGELOG.md \
   && git commit -q -m "$MSG" \
   && git tag -a "v$VERSION" -m "$MSG" )
-( cd "$ROOT" && git add crates/halfphi/Cargo.toml Cargo.lock \
+( cd "$ROOT" && git add -u crates/halfphi/Cargo.toml Cargo.lock \
   && git commit -q -m "$MSG
 
 Cut from crates/halfphi; published as tinymachines/halfphi v$VERSION." \
