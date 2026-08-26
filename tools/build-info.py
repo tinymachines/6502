@@ -113,7 +113,9 @@ def main() -> None:
     # No tags in this repo yet, so fall back to the commit count. It is
     # monotonic, meaningful without ceremony, and becomes a real tag the moment
     # one exists.
-    version = git("describe", "--tags", "--abbrev=0")
+    # halfphi's releases are tagged here too (halfphi-vX.Y.Z, by
+    # tools/release-halfphi.sh) and are not versions of the site.
+    version = git("describe", "--tags", "--abbrev=0", "--exclude", "halfphi-*")
     if not version:
         n = git("rev-list", "--count", "HEAD")
         version = f"v0.{n}" if n else "v0"

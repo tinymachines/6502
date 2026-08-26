@@ -27,7 +27,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | | |
 |---|---|
 | Simulation | Complete. 84 tests, bit-exact against the original. |
-| Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs. |
+| Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone to desktop), installable PWA, offline. One header owning program, transport and clock across every page. |
 | Programs | Seven programs as **source**, assembled in the page, annotated, run on the chip. One choice, shared by every page. |
