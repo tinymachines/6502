@@ -25,6 +25,39 @@ cd "$REPO"
 
 log "rustc $(rustc --version | awk '{print $2}'), $(wasm-pack --version)"
 
+# The programs are assembled at load rather than typed, which moves the risk
+# rather than removing it: a bad edit to the assembler changes every program at
+# once, silently, and every page still boots. This refuses to publish unless the
+# three that predate the rewrite still assemble to the bytes they shipped with.
+# Which node, though. This runs under systemd, whose PATH is not the interactive
+# shell's: `node` there is /usr/bin/node, v12, which cannot parse the `??` in
+# web/programs.js and fails with a bare SyntaxError pointing at a line that is
+# perfectly good JavaScript. Exactly the same trap as the stray /usr/bin/rustc
+# documented in CLAUDE.md, and it cost a deploy to find.
+#
+# The alternative -- writing the site's JavaScript down to whatever node the
+# host happens to ship -- would constrain browser code forever for the sake of
+# one check script, and nothing would ever say so out loud.
+pick_node() {
+  local candidate version major
+  for candidate in "${NODE:-}" node \
+      $(ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -Vr); do
+    [ -n "$candidate" ] || continue
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    version=$("$candidate" --version 2>/dev/null) || continue
+    major=${version#v}; major=${major%%.*}
+    case "$major" in ''|*[!0-9]*) continue ;; esac
+    [ "$major" -ge 16 ] && { command -v "$candidate"; return 0; }
+  done
+  return 1
+}
+NODE_BIN=$(pick_node) || {
+  echo "deploy: need node >= 16 to check that the programs assemble." >&2
+  echo "        found: $(command -v node >/dev/null && node --version || echo none)" >&2
+  echo "        systemd's PATH is not your shell's -- set NODE=/path/to/node." >&2
+  exit 1
+}
+
 # ---------------------------------------------------------------------------
 # Test, before anything is built to publish
 # ---------------------------------------------------------------------------
@@ -78,7 +111,11 @@ read -r CARGO_PASSED CARGO_FAILED < <(count_cargo <"$CARGO_OUT")
 [ "$CARGO_PASSED" -gt 0 ] || { echo "deploy: cargo test reported 0 passed; that would pass on nothing" >&2; exit 1; }
 log "  cargo: $CARGO_PASSED passed, $CARGO_FAILED failed"
 
-log "testing the service"
+# The service's assembler shells out to node (service/assembler.py reads
+# NODE), and under systemd's PATH that is /usr/bin/node v12, which cannot parse
+# the assembler. The node this script already resolves is the one the tests get.
+log "testing the service (node: $NODE_BIN)"
+export NODE="$NODE_BIN"
 PYTEST_OUT=$(mktemp)
 if ! python3 -m pytest service/ -q >"$PYTEST_OUT" 2>&1; then
   tail -40 "$PYTEST_OUT" >&2
@@ -150,38 +187,6 @@ for f in web/index.html web/app.js web/renderer.js web/disasm.js web/style.css \
   [ -s "$f" ] || { echo "deploy: missing or empty $f" >&2; exit 1; }
 done
 
-# The programs are assembled at load rather than typed, which moves the risk
-# rather than removing it: a bad edit to the assembler changes every program at
-# once, silently, and every page still boots. This refuses to publish unless the
-# three that predate the rewrite still assemble to the bytes they shipped with.
-# Which node, though. This runs under systemd, whose PATH is not the interactive
-# shell's: `node` there is /usr/bin/node, v12, which cannot parse the `??` in
-# web/programs.js and fails with a bare SyntaxError pointing at a line that is
-# perfectly good JavaScript. Exactly the same trap as the stray /usr/bin/rustc
-# documented in CLAUDE.md, and it cost a deploy to find.
-#
-# The alternative -- writing the site's JavaScript down to whatever node the
-# host happens to ship -- would constrain browser code forever for the sake of
-# one check script, and nothing would ever say so out loud.
-pick_node() {
-  local candidate version major
-  for candidate in "${NODE:-}" node \
-      $(ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -Vr); do
-    [ -n "$candidate" ] || continue
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    version=$("$candidate" --version 2>/dev/null) || continue
-    major=${version#v}; major=${major%%.*}
-    case "$major" in ''|*[!0-9]*) continue ;; esac
-    [ "$major" -ge 16 ] && { command -v "$candidate"; return 0; }
-  done
-  return 1
-}
-NODE_BIN=$(pick_node) || {
-  echo "deploy: need node >= 16 to check that the programs assemble." >&2
-  echo "        found: $(command -v node >/dev/null && node --version || echo none)" >&2
-  echo "        systemd's PATH is not your shell's -- set NODE=/path/to/node." >&2
-  exit 1
-}
 "$NODE_BIN" tools/check-programs.mjs || exit 1
 
 # The chip atlas: the tracer's derivations composed into the chip map's
