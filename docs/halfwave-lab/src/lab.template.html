@@ -3518,6 +3518,7 @@ $("#b-reset").onclick=()=>{ stopPlay(); go(0); };
    Off is now a state the reader can see, and the way back out of it is
    disabled and says what it is doing. */
 let POWER=true, PWBUSY=false;
+let STORE=null;   /* the host's chip store, once attached (see attachStore) */
 const OFFWORDS=$("#offnote").querySelector(".pb").innerHTML;
 function paintPower(){
   const b=$("#b-power");
@@ -3537,6 +3538,9 @@ function paintPower(){
      no machine behind it, so it goes with the power. */
   for(const id of ["b-reset","b-hb","b-play","b-hf","b-cf","b-if"]) $("#"+id).disabled=!POWER||PWBUSY;
   $("#scrub").disabled=$("#rate").disabled=!POWER||PWBUSY;
+  /* The store learns of a boot that finished after it attached (the page
+     boots on load, and the host's strip usually arrives mid-boot). */
+  if(STORE&&POWER&&!PWBUSY&&!STORE.isPowered()) STORE.setPower(true);
 }
 async function powerOn(){
   PWBUSY=true; paintPower();
@@ -3626,7 +3630,6 @@ $("#b-play").onclick=()=>{
    driver, paces its play off the store's clock, and marks its own player
    `driven` so the host can hide it: one strip, one set of keys. Standalone
    (halfwave.tinymachines.ai) nothing is provided and nothing changes. */
-let STORE=null;
 function attachStore(store){
   if(STORE||!store||typeof store.registerDriver!=="function") return;
   STORE=store;
