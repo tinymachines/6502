@@ -1,5 +1,13 @@
 <!doctype html><html><head><meta charset="utf-8"><title>working</title></head><body>
-<iframe id="f" src="/" style="width:1100px;height:900px;border:0"></iframe>
+<iframe id="f" style="width:1100px;height:900px;border:0"></iframe>
+<script>
+// The console resolves its API from its OWN query string, so a probe served
+// from a directory with no /api behind it has to pass one through. Without a
+// ?api= this is unchanged: the iframe loads "/" and the console uses its own
+// origin, which is what the deployed site does.
+{const a=new URLSearchParams(location.search).get("api");
+ document.getElementById("f").src = a ? "/?api="+encodeURIComponent(a) : "/";}
+</script>
 <script type="module">
 const R=[],ok=(n,c,x)=>R.push((c?"OK ":"FAIL ")+n+(x?" ["+String(x).replace(/\s+/g," ").slice(0,46)+"]":""));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -30,6 +38,34 @@ f.addEventListener("load",async()=>{
     ok("pause stops the chip", T("#k-frames")===n, n+" -> "+T("#k-frames"));
     ok("one request per frame, as designed", Math.abs(+T("#k-req") - +T("#k-frames")) <= 3,
        T("#k-req")+" requests for "+T("#k-frames")+" frames");
+
+    // Changing the cartridge WHILE a boot is in flight. power() decides things
+    // before two awaits; without rechecking the generation after them it
+    // resumed into a cancelled boot, repainted the buttons as live, wrote the
+    // new cartridge's name against the old ROM's byte count, and built the
+    // console from the new contract over the old bytes. Its loop then exited
+    // at once on the stale generation, so the console read live with nothing
+    // running. Reported from the apex site's console shell with a repro.
+    const sel=q("#cart");
+    if (sel && sel.options.length > 1) {
+      const first=sel.value;
+      q("#b-power").click();                 // boot starts, awaits begin
+      // Poll for the effect the click writes, do not sleep a guessed number of
+      // milliseconds past it: the boot's long await is an API round trip, and
+      // a fixed sleep either lands outside the window or races it. An earlier
+      // version slept 40ms and passed against the UNFIXED console, which makes
+      // it a test that cannot fail.
+      await wait(()=>T("#b-power")==="booting...", 4000);
+      sel.value=[...sel.options].map(o=>o.value).find(v=>v!==first);
+      sel.dispatchEvent(new w.Event("change"));
+      await sleep(3000);                     // let the cancelled boot land
+      ok("changing the cartridge mid-boot cancels the boot",
+         T("#b-power")==="power on" && T("#k-cart")==="--",
+         "power=\""+T("#b-power")+"\" cart=\""+T("#k-cart")+"\"");
+      ok("...and does not leave a console reporting live with nothing running",
+         !(T("#b-power")==="reset" && T("#k-frames")==="0"),
+         "power=\""+T("#b-power")+"\" frames="+T("#k-frames"));
+    }
   }catch(e){ R.push("FAIL threw: "+e.message); }
   const bad=R.filter(r=>r.indexOf("FAIL")===0);
   document.title=(bad.length?"RED "+bad.length+" :: ":"ALL PASS :: ")+R.join(" | ");

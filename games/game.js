@@ -379,15 +379,26 @@ async function power() {
   try {
     // A loaded cartridge carries its bytes; a built-in one is a file beside
     // this page. Either way what reaches the console is a Uint8Array.
-    let rom = state.cart.bytes;
+    const cart = state.cart;           // the one being booted, not the current one
+    let rom = cart.bytes;
     if (!rom) {
-      const r = await fetch(new URL(state.cart.rom, import.meta.url));
-      if (!r.ok) throw new Error(`${state.cart.rom}: HTTP ${r.status}`);
+      const r = await fetch(new URL(cart.rom, import.meta.url));
+      if (!r.ok) throw new Error(`${cart.rom}: HTTP ${r.status}`);
       rom = new Uint8Array(await r.arrayBuffer());
     }
-    $('#k-cart').textContent = `${state.cart.name} · ${rom.length}B`;
-    state.con = new Console6502(state.cart, rom, API);
+    // Anything decided before an await has to be rechecked after it, the rule
+    // `loop` already keeps. Changing the cartridge mid-boot bumps `gen`, nulls
+    // `state.con` and puts the button back to "power on"; without this guard
+    // the in-flight boot resumed and overwrote all three, painting a live
+    // console whose `loop` then exited at once on the stale gen. It also built
+    // the console from the NEW cartridge's contract over the OLD cartridge's
+    // bytes, so a later resume ran the wrong ROM. Reported from the apex
+    // site's console shell, with a repro.
+    if (gen !== state.gen) return;
+    $('#k-cart').textContent = `${cart.name} · ${rom.length}B`;
+    state.con = new Console6502(cart, rom, API);
     await state.con.power();
+    if (gen !== state.gen) return;
     fit();
     paint();
     hud();
