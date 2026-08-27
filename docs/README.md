@@ -105,6 +105,32 @@ worth having and **neither is a picture of the die.**
   16-node clock generator, derived) and [`alu-bit3.svg`](elk/alu-bit3.svg)
   (one ALU bit slice).
 
+### The same containers, live
+
+The documents above are generated into this directory and are read here. The
+same derivation is also served and drawn, so a reader who wants to query it
+rather than read it does not have to clone anything.
+
+| | |
+|---|---|
+| <https://6502.tinymachines.ai/api/v1/atlas> | the kinds, the blocks, the counts |
+| <https://6502.tinymachines.ai/api/v1/atlas/full> | all of it in one response, `groups.json` byte for byte, 48 KB gzipped |
+| <https://6502.tinymachines.ai/api/v1/groups?layer=partition> | the disjoint groups the chip map draws |
+| <https://6502.tinymachines.ai/api/v1/groups?layer=containers> | the same derivations unfiltered, overlapping |
+| <https://6502.tinymachines.ai/api/v1/groups?layer=absorbed> | the ones that exist only in the overlapping layer |
+| <https://6502.tinymachines.ai/api/v1/groups/regs:a> | one group, with the bundles it anchors |
+| <https://6502.tinymachines.ai/api/v1/node/pipeUNK39> | one node, and every container that claims it |
+| <https://6502.tinymachines.ai/api/v1/tags?multi=true> | the nodes in more than one container |
+| <https://6502.tinymachines.ai/api/v1/neighbors?node=a0&via=switch> | a bounded walk out from one node |
+| <https://6502.tinymachines.ai/api/> | the reference page, which explains the two layers |
+| <https://6502.tinymachines.ai/chipmap> | the partition, drawn |
+| <https://6502.tinymachines.ai/tracer> | the same kinds, overlapping, drawn |
+
+The counts are deliberately absent from that table: they are stated once in
+this file and once on the API page, and both are checked against the export
+rather than typed. `../web/chip-groups.js` is the one hand-written source
+behind every row of it.
+
 ## How the chip is built
 
 [`idioms.md`](idioms.md) is the other half of the atlas. The atlas says *where*
