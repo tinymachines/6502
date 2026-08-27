@@ -175,9 +175,9 @@ test reads the program bytes out of its header rather than duplicating them.
 
 ## Performance
 
-**~25,800 half-cycles/s native (~12.9 kHz simulated 6502)**, against the
-reference JavaScript's 302 half-cycles/s: **85x faster**. A real 6502 runs at
-1 to 2 MHz, so this is 77x to 155x slower than the part.
+**~29,600 half-cycles/s native (~14.8 kHz simulated 6502)**, against the
+reference JavaScript's 302 half-cycles/s: **98x faster**. A real 6502 runs at
+1 to 2 MHz, so this is 68x to 135x slower than the part.
 
 ```bash
 node tools/export-programs.mjs                                  # web/programs.txt

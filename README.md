@@ -79,7 +79,7 @@ Two independent oracles, because either alone is insufficient:
    JSR/RTS stack layout, ADC/SBC flags, BCD. A shared misreading of the die data
    would pass the first test and fail this one.
 
-~28,500 half-cycles/s natively — about 94× the original JavaScript.
+~29,600 half-cycles/s natively — about 98× the original JavaScript.
 
 ## Building
 

@@ -238,6 +238,99 @@ CLAIMS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Derived claims: numbers that are RELATED to each other rather than counted.
+#
+# Throughput is a timing, so nothing here can tell you it is stale -- only a
+# re-run of the benchmark can, and the deploy is not going to do that. What it
+# CAN tell you is that the tree contradicts itself, which is the failure that
+# actually happened: the site said 28,500 half-cycles/s and "94x", CLAUDE.md
+# said 25,800 and "85x", each looked plausible on its own, and nothing related
+# them. The measured figure is stated ONCE and every other number derives from
+# it.
+# ---------------------------------------------------------------------------
+FLAT = lambda s: re.sub(r"\s+", " ", s)
+STRIP_TAGS = lambda s: re.sub(r"<[^>]+>", " ", s)
+
+
+def derived_checks() -> list[tuple[bool, str]]:
+    """The throughput claim, in the four places it is stated.
+
+    Nothing here can tell you the measurement is STALE -- only re-running the
+    benchmark can, and the deploy is not going to spend wall-clock on a timing.
+    What it tells you is that the tree contradicts itself, which is what
+    happened: CLAUDE.md and the engine note said 25,800 and 85x, the site and
+    the README said 28,500 and 94x, each internally consistent, nothing
+    relating them, split two against two.
+
+    CLAUDE.md is the source. Every other number is derived from its rate: the
+    kHz is half of it, the multiple is it over the reference engine's measured
+    302, and the "slower than the part" range is a 1-2 MHz 6502 over it.
+    """
+    out: list[tuple[bool, str]] = []
+    flat = lambda s: re.sub(r"\s+", " ", s)
+    # Tags are stripped from HTML and NOT from markdown. `<[^>]+>` looks
+    # harmless until it meets prose containing a bare `<`: CLAUDE.md documents
+    # the drive lattice as "Floating < ChargedHigh < PullDown < ...", so the
+    # pattern matched from there to the next `>` in the file and swallowed
+    # whole sections, including the one being checked. The failure looked like
+    # a regex that would not match a sentence that was plainly there.
+    def load(rel: str) -> str:
+        s = (ROOT / rel).read_text()
+        if rel.endswith(".html"):
+            s = re.sub(r"<[^>]+>", " ", s)
+        return flat(s)
+
+    text = {
+        rel: load(rel)
+        for rel in ("CLAUDE.md", "docs/notes/engine.md", "web/index.html", "README.md")
+    }
+    num = lambda s: int(s.replace(",", ""))
+
+    src = re.search(
+        r"\*\*~([\d,]+) half-cycles/s native \(~([\d.]+) kHz simulated 6502\)\*\*,"
+        r" against the reference JavaScript's ([\d,]+): \*\*([\d,]+)x faster\*\*\."
+        r" A real 6502 runs at 1 to 2 MHz, so this is ([\d,]+)x to ([\d,]+)x slower",
+        text["CLAUDE.md"],
+    )
+    if not src:
+        return [(False, "CLAUDE.md's Performance claim did not parse; every other check keys off it")]
+    rate, khz, ref, mult, lo, hi = (
+        num(src.group(1)), float(src.group(2)), num(src.group(3)),
+        num(src.group(4)), num(src.group(5)), num(src.group(6)),
+    )
+
+    # CLAUDE.md against itself
+    out.append((abs(khz - round(rate / 2000, 1)) < 0.05,
+                f"CLAUDE.md says {khz} kHz; half of {rate:,} half-cycles/s is {round(rate/2000,1)}"))
+    out.append((mult == round(rate / ref),
+                f"CLAUDE.md says {mult}x; {rate:,}/{ref} is {round(rate/ref)}x"))
+    out.append((lo == round(1e6 / (rate / 2)) and hi == round(2e6 / (rate / 2)),
+                f"CLAUDE.md says {lo}x to {hi}x slower than the part; a 1-2 MHz 6502 over "
+                f"{round(rate/2000,1)} kHz is {round(1e6/(rate/2))}x to {round(2e6/(rate/2))}x"))
+
+    # the engine note repeats the sentence verbatim apart from one unit word
+    en = re.search(r"\*\*~([\d,]+) half-cycles/s native \(~([\d.]+) kHz simulated 6502\)\*\*,"
+                   r" against the reference JavaScript's [\d,]+ half-cycles/s: \*\*([\d,]+)x faster\*\*",
+                   text["docs/notes/engine.md"])
+    out.append((bool(en) and num(en.group(1)) == rate and num(en.group(3)) == mult,
+                "docs/notes/engine.md restates the rate and multiple; they must be CLAUDE.md's"
+                + (f" (found {en.group(1)} and {en.group(3)}x)" if en else " (did not parse)")))
+
+    # the shipped page and the README
+    for rel, pat in (
+        ("web/index.html",
+         r"About ([\d,]+) half-cycles per second natively, roughly ([\d,]+)\u00d7 the original JavaScript"),
+        ("README.md",
+         r"~([\d,]+) half-cycles/s natively .? about ([\d,]+)\u00d7 the original JavaScript"),
+    ):
+        m = re.search(pat, text[rel])
+        out.append((bool(m) and num(m.group(1)) == rate and num(m.group(2)) == mult,
+                    f"{rel} states the rate and multiple; they must be CLAUDE.md's {rate:,} and {mult}x"
+                    + (f" (found {m.group(1)} and {m.group(2)}x)" if m else " (did not parse)")))
+    return out
+
+
 def main() -> int:
     cache: dict[str, object] = {}
 
@@ -283,6 +376,13 @@ def main() -> int:
             shown = WORD_OF.get(want, want) if not claimed_text.strip().isdigit() else want
             print(f"FAIL {path}: says {claimed_text.strip()} {key}, measured {want}")
             print(f"     write: {shown}")
+            fail += 1
+
+    for good, why in derived_checks():
+        if good:
+            ok += 1
+        else:
+            print(f"FAIL derived: {why}")
             fail += 1
 
     print(f"\n{ok} claim(s) agree, {fail} disagree, {skip} skipped.")

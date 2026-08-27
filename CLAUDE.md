@@ -543,9 +543,9 @@ something.
 
 ## Performance
 
-**~25,800 half-cycles/s native (~12.9 kHz simulated 6502)**, against the
-reference JavaScript's 302: **85x faster**. A real 6502 runs at 1 to 2 MHz, so
-this is 77x to 155x slower than the part.
+**~29,600 half-cycles/s native (~14.8 kHz simulated 6502)**, against the
+reference JavaScript's 302: **98x faster**. A real 6502 runs at 1 to 2 MHz,
+so this is 68x to 135x slower than the part.
 
 **It is not memory-bound, and that was measured after the opposite was guessed.**
 IPC 2.04, L1 dcache miss 1.28%, 99.6% of time in `Engine::settle`, fully inlined,
