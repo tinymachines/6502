@@ -26,7 +26,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 84 tests, bit-exact against the original. |
+| Simulation | Complete. 91 tests, bit-exact against the original. |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone to desktop), installable PWA, offline. One header owning program, transport and clock across every page. |
@@ -134,9 +134,10 @@ python3 tools/analyse-searches.py /tmp/searches.json /tmp/addr.json
 # 6502 as a service: the stateless engine, and its HTTP reference implementation
 cargo build --release -p v6502-sim --bin halfwave   # the warm engine process
 cargo test -p v6502-sim --test state                # snapshot/restore, bit-exact
-python3 -m pytest service/ -q                       # 174 tests: the service end to
-                                                    # end, the chip atlas (52),
-                                                    # cartridges (27), MCP (17).
+python3 -m pytest service/ -q                       # 182 tests: the service end to
+                                                    # end (30), the chip atlas (56),
+                                                    # cartridges (32), the registry
+                                                    # (48), MCP (16).
                                                     # Atlas SKIPS without groups.json.
 uvicorn app:app --app-dir service --port 6510       # run it. NOT 6502: the live
                                                     # 6502-api service holds that
@@ -386,7 +387,7 @@ for each page.
 
 ### Development harnesses in `web/`
 
-Thirty-three harnesses plus three probes, all prefixed `_` and **never shipped**
+Thirty-six harnesses plus three probes, all prefixed `_` and **never shipped**
 (`build-web.py` copies only the files it names, so they cannot reach `dist/`).
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug. Read the title with `--dump-dom`: each reports
