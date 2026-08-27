@@ -20,7 +20,7 @@ series chain three deep).
   `dpc23_SBAC` and `sync` have no pullup flag, so the first version rendered
   every control line as a dead end. They are **precharged**: a clocked
   transistor pulls them to vcc and the pulldown network discharges them or
-  leaves them holding charge. 150 nodes work this way — the same dynamic storage
+  leaves them holding charge. 142 nodes work this way — the same dynamic storage
   the engine models as `ChargedHigh`, and the reason the 6502 has a *minimum*
   clock. The PLA's product terms, by contrast, really are static.
 - **A switch's control line rides on the edge and is never expanded.** `cclk`

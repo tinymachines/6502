@@ -124,6 +124,22 @@ def node_eval(expr: str, what: str) -> int:
     return int(r.stdout.strip())
 
 
+def _timing():
+    """(all timed, ending on a T0 term, nothing arriving, arriving but not a
+    term). The predicate is web/timing.js's: a term whose name starts
+    op-T0-."""
+    T = _json("timing.json")
+    terms = T["terms"]
+    timed = [o for o in T["opcodes"] if not o["jam"]]
+    is_t0 = lambda i: bool(terms[i]) and str(terms[i]).startswith("op-T0-")
+    with_t0 = [o for o in timed if any(is_t0(i) for i in o["arrived"])]
+    nothing = [o for o in timed if not o["arrived"]]
+    other = [o for o in timed if o["arrived"] and not any(is_t0(i) for i in o["arrived"])]
+    if len(with_t0) + len(nothing) + len(other) != len(timed):
+        raise Skip("the timing split does not partition; the predicate moved")
+    return timed, with_t0, nothing, other
+
+
 MEASURE = {
     "cargo tests": cargo_tests,
     "service tests": lambda: pytest_counts()["total"],
@@ -153,6 +169,19 @@ MEASURE = {
     "unresolved gates": lambda: _json("schematic.json")["counts"]["unresolved"],
     "transistors": lambda: _json("schematic.json")["counts"]["transistors"],
     "netlist nodes": lambda: len(_json("schematic.json")["names"]),
+    # The precharged half: gates whose output has no pullup, held by charge
+    # between phases. The shipped page said 150 for as long as it existed and
+    # the export has counted 142; nothing compared them until this row.
+    "dynamic gates": lambda: _json("schematic.json")["counts"]["dynamic"],
+    "absorbed transistors": lambda: _json("schematic.json")["counts"]["absorbed"],
+    "switches": lambda: _json("schematic.json")["counts"]["switches"],
+    # The timing page's split, recomputed with the page's OWN predicate
+    # (a term named op-T0-*), because the first attempt at this used a
+    # plausible different rule and made the page look wrong when it was right.
+    "timed instructions": lambda: len(_timing()[0]),
+    "t0 endings": lambda: len(_timing()[1]),
+    "no arrivals": lambda: len(_timing()[2]),
+    "arrivals that are not terms": lambda: len(_timing()[3]),
     "pla terms": lambda: len(_json("decode.json")["rows"]),
     "control lines": lambda: len(_json("decode.json")["outputs"]),
     "traced control lines": lambda: len(_json("decode.json")["links"]),
@@ -187,6 +216,20 @@ CLAIMS = [
     ("CLAUDE.md", r"PLA product terms \+ \d+ of (\d+) control lines", "control lines"),
     ("CLAUDE.md", r"Facts: \*\*(\d+) nodes,", "netlist nodes"),
     ("CLAUDE.md", r"Facts: \*\*\d+ nodes, (\d+) transistors", "transistors"),
+    # The shipped pages. A number in a page's prose is a number nothing
+    # recomputes, which is how "150 signals have no pullup" survived.
+    ("web/schematic.html", r"<h2>(\d+) signals have no pullup</h2>", "dynamic gates"),
+    ("web/schematic.html", r"<strong>(\d+) nodes work this way</strong>", "dynamic gates"),
+    ("web/schematic.html", r"One gate shape,[^0-9]{0,40}(\d+) times", "gates"),
+    ("web/schematic.html", r"Coverage of the (\d+)\s*transistors", "transistors"),
+    ("web/schematic.html", r"(\d+) symbols absorb", "gates"),
+    ("web/schematic.html", r"symbols absorb\s*(\d+) of", "absorbed transistors"),
+    ("web/schematic.html", r"remaining\s*(\d+) stay as switches", "switches"),
+    ("web/timing.html", r"For \d+ of the (\d+) instructions", "timed instructions"),
+    ("web/timing.html", r"For (\d+) of the \d+ instructions", "t0 endings"),
+    ("web/timing.html", r"For (\d+) of them nothing new arrives", "no arrivals"),
+    ("web/timing.html", r"The other (\d+) do have\s+something arriving", "arrivals that are not terms"),
+    ("docs/notes/schematic-and-blocks.md", r"holding charge\. (\d+) nodes work this way", "dynamic gates"),
     ("docs/notes/web-shell.md", r"([A-Za-z-]+) harnesses plus (?:\w+) probes", "harnesses"),
     ("docs/notes/web-shell.md", r"[A-Za-z-]+ harnesses plus (\w+) probes", "probes"),
     ("docs/README.md", r"(\d+) groups and the \w+ containers that exist only", "groups"),
