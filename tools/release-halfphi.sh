@@ -17,7 +17,7 @@
 #   halfphi     tag  v<X>          the published crate's own release
 #   6502        tag  halfphi-v<X>  the commit the crate was cut from, here
 #
-# Both tag messages carry the sha256 over the five shared files (the digest
+# Both tag messages carry the sha256 over the six shared files (the digest
 # tinymachines/public's board-engine.py records), so a tag can be checked
 # against the bytes it claims to name rather than trusted.
 #
@@ -84,7 +84,11 @@ import hashlib, sys
 from pathlib import Path
 root = Path(sys.argv[1])
 h = hashlib.sha256()
-for rel in ["src/lib.rs", "src/source.rs", "src/netlist.rs", "src/engine.rs", "tests/chips.rs"]:
+# The SHARED list in check-halfphi.mjs, and it has to stay that list: a shared
+# file outside the digest is a byte the tag does not name. slice.rs joined in
+# 946c0ae and this line was updated with it. Digests before that release cover
+# five files; from 0.1.2 they cover six.
+for rel in ["src/lib.rs", "src/source.rs", "src/netlist.rs", "src/engine.rs", "src/slice.rs", "tests/chips.rs"]:
     h.update(rel.encode() + b"\0" + (root / rel).read_bytes() + b"\0")
 print(h.hexdigest())
 PY
