@@ -419,6 +419,14 @@ if [ -f "$SITE/current/build-info.json" ]; then
 fi
 PREVIOUS_DEPLOY="$PREV_COMMIT" python3 tools/build-info.py web --kind simulator
 
+# Every place the docs count this PROJECT -- tests, harnesses, programs, block
+# pages, the chip's own totals -- against a measurement. It runs HERE, after
+# build-info.json is written, because that file is where the cargo count it
+# checks comes from: the run this deploy just did, not a remembered number.
+# Three of these had drifted silently before it existed.
+log "checking the counts the docs keep of themselves"
+NODE="$NODE_BIN" python3 tools/check-self-counts.py || exit 1
+
 rm -f "$TESTS_JSON"
 
 log "hashing assets"

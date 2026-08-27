@@ -197,6 +197,16 @@ python3 tools/serve.py web 8777                    # http://localhost:8777/
 # that is web/_asm-test.html.)
 node tools/check-programs.mjs
 
+# Every place the docs count this PROJECT: the test totals and their per-file
+# breakdown, the harnesses and probes, the programs, the block pages, and the
+# chip totals the status table quotes. Each claim is matched by a pattern that
+# must hit exactly once and compared with a measurement, so a claim that moves
+# out from under its pattern fails as loudly as a wrong number. The cargo count
+# comes from build-info.json, so deploy.sh runs this AFTER writing it; run by
+# hand it SKIPS that row unless the file is there. REQUIRE_ALL=1 makes a skip a
+# failure. Three claims had drifted silently before this existed.
+python3 tools/check-self-counts.py
+
 # halfphi lives in two repositories. This diffs the five shared files against the
 # published checkout and deploy.sh refuses to publish on a difference. SKIPS
 # without a sibling clone; REQUIRE_HALFPHI=1 insists, HALFPHI=<path> names one,
