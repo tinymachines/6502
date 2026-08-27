@@ -148,7 +148,11 @@ restart_api() {
 
 deploy_archive() { say "archive"; run bash deploy/archive-deploy.sh; }
 deploy_games()   { say "games";   run bash games/deploy.sh; }
-deploy_lab()     { say "lab";     run bash deploy/halfwave-deploy.sh; }
+# The lab installs as www-data, so unlike archive and games it needs root:
+# without sudo it dies on "cannot remove index.html: Permission denied"
+# AFTER its two self-contained checks have passed, which reads like the
+# page was rejected rather than the write.
+deploy_lab()     { say "lab";     run sudo bash deploy/halfwave-deploy.sh; }
 
 # ---------------------------------------------------------------------------
 # Verify what is actually live. A screenshot cannot show a wrong header and a
