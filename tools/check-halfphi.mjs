@@ -46,6 +46,7 @@ const SHARED = [
   'src/source.rs',
   'src/netlist.rs',
   'src/engine.rs',
+  'src/slice.rs',
   'tests/chips.rs',
 ];
 
@@ -83,10 +84,17 @@ for (const rel of SHARED) {
   }
 }
 
-if (fix && differ.length) {
-  for (const d of differ) {
-    fs.copyFileSync(path.join(HERE, d.rel), path.join(there, d.rel));
-    console.log(`copied crates/halfphi/${d.rel} -> ${there}/${d.rel}`);
+// A file present here and absent there is copied too. Without this, adding a
+// shared file reported "missing" and fixed nothing, which is the failure this
+// check exists to prevent, wearing the costume of a report.
+const absent = missing
+  .filter((m) => m.endsWith(`is missing from ${there}`))
+  .map((m) => m.split(' ')[0]);
+
+if (fix && (differ.length || absent.length)) {
+  for (const rel of [...differ.map((d) => d.rel), ...absent]) {
+    fs.copyFileSync(path.join(HERE, rel), path.join(there, rel));
+    console.log(`copied crates/halfphi/${rel} -> ${there}/${rel}`);
   }
   console.log('check-halfphi: copied this repo\'s copy over the published one. '
     + 'Commit and push it there, and re-run its tests: the standalone repo runs '

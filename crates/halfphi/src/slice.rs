@@ -101,11 +101,7 @@ impl SliceNetlist {
             exists: (0..n).map(|i| nl.exists(i as NodeId)).collect(),
         };
         for ti in 0..t as TransId {
-            let (g, a, b) = (
-                nl.transistor_gate(ti),
-                nl.transistor_c1(ti),
-                nl.transistor_c2(ti),
-            );
+            let (g, a, b) = (nl.transistor_gate(ti), nl.transistor_c1(ti), nl.transistor_c2(ti));
             let (ra, rb) = (nl.is_rail(a), nl.is_rail(b));
             // A transistor gated by vss can never conduct: vss is low by
             // identity, so its gate never rises. 17 of them on the 6502, and
