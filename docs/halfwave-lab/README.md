@@ -228,7 +228,7 @@ a recording away. Measured: 4.9:1 filled and 5.0:1 hollow against the bar in dar
 
 **Every readout is clickable, and says what it is part of.** The page always knew a latch's
 value and nothing about the wire. `/v1/atlas/full` is the chip map's own derivation of the
-die into machinery: 132 groups over 23 kinds covering all 1547 nodes once, plus the 135
+die into machinery: 132 groups over 23 kinds covering all 1547 nodes once, plus the 138
 overlapping containers behind them. One fetch, ~50 KB gzipped, cached a day, pulled in the
 background after the trace lands, and every question after that is answered locally: nothing
 new happens on the step path.
@@ -238,7 +238,7 @@ the wires, the container that owns them, the blocks they are filed in and what t
 to. **The containers beyond the owner are listed too**, because the partition gives every node
 one box only so the chip map can draw it: `dpc23_SBAC` is in `regs:a.SBAC` *and* in the
 special bus's `sbus:off`, and `dpc25_SBDB` is in `dbus:SBDB` and in `sbus:link`, one of the
-three containers the partition absorbed whole. One lane can come apart into several: **P is
+six containers the partition absorbed whole. One lane can come apart into several: **P is
 seven containers, one per flag**, and the ALU is its eight bit slices.
 
 **Watching a container puts its named nodes in the trace's own watch set.** The trace in hand
