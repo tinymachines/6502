@@ -97,16 +97,16 @@ curl -s localhost:6502/v1/atlas/full                  # ALL of it, one file, 48 
 curl -s localhost:6502/v1/atlas                       # just the kinds, blocks, counts
 curl -s 'localhost:6502/v1/groups?kind=alu'           # the ALU as 17 containers
 curl -s 'localhost:6502/v1/groups/regs:a'             # one, with its wiring
-curl -s 'localhost:6502/v1/tags?multi=true'           # the 88 nodes in more than one
+curl -s 'localhost:6502/v1/tags?multi=true'           # the 122 nodes in more than one
 curl -s 'localhost:6502/v1/node/pipeUNK39'            # one node, all of its tags
 curl -s 'localhost:6502/v1/neighbors?node=a0&via=switch'
 ```
 
 Two layers, and the difference is the point. The **partition** is 132 groups
 with every one of the 1547 nodes in exactly one, because a drawing needs
-disjoint boxes. The **containers** are the same derivations unfiltered: 135,
-overlapping, 88 nodes in more than one, and three (`sdp:sd1`, `sdp:sd2`,
-`sbus:link`) that exist only there. `?layer=containers` on a group asks for
+disjoint boxes. The **containers** are the same derivations unfiltered: 138,
+overlapping, 122 nodes in more than one, and six (`sdp:sd1`, `sdp:sd2`,
+`sbus:link` and the three `dpc` clock-phase sets) that exist only there. `?layer=containers` on a group asks for
 the derivation's own set instead of the box: `intr:nmi` is 20 nodes as a walk
 and 18 as a box, and the two it loses include `pipeVectorA2`, the one address
 bit by which `$FFFA` differs from `$FFFE`.

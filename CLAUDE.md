@@ -40,7 +40,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 | Hosting | <https://6502.tinymachines.ai> -- nginx + a oneshot systemd deploy. |
 | Backup | The registry replicates continuously to `/mnt/backup/6502-registry` (Litestream, `deploy/litestream.yml`). Restore proven twice. Survives a disk, not a fire: same machine, and off-box is a second destination in the same file whenever there is somewhere to put it. |
 | Service | `halfwave`, the stateless engine binary, plus a FastAPI reference implementation in `service/`. Live at `/api/`. Proven bit-exact across serialize/resume hops. |
-| Atlas | The chip map's own derivation over HTTP: 132 groups, the 135 overlapping containers behind it, the hierarchy, the wiring, a bounded neighbour walk. One module, shared with the pages. |
+| Atlas | The chip map's own derivation over HTTP: 132 groups, the 138 overlapping containers behind it, the hierarchy, the wiring, a bounded neighbour walk. One module, shared with the pages. |
 | Games | <https://games.tinymachines.ai> -- Die Runner: a console on the API. Cartridges are one gzipped file carrying the ROM, its tiles and the contract. See `games/README.md`. |
 | Registry | Builders, their pages and the ROMs on them. The one stateful thing here: one SQLite file beside the checkout. |
 | MCP | `POST /api/mcp`, hand-written JSON-RPC, no session and no SSE. Five coarse tools. |

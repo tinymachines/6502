@@ -186,11 +186,17 @@ state that decodes to the wrong chip is worse than one that is rejected.
     candidate set before the ownership filter as well as after
     (`containers`, additive: the partition, its order and its counts are
     unchanged, and `_chipmap-test` and `_tracer-test` passed before and
-    after). Measured: **135 containers, 88 nodes in more than one, five at
-    most** (`pipeUNK39` is in `alat:ADL/ABL`, `dbus:rw`, `sdp:sd1`,
-    `pipe:unk` and `alu:out`), and **three containers exist only in the
-    overlapping layer** -- `sdp:sd1`, `sdp:sd2` and `sbus:link`, absorbed
-    whole. SD1 and SD2 are the store-data latches the simulator's own timing
+    after). Measured when it was built: **135 containers, 88 nodes in more
+    than one, five at most**, and three containers existing only in the
+    overlapping layer. Adding the three `dpc` clock-phase sets afterwards
+    moved all three numbers, and today's export reads **138 containers, 122
+    nodes in more than one, still five at most** (`pipeUNK39` and
+    `pipeUNK41` are each in `alat:ADL/ABL`, `dbus:rw`, `sdp:sd1` or
+    `sdp:sd2`, `pipe:unk` and `alu:out`), with **six containers existing
+    only in the overlapping layer** -- `sdp:sd1`, `sdp:sd2`, `sbus:link`,
+    `dpc:phi1`, `dpc:both` and `dpc:unreached`, absorbed whole. The `dpc`
+    three claim nothing by construction: a clock phase is added last, when
+    every one of its nodes already has a derivation that explains it. SD1 and SD2 are the store-data latches the simulator's own timing
     readout names, so the partition alone cannot answer a question about
     them at all.
   - **`?layer=containers` on a group is the same key read the other way, and

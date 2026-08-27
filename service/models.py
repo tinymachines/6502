@@ -299,7 +299,7 @@ class AtlasResponse(BaseModel):
 class GroupsResponse(BaseModel):
     """Derived containers, filtered. `layer` says which of the two layers was
     asked for: `partition` (132 disjoint groups, every node once),
-    `containers` (135, overlapping) or `absorbed` (the 3 that exist only in
+    `containers` (138, overlapping) or `absorbed` (the 6 that exist only in
     the overlapping layer)."""
 
     count: int

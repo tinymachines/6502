@@ -446,7 +446,7 @@ def groups(
     `layer=partition` (the default) is the 132 disjoint groups the chip map
     draws: every node in exactly one. `layer=containers` is the same
     derivations unfiltered, so they overlap and a node can be in five.
-    `layer=absorbed` is the three that exist only in the overlapping layer,
+    `layer=absorbed` is the six that exist only in the overlapping layer,
     having been claimed whole by a container that outranks them.
     """
     a = _at()

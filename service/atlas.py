@@ -13,9 +13,10 @@ Two layers, and the difference is the whole point:
   groups      the PARTITION: 132 groups, every one of the 1547 nodes in
               exactly one. A drawing needs disjoint boxes, so ownership goes
               to the most specific claim.
-  containers  the same derivations UNFILTERED: 135 of them, overlapping. 88
-              nodes are in more than one, and three containers (`sdp:sd1`,
-              `sdp:sd2`, `sbus:link`) live only here, absorbed whole by a
+  containers  the same derivations UNFILTERED: 138 of them, overlapping. 122
+              nodes are in more than one, and six containers (`sdp:sd1`,
+              `sdp:sd2`, `sbus:link`, `dpc:phi1`, `dpc:both`,
+              `dpc:unreached`) live only here, absorbed whole by a
               container that outranks them. Asking which groups a node is in
               and getting one answer is a fact about the drawing, not about
               the chip.

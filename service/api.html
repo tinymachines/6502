@@ -331,7 +331,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     <p>The containers, filtered.</p>
     <table>
       <tr><th>query</th><th>meaning</th></tr>
-      <tr><td><code>layer</code></td><td><code>partition</code> (default, 132 disjoint), <code>containers</code> (135, overlapping) or <code>absorbed</code> (the 3 that exist only in the overlapping layer)</td></tr>
+      <tr><td><code>layer</code></td><td><code>partition</code> (default, 132 disjoint), <code>containers</code> (138, overlapping) or <code>absorbed</code> (the 6 that exist only in the overlapping layer)</td></tr>
       <tr><td><code>kind</code></td><td>one kind: <code>alu</code>, <code>flags</code>, <code>regs</code>, <code>alat</code>, <code>dbus</code>, <code>irp</code>, <code>sbus</code>, <code>sdp</code>, <code>rdy</code>, <code>pcr</code>, <code>pipe</code>, <code>sync</code>, <code>clock</code>, <code>intr</code>, <code>branch</code>, <code>decimal</code>, <code>incr</code>, <code>chain</code>, <code>bus</code>, <code>stage</code>, <code>pins</code>, <code>rest</code>, <code>logic</code></td></tr>
       <tr><td><code>parent</code></td><td>only the children of one group key. <code>parent=regs:a</code> gives the accumulator's three load lines</td></tr>
       <tr><td><code>block</code></td><td>a functional block, by id or name: which machinery reaches into the ALU</td></tr>
@@ -383,7 +383,7 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
       <tr><td><code>role</code></td><td><code>signal</code>, <code>decode term</code> (122 of them) or <code>control line</code> (46)</td></tr>
       <tr><td><code>q</code></td><td>substring of the node name</td></tr>
       <tr><td><code>named</code></td><td>true for the 705 named nodes, false for the 842 the die never named</td></tr>
-      <tr><td><code>multi</code></td><td>only the 88 nodes in more than one container</td></tr>
+      <tr><td><code>multi</code></td><td>only the 122 nodes in more than one container</td></tr>
       <tr><td><code>limit</code>, <code>offset</code></td><td>paging; <code>total</code> says how many matched</td></tr>
     </table>
   </div>
