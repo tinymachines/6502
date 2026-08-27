@@ -236,6 +236,52 @@ def test_the_api_page_documents_what_the_service_does(client):
     assert f"{HEX_NODE_CHARS} hex chars" in page
     assert f"{HEX_TRANS_CHARS} hex chars" in page
 
+    # ...and so are the ATLAS numbers, which is a separate sentence because
+    # they were a separate hole. The block above checks the engine's figures,
+    # the chip map's were checked by nothing, and "135 containers, 88 nodes in
+    # more than one, three absorbed" sat on this page through a deploy after
+    # the three `dpc` clock-phase sets moved all three. Every figure below is
+    # asked of the running API and never typed here: a second place that knows
+    # how many containers there are is the thing that drifted in the first
+    # place. Whitespace is flattened first because the page wraps its prose and
+    # a number can land either side of a newline.
+    flat = re.sub(r"\s+", " ", page)
+    counts = client.get("/v1/atlas").json()["counts"]
+    absorbed = client.get("/v1/groups?layer=absorbed").json()["count"]
+    multi = client.get("/v1/tags?multi=true&limit=1").json()["total"]
+    named = client.get("/v1/tags?named=true&limit=1").json()["total"]
+    unnamed = client.get("/v1/tags?named=false&limit=1").json()["total"]
+
+    for claim in (
+        # the two layers, in the prose and again in the /v1/groups table
+        f"{counts['groups']} groups with every one of the {counts['nodes']} nodes in",
+        f"unfiltered: {counts['containers']} of them, overlapping",
+        f"<strong>{multi} nodes in more than one</strong>",
+        f"and {absorbed} that exist only there",
+        f"(default, {counts['groups']} disjoint)",
+        f"<code>containers</code> ({counts['containers']}, overlapping)",
+        f"the {absorbed} that exist only in the overlapping layer",
+        # what /v1/atlas itself reports
+        f"the {counts['kinds']} container kinds",
+        f"{counts['groups']} groups, {counts['bundles']} bundles carrying "
+        f"{counts['bundledGate']} gate legs and {counts['bundledSwitch']} "
+        f"switches between groups, {counts['insideGate']} and "
+        f"{counts['insideSwitch']} staying inside one",
+        # the /v1/tags filters
+        f"true for the {named} named nodes, false for the {unnamed} the die never named",
+        f"only the {multi} nodes in more than one container",
+        # and the MCP tool row, which said 1725 (the netlist's node count)
+        # where the partition covers 1547
+        f"{counts['groups']} derived containers that cover all {counts['nodes']} nodes",
+    ):
+        assert claim in flat, f"page does not state the measured claim: {claim!r}"
+
+    # multi and the decode-term count are both 122 today and are not the same
+    # set, so a lazy substring check would pass on the wrong one. Pin the
+    # sentence each belongs to rather than the bare number.
+    terms = client.get("/v1/tags?role=decode term&limit=1").json()["total"]
+    assert f"<code>decode term</code> ({terms} of them)" in flat
+
     # House style: no em dashes in anything shipped.
     assert "\u2014" not in page
 

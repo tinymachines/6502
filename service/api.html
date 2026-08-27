@@ -284,10 +284,11 @@ print(bytes.fromhex(r["machine"]["memory"]["pages"]["00"])[0x82])'</span></code>
     <em>partition</em> is 132 groups with every one of the 1547 nodes in
     exactly one, because a drawing needs disjoint boxes and ownership goes to
     the most specific claim. The <em>containers</em> are the same derivations
-    unfiltered: 135 of them, overlapping, with <strong>88 nodes in more than
-    one</strong> and three (<code>sdp:sd1</code>, <code>sdp:sd2</code>,
-    <code>sbus:link</code>) that exist only there, absorbed whole by a
-    container that outranks them. Asking which group a node is in and getting
+    unfiltered: 138 of them, overlapping, with <strong>122 nodes in more than
+    one</strong> and 6 that exist only there (<code>sdp:sd1</code>,
+    <code>sdp:sd2</code>, <code>sbus:link</code> and the three
+    <code>dpc</code> clock-phase sets), absorbed whole by a container that
+    outranks them. Asking which group a node is in and getting
     one answer is a fact about the drawing, not about the chip.
   </p>
   <p>
@@ -659,7 +660,7 @@ python3 -c <span class="s">'import gzip,json,sys; print(json.load(gzip.open("min
     <tr><td><code>mint_cartridge</code></td><td>source and tiles to one verified
       file, base64</td></tr>
     <tr><td><code>chip_atlas</code></td><td>what a wire is part of, out of the 132
-      derived containers that cover all 1725 nodes</td></tr>
+      derived containers that cover all 1547 nodes they partition</td></tr>
   </table>
   <p>
     <strong><code>run</code> renders the screen as two hex characters a cell,
