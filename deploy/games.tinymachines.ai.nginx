@@ -63,14 +63,25 @@ server {
     # static document each, reading the handle and the slug out of their own
     # path rather than out of a query. None of these declare add_header, so
     # they inherit the complete set above, which is this config's own rule.
-    location = /builders { try_files /builders.html =404; }
-    location = /manage   { try_files /manage.html =404; }
+    # The forward (2026-08-27): the console and the registry pages live
+    # under the apex now, so each page path answers 301 to its home there
+    # (a ?cart= query travels with /). The ROM page forwards to the console
+    # with the cartridge address the apex's own builder pages link, encoded
+    # the same way. /api/ and the static files stay: a browser still holding
+    # the old index.html asks for them, and cartridge addresses in the wild
+    # name this origin.
+    location = /            { return 301 https://tinymachines.ai/6502/games$is_args$args; }
+    location = /index.html  { return 301 https://tinymachines.ai/6502/games$is_args$args; }
+    location = /builders    { return 301 https://tinymachines.ai/6502/builders; }
+    location = /manage      { return 301 https://tinymachines.ai/6502/manage; }
     # The regexes are QUOTED because they contain {2,32}: an unquoted brace is
     # the start of a block to nginx's parser, and it fails with "unknown
     # directive" naming the middle of the pattern. The 6502 config records the
     # same trap for a map key.
-    location ~ "^/b/[a-z0-9-]{2,32}/[a-z0-9-]{2,32}/?$" { try_files /index.html =404; }
-    location ~ "^/b/[a-z0-9-]{2,32}/?$"                 { try_files /builder.html =404; }
+    location ~ "^/b/(?<handle>[a-z0-9-]{2,32})/(?<slug>[a-z0-9-]{2,32})/?$" {
+        return 301 https://tinymachines.ai/6502/games?cart=https%3A%2F%2Ftinymachines.ai%2F6502%2Fapi%2Fv1%2Fregistry%2Fb%2F$handle%2Froms%2F$slug%2Fcart;
+    }
+    location ~ "^/b/(?<handle>[a-z0-9-]{2,32})/?$" { return 301 https://tinymachines.ai/6502/builders/$handle; }
 
     # The same engine both other origins use. These locations declare
     # add_header and therefore restate the COMPLETE set: nginx discards every

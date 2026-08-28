@@ -61,6 +61,14 @@ server {
         default_type application/manifest+json;
     }
 
+    # The forward (2026-08-27): the Lab lives at the apex. Only the page
+    # forwards. sw.js, the manifest and the icons keep serving, because this
+    # is an installed app for some readers, and an installed app whose sw.js
+    # 404s keeps its cached shell forever; the worker fetches / network-first
+    # and follows this 301.
+    location = /           { return 301 https://tinymachines.ai/6502/lab$is_args$args; }
+    location = /index.html { return 301 https://tinymachines.ai/6502/lab$is_args$args; }
+
     # The same API the 6502 site proxies, one engine behind both origins.
     # These locations declare add_header and therefore restate the COMPLETE
     # set (nginx discards every inherited header the moment one appears);

@@ -47,6 +47,21 @@ map $uri $tm6502_cache {
     "/sw.js"                                                   "no-cache";
 }
 
+# The forward (2026-08-27). The pages now live under the apex, so a page
+# path answers 301 to its home there; the query string travels with it,
+# because the pages read their state from it. Only pages forward: /api/ is
+# called cross-origin by other people's clients and by every published
+# cartridge address, a 301 on a POST is answered as a GET, and the hashed
+# assets, sw.js and build-info.json are what a browser holding the old
+# index.html still asks for. Those keep serving in place. Quoted regex:
+# nginx reads a bare { in a map key as a block.
+map $uri $tm6502_forward {
+    default                 "";
+    "/"                     "/6502/explorer";
+    "/index.html"           "/6502/explorer";
+    "~^/(primer|tracer|blueprint|chipmap|decode|designer|diegraph|exploded|halfshot|pinout|programs|schematic|talk|timing|trace|block|blockdiagram|explorer)(?:\.html)?$"  "/6502/$1";
+}
+
 server {
     include snippets/scanner-trap.conf;
     server_name 6502.tinymachines.ai;
@@ -127,9 +142,9 @@ server {
     # point of the gallery is that the collection is browsable through pages
     # that carry attribution, not through a bare directory listing.
     location /archive/ {
-        alias /var/www/6502.tinymachines.ai/archive/;
-        autoindex off;
-        try_files $uri $uri/ $uri/index.html =404;
+        # Forwarded to the apex, which aliases the same directory (the
+        # forward, 2026-08-27). Nothing here is hashed, so nothing is lost.
+        return 301 https://tinymachines.ai/6502$request_uri;
     }
 
     # 6502 as a service: the stateless API, proxied to a local uvicorn run by
@@ -151,7 +166,10 @@ server {
     # uvicorn runs with --root-path /api, which is what makes the generated
     # docs ask for /api/openapi.json rather than /openapi.json; the trailing
     # slashes on both sides of proxy_pass strip the prefix on the way in.
-    location = /api { return 301 /api/; }
+    # The reference page is a document, not a call: it forwards to the apex.
+    # The calls under /api/v1/ and the generated docs stay here.
+    location = /api  { return 301 https://tinymachines.ai/6502/api; }
+    location = /api/ { return 301 https://tinymachines.ai/6502/api; }
     # The API responses that are static data: the die's node names, and the
     # atlas (its derived containers, their members, and the wiring between
     # them). The /api/ location below says no-store, which is right for
@@ -217,5 +235,10 @@ server {
     # It sits after `$uri` so a real file always wins, and before `$uri/` so a
     # page beats a same-named directory -- the order that bit the archive, where
     # a URL was both a page and a directory.
-    location / { try_files $uri $uri.html $uri/ =404; }
+    location / {
+        # A page path forwards to the apex (see the map at the top); anything
+        # the map leaves blank is served as before.
+        if ($tm6502_forward) { return 301 https://tinymachines.ai$tm6502_forward$is_args$args; }
+        try_files $uri $uri.html $uri/ =404;
+    }
 }

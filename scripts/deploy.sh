@@ -174,10 +174,10 @@ verify() {
   # until a deploy stops taking effect.
   local cc
   cc="$(curl -fsSI "https://$HOST/" | tr -d '\r' | awk -F': ' 'tolower($1)=="cache-control"{print $2}')"
-  case "$cc" in *no-cache*) ok "/ is $cc" ;; *) bad "/ Cache-Control is '${cc:-absent}', want no-cache" ;; esac
+  case "$cc" in *no-cache*) ok "/ (the forward) is $cc" ;; *) bad "/ Cache-Control is '${cc:-absent}', want no-cache" ;; esac
 
   curl -fsSI "https://$HOST/" | tr -d '\r' | grep -qi '^content-security-policy:' \
-    && ok "CSP present on /" || bad "no CSP on /"
+    && ok "CSP present on / (the forward)" || bad "no CSP on /"
 
   # The atlas count is READ FROM THE BUILD, never typed here: this script must
   # not become a second place that knows how many containers there are.
@@ -189,26 +189,47 @@ verify() {
   elif [ "$want" = "$got" ]; then ok "api serves $got containers, the build's own number"
   else bad "api serves $got containers, the build says $want (restart 6502-api)"; fi
 
-  # The manifest is content-hashed by build-web.py, so there is no bare path to
-  # ask for: read the href out of the page. Guessing `/manifest.webmanifest`
-  # gets a 404 and reads as a broken MIME type, which is what it did first.
-  local mf
-  mf="$(curl -fsS "https://$HOST/" 2>/dev/null | grep -o 'href="[^"]*webmanifest"' \
-        | head -1 | sed 's/^href="//;s/"$//')"
-  if [ -z "$mf" ]; then bad "no manifest link on /"
-  elif curl -fsSI "https://$HOST/$mf" 2>/dev/null | tr -d '\r' \
-       | grep -qi 'content-type: *application/manifest+json'; then ok "manifest MIME ($mf)"
-  else bad "$mf is not served as application/manifest+json"; fi
+  # The pages forward to the apex now, so `/` is a 301 with no body and the
+  # hashed names cannot be scraped out of it. They come from the build's own
+  # asset manifest instead, which is better anyway: this checks what was
+  # BUILT rather than what some page happened to link.
+  #
+  # Every capture below ends in `|| true`. Without it a `grep` that matches
+  # nothing exits 1 and `set -e` kills this function mid-run: when the forward
+  # first went live, verify printed four lines and stopped, with no ALL OK and
+  # no SOMETHING IS WRONG, which reads exactly like a pass to anyone skimming.
+  local am mf asset
+  am=dist/asset-manifest.json
+  if [ ! -f "$am" ]; then
+    note "no $am; skipping the hashed-asset checks (run a build to get them)"
+  else
+    mf="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(next((v for v in d.values() if v.endswith(".webmanifest")), ""))' "$am" 2>/dev/null || true)"
+    asset="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("app.js",""))' "$am" 2>/dev/null || true)"
 
-  # A hashed asset must be immutable, or the long cache is a lie.
-  local asset
-  asset="$(curl -fsS "https://$HOST/" 2>/dev/null \
-           | grep -o 'src="[^"]*\.[0-9a-f]\{8\}\.js"' | head -1 | sed 's/^src="//;s/"$//')"
-  if [ -n "$asset" ]; then
-    curl -fsSI "https://$HOST/$asset" 2>/dev/null | tr -d '\r' \
-      | grep -qi 'cache-control:.*immutable' \
-      && ok "hashed asset is immutable ($asset)" || bad "$asset is not immutable"
+    if [ -z "$mf" ]; then bad "no webmanifest in $am"
+    elif curl -fsSI "https://$HOST/$mf" 2>/dev/null | tr -d '\r' \
+         | grep -qi 'content-type: *application/manifest+json'; then ok "manifest MIME ($mf)"
+    else bad "$mf is not served as application/manifest+json"; fi
+
+    # A hashed asset must be immutable, or the long cache is a lie.
+    if [ -z "$asset" ]; then bad "no app.js in $am"
+    elif curl -fsSI "https://$HOST/$asset" 2>/dev/null | tr -d '\r' \
+         | grep -qi 'cache-control:.*immutable'; then ok "hashed asset is immutable ($asset)"
+    else bad "$asset is not immutable"; fi
   fi
+
+  # The forward itself, pinned. The apex site redirects this origin's pages to
+  # tinymachines.ai/6502/, configured in deploy/6502.tinymachines.ai.nginx. A
+  # copy-over from deploy/ to /etc that predates the forward would silently
+  # undo it, and the only symptom would be the site quietly working the old
+  # way, so it is asserted rather than assumed.
+  local fwd
+  fwd="$(curl -sI "https://$HOST/" | tr -d '\r' | awk -F': ' 'tolower($1)=="location"{print $2}' || true)"
+  case "$fwd" in
+    https://tinymachines.ai/6502/*) ok "/ forwards to the apex ($fwd)" ;;
+    "") bad "/ does not forward; deploy/*.nginx may have overwritten the forward" ;;
+    *) bad "/ forwards to '$fwd', not the apex" ;;
+  esac
 
   [ "$FAIL" = 0 ] && say "verify: ALL OK" || { say "verify: SOMETHING IS WRONG"; return 1; }
 }
