@@ -51,7 +51,10 @@ f.addEventListener("load",async()=>{
     q("#b-pause").click(); const n=+T("#k-frames"); await sleep(1600);
     ok("pause stops the chip", +T("#k-frames") - n <= 1,
        n+" -> "+T("#k-frames")+" (one in-flight frame is allowed)");
-    ok("one request per frame, as designed", Math.abs(+T("#k-req") - +T("#k-frames")) <= 3,
+    // parseInt, not unary plus: after a network retry the readout reads
+    // "20 (1 retried)", which coerces to NaN and failed this check on a run
+    // where the count itself was within tolerance.
+    ok("one request per frame, as designed", Math.abs(parseInt(T("#k-req"), 10) - +T("#k-frames")) <= 3,
        T("#k-req")+" requests for "+T("#k-frames")+" frames");
 
     // Changing the cartridge WHILE a boot is in flight. power() decides things
@@ -98,6 +101,37 @@ f.addEventListener("load",async()=>{
       ok("data-frame-ms paces the loop", false, "the console did not boot");
     }
     delete d.body.dataset.frameMs;
+
+    // The sheet is a property of the cartridge, not of the page. Load a
+    // cartridge whose tiles differ from the house set, then choose a built-in
+    // one from the picker: it must draw in the house set again. The legend is
+    // the witness, because the page paints it from the same TILES the screen
+    // draws from; comparing canvases would compare two games at whatever
+    // frame each had reached. dierunner.cart.gz ships the house tiles byte
+    // for byte, so it is fetched, its tile bytes inverted and re-gzipped: a
+    // fixture derived here rather than a binary committed. Without the fix
+    // the second assertion times out with the legend still inverted.
+    const swatches=(doc)=>[...doc.querySelectorAll(".legend i")].map(i=>i.style.backgroundImage).join("\n");
+    await wait(()=>swatches(d).length>0, 5000);
+    const house=swatches(d);
+    const gz=await (await fetch("/dierunner.cart.gz")).arrayBuffer();
+    const cartDoc=JSON.parse(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
+    cartDoc.meta=Object.assign({},cartDoc.meta,{name:"Inverted"});
+    cartDoc.tiles.chr=cartDoc.tiles.chr.match(/../g).map(h=>(255-parseInt(h,16)).toString(16).padStart(2,"0")).join("");
+    const fixture=await new Response(new Blob([JSON.stringify(cartDoc)]).stream().pipeThrough(new CompressionStream("gzip"))).blob();
+    const fixtureUrl=URL.createObjectURL(fixture);
+    const apiParam=new URLSearchParams(location.search).get("api");
+    const reloaded=new Promise(r=>f.addEventListener("load",r,{once:true}));
+    f.src="/?cart="+encodeURIComponent(fixtureUrl)+(apiParam?"&api="+encodeURIComponent(apiParam):"");
+    await reloaded;
+    const d2=f.contentDocument, w2=f.contentWindow, q2=s=>d2.querySelector(s), T2=s=>(q2(s)||{}).textContent||"";
+    const linked=await wait(()=>/Inverted/.test(T2("#k-cart")), 15000);
+    ok("a linked cartridge loads and draws in its own tiles", linked && swatches(d2)!==house,
+       linked ? "legend differs from a plain page's, as it must" : "the fixture did not load: "+T2("#err"));
+    const sel2=q2("#cart"); sel2.value="0"; sel2.dispatchEvent(new w2.Event("change"));
+    const restored=await wait(()=>swatches(d2)===house, 3000);
+    ok("choosing a built-in cartridge afterwards restores the house tiles", restored,
+       restored ? "legend byte-identical to a plain page's" : "legend still shows the linked cartridge's sprites");
   }catch(e){ R.push("FAIL threw: "+e.message); }
   const bad=R.filter(r=>r.indexOf("FAIL")===0);
   document.title=(bad.length?"RED "+bad.length+" :: ":"ALL PASS :: ")+R.join(" | ");

@@ -174,11 +174,15 @@ function useCart(cart) {
   state.con = null;
   state.running = false;
   state.gen++;
+  // Decoded ONTO the cartridge, once, so the set travels with it and the
+  // picker can put it back, or put the house set back, later. `tileset` and
+  // not `tiles`: `tiles` is already the per-cartridge index remap that
+  // drawScreen applies.
   if (cart.chr && cart.chr.length >= 32) {
-    const chr = Uint8Array.from(cart.chr.match(/../g), (h) => parseInt(h, 16));
-    const t = decodeCHR(chr);
-    if (t.length) { TILES = t; state.sheet = null; }
+    const t = decodeCHR(Uint8Array.from(cart.chr.match(/../g), (h) => parseInt(h, 16)));
+    if (t.length) cart.tileset = t;
   }
+  selectTiles();
   $('#note').textContent = cart.blurb || 'A cartridge, loaded from a file.';
   $('#k-cart').textContent = `${cart.name} · ${cart.bytes.length}B`;
   $('#b-power').textContent = 'power on';
@@ -202,6 +206,28 @@ async function loadCartFrom(url) {
  * by definition the ones the sheet was meant to match. */
 let TILES = starterTiles(16);
 
+// The shipped sheet, held apart from TILES because TILES follows the
+// cartridge on screen. A loaded cartridge brings its own set, and when a
+// built-in one is chosen afterwards the house set has to come back. For as
+// long as ?cart= existed nothing put it back: the next cartridge drew in the
+// linked one's sprites, and the legend, painted from the same TILES the
+// screen draws from, agreed with the wrong screen. Reported from the apex
+// site's console with the owner's repro (Die Invaders, then Silicon Snake:
+// snake and food drawn as invaders and a ship).
+let HOUSE = TILES;
+
+/** Point TILES at the cartridge on screen. The sheet is a property of the
+ *  cartridge, not of the page: a cartridge with its own CHR draws in it and
+ *  every other one draws in the house set. Called wherever `state.cart` or
+ *  HOUSE changes. */
+function selectTiles() {
+  const want = (state.cart && state.cart.tileset) || HOUSE;
+  if (want === TILES) return;
+  TILES = want;
+  state.sheet = null;              // the atlas was built from the old set
+  legend();
+}
+
 async function loadTiles() {
   try {
     // Resolved against THIS MODULE's url, not the document's. The page is
@@ -214,10 +240,11 @@ async function loadTiles() {
     if (chr.length < 16) throw new Error(`${chr.length} bytes is not a tile`);
     const t = decodeCHR(chr);
     if (!t.length) throw new Error('no tiles in it');
-    TILES = t;
-    state.sheet = null;              // force the atlas to be rebuilt
+    // A linked cartridge can land before this sheet does. Its own set stays
+    // on screen while it is selected; the house set is here for the next one.
+    HOUSE = t;
+    selectTiles();
     fit();
-    legend();
     if (state.con) paint(); else preview();
   } catch (e) {
     // Not an error the player needs: the starter set is a real tile set.
@@ -477,6 +504,7 @@ $('#cart').onchange = () => {
   state.running = false;
   state.cart = CARTS[+$('#cart').value];
   state.con = null;
+  selectTiles();
   $('#k-cart').textContent = '--';
   $('#k-score').textContent = '0';
   $('#note').textContent = state.cart.blurb || 'The screen is a page of the '
