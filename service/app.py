@@ -629,49 +629,6 @@ def boot(req: BootRequest) -> StepResponse:
     )
 
 
-_ROW_COLS = [
-    "half_cycle", "cycle", "clk0", "phase", "addr", "data", "rw", "sync",
-    "pc", "a", "x", "y", "s", "p", "ir",
-    "alu", "alua", "alub", "sb", "idb", "idl", "dor",
-    "adl", "adh", "abl", "abh", "pclp", "pchp",
-    "tstates", "hidden", "store_data", "fetch_addr", "fetch_opcode", "watch",
-]
-_HIDDEN = {"": 0, "T1": 1, "VEC0": 2, "T6": 3}
-_SD = {"": 0, "SD1": 1, "SD2": 2}
-
-
-def _pack_rows(trace: list[dict], watch_names: list[str]) -> TraceRows:
-    rows = []
-    nbytes = (len(watch_names) + 7) // 8
-    for t in trace:
-        tmask = 0
-        for part in t["tstates"].split("+"):
-            if part:
-                tmask |= 1 << int(part[1])
-        w = t.get("watch") or {}
-        wmask = 0
-        for i, name in enumerate(watch_names):
-            if w.get(name):
-                wmask |= 1 << i
-        # Hex, not an integer: a JSON number is a float64 to every browser,
-        # so an integer mask silently corrupts past 53 names. Same bit
-        # convention as the state blobs (bit i in byte i/8, LSB first),
-        # fixed width, empty with no watches.
-        whex = wmask.to_bytes(nbytes, "little").hex()
-        f = t["fetch"]
-        rows.append([
-            t["half_cycle"], t["cycle"], int(t["clk0"]),
-            1 if t["phase"] == "phi1" else 2,
-            t["addr"], t["data"], 0 if t["rw"] == "read" else 1, int(t["sync"]),
-            t["pc"], t["a"], t["x"], t["y"], t["s"], t["p"], t["ir"],
-            t["alu"], t["alua"], t["alub"], t["sb"], t["idb"], t["idl"], t["dor"],
-            t["adl"], t["adh"], t["abl"], t["abh"], t["pclp"], t["pchp"],
-            tmask, _HIDDEN[t["hidden"]], _SD[t["store_data"]],
-            f["addr"] if f else -1, f["opcode"] if f else -1, whex,
-        ])
-    return TraceRows(cols=_ROW_COLS, watch_names=watch_names, rows=rows)
-
-
 @app.post("/v1/step")
 def step(req: StepRequest) -> StepResponse:
     chosen = [
@@ -697,18 +654,23 @@ def step(req: StepRequest) -> StepResponse:
         lines.append(f"PIN {pin} {level}")
     if req.watch:
         lines.append("WATCH " + " ".join(req.watch))
-    if req.trace:
+    # ROWS is TRACE packed by the engine itself (v6502_sim::rows), the same
+    # packer the wasm Machine uses; it is passed through here untouched, so
+    # this file encodes no column and cannot drift from either.
+    rows = req.trace and req.format == "rows"
+    if rows:
+        lines.append("ROWS")
+    elif req.trace:
         lines.append("TRACE")
 
     res = _engine(lines)
-    rows = req.trace and req.format == "rows"
     return StepResponse(
         machine=_machine_from(res),
         observe=Observation(**res["observe"]),
         stepped=res["stepped"],
         completed=res["completed"],
         trace=[Observation(**t) for t in res["trace"]] if req.trace and not rows else None,
-        trace_rows=_pack_rows(res["trace"], req.watch) if rows else None,
+        trace_rows=TraceRows(**res["trace_rows"]) if rows else None,
     )
 
 

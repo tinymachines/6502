@@ -32,7 +32,7 @@ state that decodes to the wrong chip is worse than one that is rejected.
   what is proven is what travels.
 - **`halfwave` parses no JSON, and that is the workspace's zero-dependency
   rule holding.** Requests are a line protocol (`BOOT`/`STEP n`/`RUN max` +
-  `STATE`/`FILL`/`PAGE`/`WATCH`/`TRACE`, ending `GO`) read with
+  `STATE`/`FILL`/`PAGE`/`WATCH`/`TRACE`/`ROWS`, ending `GO`) read with
   `split_whitespace` and `from_str_radix`, which have nothing in them to be
   wrong about; responses are one hand-written JSON line, the emission style
   every export binary already uses. The asymmetry is the point: parse
@@ -114,7 +114,15 @@ state that decodes to the wrong chip is worse than one that is rejected.
   (stateless, so open on purpose); and `format: "rows"` (the trace as
   columnar rows with stated encodings, asserted to agree with the object
   form column for column; the measured figures on the page are held to a
-  band by the test). Two transport rounds later: `watch` is a lowercase
+  band by the test). **The rows are packed by the engine, not the
+  service**: `ROWS` is a halfwave line beside `TRACE`, and
+  `v6502_sim::rows` is the one packer, the same function the wasm
+  `Machine`'s `traceRows` calls, so `app.py` encodes no column at all and
+  passes `trace_rows` through. It used to re-encode halfwave's objects in
+  Python, which was a second implementation of the format the moment the
+  browser needed a first; `tools/check-wasm-parity.py` now holds the two
+  ends bit-identical over all 34 columns, and `tests/rows.rs` holds the
+  packer to `observe()`. Two transport rounds later: `watch` is a lowercase
   HEX bitset (`watch_encoding: "hex"`), because a JSON integer is a
   float64 to every browser and silently corrupts past 53 watched names,
   found by a consumer watching 64 and pinned by a regression that requires

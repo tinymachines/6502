@@ -12,6 +12,7 @@
 //! - [`timing`] — decoding the internal T-state chain.
 //! - [`bus`] — what the CPU is attached to.
 //! - [`history`] — keyframed rewind.
+//! - [`rows`] — the trace as columnar rows, one packer for every consumer.
 //!
 //! # Example
 //!
@@ -38,6 +39,7 @@
 pub mod bus;
 pub mod cpu;
 pub mod history;
+pub mod rows;
 pub mod state;
 pub mod timing;
 

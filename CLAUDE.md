@@ -26,7 +26,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 91 tests, bit-exact against the original. |
+| Simulation | Complete. 94 tests, bit-exact against the original. |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone to desktop), installable PWA, offline. One header owning program, transport and clock across every page. |
@@ -108,9 +108,9 @@ writes the counts into `build-info.json` beside the commit. A release that
 carries no `tests` key was made by hand.
 
 ```bash
-cargo test --workspace              # 91 tests: netlist, functional, golden,
-                                    # rewind, state, blueprint, pla, decode,
-                                    # blocks, interrupts
+cargo test --workspace              # 94 tests: netlist, functional, golden,
+                                    # rewind, state, rows, blueprint, pla,
+                                    # decode, blocks, interrupts
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo test -p halfphi --test chips         # the 6502, the 6800 and the Z80,
                                            # through identical calls. SKIPS without

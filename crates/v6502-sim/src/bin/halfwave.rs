@@ -32,6 +32,7 @@
 //!     WATCH <name> [name...]     node names to read out (repeatable)
 //!     PIN <name> <0|1>            drive an input pin (res irq nmi rdy so)
 //!     TRACE                       record an observation per half-cycle
+//!     ROWS                        ...as columnar rows (v6502_sim::rows), implies TRACE
 //!     GO
 //!
 //! Exactly one verb (META | NODES | BOOT | STEP | RUN | RUNTO) per block. The response is one
@@ -46,6 +47,7 @@ use std::sync::Arc;
 use v6502_netlist::{mos6502, NodeId};
 use v6502_sim::bus::FlatMemory;
 use v6502_sim::cpu::{Cpu, Fetch, ReadWrite};
+use v6502_sim::rows;
 use v6502_sim::state::{restore, snapshot, MachineState};
 use v6502_sim::timing::{Hidden, Phase, StoreData};
 
@@ -53,7 +55,8 @@ use v6502_sim::timing::{Hidden, Phase, StoreData};
 /// worker. Stated in META so clients can shard long runs.
 const MAX_STEP: u64 = 200_000;
 /// Ceiling when TRACE is on: each traced half-cycle is a response line entry.
-const MAX_TRACED: u64 = 10_000;
+/// Shared with the wasm Machine's `traceRows`, so the two ends agree.
+const MAX_TRACED: u64 = rows::MAX_TRACED;
 
 struct Request {
     verb: Option<String>,
@@ -66,6 +69,7 @@ struct Request {
     pages: Vec<(u8, Vec<u8>)>,
     watch: Vec<String>,
     trace: bool,
+    rows: bool,
 }
 
 impl Request {
@@ -81,6 +85,7 @@ impl Request {
             pages: Vec::new(),
             watch: Vec::new(),
             trace: false,
+            rows: false,
         }
     }
 }
@@ -357,8 +362,19 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                 }
             }
 
+            // The rows form is the same trace packed by v6502_sim::rows, the
+            // packer the wasm Machine uses too: the service passes it
+            // through untouched, so nothing downstream re-encodes a column.
+            let watch_ids: Vec<NodeId> = watch.iter().map(|w| w.1).collect();
             let mut trace = String::new();
-            if req.trace {
+            if req.rows {
+                let _ = write!(
+                    trace,
+                    ",\"trace_rows\":{{\"cols\":{},\"watch_names\":{},\"watch_encoding\":\"hex\",\"rows\":[",
+                    rows::cols_json(),
+                    rows::names_json(&req.watch)
+                );
+            } else if req.trace {
                 trace.push_str(",\"trace\":[");
             }
             let mut stepped = 0u64;
@@ -370,7 +386,11 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                     if i > 0 {
                         trace.push(',');
                     }
-                    trace.push_str(&obs_json(cpu, &watch));
+                    if req.rows {
+                        rows::push_row(&mut trace, cpu, &watch_ids);
+                    } else {
+                        trace.push_str(&obs_json(cpu, &watch));
+                    }
                 }
                 // RUN stops at the next opcode fetch: sync high with clk0
                 // low, the same boundary `step_instruction` uses. RUNTO stops
@@ -397,7 +417,9 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                 completed = false; // the cap came first: a JAM, a loop that
                                    // never fetches there, or the cap is low
             }
-            if req.trace {
+            if req.rows {
+                trace.push_str("]}");
+            } else if req.trace {
                 trace.push(']');
             }
             return format!(
@@ -534,6 +556,11 @@ fn main() {
             }
             "TRACE" => {
                 r.trace = true;
+                Ok(false)
+            }
+            "ROWS" => {
+                r.trace = true;
+                r.rows = true;
                 Ok(false)
             }
             w => Err(format!("unknown line {w:?}")),
