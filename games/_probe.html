@@ -26,16 +26,31 @@ f.addEventListener("load",async()=>{
     q("#b-power").click();
     ok("it boots on the live API", await wait(()=>T("#k-cart")!=="--"), T("#k-cart"));
     ok("...and runs frames", await wait(()=>+T("#k-frames")>=4), T("#k-frames")+" frames");
-    ok("...at the cost the chip actually pays", /^\d+$/.test(T("#k-fc")) && +T("#k-fc")<=1200,
-       T("#k-fc")+" half-cycles per frame");
+    // Bounded by the budget the console ENFORCES (console.js `frame(input,
+    // budget = 20000)`), not by a remembered cost. This read <=1200 from the
+    // day the console shipped, when the only cartridge cost 600 half-cycles a
+    // frame; Die Runner costs 8704, which the mint tool reports too, so the
+    // assertion had been failing for a year of cartridges being bigger rather
+    // than anything being broken. A harness that is always red is one nobody
+    // reads. Exceeding the budget is the real failure and it has its own
+    // message ("did not raise its flag"), covered by "no error surfaced".
+    ok("...at a cost inside the console's frame budget",
+       /^\d+$/.test(T("#k-fc")) && +T("#k-fc")>0 && +T("#k-fc")<20000,
+       T("#k-fc")+" half-cycles per frame, budget 20000");
     ok("...advancing the half-cycle counter", +T("#k-hc").replace(/,/g,"")>5000, T("#k-hc"));
     const a=g.getImageData(0,0,cv.width,cv.height).data.join(",");
     await wait(()=>+T("#k-frames")>=12);
     const b=g.getImageData(0,0,cv.width,cv.height).data.join(",");
     ok("the screen changes as it runs", a!==b);
     ok("no error surfaced", q("#err").hidden || !/stopped answering|could not boot|did not raise/.test(T("#err")), T("#err"));
-    q("#b-pause").click(); const n=T("#k-frames"); await sleep(1600);
-    ok("pause stops the chip", T("#k-frames")===n, n+" -> "+T("#k-frames"));
+    // One frame may already be in flight when pause is clicked -- a frame is a
+    // request and the console cannot recall it -- so the honest assertion is
+    // that no MORE than that lands. Requiring exactly zero made this red
+    // whenever the click happened to fall inside a round trip, which is most
+    // of the time at 200ms a frame.
+    q("#b-pause").click(); const n=+T("#k-frames"); await sleep(1600);
+    ok("pause stops the chip", +T("#k-frames") - n <= 1,
+       n+" -> "+T("#k-frames")+" (one in-flight frame is allowed)");
     ok("one request per frame, as designed", Math.abs(+T("#k-req") - +T("#k-frames")) <= 3,
        T("#k-req")+" requests for "+T("#k-frames")+" frames");
 
