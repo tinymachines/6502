@@ -335,3 +335,17 @@ request with a 200. `post()` retries a rejected fetch up to three times; an
 HTTP status is a real answer and is never retried. Retrying is free here in a
 way it is not for most APIs: the machine is a value we still hold, so the retry
 is the same body sent again, and the server has no session to have lost.
+
+**The transport is a page-level seam.** `post()` reads
+`globalThis.tm6502Transport` on every call; if a host has installed one,
+`(path, body)` goes there with the same request and reply shapes as
+`/v1/<path>` and no HTTP is made. Read per call, not at construction, so a
+host can install or delete it mid-game and the running machine changes
+transport without rebooting (the machine is a value either way).
+`requests` counts round trips, and a local transport makes none, which is how
+`_probe.html` proves the seam is used for frames and not merely consulted
+once: boot and frames through a fake that forwards to the real API, the
+counter reads 0; delete the fake mid-game and the counter starts again while
+the fake's call count stands still. Without the two lines in `post()` the
+fake is never called. The apex site's console, which runs the wasm chip on a
+worker, is the host this exists for.

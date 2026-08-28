@@ -57,6 +57,35 @@ f.addEventListener("load",async()=>{
     ok("one request per frame, as designed", Math.abs(parseInt(T("#k-req"), 10) - +T("#k-frames")) <= 3,
        T("#k-req")+" requests for "+T("#k-frames")+" frames");
 
+    // The transport seam: with globalThis.tm6502Transport installed in the
+    // page, the boot and every frame go through it and no HTTP request is
+    // made. The fake here forwards to the real API so the game keeps
+    // running, which is what lets it prove the seam is used for FRAMES and
+    // not merely consulted once: the request counter must stand still while
+    // frames advance, and start again when the global is deleted mid-game.
+    // Without the seam the fake is never called. On a fresh boot, because
+    // an unattended snake dies at about 26 frames and a game over stops the
+    // loop for a reason that has nothing to do with the transport (the
+    // first draft of this test found that out).
+    {
+      const apiBase=new URLSearchParams(w.location.search).get("api")||(w.location.origin+"/api");
+      const calls=[];
+      w.tm6502Transport=(path,body)=>{calls.push(path);
+        return w.fetch(apiBase+"/v1/"+path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}).then(r=>r.json());};
+      q("#b-power").click();   // a new console: its request counter starts at 0
+      const ran=await wait(()=>calls.includes("boot") && +T("#k-frames")>=4, 30000);
+      ok("with tm6502Transport installed, the boot and the frames go through it", ran && calls.filter(c=>c==="step").length>=4,
+         calls.length+" calls ("+calls.filter(c=>c==="boot").length+" boot), "+T("#k-frames")+" frames, err="+T("#err"));
+      ok("...and no HTTP request is counted", parseInt(T("#k-req"),10)===0,
+         T("#k-req")+" requests");
+      delete w.tm6502Transport;
+      const n1=calls.length, fr1=+T("#k-frames");
+      const ran2=await wait(()=>+T("#k-frames")>=fr1+4, 30000);
+      ok("deleting it mid-game hands the running game back to fetch", ran2 && parseInt(T("#k-req"),10)>0 && calls.length===n1,
+         T("#k-req")+" requests, "+calls.length+" calls, "+(+T("#k-frames")-fr1)+" frames, err="+T("#err"));
+      q("#b-pause").click();
+    }
+
     // Changing the cartridge WHILE a boot is in flight. power() decides things
     // before two awaits; without rechecking the generation after them it
     // resumed into a cancelled boot, repainted the buttons as live, wrote the

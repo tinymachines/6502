@@ -82,6 +82,16 @@ export class Console6502 {
    * is never retried -- only a rejected fetch, which is a transport failure.
    */
   async post(path, body, tries = 3) {
+    // A deliberate page-level seam. A host with the engine in the tab
+    // installs `globalThis.tm6502Transport(path, body)` and every round trip
+    // goes there instead of over HTTP, with the same request and reply shapes
+    // as `/v1/<path>`. Read per call rather than at construction, so
+    // installing or deleting it mid-game hands the running machine across
+    // instead of rebooting it: the machine is a value either way, and it is
+    // the transport that changed, not the game. `requests` counts round
+    // trips, and a local transport makes none.
+    const here = globalThis.tm6502Transport;
+    if (here) return here(path, body);
     const payload = JSON.stringify(body);
     for (let n = 1; ; n++) {
       this.requests++;
