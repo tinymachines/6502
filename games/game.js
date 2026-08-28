@@ -228,6 +228,8 @@ async function loadTiles() {
 const state = {
   con: null, cart: CARTS[0], sheet: null, running: false, input: 0,
   fpsAt: 0, fpsFrames: 0, scale: 2,
+  // When the last frame was released, for `data-frame-ms` pacing. See `loop`.
+  paceAt: 0,
   // Anything decided before an await has to be rechecked after it. A frame IS
   // a round trip, so powering on or changing cartridge while one is in flight
   // left the OLD loop alive: it woke up, saw `running` true again, and carried
@@ -331,9 +333,40 @@ function hud() {
   }
 }
 
+/**
+ * How long a frame must last, in milliseconds, or 0 for as fast as the round
+ * trip allows.
+ *
+ * Read from `[data-frame-ms]` on the page rather than from a control here, so
+ * a host embedding this console can pace it without forking the loop: the
+ * apex site carried an eleven-line build-time patch to do exactly this for its
+ * fast/slow switch, and a patch that has to be reapplied on every upstream
+ * change is a fork with extra steps.
+ *
+ * A PERIOD, not a rate, because it composes with the round trip instead of
+ * fighting it: a frame is a request that already takes about 200ms, so the
+ * longer of the two wins and asking for 10ms frames changes nothing. Read
+ * every frame, so the value can change while the console runs.
+ */
+function frameMs() {
+  const el = document.querySelector('[data-frame-ms]');
+  const v = el ? Number(el.dataset.frameMs) : 0;
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
 async function loop(gen) {
   while (state.running && gen === state.gen) {
     try {
+      // Pace before the work, not after: waiting afterwards would add the
+      // period to the round trip rather than absorbing it.
+      const period = frameMs();
+      if (period) {
+        const wait = period - (performance.now() - state.paceAt);
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        if (gen !== state.gen) return;   // rechecked after the await, as ever
+        if (!state.running) return;
+      }
+      state.paceAt = performance.now();
       // Read and clear BEFORE the await, not after. A request takes about
       // 200ms and frames run back to back, so almost every keypress lands
       // while one is in flight -- and clearing afterwards threw away the

@@ -81,6 +81,23 @@ f.addEventListener("load",async()=>{
          !(T("#b-power")==="reset" && T("#k-frames")==="0"),
          "power=\""+T("#b-power")+"\" frames="+T("#k-frames"));
     }
+
+    // `data-frame-ms` paces the loop. A frame is a request of about 200ms, so
+    // unpaced this manages roughly 15 in three seconds; asking for 900ms
+    // periods must bring that to three or four. The attribute is read every
+    // frame, so it is set here on a console that is already booted.
+    d.body.dataset.frameMs = "900";
+    q("#b-power").click();
+    if (await wait(()=>T("#b-power")==="reset", 30000)) {
+      const before=+T("#k-frames");
+      await sleep(3000);
+      const paced=+T("#k-frames")-before;
+      ok("data-frame-ms paces the loop", paced>0 && paced<=5,
+         paced+" frames in 3s at a 900ms period (unpaced is about 15)");
+    } else {
+      ok("data-frame-ms paces the loop", false, "the console did not boot");
+    }
+    delete d.body.dataset.frameMs;
   }catch(e){ R.push("FAIL threw: "+e.message); }
   const bad=R.filter(r=>r.indexOf("FAIL")===0);
   document.title=(bad.length?"RED "+bad.length+" :: ":"ALL PASS :: ")+R.join(" | ");
