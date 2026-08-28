@@ -112,50 +112,9 @@ fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-/// The buses and hold registers an observation reads beside the registers.
-/// Resolved once at startup. `alu` is the adder's hold register: the wire
-/// where a sum is real before any register holds it, which is the reading
-/// the whole overlap demo turns on.
-struct ExtraBuses {
-    alu: [NodeId; 8],
-    alua: [NodeId; 8],
-    alub: [NodeId; 8],
-    sb: [NodeId; 8],
-    idb: [NodeId; 8],
-    idl: [NodeId; 8],
-    dor: [NodeId; 8],
-    adl: [NodeId; 8],
-    adh: [NodeId; 8],
-    abl: [NodeId; 8],
-    abh: [NodeId; 8],
-    pclp: [NodeId; 8],
-    pchp: [NodeId; 8],
-}
-
-impl ExtraBuses {
-    fn resolve(nl: &v6502_netlist::Netlist) -> ExtraBuses {
-        let bus = |p: &str| nl.bus::<8>(p).unwrap_or_else(|| panic!("no bus {p}0..7"));
-        ExtraBuses {
-            alu: bus("alu"),
-            alua: bus("alua"),
-            alub: bus("alub"),
-            sb: bus("sb"),
-            idb: bus("idb"),
-            idl: bus("idl"),
-            dor: bus("dor"),
-            adl: bus("adl"),
-            adh: bus("adh"),
-            abl: bus("abl"),
-            abh: bus("abh"),
-            pclp: bus("pclp"),
-            pchp: bus("pchp"),
-        }
-    }
-}
-
 /// One observation as flat JSON: the architectural and microarchitectural
 /// state a learner reads off the running chip, plus any watched nodes.
-fn obs_json(cpu: &Cpu<FlatMemory>, extra: &ExtraBuses, watch: &[(String, NodeId)]) -> String {
+fn obs_json(cpu: &Cpu<FlatMemory>, watch: &[(String, NodeId)]) -> String {
     let o = cpu.observe();
     let mut s = String::with_capacity(320);
     let _ = write!(
@@ -199,23 +158,23 @@ fn obs_json(cpu: &Cpu<FlatMemory>, extra: &ExtraBuses, watch: &[(String, NodeId)
             StoreData::None => "",
         },
     );
-    let rb = |b: &[NodeId; 8]| cpu.engine().read_bus(b);
+    let i = cpu.internals().expect("the 6502 netlist names its internal buses");
     let _ = write!(
         s,
         ",\"alu\":{},\"alua\":{},\"alub\":{},\"sb\":{},\"idb\":{},\"idl\":{},\"dor\":{},         \"adl\":{},\"adh\":{},\"abl\":{},\"abh\":{},\"pclp\":{},\"pchp\":{}",
-        rb(&extra.alu),
-        rb(&extra.alua),
-        rb(&extra.alub),
-        rb(&extra.sb),
-        rb(&extra.idb),
-        rb(&extra.idl),
-        rb(&extra.dor),
-        rb(&extra.adl),
-        rb(&extra.adh),
-        rb(&extra.abl),
-        rb(&extra.abh),
-        rb(&extra.pclp),
-        rb(&extra.pchp),
+        i.alu,
+        i.alua,
+        i.alub,
+        i.sb,
+        i.idb,
+        i.idl,
+        i.dor,
+        i.adl,
+        i.adh,
+        i.abl,
+        i.abh,
+        i.pclp,
+        i.pchp,
     );
     match cpu.last_fetch() {
         Some(f) => {
@@ -281,7 +240,7 @@ fn err(msg: &str) -> String {
     format!("{{\"ok\":false,\"error\":\"{}\"}}", json_escape(msg))
 }
 
-fn handle(cpu: &mut Cpu<FlatMemory>, extra: &ExtraBuses, req: &Request) -> String {
+fn handle(cpu: &mut Cpu<FlatMemory>, req: &Request) -> String {
     let verb = match &req.verb {
         Some(v) => v.as_str(),
         None => return err("no verb (META, NODES, BOOT, STEP, RUN or RUNTO) before GO"),
@@ -411,7 +370,7 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                     if i > 0 {
                         trace.push(',');
                     }
-                    trace.push_str(&obs_json(cpu, extra, &watch));
+                    trace.push_str(&obs_json(cpu, &watch));
                 }
                 // RUN stops at the next opcode fetch: sync high with clk0
                 // low, the same boundary `step_instruction` uses. RUNTO stops
@@ -447,7 +406,7 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                 completed,
                 state_json(cpu),
                 memory_json(cpu, req.fill),
-                obs_json(cpu, extra, &watch),
+                obs_json(cpu, &watch),
                 trace
             );
         }
@@ -459,7 +418,7 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
         "{{\"ok\":true,\"stepped\":0,\"completed\":true,\"state\":{},\"memory\":{},\"observe\":{}}}",
         state_json(cpu),
         memory_json(cpu, req.fill),
-        obs_json(cpu, extra, &watch)
+        obs_json(cpu, &watch)
     )
 }
 
@@ -476,7 +435,6 @@ fn main() {
         return;
     }
     let netlist = Arc::new(mos6502());
-    let extra = ExtraBuses::resolve(&netlist);
     let mut cpu = Cpu::new(netlist, FlatMemory::new()).expect("6502 signals resolve");
     cpu.bus.set_journalling(false);
 
@@ -586,7 +544,7 @@ fn main() {
             Ok(true) => {
                 let response = match bad.take() {
                     Some(e) => err(&e),
-                    None => handle(&mut cpu, &extra, &req),
+                    None => handle(&mut cpu, &req),
                 };
                 let _ = writeln!(out, "{response}");
                 let _ = out.flush();

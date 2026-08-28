@@ -54,7 +54,7 @@ pub use halfphi::netlist::{Netlist, NodeId, TransId};
 pub use v6502_netlist::mos6502;
 
 pub use bus::{Bus, FlatMemory};
-pub use cpu::{BusState, Cpu, CycleState, ReadWrite, Registers, Signals};
+pub use cpu::{BusState, Cpu, CycleState, InternalNodes, Internals, ReadWrite, Registers, Signals};
 // The solver lives in `halfphi`; re-exported so this crate's callers are
 // unaffected by where it moved to.
 pub use halfphi::engine::{ChipState, Drive, Engine, Stats};

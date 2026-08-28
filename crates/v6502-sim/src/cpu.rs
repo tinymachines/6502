@@ -93,6 +93,69 @@ impl Signals {
     }
 }
 
+/// Node handles for the internal buses and hold registers an observation
+/// reads beside the registers: what `halfwave` and the wasm `Machine` both
+/// report, resolved once so neither of them names a bus the other does not.
+/// `alu` is the adder's hold register: the wire where a sum is real before any
+/// register holds it, which is the reading the whole overlap demo turns on.
+#[derive(Clone, Debug)]
+pub struct InternalNodes {
+    pub alu: [NodeId; 8],
+    pub alua: [NodeId; 8],
+    pub alub: [NodeId; 8],
+    pub sb: [NodeId; 8],
+    pub idb: [NodeId; 8],
+    pub idl: [NodeId; 8],
+    pub dor: [NodeId; 8],
+    pub adl: [NodeId; 8],
+    pub adh: [NodeId; 8],
+    pub abl: [NodeId; 8],
+    pub abh: [NodeId; 8],
+    pub pclp: [NodeId; 8],
+    pub pchp: [NodeId; 8],
+}
+
+impl InternalNodes {
+    pub fn resolve(nl: &Netlist) -> Result<Self, MissingSignal> {
+        let bus = |prefix: &str| -> Result<[NodeId; 8], MissingSignal> {
+            nl.bus::<8>(prefix).ok_or_else(|| MissingSignal(format!("{prefix}0..7")))
+        };
+        Ok(InternalNodes {
+            alu: bus("alu")?,
+            alua: bus("alua")?,
+            alub: bus("alub")?,
+            sb: bus("sb")?,
+            idb: bus("idb")?,
+            idl: bus("idl")?,
+            dor: bus("dor")?,
+            adl: bus("adl")?,
+            adh: bus("adh")?,
+            abl: bus("abl")?,
+            abh: bus("abh")?,
+            pclp: bus("pclp")?,
+            pchp: bus("pchp")?,
+        })
+    }
+}
+
+/// The internal buses at one instant, read back out of [`InternalNodes`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct Internals {
+    pub alu: u8,
+    pub alua: u8,
+    pub alub: u8,
+    pub sb: u8,
+    pub idb: u8,
+    pub idl: u8,
+    pub dor: u8,
+    pub adl: u8,
+    pub adh: u8,
+    pub abl: u8,
+    pub abh: u8,
+    pub pclp: u8,
+    pub pchp: u8,
+}
+
 /// Architectural registers, recovered from storage nodes.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Registers {
@@ -182,6 +245,9 @@ pub struct Fetch {
 pub struct Cpu<B: Bus> {
     engine: Engine,
     sig: Signals,
+    /// `None` on a netlist that names the registers but not the internal
+    /// buses; nothing in the clock or bus layer needs them.
+    internal: Option<InternalNodes>,
     pub bus: B,
     half_cycle: u64,
     last_fetch: Option<Fetch>,
@@ -190,7 +256,8 @@ pub struct Cpu<B: Bus> {
 impl<B: Bus> Cpu<B> {
     pub fn new(netlist: Arc<Netlist>, bus: B) -> Result<Self, MissingSignal> {
         let sig = Signals::resolve(&netlist)?;
-        Ok(Cpu { engine: Engine::new(netlist), sig, bus, half_cycle: 0, last_fetch: None })
+        let internal = InternalNodes::resolve(&netlist).ok();
+        Ok(Cpu { engine: Engine::new(netlist), sig, internal, bus, half_cycle: 0, last_fetch: None })
     }
 
     /// The most recent opcode fetch, or `None` if none has happened yet.
@@ -213,6 +280,10 @@ impl<B: Bus> Cpu<B> {
     }
     pub fn signals(&self) -> &Signals {
         &self.sig
+    }
+    /// The internal bus nodes, if the netlist names them.
+    pub fn internal_nodes(&self) -> Option<&InternalNodes> {
+        self.internal.as_ref()
     }
     pub fn half_cycle(&self) -> u64 {
         self.half_cycle
@@ -442,6 +513,27 @@ impl<B: Bus> Cpu<B> {
             rw: self.rw(),
             sync: self.sync(),
         }
+    }
+
+    /// The internal buses and hold registers, if the netlist names them.
+    pub fn internals(&self) -> Option<Internals> {
+        let n = self.internal.as_ref()?;
+        let rb = |b: &[NodeId; 8]| self.engine.read_bus(b) as u8;
+        Some(Internals {
+            alu: rb(&n.alu),
+            alua: rb(&n.alua),
+            alub: rb(&n.alub),
+            sb: rb(&n.sb),
+            idb: rb(&n.idb),
+            idl: rb(&n.idl),
+            dor: rb(&n.dor),
+            adl: rb(&n.adl),
+            adh: rb(&n.adh),
+            abl: rb(&n.abl),
+            abh: rb(&n.abh),
+            pclp: rb(&n.pclp),
+            pchp: rb(&n.pchp),
+        })
     }
 
     pub fn timing(&self) -> TimingState {
