@@ -112,15 +112,26 @@ f.addEventListener("load",async()=>{
     // fixture derived here rather than a binary committed. Without the fix
     // the second assertion times out with the legend still inverted.
     const swatches=(doc)=>[...doc.querySelectorAll(".legend i")].map(i=>i.style.backgroundImage).join("\n");
-    await wait(()=>swatches(d).length>0, 5000);
-    const house=swatches(d);
+    const apiParam=new URLSearchParams(location.search).get("api");
+    // The baseline is a FRESH plain page after its sheet has landed, not the
+    // page the sections above drove. A loader that never records the house
+    // sheet leaves the picker restoring the STARTER set, and the mid-boot
+    // test above changes the picker, so a baseline taken from that page was
+    // the starter legend: the restore case then compared starter with
+    // starter and passed against the mutant it exists to catch. Measured.
+    const fresh=new Promise(r=>f.addEventListener("load",r,{once:true}));
+    f.src="/"+(apiParam?"?api="+encodeURIComponent(apiParam):"");
+    await fresh;
+    const d0=f.contentDocument;
+    await fetch("/art/tiles.chr",{cache:"no-cache"});   // resolves after the page's own
+    await sleep(300);
+    const house=swatches(d0);
     const gz=await (await fetch("/dierunner.cart.gz")).arrayBuffer();
     const cartDoc=JSON.parse(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"))).text());
     cartDoc.meta=Object.assign({},cartDoc.meta,{name:"Inverted"});
     cartDoc.tiles.chr=cartDoc.tiles.chr.match(/../g).map(h=>(255-parseInt(h,16)).toString(16).padStart(2,"0")).join("");
     const fixture=await new Response(new Blob([JSON.stringify(cartDoc)]).stream().pipeThrough(new CompressionStream("gzip"))).blob();
     const fixtureUrl=URL.createObjectURL(fixture);
-    const apiParam=new URLSearchParams(location.search).get("api");
     const reloaded=new Promise(r=>f.addEventListener("load",r,{once:true}));
     f.src="/?cart="+encodeURIComponent(fixtureUrl)+(apiParam?"&api="+encodeURIComponent(apiParam):"");
     await reloaded;
@@ -132,6 +143,62 @@ f.addEventListener("load",async()=>{
     const restored=await wait(()=>swatches(d2)===house, 3000);
     ok("choosing a built-in cartridge afterwards restores the house tiles", restored,
        restored ? "legend byte-identical to a plain page's" : "legend still shows the linked cartridge's sprites");
+
+    // The other half of the same bug, and the half that needs a slow server
+    // to show. art/tiles.chr and a linked cartridge are two fetches the page
+    // starts together, and on the live console their responses land about
+    // two milliseconds apart: a coin toss, not a corner. When the sheet lands
+    // SECOND, the loader used to install it over the cartridge's own set and
+    // the linked cartridge drew in the house tiles. games/tools/probe-serve.py
+    // holds the sheet back on request; this case runs only when the probe is
+    // told that it did, and says so otherwise rather than passing on nothing.
+    const slow=+new URLSearchParams(location.search).get("slow-sheet")||0;
+    if (slow) {
+      const again=new Promise(r=>f.addEventListener("load",r,{once:true}));
+      f.src="/?cart="+encodeURIComponent(fixtureUrl)+(apiParam?"&api="+encodeURIComponent(apiParam):"");
+      await again;
+      const d3=f.contentDocument, q3=s=>d3.querySelector(s), T3=s=>(q3(s)||{}).textContent||"";
+      // A timeline of what the legend showed, so the case asserts the ORDER
+      // it needed and not just the outcome. Under --virtual-time-budget the
+      // first version of this passed against the unfixed loader: virtual
+      // time pauses while a fetch is pending, the cartridge's decode waited
+      // behind the delayed sheet, the sheet won the race in the page every
+      // time, and nothing was ever there to clobber. A test that cannot fail
+      // is not a test; this one fails if the cartridge did not win.
+      const t0=performance.now(); const seen=[];
+      const tick=()=>{const s=swatches(d3); if(!seen.length||seen[seen.length-1].s!==s) seen.push({s, at:Math.round(performance.now()-t0)});};
+      const poll=setInterval(tick,50);
+      // A MutationObserver, not the polling wait(): under the budget, timers
+      // do not fire while the delayed sheet is pending, so a poll that missed
+      // the cartridge at load next looked AFTER the sheet had landed and
+      // captured the clobbered legend as "own". Microtasks run either way.
+      const untilLinked=new Promise((res)=>{
+        const el=q3("#k-cart");
+        if(/Inverted/.test(el.textContent)) return res(true);
+        const mo=new MutationObserver(()=>{ if(/Inverted/.test(el.textContent)){ mo.disconnect(); res(true); } });
+        mo.observe(el,{childList:true,characterData:true,subtree:true});
+      });
+      const linked3=await Promise.race([untilLinked, sleep(15000).then(()=>false)]);
+      tick(); const own=swatches(d3);
+      // Wait for the sheet to LAND, not for a guessed number of milliseconds.
+      // The probe's own fetch of the same file, started after the page's,
+      // goes through the same delay and resolves after it.
+      await fetch("/art/tiles.chr", {cache:"no-cache"});
+      await sleep(300); tick(); clearInterval(poll);
+      const label=s=> s===house?"house" : s===own?"cart" : s.length?"starter":"none";
+      const order=seen.map(e=>label(e.s)+"@"+e.at+"ms").join(" > ");
+      const firstHouse=seen.findIndex(e=>e.s===house), firstCart=seen.findIndex(e=>e.s===own);
+      const cartWon=firstCart>=0 && (firstHouse<0 || firstCart<firstHouse);
+      const kept=swatches(d3)===own;
+      ok("a linked cartridge keeps its own tiles when the house sheet lands second",
+         linked3 && own!==house && cartWon && kept,
+         !linked3 ? "the fixture did not load: "+T3("#err")
+         : !cartWon ? "NO POWER, the sheet landed before the cartridge: "+order
+         : kept ? "kept, order "+order
+         : "the house sheet replaced the cartridge's tiles: "+order);
+    } else {
+      R.push("SKIP the delayed-sheet case: serve with games/tools/probe-serve.py --delay art/tiles.chr=1500 and pass ?slow-sheet=1500");
+    }
   }catch(e){ R.push("FAIL threw: "+e.message); }
   const bad=R.filter(r=>r.indexOf("FAIL")===0);
   document.title=(bad.length?"RED "+bad.length+" :: ":"ALL PASS :: ")+R.join(" | ");
