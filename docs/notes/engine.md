@@ -385,6 +385,15 @@ own rule.
   because an assertion that cannot fail is not an assertion.
   `tools/wasm-bridge.mjs` drives the wasm from outside a browser, the same
   shape as `service/asm-bridge.mjs`.
+- **`traceRows(halfCycles, watch)` is the API's `format: "rows"` in the
+  tab.** Same 34 columns, same encodings, same watch bitset, because it is
+  the same Rust function (`v6502_sim::rows::push_row`) that `halfwave`
+  runs for its `ROWS` line; the service passes the result through and
+  encodes nothing. `watch` is names separated by whitespace, the `WATCH`
+  line's shape; an unknown name or more than `MAX_TRACED` (10,000)
+  half-cycles throws before the chip moves. The parity check records the
+  same 41 half-cycles both ways and requires every cell equal; a mutant
+  that swapped the phase encoding at one end was named by column.
 - **The site ships `--target web`, which cannot be `require`d.** The parity
   check needs a `--target nodejs` build, and it skips without one.
 - **The bundle embeds the die data** (`v6502-wasm` -> `v6502-sim` ->

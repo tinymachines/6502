@@ -1,6 +1,7 @@
 // The browser engine, spoken over stdin/stdout.
 //
 //     node tools/wasm-bridge.mjs < {"op":"run","program":"a92e...","half_cycles":20}
+//     ... "rows":true,"watch":["sync"]   the run as traceRows(), returned as trace_rows
 //
 // Same shape as service/asm-bridge.mjs, and for the same reason: one JSON
 // request in, one JSON response out, so something that is not a browser can
@@ -82,13 +83,21 @@ try {
     throw new Error(`unknown op ${req.op}`);
   }
 
-  for (let i = 0; i < (req.half_cycles || 0); i++) m.halfStep();
+  // With `rows`, the half-cycles are stepped by traceRows itself and come
+  // back as the API's trace_rows shape; otherwise plain steps.
+  let traceRows = null;
+  if (req.rows) {
+    traceRows = JSON.parse(m.traceRows(req.half_cycles || 0, (req.watch || []).join(' ')));
+  } else {
+    for (let i = 0; i < (req.half_cycles || 0); i++) m.halfStep();
+  }
 
   out = {
     ok: true,
     report: report(m),
     peek: Object.fromEntries((req.peek || []).map((a) => [a, m.peek(a)])),
     machine: JSON.parse(m.exportMachine()),
+    trace_rows: traceRows,
   };
 } catch (e) {
   out = { ok: false, error: String((e && e.message) || e) };

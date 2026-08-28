@@ -13,6 +13,12 @@ run gives.
 The witness is the project's own: $2E + $14 landing at $0082 as $42 by
 half-cycle 41. Nothing in either path consults an instruction table.
 
+The second claim is the recording: `traceRows` on the wasm Machine and
+`format: "rows"` on POST /v1/step are one packer (`v6502_sim::rows`) at two
+ends, so the same run recorded either way is the same rows, every column,
+every half-cycle, watch bitset included. A page that records over the API
+must be able to read what the tab recorded without a second decoder.
+
 SKIPS when the nodejs-target build is absent, like the golden trace and the
 manual. REQUIRE_WASM=1 makes its absence a failure.
 """
@@ -123,6 +129,46 @@ def main() -> int:
         ok("...bit-exact against the uninterrupted run",
            back["machine"]["state"]["value"] == whole["machine"]["state"]["value"],
            "value bitsets identical")
+
+        # -- the recording: rows from the tab are rows from the API ---------
+        WATCH = ["sync", "dpc23_SBAC", "clk0"]
+        api_rows = api.post("/v1/step", json={
+            "machine": boot["machine"], "half_cycles": SPLIT + REST,
+            "trace": True, "format": "rows", "watch": WATCH}).json()["trace_rows"]
+        tab_rows = wasm({"op": "run", "program": ADD, "org": ORG,
+                         "half_cycles": SPLIT + REST, "rows": True,
+                         "watch": WATCH})["trace_rows"]
+        ok("traceRows names the API's columns",
+           tab_rows["cols"] == api_rows["cols"] and len(api_rows["cols"]) == 34,
+           f"{len(tab_rows['cols'])} columns")
+        ok("...and its watch names, in order",
+           tab_rows["watch_names"] == api_rows["watch_names"] == WATCH
+           and tab_rows["watch_encoding"] == api_rows["watch_encoding"] == "hex")
+        ok("...with one row per half-cycle",
+           len(tab_rows["rows"]) == len(api_rows["rows"]) == SPLIT + REST,
+           f"{len(tab_rows['rows'])} rows")
+        diff = [(i, c) for i, (t, a) in enumerate(zip(tab_rows["rows"], api_rows["rows"]))
+                for c, (x, y) in enumerate(zip(t, a)) if x != y]
+        ok("...identical in every cell, both engines, all 34 columns",
+           not diff, "bit-identical" if not diff else
+           f"first difference row {diff[0][0]} column {api_rows['cols'][diff[0][1]]}")
+        # The watch column carries information: on this run sync toggles, so
+        # the bitset is not the same in every row.
+        ok("...and the watch column is not blank",
+           len({r[-1] for r in tab_rows["rows"]}) > 1)
+        # A recording one half-cycle out must NOT match, or the comparison
+        # above proves nothing.
+        one_short = wasm({"op": "run", "program": ADD, "org": ORG,
+                          "half_cycles": SPLIT + REST - 1, "rows": True,
+                          "watch": WATCH})["trace_rows"]
+        ok("and it would notice a recording one half-cycle out",
+           one_short["rows"] != api_rows["rows"][:-1] or len(one_short["rows"]) != len(api_rows["rows"]))
+        # ...which is the weak form. The strong one: shift the recording by a
+        # half-cycle and the rows differ in the columns that move.
+        shifted = one_short["rows"]
+        moved = [c for c, (x, y) in enumerate(zip(api_rows["rows"][1], shifted[0])) if x != y]
+        ok("...and a row compared against its neighbour differs",
+           bool(moved), f"{len(moved)} columns differ between adjacent half-cycles")
 
         # -- the check can tell ---------------------------------------------
         # An assertion that cannot fail is not an assertion. Resume the same

@@ -12,6 +12,7 @@
 use std::sync::Arc;
 
 use v6502_sim::state::{self, MachineState};
+use v6502_sim::rows;
 use v6502_sim::{bus::FlatMemory, cpu::Cpu, cpu::Fetch, history::History, ReadWrite};
 use wasm_bindgen::prelude::*;
 
@@ -147,6 +148,57 @@ impl Machine {
         for _ in 0..n {
             self.half_step();
         }
+    }
+
+    /// Advance `half_cycles` half-cycles, recording one row per half-cycle:
+    /// the same 34 columns, in the same encodings, that `POST /v1/step`
+    /// returns as `trace_rows` when asked for `format: "rows"`, packed by the
+    /// same Rust function (`v6502_sim::rows`). A page that recorded a
+    /// machine over the API reads a recording made here without a second
+    /// decoder, and `tools/check-wasm-parity.py` holds the two bit-identical.
+    ///
+    /// `watch` is node names separated by whitespace, exactly the API's
+    /// `watch` list joined with spaces (and halfwave's `WATCH` line); bit i of
+    /// each row's watch column is name i. An unknown name is an error, before
+    /// the chip is touched. More than `MAX_TRACED` half-cycles (10,000, the
+    /// service's `max_traced`) is an error too, so the JSON string cannot
+    /// grow without bound in a tab.
+    ///
+    /// Returns a JSON string `{cols, watch_names, watch_encoding, rows}`. A
+    /// string rather than an object because this crate emits JSON and never
+    /// parses it, and because one `JSON.parse` on the far side is cheaper
+    /// than 34 boundary crossings per row.
+    #[wasm_bindgen(js_name = traceRows)]
+    pub fn trace_rows(&mut self, half_cycles: u32, watch: &str) -> Result<String, JsError> {
+        if half_cycles as u64 > rows::MAX_TRACED {
+            return Err(JsError::new(&format!(
+                "{half_cycles} traced half-cycles exceeds max_traced {}",
+                rows::MAX_TRACED
+            )));
+        }
+        let names: Vec<String> = watch.split_whitespace().map(str::to_owned).collect();
+        let mut ids = Vec::with_capacity(names.len());
+        for name in &names {
+            match self.cpu.engine().netlist().node(name) {
+                Some(id) => ids.push(id),
+                None => return Err(JsError::new(&format!("unknown node {name:?}"))),
+            }
+        }
+        let mut out = String::with_capacity(96 * half_cycles as usize + 512);
+        out.push_str("{\"cols\":");
+        out.push_str(&rows::cols_json());
+        out.push_str(",\"watch_names\":");
+        out.push_str(&rows::names_json(&names));
+        out.push_str(",\"watch_encoding\":\"hex\",\"rows\":[");
+        for i in 0..half_cycles {
+            self.half_step();
+            if i > 0 {
+                out.push(',');
+            }
+            rows::push_row(&mut out, &self.cpu, &ids);
+        }
+        out.push_str("]}");
+        Ok(out)
     }
 
     // -- time travel ------------------------------------------------------
