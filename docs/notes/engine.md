@@ -278,6 +278,36 @@ construction cannot touch it**, because the recalc list is the queue order
 and the queue order is what bit-exactness hangs on. Rung 2 is where that
 overhead is compiled away rather than skipped.
 
+### The machine value crosses the rungs, and the console rides it
+
+Because rung 1's whole mutable state is the same four bitsets, rung 0's
+`MachineState` is its snapshot format too: `v6502-hybrid/src/state.rs` is
+`snapshot`/`restore` in that shape, and the per-output counters, which are a
+function of `trans_on`, are rebuilt on restore rather than carried
+(`HybridEngine::restore_state`). `tests/state.rs` proves the crossing the
+way lockstep proves the construction: rung 0 runs a loop 777 half-cycles
+(odd, so the seam lands mid-cycle), its value restores into a COLD rung 1
+that never ran a reset, and both engines then step 600 half-cycles with
+every node and every transistor compared at every half-cycle; then the same
+the other way. `MUTATE=1` flips one node's level in the travelling value and
+both directions must go red at the first comparison.
+
+`HybridCpu` also latches `last_fetch` where rung 0 latches it (the sync
+read in `service_read`), so the bookkeeping half of the value is the same
+bookkeeping and not just compatible.
+
+The wasm surface exposes this as `HybridMachine` (data build only: the
+hybrid netlist is derived from the schematic, which is derived from the die
+data), behind the same method names the console's worker already drives:
+`importMachine`/`exportMachine` through ONE shared emitter (`machine_json`,
+factored out of `Machine` so the two rungs cannot drift in shape),
+`fillMemory`, `powerCycle`, `runHalfCycles`, `nodeId`/`isNodeHigh` for the
+gate sampling with the same refusal. No rewind and no node-level buffer:
+this is the console contract, not the explorer's. The crossing is checked
+through the JS surface itself in the public site's console spec; on this
+side the proof is `tests/state.rs` plus a node smoke run of
+rung 0 -> rung 1 -> rung 0 with byte-identical exports.
+
 ## Rung 2: `v6502-compiled`, the network as code, 64 machines per word
 
 `build.rs` reads the die through `Schematic::derive` and emits the kernel

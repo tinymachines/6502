@@ -8,7 +8,7 @@ use halfphi::netlist::NodeId;
 use v6502_netlist::mos6502;
 use v6502_pins::{Load, PinEngine, PinFrame};
 use v6502_sim::bus::{Bus, FlatMemory};
-use v6502_sim::cpu::Signals;
+use v6502_sim::cpu::{Fetch, Signals};
 
 use crate::engine::{HybridEngine, HybridNetlist};
 
@@ -17,12 +17,13 @@ pub struct HybridCpu<B: Bus> {
     sig: Signals,
     pub bus: B,
     half_cycle: u64,
+    last_fetch: Option<Fetch>,
 }
 
 impl<B: Bus> HybridCpu<B> {
     pub fn new(hn: Arc<HybridNetlist>, bus: B) -> Self {
         let sig = Signals::resolve(hn.netlist()).expect("the 6502 netlist names every signal");
-        HybridCpu { engine: HybridEngine::new(hn), sig, bus, half_cycle: 0 }
+        HybridCpu { engine: HybridEngine::new(hn), sig, bus, half_cycle: 0, last_fetch: None }
     }
 
     /// Rung 1 built from what a `.pins` header says, the way
@@ -48,9 +49,19 @@ impl<B: Bus> HybridCpu<B> {
     pub fn half_cycle(&self) -> u64 {
         self.half_cycle
     }
+    pub fn set_half_cycle(&mut self, hc: u64) {
+        self.half_cycle = hc;
+    }
+    pub fn last_fetch(&self) -> Option<Fetch> {
+        self.last_fetch
+    }
+    pub fn set_last_fetch(&mut self, f: Option<Fetch>) {
+        self.last_fetch = f;
+    }
 
     /// `v6502_sim::Cpu::reset`, step for step.
     pub fn reset(&mut self) {
+        self.last_fetch = None;
         self.engine.force_power_on_state();
         self.engine.drive_low(self.sig.res);
         self.engine.drive_low(self.sig.clk0);
@@ -90,6 +101,12 @@ impl<B: Bus> HybridCpu<B> {
         if self.engine.is_high(self.sig.rw) {
             let addr = self.address_bus();
             let data = self.bus.read(addr);
+            // `sync` marks this read as an opcode fetch, latched exactly as
+            // rung 0 latches it, so the machine value's `last_fetch` is the
+            // same bookkeeping on either rung.
+            if self.engine.is_high(self.sig.sync) {
+                self.last_fetch = Some(Fetch { addr, opcode: data });
+            }
             for i in 0..8 {
                 self.engine.set_pull(self.sig.db[i], value_bit(data, i));
             }

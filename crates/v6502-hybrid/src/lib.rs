@@ -32,6 +32,7 @@
 
 pub mod cpu;
 pub mod engine;
+pub mod state;
 
 pub use cpu::HybridCpu;
 pub use engine::{HybridEngine, HybridNetlist, Stats};

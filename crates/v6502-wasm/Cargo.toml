@@ -16,10 +16,14 @@ crate-type = ["cdylib", "rlib"]
 #                      one at runtime, which is what lets the published
 #                      package be MIT the way `halfphi` is.
 default = ["mos6502"]
-mos6502 = ["v6502-sim/mos6502"]
+mos6502 = ["v6502-sim/mos6502", "dep:v6502-hybrid"]
 
 [dependencies]
 wasm-bindgen = "0.2.127"
 halfphi = { path = "../halfphi" }
 
 v6502-sim = { path = "../v6502-sim", default-features = false }
+# Rung 1 behind the same surface. Optional and tied to `mos6502`: the hybrid
+# netlist is derived from the schematic, which is derived from the die data,
+# so it has no place in the data-free build.
+v6502-hybrid = { path = "../v6502-hybrid", optional = true }

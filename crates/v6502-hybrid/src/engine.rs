@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use halfphi::engine::ChipState;
 use halfphi::netlist::{BitSet, Netlist, NodeId, TransId};
 use halfphi::{Drive, MAX_SETTLE_ROUNDS};
 use v6502_netlist::schematic::Schematic;
@@ -242,6 +243,41 @@ impl HybridEngine {
     }
     pub fn trans_on(&self) -> &BitSet {
         &self.trans_on
+    }
+
+    /// The four bitsets as one value, in halfphi's own shape, so rung 0's
+    /// codec carries this rung's state without a second encoding.
+    pub fn chip_state(&self) -> ChipState {
+        ChipState {
+            value: self.value.clone(),
+            pullup: self.pullup.clone(),
+            pulldown: self.pulldown.clone(),
+            trans_on: self.trans_on.clone(),
+        }
+    }
+
+    /// Restore the four bitsets, and rebuild what this rung keeps on top of
+    /// them: the per-output counters are a function of `trans_on`, so they
+    /// are recomputed here rather than carried in the value. The queue
+    /// scratch needs nothing; it is empty between settles.
+    pub fn restore_state(&mut self, st: &ChipState) {
+        self.value.copy_from(&st.value);
+        self.pullup.copy_from(&st.pullup);
+        self.pulldown.copy_from(&st.pulldown);
+        self.trans_on.copy_from(&st.trans_on);
+        self.singles_on.iter_mut().for_each(|c| *c = 0);
+        self.tops_on.iter_mut().for_each(|c| *c = 0);
+        let transistors = self.hn.nl.transistor_count();
+        for t in 0..transistors {
+            if !self.trans_on.get(t) {
+                continue;
+            }
+            match self.hn.slot[t].get() {
+                Slot::Single(o) => self.singles_on[o as usize] += 1,
+                Slot::Top(o) => self.tops_on[o as usize] += 1,
+                Slot::None => {}
+            }
+        }
     }
 
     #[inline]

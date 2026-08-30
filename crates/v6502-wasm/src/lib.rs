@@ -410,54 +410,7 @@ impl Machine {
     /// rather than 128 KB of hex.
     #[wasm_bindgen(js_name = exportMachine)]
     pub fn export_machine(&self) -> String {
-        let st = state::snapshot(&self.cpu);
-        let [value, pullup, pulldown, trans_on] = st.chip_hex();
-        let mut out = String::with_capacity(4096);
-        out.push_str("{\"state\":{\"half_cycle\":");
-        out.push_str(&st.half_cycle.to_string());
-        out.push_str(",\"last_fetch\":");
-        match st.last_fetch {
-            Some(f) => {
-                out.push_str("{\"addr\":");
-                out.push_str(&f.addr.to_string());
-                out.push_str(",\"opcode\":");
-                out.push_str(&f.opcode.to_string());
-                out.push('}');
-            }
-            None => out.push_str("null"),
-        }
-        for (k, v) in [
-            ("value", &value),
-            ("pullup", &pullup),
-            ("pulldown", &pulldown),
-            ("trans_on", &trans_on),
-        ] {
-            out.push_str(",\"");
-            out.push_str(k);
-            out.push_str("\":\"");
-            out.push_str(v);
-            out.push('"');
-        }
-        out.push_str("},\"memory\":{\"fill\":\"00\",\"pages\":{");
-        let image = self.cpu.bus.as_slice();
-        let mut first = true;
-        for page in 0..256usize {
-            let bytes = &image[page * 256..(page + 1) * 256];
-            if bytes.iter().all(|&b| b == 0) {
-                continue;
-            }
-            if !first {
-                out.push(',');
-            }
-            first = false;
-            out.push_str(&format!("\"{page:02x}\":\""));
-            for &b in bytes {
-                out.push_str(&format!("{b:02x}"));
-            }
-            out.push('"');
-        }
-        out.push_str("}}}");
-        out
+        machine_json(&state::snapshot(&self.cpu), self.cpu.bus.as_slice())
     }
 
     /// Restore the chip half of a machine, and ONLY the chip half.
@@ -560,15 +513,7 @@ impl Machine {
         page_ids: &[u8],
         page_bytes: &[u8],
     ) -> Result<(), JsError> {
-        if page_bytes.len() != page_ids.len() * 256 {
-            return Err(JsError::new(&format!(
-                "importMachine: {} page ids but {} bytes of page data. \
-                 Expected {} (256 per page), so the pages cannot be cut apart.",
-                page_ids.len(),
-                page_bytes.len(),
-                page_ids.len() * 256,
-            )));
-        }
+        check_page_cut(page_ids, page_bytes)?;
 
         // The chip first. If the state is malformed this returns before memory
         // is touched, so a refused import leaves the machine as it was rather
@@ -659,4 +604,280 @@ pub fn netlist_info_of(blob: &[u8]) -> Result<String, JsError> {
     let nl = halfphi::netlist::Netlist::decode(blob)
         .map_err(|e| JsError::new(&format!("netlist: {e:?}")))?;
     Ok(format!("{} nodes, {} transistors", nl.node_count(), nl.transistor_count()))
+}
+
+// -- shared emitters ------------------------------------------------------
+
+/// The whole machine as the API's own JSON: `{state, memory}`.
+///
+/// One emitter for every engine in this crate, so two rungs cannot drift in
+/// shape. Memory is sparse by the service's rule, a fill byte plus only the
+/// pages that differ from it, so an idle 64 KiB costs a few hundred bytes
+/// rather than 128 KB of hex.
+fn machine_json(st: &MachineState, image: &[u8]) -> String {
+    let [value, pullup, pulldown, trans_on] = st.chip_hex();
+    let mut out = String::with_capacity(4096);
+    out.push_str("{\"state\":{\"half_cycle\":");
+    out.push_str(&st.half_cycle.to_string());
+    out.push_str(",\"last_fetch\":");
+    match st.last_fetch {
+        Some(f) => {
+            out.push_str("{\"addr\":");
+            out.push_str(&f.addr.to_string());
+            out.push_str(",\"opcode\":");
+            out.push_str(&f.opcode.to_string());
+            out.push('}');
+        }
+        None => out.push_str("null"),
+    }
+    for (k, v) in [
+        ("value", &value),
+        ("pullup", &pullup),
+        ("pulldown", &pulldown),
+        ("trans_on", &trans_on),
+    ] {
+        out.push_str(",\"");
+        out.push_str(k);
+        out.push_str("\":\"");
+        out.push_str(v);
+        out.push('"');
+    }
+    out.push_str("},\"memory\":{\"fill\":\"00\",\"pages\":{");
+    let mut first = true;
+    for page in 0..256usize {
+        let bytes = &image[page * 256..(page + 1) * 256];
+        if bytes.iter().all(|&b| b == 0) {
+            continue;
+        }
+        if !first {
+            out.push(',');
+        }
+        first = false;
+        out.push_str(&format!("\"{page:02x}\":\""));
+        for &b in bytes {
+            out.push_str(&format!("{b:02x}"));
+        }
+        out.push('"');
+    }
+    out.push_str("}}}");
+    out
+}
+
+/// Refuse a page list that cannot be cut apart unambiguously; shared by every
+/// engine's `importMachine` so the refusal cannot drift.
+fn check_page_cut(page_ids: &[u8], page_bytes: &[u8]) -> Result<(), JsError> {
+    if page_bytes.len() != page_ids.len() * 256 {
+        return Err(JsError::new(&format!(
+            "importMachine: {} page ids but {} bytes of page data. \
+             Expected {} (256 per page), so the pages cannot be cut apart.",
+            page_ids.len(),
+            page_bytes.len(),
+            page_ids.len() * 256,
+        )));
+    }
+    Ok(())
+}
+
+// -- rung 1 ---------------------------------------------------------------
+
+/// Rung 1 of the engine ladder (`v6502-hybrid`): the same chip with the
+/// recognised gates folded into per-output counters, behind the surface the
+/// console's worker drives. Bit-exact with [`Machine`] every node every
+/// half-cycle (`v6502-hybrid/tests/lockstep.rs`), and the machine value is
+/// the SAME value, so a run can cross between the two engines mid-game
+/// (`v6502-hybrid/tests/state.rs`).
+///
+/// Only in the default build: the hybrid netlist is derived from the
+/// schematic, which is derived from the die data, so the data-free package
+/// has no rung 1 to construct.
+///
+/// No rewind and no node-level buffer: this surface is the console contract
+/// (boot, step, the machine as a value, named-node sampling), not the
+/// explorer's.
+#[cfg(feature = "mos6502")]
+#[wasm_bindgen]
+pub struct HybridMachine {
+    cpu: v6502_hybrid::HybridCpu<FlatMemory>,
+}
+
+#[cfg(feature = "mos6502")]
+#[wasm_bindgen]
+impl HybridMachine {
+    /// Build with the embedded 6502 netlist, the gates recognised at
+    /// construction. Not yet reset -- load a program and set the reset
+    /// vector first, exactly as [`Machine::new`].
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> HybridMachine {
+        let hn = v6502_hybrid::HybridNetlist::new(Arc::new(v6502_sim::mos6502()));
+        HybridMachine { cpu: v6502_hybrid::HybridCpu::new(Arc::new(hn), FlatMemory::new()) }
+    }
+
+    pub fn load(&mut self, addr: u16, bytes: &[u8]) {
+        self.cpu.bus.load(addr, bytes);
+    }
+
+    #[wasm_bindgen(js_name = setResetVector)]
+    pub fn set_reset_vector(&mut self, addr: u16) {
+        self.cpu.bus.set_reset_vector(addr);
+    }
+
+    /// Set all 64 KiB to one byte, so a sparse image can be written over it.
+    #[wasm_bindgen(js_name = fillMemory)]
+    pub fn fill_memory(&mut self, byte: u8) {
+        self.cpu.bus.load(0, &vec![byte; 0x10000]);
+    }
+
+    /// Cold boot, as [`Machine::power_cycle`].
+    #[wasm_bindgen(js_name = powerCycle)]
+    pub fn power_cycle(&mut self) {
+        self.cpu.power_cycle();
+        self.cpu.bus.clear_journal();
+    }
+
+    /// Warm reset, as [`Machine::reset`].
+    pub fn reset(&mut self) {
+        self.cpu.reset();
+        self.cpu.bus.clear_journal();
+    }
+
+    #[wasm_bindgen(js_name = halfStep)]
+    pub fn half_step(&mut self) {
+        self.cpu.half_step();
+    }
+
+    /// Advance `n` half-cycles, one boundary crossing for the batch.
+    #[wasm_bindgen(js_name = runHalfCycles)]
+    pub fn run_half_cycles(&mut self, n: u32) {
+        for _ in 0..n {
+            self.cpu.half_step();
+        }
+    }
+
+    #[wasm_bindgen(js_name = halfCycle)]
+    pub fn half_cycle(&self) -> f64 {
+        self.cpu.half_cycle() as f64
+    }
+    #[wasm_bindgen(js_name = addressBus)]
+    pub fn address_bus(&self) -> u16 {
+        self.cpu.address_bus()
+    }
+    #[wasm_bindgen(js_name = dataBus)]
+    pub fn data_bus(&self) -> u8 {
+        self.cpu.data_bus()
+    }
+    #[wasm_bindgen(js_name = isRead)]
+    pub fn is_read(&self) -> bool {
+        self.cpu.rw_is_read()
+    }
+    pub fn sync(&self) -> bool {
+        self.cpu.sync()
+    }
+    pub fn clk0(&self) -> bool {
+        self.cpu.clk0()
+    }
+
+    #[wasm_bindgen(js_name = nodeCount)]
+    pub fn node_count(&self) -> u32 {
+        self.cpu.engine().netlist().node_count() as u32
+    }
+    #[wasm_bindgen(js_name = isNodeHigh)]
+    pub fn is_node_high(&self, node: u16) -> bool {
+        self.cpu.engine().is_high(node)
+    }
+    /// Resolve a signal name to a node number, or -1 if unknown: the refusal
+    /// the console's gate sampling is built on.
+    #[wasm_bindgen(js_name = nodeId)]
+    pub fn node_id(&self, name: &str) -> i32 {
+        self.cpu.engine().netlist().node(name).map_or(-1, i32::from)
+    }
+
+    pub fn peek(&self, addr: u16) -> u8 {
+        self.cpu.bus.peek(addr)
+    }
+    #[wasm_bindgen(js_name = memorySlice)]
+    pub fn memory_slice(&self, addr: u16, len: u32) -> Vec<u8> {
+        (0..len).map(|i| self.cpu.bus.peek(addr.wrapping_add(i as u16))).collect()
+    }
+
+    /// The whole machine as the API's own JSON, through the same emitter as
+    /// [`Machine::export_machine`], so the two cannot drift in shape.
+    #[wasm_bindgen(js_name = exportMachine)]
+    pub fn export_machine(&self) -> String {
+        machine_json(&v6502_hybrid::state::snapshot(&self.cpu), self.cpu.bus.as_slice())
+    }
+
+    /// Restore the chip half of a machine, and ONLY the chip half. The same
+    /// contract, and the same quiet failure to avoid, as
+    /// [`Machine::import_state`]: memory does not come with it.
+    #[allow(clippy::too_many_arguments)]
+    #[wasm_bindgen(js_name = importState)]
+    pub fn import_state(
+        &mut self,
+        value: &str,
+        pullup: &str,
+        pulldown: &str,
+        trans_on: &str,
+        half_cycle: f64,
+        fetch_addr: i32,
+        fetch_opcode: u8,
+    ) -> Result<(), JsError> {
+        let (nodes, transistors) = {
+            let nl = self.cpu.engine().netlist();
+            (nl.node_count(), nl.transistor_count())
+        };
+        let last_fetch = if fetch_addr < 0 {
+            None
+        } else {
+            Some(Fetch { addr: fetch_addr as u16, opcode: fetch_opcode })
+        };
+        let st = MachineState::from_hex(
+            nodes, transistors, value, pullup, pulldown, trans_on, half_cycle as u64, last_fetch,
+        )
+        .map_err(|e| JsError::new(&e))?;
+        v6502_hybrid::state::restore(&mut self.cpu, &st);
+        Ok(())
+    }
+
+    /// A whole machine, chip and memory in one call: the counterpart to
+    /// `exportMachine`, with [`Machine::import_machine`]'s contract.
+    #[allow(clippy::too_many_arguments)]
+    #[wasm_bindgen(js_name = importMachine)]
+    pub fn import_machine(
+        &mut self,
+        value: &str,
+        pullup: &str,
+        pulldown: &str,
+        trans_on: &str,
+        half_cycle: f64,
+        fetch_addr: i32,
+        fetch_opcode: u8,
+        fill: u8,
+        page_ids: &[u8],
+        page_bytes: &[u8],
+    ) -> Result<(), JsError> {
+        check_page_cut(page_ids, page_bytes)?;
+        self.import_state(value, pullup, pulldown, trans_on, half_cycle, fetch_addr, fetch_opcode)?;
+        self.fill_memory(fill);
+        for (i, &page) in page_ids.iter().enumerate() {
+            let from = i * 256;
+            self.load(u16::from(page) << 8, &page_bytes[from..from + 256]);
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = nonconvergentSettles)]
+    pub fn nonconvergent_settles(&self) -> f64 {
+        self.cpu.engine().stats().nonconvergent_settles as f64
+    }
+    #[wasm_bindgen(js_name = contestedGroups)]
+    pub fn contested_groups(&self) -> f64 {
+        self.cpu.engine().stats().contested_groups as f64
+    }
+}
+
+#[cfg(feature = "mos6502")]
+impl Default for HybridMachine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
