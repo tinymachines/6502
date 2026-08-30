@@ -18,10 +18,11 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ALLOWED = {
     # Rust
-    "pub", "const", "static", "usize", "u16", "u64", "fn", "let", "mut", "mod", "inline", "always",
+    "pub", "const", "static", "usize", "u16", "u32", "u64", "fn", "let", "mut", "mod", "inline", "always",
     # the generator's own vocabulary
     "NODES", "TRANS", "VSS", "VCC", "FOLDED_GATES", "GATES_LEFT_AS_SWITCHES", "ABSORBED", "SWITCHES",
     "DEAD", "JUNCTIONS", "MISSING", "GATE_OF", "sig", "gate_planes", "spread_once", "junctions",
+    "SWITCH_TABLE", "GATE_TABLE", "JUNCTION_TABLE", "GATE_OFFSETS", "JUNCTION_OFFSETS",
     "both", "oneway", "on", "moved", "next", "top", "bot", "v", "p", "s",
     "CLK0", "RW", "SYNC", "RES", "IRQ", "NMI", "RDY", "SO", "AB", "DB", "A", "X", "Y", "S", "PCL", "PCH", "IR",
     "Vec",

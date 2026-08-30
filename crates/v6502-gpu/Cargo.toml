@@ -1,0 +1,20 @@
+[package]
+name = "v6502-gpu"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Rung 2's kernel on a GPU: the WGSL that v6502-compiled's build.rs emits,
+# dispatched over as many words of 32 machines as the buffers hold. This is
+# the one crate in the workspace with registry dependencies, and they stop
+# here: nothing shipped depends on it. Tests SKIP without an adapter;
+# REQUIRE_GPU=1 insists.
+
+[dependencies]
+v6502-compiled = { path = "../v6502-compiled" }
+v6502-pins = { path = "../v6502-pins" }
+wgpu = "22.1"
+pollster = "0.3"
+
+[dev-dependencies]
+v6502-netlist = { path = "../v6502-netlist" }

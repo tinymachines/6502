@@ -333,6 +333,59 @@ and this is where "machines per second is bounded by cores" stops being
 true. The kernel it descends from measured 2.3x on the same box. Not wired
 into anything yet.
 
+### The same kernel on a GPU (`v6502-gpu`)
+
+The same `build.rs` emits the kernel a second time as WGSL, from the same
+folds and switch list, so the two cannot drift; `v6502_compiled::KERNEL_WGSL`
+is the text and `v6502-gpu` runs it through `wgpu`. That crate is the one
+place in the workspace with registry dependencies (73 crates behind `wgpu`
+and `pollster`) and nothing shipped depends on it. Tests SKIP without an
+adapter, `REQUIRE_GPU=1` insists, `GPU_INDEX=n` picks a card.
+
+**Bit-exact with the CPU rung, lane for lane.** Per-lane semantics are
+lane-independent, so GPU lane `k` of any word must equal CPU lane `k` of a
+`Machines` given the same memory: `tests/parity.rs` loads the CPU state
+into four words of 32 lanes (lane 1 on a different program), steps both
+sides 361 half-cycles in six batches, and compares every node and every
+transistor after each: identical. `MUTATE=1` flips one CPU bit and goes red
+naming the node. The one bookkeeping bug on the way was mine, not the
+kernel's: `power_cycle` leaves `clk0` low, so the first dispatched edge
+must be the rising one.
+
+**Three shapes were tried, and the driver decided the first two.**
+1. *Straight-line code, as on the CPU.* The NVIDIA shader compiler took the
+   871 unrolled switch blocks to 38 GB of memory before the kernel was
+   OOM-killed; with the switches as data, the 1,159 gate statements still
+   took 15 GB and two minutes and failed. On a GPU the fold is the
+   compile-time work and the code shape is data: the switch list, the gate
+   terms and the junction rules are storage buffers interpreted by loops,
+   with every loop bound in the uniform, because as constants the driver
+   unrolled the nested settle and spread loops. Pipeline compile: 0.19 s.
+2. *One thread per word, the whole half-step serial.* Correct, and 273,000
+   machine-half-cycles/s at 8,192 machines: 33 sweeps/s, barely the CPU
+   rung, because a thread is a slow serial machine and 256 of them leave
+   the card idle.
+3. *One workgroup per word, 256 threads cooperating.* The relaxation is a
+   monotone OR over the planes, so switches can be merged in parallel with
+   `atomicOr` and reach the same fixed point; the nodes, transistors, gates
+   and junctions are split across the threads with barriers between
+   phases and shared atomics for the reductions. With the planes in global
+   memory: 1.64 M machine-half-cycles/s at 2,048 machines, falling past
+   that as the working set left L2. **With the five planes in workgroup
+   memory** (34.5 KB of the 48 KB the card allows), atomics are on chip and
+   the curve stops falling: **3.62 M at 2,048 machines, 3.78 M at 6,400
+   machines** (`examples/bench.rs`, best of three, 400 half-cycles of the
+   `INC $20; JMP` loop, one readback at the end), about 17x the CPU rung 2
+   and about 128x rung 0, still rising with width.
+
+What stops the curve is the box, not the kernel: each lane carries 64 KiB
+of memory, 2 MB a word, and the two cards had about 500 MB free under
+other tenants, so 200 words was the widest measured. The next lever is a
+sparse per-lane memory (the API already describes an image as a fill byte
+and the pages that differ), which would put thousands of words on the same
+card; after that, the serial phases inside a word (the barriers between
+steps 0, 1, 2 and 3 and the per-word settle loop).
+
 ## Performance
 
 **~29,600 half-cycles/s native (~14.8 kHz simulated 6502)**, against the

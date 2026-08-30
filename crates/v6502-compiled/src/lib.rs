@@ -85,6 +85,13 @@ pub mod kernel {
     include!(concat!(env!("OUT_DIR"), "/kernel.rs"));
 }
 
+/// The same kernel as a WebGPU compute shader, emitted by the same
+/// `build.rs` from the same folds and switch list: one invocation owns one
+/// `u32` word of 32 machines and runs a whole half-step, bus service
+/// included, against per-lane memory in a storage buffer. `v6502-gpu` runs
+/// it; the page can load the same text.
+pub const KERNEL_WGSL: &str = include_str!(concat!(env!("OUT_DIR"), "/kernel.wgsl"));
+
 use kernel::{sig, GATE_OF, NODES, TRANS, VCC, VSS};
 
 /// 64 machines' worth of electrical state. Bit `k` of every word is lane `k`.
