@@ -230,6 +230,54 @@ half-cycle and the field. The stamp in each header is the crate version and
 the netlist's node and transistor counts, not a digest: nothing here computes
 one, and it is labelled as what it is.
 
+## Rung 1: `v6502-hybrid`, the gates folded out of the walk
+
+The queue solver again, with one change at gate outputs. `halfphi::Engine`
+settles by rebuilding, for each queued node, the group shorted to it through
+conducting transistors, probing every terminal of every member. On this die
+most of what a walk probes at a gate output is the gate's own pulldown
+network (a decode term has dozens of pulldown transistors on its output),
+and no probe there ever leads anywhere but a junction or vss. `v6502-hybrid`
+reads the network through `Schematic::derive` (**1160 gates** absorbing
+**2637 transistors**, **873 switches** left, node 1085 unresolved and left in
+the switch network, not special-cased) and keeps two counters per output,
+maintained where transistors toggle: conducting straight-to-ground pulldowns
+and conducting series tops. "Is this output at ground" is then a comparison,
+and the walk enters the network only through a top that is actually on,
+whose junction keeps its own adjacency (bottom to ground, top to output) so
+a walk seeded at a junction goes exactly where the scalar's would.
+
+**Bit-exact with rung 0 by construction, and held to it.** The seeds, the
+queue order, the drive lattice and the write set are the scalar's; only what
+is probed changed, and everything the scalar walk would have found (a rail,
+a charged junction) the counters find too. `tests/lockstep.rs` steps both
+engines on one memory image and compares `state_string()` and `trans_on`
+after every half-cycle on the seven programs, the tight loop, the interrupt
+fixture with an IRQ in the lost-BRK window, and the reference's program:
+every node identical. `tests/replay.rs` is the pin replay with the
+constructor swapped. `MUTATE=1` goes red in both, naming the node or the
+field. Every node survives, junctions included, so the golden comparison
+against the JavaScript engine would run against this rung unchanged.
+
+**Measured, and the number is not a speedup.** On the seven programs
+(`examples/bench.rs`, best of three, 20,000 half-cycles) rung 1 runs at
+between 0.97x and 1.13x rung 0 across two runs, inside the 1.18x noise floor
+recorded above, and its
+recalc count is the scalar's to the decimal (893.0 against 893.0 on Counter),
+which is the construction showing. On counters, which do not need repeats
+(`examples/run.rs` under `sudo perf stat`, 200,000 half-cycles of
+Fibonacci): **4.5% fewer instructions** (95.6 G against 91.3 G), 13% fewer
+branch mispredicts, L1 dcache misses about doubled (336 M against 705 M,
+the hybrid's tables beside the netlist's rather than inside it), cycles
+equal within the box's noise. The probes the fold removes were about 2% of
+the instructions; the rest is per-recalc overhead, queue mechanics and
+bitset bookkeeping, spent 922 times a half-cycle for 186 changes. So the
+finding is the one the search profile already pointed at from the other
+side: **the lever is the recalc count, and a rung that is bit-exact by
+construction cannot touch it**, because the recalc list is the queue order
+and the queue order is what bit-exactness hangs on. Rung 2 is where that
+overhead is compiled away rather than skipped.
+
 ## Performance
 
 **~29,600 half-cycles/s native (~14.8 kHz simulated 6502)**, against the

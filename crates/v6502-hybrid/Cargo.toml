@@ -1,0 +1,16 @@
+[package]
+name = "v6502-hybrid"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Rung 1 of the engine ladder (docs/engine-ladder.md): the queue solver with
+# the gate population folded into per-output counters. Carries the same
+# licence position as v6502-netlist, because it is built from the schematic
+# derived from the die data.
+
+[dependencies]
+halfphi = { path = "../halfphi" }
+v6502-netlist = { path = "../v6502-netlist" }
+v6502-sim = { path = "../v6502-sim" }
+v6502-pins = { path = "../v6502-pins" }

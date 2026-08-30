@@ -280,6 +280,9 @@ CLAIMS = [
     ("docs/notes/engine.md", r"the first divergence is at half-cycle (\d+), and the worst", "slice first divergence"),
     ("docs/notes/engine.md", r"the worst half-cycle differs on\s+(\d+) of \d+ nodes", "slice worst divergence"),
     ("docs/notes/engine.md", r"so that (\d+) machines can\s+share one instruction stream", "slice lanes"),
+    ("docs/notes/engine.md", r"\(\*\*(\d+) gates\*\* absorbing", "gates"),
+    ("docs/notes/engine.md", r"absorbing\s+\*\*(\d+) transistors\*\*, \*\*\d+ switches\*\* left", "absorbed transistors"),
+    ("docs/notes/engine.md", r"absorbing\s+\*\*\d+ transistors\*\*, \*\*(\d+) switches\*\* left", "switches"),
 ]
 
 

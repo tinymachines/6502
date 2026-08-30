@@ -6,6 +6,7 @@ members = [
     "crates/v6502-sim",
     "crates/v6502-wasm",
     "crates/v6502-pins",
+    "crates/v6502-hybrid",
 ]
 
 [workspace.package]

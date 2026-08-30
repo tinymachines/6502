@@ -106,6 +106,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
+name = "v6502-hybrid"
+version = "0.1.0"
+dependencies = [
+ "halfphi",
+ "v6502-netlist",
+ "v6502-pins",
+ "v6502-sim",
+]
+
+[[package]]
 name = "v6502-netlist"
 version = "0.1.0"
 dependencies = [

@@ -26,8 +26,8 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 100 tests, bit-exact against the original. |
-| Pin contract | `v6502-pins`: what "the same chip at the pins" means, in one crate with no dependencies. Rung 0 of the engine ladder (`docs/engine-ladder.md`) is the switch-level `Cpu` behind it; its pin golden is 271 recorded traces (seven programs, the reference's program, seven scripted interrupt and RDY runs, all 256 opcodes), replayed by `cargo test -p v6502-pins` and mutation-proved. Rungs 1 to 3 are not started. |
+| Simulation | Complete. 102 tests, bit-exact against the original. |
+| Pin contract | `v6502-pins`: what "the same chip at the pins" means, in one crate with no dependencies. Rung 0 of the engine ladder (`docs/engine-ladder.md`) is the switch-level `Cpu` behind it; its pin golden is 271 recorded traces (seven programs, the reference's program, seven scripted interrupt and RDY runs, all 256 opcodes), replayed by `cargo test -p v6502-pins` and mutation-proved. Rung 1 (`v6502-hybrid`, the gates folded into per-output counters) is done and bit-exact with rung 0 by construction, every node every half-cycle; it is not faster (4.5% fewer instructions, inside noise), and that finding is the point: the lever is the recalc count, which an exact rung cannot touch. Rungs 2 and 3 are not started. |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone to desktop), installable PWA, offline. One header owning program, transport and clock across every page. |
@@ -109,14 +109,18 @@ writes the counts into `build-info.json` beside the commit. A release that
 carries no `tests` key was made by hand.
 
 ```bash
-cargo test --workspace              # 100 tests: netlist, functional, golden,
+cargo test --workspace              # 102 tests: netlist, functional, golden,
                                     # rewind, state, rows, blueprint, pla,
-                                    # decode, blocks, interrupts, pins
+                                    # decode, blocks, interrupts, pins,
+                                    # hybrid (lockstep + replay)
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo run --release -p v6502-pins --example pin-golden   # record the pin golden
 cargo test -p v6502-pins                   # replay it through rung 0. SKIPS
                                            # without the files; REQUIRE_PINS=1
                                            # insists; MUTATE=1 must go red.
+cargo test -p v6502-hybrid                 # rung 1 lockstep with rung 0 (every
+                                           # node) and its pin replay; MUTATE=1
+cargo run --release -p v6502-hybrid --example bench   # rung 0 beside rung 1
 cargo test -p halfphi --test chips         # the 6502, the 6800 and the Z80,
                                            # through identical calls. SKIPS without
                                            # extern/; HALFPHI_REQUIRE_CHIPS=1 to
@@ -419,7 +423,7 @@ is in the note for its page. Three worth knowing by name:
   viewport. Its "elements past the edge" list is informational, not causal.
 ## Architecture
 
-Five crates, split so the topology is shared and read-only while state is
+Six crates, split so the topology is shared and read-only while state is
 per-instance and mutable.
 
 | Crate | Role |
@@ -429,6 +433,7 @@ per-instance and mutable.
 | `v6502-sim` | The 6502 clock/bus layer, timing chain, rewind, state codec, `halfwave`. |
 | `v6502-wasm` | `wasm-bindgen` surface consumed by `web/`. Builds two ways: with die data (117 KB, NC-SA) and `--no-default-features` (85 KB, MIT, takes a netlist at runtime). |
 | `v6502-pins` | The pin contract: `PinFrame`, `PinEngine`, the `.pins`/`.stim` text format, the replay driver and the comparison. No dependencies, no die data. `v6502-sim` implements it for `Cpu` in `src/pins.rs`; the recorder and replay test live here and use that adapter. |
+| `v6502-hybrid` | Rung 1 of the engine ladder: the queue solver with the recognised gates folded into per-output counters. Bit-exact with rung 0 by construction and held to it every node every half-cycle. NC-SA, like `v6502-netlist`: it is built from the schematic derived from the die data. |
 
 Facts: **1725 nodes, 3510 transistors, 846 names.** Adjacency is **CSR**, not the
 reference's array-of-arrays, with two lists per node (transistors it gates, and

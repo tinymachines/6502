@@ -14,7 +14,10 @@ MIT-licensed visual6502 JavaScript; that copyright notice is reproduced in
 
 `crates/v6502-pins` is MIT and carries no die data. The traces it records
 into `tools/pin-golden/` are derived from the die data and are gitignored,
-like the golden trace.
+like the golden trace. `crates/v6502-hybrid` builds its tables from the
+schematic derived from the die data at run time and so ships nothing of its
+own, but anything built with it embeds `netlist.bin` and is under the terms
+below, exactly as `v6502-sim` is.
 
 ## Why the die data is a submodule
 
