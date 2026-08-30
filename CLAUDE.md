@@ -26,8 +26,8 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 108 tests, bit-exact against the original. |
-| Pin contract | `v6502-pins`: what "the same chip at the pins" means, in one crate with no dependencies. Rung 0 of the engine ladder (`docs/engine-ladder.md`) is the switch-level `Cpu` behind it; its pin golden is 271 recorded traces (seven programs, the reference's program, seven scripted interrupt and RDY runs, all 256 opcodes), replayed by `cargo test -p v6502-pins` and mutation-proved. Rung 1 (`v6502-hybrid`, the gates folded into per-output counters) is done and bit-exact with rung 0 by construction, every node every half-cycle; it is not faster (4.5% fewer instructions, inside noise), and that finding is the point: the lever is the recalc count, which an exact rung cannot touch. Because the state is the same four bitsets, rung 0's machine value restores into it mid-run and back, proven every node (`v6502-hybrid/tests/state.rs`), which is what the console's engine switch rides on. Rung 2 (`v6502-compiled`, the network as generated code, 64 machines per word) passes the whole pin golden through lane 0 at **6.83x rung 0 per machine**; it is not node-exact with rung 0 by nature, and says so. The same kernel as WGSL runs on a GPU (`v6502-gpu`), bit-exact with the CPU rung lane for lane, at **3.78 M machine-half-cycles/s** on one RTX 3070, about 128x rung 0. Rung 3 is specified from three experiments (`docs/engine-ladder.md`) and not started. |
+| Simulation | Complete. 110 tests, bit-exact against the original. |
+| Pin contract | `v6502-pins`: what "the same chip at the pins" means, in one crate with no dependencies. Rung 0 of the engine ladder (`docs/engine-ladder.md`) is the switch-level `Cpu` behind it; its pin golden is 271 recorded traces (seven programs, the reference's program, seven scripted interrupt and RDY runs, all 256 opcodes), replayed by `cargo test -p v6502-pins` and mutation-proved. Rung 1 (`v6502-hybrid`, the gates folded into per-output counters) is done and bit-exact with rung 0 by construction, every node every half-cycle; it is not faster (4.5% fewer instructions, inside noise), and that finding is the point: the lever is the recalc count, which an exact rung cannot touch. Because the state is the same four bitsets, rung 0's machine value restores into it mid-run and back, proven every node (`v6502-hybrid/tests/state.rs`), which is what the console's engine switch rides on. Rung 2 (`v6502-compiled`, the network as generated code, 64 machines per word) passes the whole pin golden through lane 0 at **6.83x rung 0 per machine**; it is not node-exact with rung 0 by nature, and says so. A machine value still crosses mid-run between rung 0 and rung 2 in both directions, held at the pins, Die Runner's eight watched gates and memory every half-cycle (`tests/crossing.rs`; measured first: 20,000/20,000 half-cycles of pin and gate agreement while internal nodes diverged as expected), which is what its console engine rides on. The same kernel as WGSL runs on a GPU (`v6502-gpu`), bit-exact with the CPU rung lane for lane, at **3.78 M machine-half-cycles/s** on one RTX 3070, about 128x rung 0. Rung 3 is specified from three experiments (`docs/engine-ladder.md`) and not started. |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone to desktop), installable PWA, offline. One header owning program, transport and clock across every page. |
@@ -109,12 +109,12 @@ writes the counts into `build-info.json` beside the commit. A release that
 carries no `tests` key was made by hand.
 
 ```bash
-cargo test --workspace              # 108 tests: netlist, functional, golden,
+cargo test --workspace              # 110 tests: netlist, functional, golden,
                                     # rewind, state, rows, blueprint, pla,
                                     # decode, blocks, interrupts, pins,
                                     # hybrid (lockstep + replay + state), compiled
-                                    # (replay + lanes), gpu (parity; SKIPS
-                                    # without an adapter, REQUIRE_GPU=1 insists)
+                                    # (replay + lanes + crossing), gpu (parity;
+                                    # SKIPS without an adapter, REQUIRE_GPU=1)
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo run --release -p v6502-pins --example pin-golden   # record the pin golden
 cargo test -p v6502-pins                   # replay it through rung 0. SKIPS
@@ -126,7 +126,10 @@ cargo test -p v6502-hybrid                 # rung 1 lockstep with rung 0 (every
                                            # and back, every node; MUTATE=1
 cargo run --release -p v6502-hybrid --example bench   # rung 0 beside rung 1
 cargo test --release -p v6502-compiled     # rung 2: the pin golden through lane 0,
-                                           # lane independence; MUTATE=1
+                                           # lane independence, and a mid-run machine
+                                           # value crossed with rung 0 both ways, held
+                                           # at the pins, the watched gates and memory
+                                           # (never at nodes); MUTATE=1
 cargo run --release -p v6502-compiled --example bench   # per machine and per 64
 cargo run --release -p v6502-compiled --example agree   # node agreement with rung 0,
                                            # measured and named, not asserted
@@ -446,10 +449,10 @@ per-instance and mutable.
 | `halfphi` | Chip-agnostic: the die-data parser, the netlist, the solver. **Names no chip.** Embeds no die data, and is MIT for that reason. |
 | `v6502-netlist` | The 6502's die data (`netlist.bin`, 31 KiB, built by `build.rs`, embedded with `include_bytes!`), and the analyses seeded from its names. Carries the CC BY-NC-SA obligations. |
 | `v6502-sim` | The 6502 clock/bus layer, timing chain, rewind, state codec, `halfwave`. |
-| `v6502-wasm` | `wasm-bindgen` surface consumed by `web/`. Builds two ways: with die data (NC-SA) and `--no-default-features` (85 KB, MIT, takes a netlist at runtime). The data build also carries `HybridMachine`, rung 1 behind the console's own verbs, sharing one machine-JSON emitter with `Machine`. |
+| `v6502-wasm` | `wasm-bindgen` surface consumed by `web/`. Builds two ways: with die data (NC-SA) and `--no-default-features` (85 KB, MIT, takes a netlist at runtime). The data build also carries `HybridMachine` (rung 1) and `CompiledMachine` (rung 2) behind the console's own verbs, all three sharing one machine-JSON emitter; `CompiledMachine` resolves names through the embedded netlist so the generated kernel stays numbers. |
 | `v6502-pins` | The pin contract: `PinFrame`, `PinEngine`, the `.pins`/`.stim` text format, the replay driver and the comparison. No dependencies, no die data. `v6502-sim` implements it for `Cpu` in `src/pins.rs`; the recorder and replay test live here and use that adapter. |
 | `v6502-hybrid` | Rung 1 of the engine ladder: the queue solver with the recognised gates folded into per-output counters. Bit-exact with rung 0 by construction and held to it every node every half-cycle. Carries rung 0's machine value (`state.rs`: snapshot/restore, counters rebuilt from `trans_on`), so a run crosses between the rungs mid-flight. NC-SA, like `v6502-netlist`: it is built from the schematic derived from the die data. |
-| `v6502-compiled` | Rung 2: `build.rs` derives the schematic and emits the kernel as Rust (gates as sum-of-products, switches unrolled), 64 machines per word on the `halfphi::slice` encoding. No engine crate at run time. Held to the pin golden, not to rung 0's nodes. The generated file is NC-SA-derived and never committed. Also emits the kernel as WGSL (`KERNEL_WGSL`). |
+| `v6502-compiled` | Rung 2: `build.rs` derives the schematic and emits the kernel as Rust (gates as sum-of-products, switches unrolled), 64 machines per word on the `halfphi::slice` encoding. No engine crate at run time. Held to the pin golden, not to rung 0's nodes. The generated file is NC-SA-derived and never committed. Also emits the kernel as WGSL (`KERNEL_WGSL`). Carries the machine value across the rung boundary (`State::extract_lane`/`inject_all`, broadcast: the clock is one instruction for all lanes), held at pins, gates and memory, never at nodes. |
 | `v6502-gpu` | The WGSL kernel on a GPU through `wgpu`: one workgroup per word of 32 machines, planes in workgroup memory, monotone OR so the parallel merge reaches the serial fixed point. Bit-exact with the CPU rung lane for lane. The only crate with registry dependencies; nothing shipped depends on it. |
 
 Facts: **1725 nodes, 3510 transistors, 846 names.** Adjacency is **CSR**, not the

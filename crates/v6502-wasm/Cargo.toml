@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 #                      one at runtime, which is what lets the published
 #                      package be MIT the way `halfphi` is.
 default = ["mos6502"]
-mos6502 = ["v6502-sim/mos6502", "dep:v6502-hybrid"]
+mos6502 = ["v6502-sim/mos6502", "dep:v6502-hybrid", "dep:v6502-compiled"]
 
 [dependencies]
 wasm-bindgen = "0.2.127"
@@ -27,3 +27,5 @@ v6502-sim = { path = "../v6502-sim", default-features = false }
 # netlist is derived from the schematic, which is derived from the die data,
 # so it has no place in the data-free build.
 v6502-hybrid = { path = "../v6502-hybrid", optional = true }
+# Rung 2, same terms: the generated kernel is derived from the die data.
+v6502-compiled = { path = "../v6502-compiled", optional = true }

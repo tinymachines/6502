@@ -363,6 +363,40 @@ and this is where "machines per second is bounded by cores" stops being
 true. The kernel it descends from measured 2.3x on the same box. Not wired
 into anything yet.
 
+### The machine value crosses this rung too, held at the contract, not the nodes
+
+The pin golden covers rung 2 from power-on; a console engine switch resumes
+a foreign snapshot mid-run, which is outside it. So the crossing was
+measured before it was promised (`examples/crossing.rs`): rung 0 runs a
+loop 777 half-cycles, its value is broadcast into every lane
+(`State::inject_all`; broadcast because `half_step` branches on the whole
+clk0 word, so one imported machine has to be all lanes), and the two
+engines run 20,000 half-cycles side by side. All 20,000 agreed at all
+eleven pins and on Die Runner's eight watched control lines, with the
+memory identical at the end, while the internal nodes diverged exactly as
+the kernel's account predicts (first at +3, worst 2 nodes, 13,748/20,000
+half-cycles fully identical). The charge divergence is real and it does not
+reach the pins.
+
+`tests/crossing.rs` holds that, both directions (an extracted lane 0 is a
+well-formed rung 0 machine), on two programs, at pins, gates and memory
+every half-cycle; node equality is deliberately NOT asserted, because it
+would fail on what the rung is rather than on a bug. `MUTATE=1` corrupts
+one opcode byte in the crossed machine and both directions go red.
+
+The wasm surface exposes it as `CompiledMachine`, the same console verbs as
+`HybridMachine` and the same shared emitter, with two things of its own:
+names resolve through the embedded netlist on the wasm side of the licence
+boundary (the generated kernel stays numbers, and
+`tools/check-compiled-nodata.py` keeps it that way), and `last_fetch` is
+latched post-edge off the settled pins (a falling edge that serviced a
+fetch leaves clk0 low, sync high, rw reading, the opcode on the bus), which
+reproduces rung 0's bookkeeping exactly from the first fetch after boot; a
+node smoke run held rung 0 -> rung 2 -> rung 0 equal at pins, gates,
+memory, half_cycle and last_fetch. What is expected to differ, and says so
+in the type's doc: exported `value`/`trans_on` against another rung.
+Compare memory and gates instead.
+
 ### The same kernel on a GPU (`v6502-gpu`)
 
 The same `build.rs` emits the kernel a second time as WGSL, from the same

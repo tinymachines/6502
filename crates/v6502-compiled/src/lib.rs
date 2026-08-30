@@ -288,6 +288,68 @@ impl State {
         MAX_ROUNDS
     }
 
+    /// One lane's four bitsets, packed LSB-first (bit `i` in byte `i / 8`
+    /// at position `i % 8`), the codec's own byte order, so hex-encoding
+    /// these bytes IS rung 0's wire encoding. Order: value, pullup,
+    /// pulldown, trans_on.
+    pub fn extract_lane(&self, lane: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
+        let pack = |words: &[u64], bits: usize| -> Vec<u8> {
+            let mut out = vec![0u8; bits.div_ceil(8)];
+            for (i, w) in words.iter().enumerate().take(bits) {
+                if w >> lane & 1 != 0 {
+                    out[i / 8] |= 1 << (i % 8);
+                }
+            }
+            out
+        };
+        (
+            pack(&self.value, NODES),
+            pack(&self.pullup, NODES),
+            pack(&self.pulldown, NODES),
+            pack(&self.trans_on, TRANS),
+        )
+    }
+
+    /// The four bitsets of one machine, broadcast into EVERY lane: the
+    /// machine-value crossing, in this rung's shape. Broadcast rather than
+    /// per-lane because the clock is one instruction for all lanes
+    /// (`half_step` branches on the whole clk0 word), so a single imported
+    /// machine has to be all of them. Same byte order as `extract_lane`.
+    /// The planes are scratch, rebuilt every round, and need nothing.
+    ///
+    /// Refused rather than guessed at on a wrong length: a blob that decodes
+    /// to the wrong chip is worse than one that is refused.
+    pub fn inject_all(
+        &mut self,
+        value: &[u8],
+        pullup: &[u8],
+        pulldown: &[u8],
+        trans_on: &[u8],
+    ) -> Result<(), String> {
+        let want_n = NODES.div_ceil(8);
+        let want_t = TRANS.div_ceil(8);
+        for (name, blob, want) in [
+            ("value", value, want_n),
+            ("pullup", pullup, want_n),
+            ("pulldown", pulldown, want_n),
+            ("trans_on", trans_on, want_t),
+        ] {
+            if blob.len() != want {
+                return Err(format!("{name}: expected {want} bytes, got {}", blob.len()));
+            }
+        }
+        let unpack = |words: &mut Vec<u64>, blob: &[u8], bits: usize| {
+            for (i, w) in words.iter_mut().enumerate().take(bits) {
+                *w = if blob[i / 8] >> (i % 8) & 1 != 0 { !0 } else { 0 };
+            }
+        };
+        unpack(&mut self.value, value, NODES);
+        unpack(&mut self.pullup, pullup, NODES);
+        unpack(&mut self.pulldown, pulldown, NODES);
+        unpack(&mut self.trans_on, trans_on, TRANS);
+        Ok(())
+    }
+
     /// The reference's encoding for one lane: `x` missing, `g`/`v` rails,
     /// `h`/`l`.
     pub fn state_string(&self, lane: usize) -> String {
@@ -344,6 +406,10 @@ impl Machines {
 
     pub fn half_cycle(&self) -> u64 {
         self.half_cycle
+    }
+    /// For resuming an imported machine at its own count.
+    pub fn set_half_cycle(&mut self, hc: u64) {
+        self.half_cycle = hc;
     }
 
     fn drive_all(&mut self, n: usize, high: bool) {

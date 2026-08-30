@@ -881,3 +881,255 @@ impl Default for HybridMachine {
         Self::new()
     }
 }
+
+// -- rung 2 ---------------------------------------------------------------
+
+/// Rung 2 of the engine ladder (`v6502-compiled`): the recognised network as
+/// generated code, behind the console's verbs. **Not node-exact with
+/// [`Machine`] by nature** (Jacobi against the queue: charge remembers a
+/// trajectory), and it does not pretend to be: what is held, and proven at
+/// the crossing (`v6502-compiled/tests/crossing.rs`), is the console
+/// contract itself: all eleven pins, the watched control lines, and the
+/// memory image, every half-cycle from a mid-run resume in either direction.
+/// A comparison of exported `value`/`trans_on` against another rung is
+/// expected to differ; compare memory and gates instead.
+///
+/// The kernel runs 64 lanes a word; here one machine is broadcast into all
+/// of them (the clock is one instruction for every lane regardless), and
+/// lane 0 is what is read back. Names resolve through the embedded netlist
+/// on this side of the boundary, so the generated kernel stays numbers.
+///
+/// Only in the default build, like [`HybridMachine`].
+#[cfg(feature = "mos6502")]
+#[wasm_bindgen]
+pub struct CompiledMachine {
+    m: v6502_compiled::Machines,
+    nl: Arc<v6502_sim::Netlist>,
+    last_fetch: Option<Fetch>,
+}
+
+#[cfg(feature = "mos6502")]
+fn decode_hex(name: &str, hex: &str) -> Result<Vec<u8>, JsError> {
+    if !hex.len().is_multiple_of(2) {
+        return Err(JsError::new(&format!("{name}: odd hex length {}", hex.len())));
+    }
+    (0..hex.len() / 2)
+        .map(|i| {
+            u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16)
+                .map_err(|_| JsError::new(&format!("{name}: bad hex at byte {i}")))
+        })
+        .collect()
+}
+
+#[cfg(feature = "mos6502")]
+#[wasm_bindgen]
+impl CompiledMachine {
+    /// Build with the embedded netlist's layout pulls and name table. Not
+    /// yet reset -- load a program and set the reset vector first, exactly
+    /// as [`Machine::new`].
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> CompiledMachine {
+        let nl = Arc::new(v6502_sim::mos6502());
+        let pu: Vec<bool> = (0..nl.node_count()).map(|i| nl.pullups().get(i)).collect();
+        CompiledMachine { m: v6502_compiled::Machines::new(&pu), nl, last_fetch: None }
+    }
+
+    /// Into every lane: one machine, broadcast, per the type's account.
+    pub fn load(&mut self, addr: u16, bytes: &[u8]) {
+        for lane in 0..v6502_compiled::LANES {
+            let o = addr as usize;
+            self.m.mem[lane][o..o + bytes.len()].copy_from_slice(bytes);
+        }
+    }
+
+    #[wasm_bindgen(js_name = setResetVector)]
+    pub fn set_reset_vector(&mut self, addr: u16) {
+        self.load(0xfffc, &[addr as u8, (addr >> 8) as u8]);
+    }
+
+    /// Set all 64 KiB to one byte, so a sparse image can be written over it.
+    #[wasm_bindgen(js_name = fillMemory)]
+    pub fn fill_memory(&mut self, byte: u8) {
+        for lane in 0..v6502_compiled::LANES {
+            self.m.mem[lane].iter_mut().for_each(|b| *b = byte);
+        }
+    }
+
+    /// Cold boot. The fetch bookkeeping starts at the first fetch after the
+    /// boot rather than inside the reset sequence; the state and memory are
+    /// what the crossing holds, and `last_fetch` is bookkeeping, not
+    /// silicon.
+    #[wasm_bindgen(js_name = powerCycle)]
+    pub fn power_cycle(&mut self) {
+        self.m.power_cycle();
+        self.last_fetch = None;
+    }
+
+    /// Warm reset, same bookkeeping note as `powerCycle`.
+    pub fn reset(&mut self) {
+        self.m.reset();
+        self.last_fetch = None;
+    }
+
+    #[wasm_bindgen(js_name = halfStep)]
+    pub fn half_step(&mut self) {
+        self.m.half_step();
+        // The latch rung 0 keeps in service_read, read back off the settled
+        // state: a falling edge that serviced a fetch read leaves clk0 low,
+        // sync high and rw reading, with the opcode on the data bus.
+        let pins = v6502_compiled::Machines::pins(&self.m, 0);
+        if !pins.clk0 && pins.sync && pins.rw {
+            self.last_fetch = Some(Fetch { addr: pins.ab, opcode: pins.db });
+        }
+    }
+
+    /// Advance `n` half-cycles, one boundary crossing for the batch.
+    #[wasm_bindgen(js_name = runHalfCycles)]
+    pub fn run_half_cycles(&mut self, n: u32) {
+        for _ in 0..n {
+            self.half_step();
+        }
+    }
+
+    #[wasm_bindgen(js_name = halfCycle)]
+    pub fn half_cycle(&self) -> f64 {
+        self.m.half_cycle() as f64
+    }
+    #[wasm_bindgen(js_name = addressBus)]
+    pub fn address_bus(&self) -> u16 {
+        v6502_compiled::Machines::pins(&self.m, 0).ab
+    }
+    #[wasm_bindgen(js_name = dataBus)]
+    pub fn data_bus(&self) -> u8 {
+        v6502_compiled::Machines::pins(&self.m, 0).db
+    }
+    #[wasm_bindgen(js_name = isRead)]
+    pub fn is_read(&self) -> bool {
+        v6502_compiled::Machines::pins(&self.m, 0).rw
+    }
+    pub fn sync(&self) -> bool {
+        v6502_compiled::Machines::pins(&self.m, 0).sync
+    }
+    pub fn clk0(&self) -> bool {
+        v6502_compiled::Machines::pins(&self.m, 0).clk0
+    }
+
+    #[wasm_bindgen(js_name = nodeCount)]
+    pub fn node_count(&self) -> u32 {
+        self.nl.node_count() as u32
+    }
+    #[wasm_bindgen(js_name = isNodeHigh)]
+    pub fn is_node_high(&self, node: u16) -> bool {
+        self.m.state.is_high(0, node as usize)
+    }
+    /// Resolve a signal name to a node number, or -1 if unknown: the refusal
+    /// the console's gate sampling is built on. The name table lives on this
+    /// side of the licence boundary; the kernel itself carries none.
+    #[wasm_bindgen(js_name = nodeId)]
+    pub fn node_id(&self, name: &str) -> i32 {
+        self.nl.node(name).map_or(-1, i32::from)
+    }
+
+    pub fn peek(&self, addr: u16) -> u8 {
+        self.m.mem[0][addr as usize]
+    }
+    #[wasm_bindgen(js_name = memorySlice)]
+    pub fn memory_slice(&self, addr: u16, len: u32) -> Vec<u8> {
+        (0..len).map(|i| self.m.mem[0][addr.wrapping_add(i as u16) as usize]).collect()
+    }
+
+    /// The whole machine as the API's own JSON, through the same emitter as
+    /// [`Machine::export_machine`]. The lane's packed bytes ARE the codec's
+    /// byte order, so the hex here is rung 0's wire encoding.
+    #[wasm_bindgen(js_name = exportMachine)]
+    pub fn export_machine(&self) -> String {
+        let (value, pullup, pulldown, trans_on) = self.m.state.extract_lane(0);
+        let hex = |v: &[u8]| {
+            let mut out = String::with_capacity(v.len() * 2);
+            for b in v {
+                out.push_str(&format!("{b:02x}"));
+            }
+            out
+        };
+        let st = MachineState::from_hex(
+            self.nl.node_count(),
+            self.nl.transistor_count(),
+            &hex(&value),
+            &hex(&pullup),
+            &hex(&pulldown),
+            &hex(&trans_on),
+            self.m.half_cycle(),
+            self.last_fetch,
+        )
+        .expect("an extracted lane is a well-formed machine");
+        machine_json(&st, &self.m.mem[0])
+    }
+
+    /// Restore the chip half of a machine, and ONLY the chip half. The same
+    /// contract and the same quiet failure to avoid as
+    /// [`Machine::import_state`]: memory does not come with it.
+    #[allow(clippy::too_many_arguments)]
+    #[wasm_bindgen(js_name = importState)]
+    pub fn import_state(
+        &mut self,
+        value: &str,
+        pullup: &str,
+        pulldown: &str,
+        trans_on: &str,
+        half_cycle: f64,
+        fetch_addr: i32,
+        fetch_opcode: u8,
+    ) -> Result<(), JsError> {
+        let v = decode_hex("value", value)?;
+        let pu = decode_hex("pullup", pullup)?;
+        let pd = decode_hex("pulldown", pulldown)?;
+        let t = decode_hex("trans_on", trans_on)?;
+        self.m.state.inject_all(&v, &pu, &pd, &t).map_err(|e| JsError::new(&e))?;
+        self.m.set_half_cycle(half_cycle as u64);
+        self.last_fetch = if fetch_addr < 0 {
+            None
+        } else {
+            Some(Fetch { addr: fetch_addr as u16, opcode: fetch_opcode })
+        };
+        Ok(())
+    }
+
+    /// A whole machine, chip and memory in one call: the counterpart to
+    /// `exportMachine`, with [`Machine::import_machine`]'s contract.
+    #[allow(clippy::too_many_arguments)]
+    #[wasm_bindgen(js_name = importMachine)]
+    pub fn import_machine(
+        &mut self,
+        value: &str,
+        pullup: &str,
+        pulldown: &str,
+        trans_on: &str,
+        half_cycle: f64,
+        fetch_addr: i32,
+        fetch_opcode: u8,
+        fill: u8,
+        page_ids: &[u8],
+        page_bytes: &[u8],
+    ) -> Result<(), JsError> {
+        check_page_cut(page_ids, page_bytes)?;
+        self.import_state(value, pullup, pulldown, trans_on, half_cycle, fetch_addr, fetch_opcode)?;
+        self.fill_memory(fill);
+        for (i, &page) in page_ids.iter().enumerate() {
+            let from = i * 256;
+            self.load(u16::from(page) << 8, &page_bytes[from..from + 256]);
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = nonconvergentSettles)]
+    pub fn nonconvergent_settles(&self) -> f64 {
+        self.m.stats.nonconvergent_settles as f64
+    }
+}
+
+#[cfg(feature = "mos6502")]
+impl Default for CompiledMachine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
