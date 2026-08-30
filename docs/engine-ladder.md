@@ -176,38 +176,97 @@ The whole recognised network as straight-line code, generated at build time.
 
 No nodes. A cycle-accurate state machine whose tables are the measured ones.
 
-- Depends on `v6502-pins` only. Its data is a build-time embedding of
-  `web/decode.json` and `web/timing.json` in a compact form; `build.rs` reads
-  the two JSON files and refuses to build if either is missing, and stamps
-  the embedded table with their content digest, which `pins()` exposes as
-  `build_stamp()` so a trace can say which measurement it came from. (This is
-  the same gap `halfwave-lab` issue 07 filed against the atlas export; do not
-  open the gap again here.)
-- The state is the architectural registers plus the T-state counter, the
-  interrupt latches, and the ALU hold register, because the hold register's
-  one-cycle lag is externally visible in the write sequence of a
-  read-modify-write and in the data written by `PHA` after an `ADC`, and rung
-  3 has to get those bytes right.
-- Per half-cycle: look up the firing PLA terms for (opcode, T-state, half),
-  which `decode.json` gives directly; map fired terms to the 44 datapath
-  control lines using `timing.json`'s `dpc` table; apply the control lines to
-  the datapath model. The random-logic lines that `decode.json` leaves
-  unresolved (`unresolvedLines`, 14 of 46 in the current export) are the hard
-  part: each one that is needed for pin behaviour is hand-written, listed by
-  name in the note with the run that justified it, and it is a known gap
-  until it is measured. **Do not pad the table with datasheet behaviour**; a
-  line derived from the manual is authored, not measured, and gets labelled
-  as such in the code and the note.
-- The 12 opcodes that never finish (`timing.json` says which) must never
-  finish here either. A `.pins` file for each is recorded from rung 0 over a
-  fixed length, and rung 3 must match it. A model that "helpfully" completes
-  a `KIL` opcode fails the contract.
-- Undefined and undocumented opcodes are in scope: 244 opcodes are timed and
-  rung 0 gives a pin trace for every one of the 256. Record all 256 as
-  `.pins` (short runs, one opcode each after a fixed preamble) and rung 3
-  passes all 256 or the note lists which ones it does not, by number.
-- Target is "as fast as it can be made while passing the 256 + interrupt +
-  program traces". No number is written down until measured.
+**Specified 2026-08-30 from three experiments** (`tools/experiments/m4-*.py`,
+each driving rung 0 through `halfwave`); the plan below replaces the earlier
+sketch, whose premise (map PLA terms to the 44 lines through `timing.json`)
+is not needed, because the control vectors can be measured directly.
+
+### What the experiments established
+
+1. **The control sequence per opcode is context-invariant for 178 of 256
+   opcodes** (`m4-control-vectors.py`: the 46 lines plus `rw`, `sync`, the
+   T-state and pipeline nodes, per half-cycle from the opcode's own fetch,
+   over four contexts varying registers, flags, operands and base page).
+   The 78 that vary do so by exactly four mechanisms, each one named signal
+   at one half-cycle: **branches** (`pipeIPCrelated` at h=3; length 4, 6 or
+   8 half-cycles for not taken, taken, taken across a page); **indexed reads
+   crossing a page** (one extra cycle, `t4`/`t5` with `clock1`); **indexed
+   writes and RMWs** (same length, `dpc-2_ADH/ABH` differs at one
+   half-cycle: the dummy read's high byte, corrected or not); and **the ROR
+   family** (`dpc19_ADDSB7` differs: it is the carry flag routed into bit 7,
+   which is why it is on the "unresolved" list, it is not a PLA output).
+   The twelve `KIL`s never reach a second fetch.
+2. **The first two half-cycles of every fetch belong to the previous
+   instruction** (its T0 overlapping the new T1), so the table is keyed by
+   the instruction that owns the T-state, and an opcode's entry includes the
+   two overlap half-cycles of the fetch after it.
+3. **Keyed by what the chip reports** (`ir`, T-state string, hidden state,
+   phase) the vector is single-valued for 2,129 of 2,276 keys
+   (`m4-rom-key.py`, 1,024 runs). The 147 conflicts are all accounted for:
+   the chip's T-state string is empty for the unnamed T6/T7 cycles (so the
+   key must be a half-cycle counter from the fetch, not the chip's names);
+   the page-cross fixup repeats `T0`; the two carries above; `dpc34_PCLC`
+   at T1 of `JSR`/`JMP` and `dpc35_PCHC`, which are the PC incrementer's
+   carries (data signals wearing control-line names); and the branch case
+   adds the offset's sign (`nDBADD` against `DBADD`).
+4. **The 44 lines' documented meanings reproduce the datapath**
+   (`m4-datapath.py`: a Python model of Hanson's block diagram driven each
+   half-cycle by the chip's OWN line levels, so only the semantics are under
+   test). After three iterations, `abl abh pc pclp pchp a x y s` agree with
+   the chip at **100% of 2,396 half-cycles** over four programs; `alu` 95%,
+   `dor` 98%, `idl` 99%. Two corrections to the wiki's wording came out of
+   it and are the kind of thing that would have been authored wrong: the
+   register-to-bus drives from X, Y, A and DL are effective in phi1 only
+   while S, ADD, the PC and the constants are effective in phi2 and the
+   next phi1 (the phi2 bus values are otherwise the precharge); and **the
+   PC increments through the address bus**: during phi2 the incrementer
+   latch `pclp`/`pchp` becomes PC + IPC, `PCL/ADL` and `PCH/ADH` drive that
+   latch, and `ADL/PCL` loads PC from ADL at phi1; `PCL/PCL` is the hold
+   path. What remains wrong is in the stack and flags program: `P/DB`
+   (flags onto the bus) is not among the 44 lines and has no named node,
+   the phi2 bus value when `SB/DB` joins two driven buses, and the shift
+   (`SRS`) operand. Each is a bounded item, not an unknown.
+
+### The design
+
+- **Sequencer, measured.** `build.rs` runs rung 0 (so this crate has a
+  build-dependency on `v6502-sim`, and none at run time) over the 256
+  opcodes in the four contexts and records, keyed by `(opcode, half-cycle
+  since its fetch, phase)`, the vector of control lines plus `rw` and
+  `sync` for the opcode's own span and the two overlap half-cycles after
+  it; where the four mechanisms fire it records the alternative span under
+  the selector that chose it. It refuses to build if any key is
+  multi-valued after the selectors, which is experiment 3 as a gate. The
+  table is stamped with the digest of the rung 0 crate version and the
+  netlist counts, exposed as `build_stamp()`.
+- **Selectors, authored and labelled `authored`:** branch condition
+  (opcode bits 7..6 pick N, V, C, Z; bit 5 the polarity), branch page cross
+  (carry of PCL + offset, with the offset's sign), index page cross (the
+  ALU's carry out), the C flag into `ADDSB7`, and the PC incrementer's
+  carries. Interrupts and reset (the predecode forcing `BRK` with the B flag
+  and vector chosen by source, sampled where `tests/interrupts.rs` measured
+  the window), and `RDY` (stall on read cycles), are authored too, and each
+  is held by the scripted `.pins` files that exercise it.
+- **Datapath, authored from Hanson's block diagram as corrected by
+  experiment 4**, with the ALU, the flags, decimal mode, and `P/DB` written
+  by hand and listed by name in the note with the run that justified each.
+  Anything taken from the manual rather than measured is labelled as such.
+- **Verification**: the pin golden, all 271 traces, is the gate; the
+  `m4-datapath.py` comparison becomes a Rust test that drives the datapath
+  from recorded line levels and holds the nine fields at 100%; `MUTATE=1`
+  for both.
+- **Not in scope**: the 12 `KIL` opcodes must never finish, as recorded;
+  undocumented opcodes are in scope because the table is measured for all
+  256, and any that fail the pin golden are listed by number.
+
+### Open items the experiments did not settle
+
+- `P/DB` and the flag register's own timing (read from DB in phi2, latched
+  in phi1) need the named nodes `Pout0..7` and a measurement.
+- The exact phi2 bus value under contention is unobservable at the pins
+  and may not need settling; if the datapath test wants it, it is measured.
+- Decimal mode (`#DAA`, `#DSA`, both on the unresolved list) was not
+  exercised by any experiment context.
 
 ## Verification, in order of strength
 
@@ -237,7 +296,7 @@ the deploy instead of leaving stale prose.
 | M1 | `v6502-pins`: the frame, the trait, the rung 0 adapter, the `.pins` and `.stim` recorder, the replay test proved to fail under `MUTATE=1` | rung 0 passes its own pin golden. **Done 2026-08-30**: 271 traces including the 256 opcodes rung 3 needs, replay green, mutant red by name. See `docs/notes/engine.md`, "The pin contract". |
 | M2 | `v6502-hybrid` | node-lockstep against rung 0 bit-exact; pin golden; `benchmarks.rs` numbers recorded in the note with recalc counts. **Done 2026-08-30**: bit-exact by construction (same seeds, queue order, lattice, write set; only the probes at gate outputs replaced by counters), lockstep and replay green, mutants red. Throughput 0.97x to 1.13x across two runs, inside noise; 4.5% fewer instructions on counters; recalcs identical to the decimal. Finding: gate folding is not the lever, the recalc count is, and an exact rung cannot change it. See `docs/notes/engine.md`, "Rung 1". |
 | M3 | `v6502-compiled` | same two comparisons; lane-independence test; generated-code licence check; throughput per machine and per 64 machines recorded. **Done 2026-08-30 on the slice encoding (choice b)**: pin golden all 271 traces through lane 0, lane-independence and program-level checks, `check-compiled-nodata.py`; node agreement with rung 0 measured and reported (`examples/agree.rs`), not asserted, per the M0 correction. 220,286 machine-half-cycles/s, 6.83x rung 0 per machine, 0.11x per sweep. A power-on tie-break was needed that the kernel never met. See `docs/notes/engine.md`, "Rung 2". |
-| M4 | `v6502-micro` | pin golden on 7 programs + 256 opcodes + stimulus files; the unresolved-line list in the note; throughput recorded |
+| M4 | `v6502-micro` | pin golden on 7 programs + 256 opcodes + stimulus files; the unresolved-line list in the note; throughput recorded. **Specified 2026-08-30** from three experiments (see the rung 3 section); not started. |
 | M5 | `halfwave` grows an `ENGINE rung` line-protocol word defaulting to 0, and the service exposes it | `tests/state.rs`-style resume proof for each rung that supports state; rung 3's state codec is its own, smaller, and says so |
 
 M5 is optional and only starts when M1 through M4 are green. The pool
