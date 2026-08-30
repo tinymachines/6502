@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -140,6 +141,36 @@ def _timing():
     return timed, with_t0, nothing, other
 
 
+_BITSLICE: dict | None = None
+
+
+def _bitslice() -> dict:
+    """Run examples/bitslice at 3000 half-cycles (the length the note quotes)
+    and parse its counted lines. Once per process; the run is a couple of
+    seconds after the build. Skips if cargo is not there or the run fails."""
+    global _BITSLICE
+    if _BITSLICE is not None:
+        return _BITSLICE
+    cargo = shutil.which("cargo") or os.path.expanduser("~/.cargo/bin/cargo")
+    if not os.path.exists(cargo):
+        raise Skip("cargo not found; the slice counts come from examples/bitslice")
+    r = subprocess.run([cargo, "run", "--release", "-q", "-p", "v6502-sim",
+                        "--example", "bitslice", "3000"],
+                       cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise Skip(f"examples/bitslice did not run: {r.stderr.strip().splitlines()[-1:] or ''}")
+    out = r.stdout
+    m1 = re.search(r"trajectory: (\d+)/3000 half-cycles identical on all (\d+) live nodes", out)
+    m2 = re.search(r"first divergence at half-cycle (\d+); worst half-cycle differed on (\d+) of", out)
+    m3 = re.search(r"advances all (\d+) machines", out)
+    if not (m1 and m2 and m3):
+        raise Skip("examples/bitslice output did not parse; its lines moved")
+    _BITSLICE = {"agree": int(m1.group(1)), "live": int(m1.group(2)),
+                 "first": int(m2.group(1)), "worst": int(m2.group(2)),
+                 "lanes": int(m3.group(1))}
+    return _BITSLICE
+
+
 MEASURE = {
     "cargo tests": cargo_tests,
     "service tests": lambda: pytest_counts()["total"],
@@ -185,6 +216,14 @@ MEASURE = {
     "pla terms": lambda: len(_json("decode.json")["rows"]),
     "control lines": lambda: len(_json("decode.json")["outputs"]),
     "traced control lines": lambda: len(_json("decode.json")["links"]),
+    # The bit-sliced kernel against the scalar engine, from the example that
+    # makes the comparison. Counted columns only: the throughput it prints is
+    # a timing and lives under the same rule as the rate above.
+    "slice agreeing half-cycles": lambda: _bitslice()["agree"],
+    "slice live nodes": lambda: _bitslice()["live"],
+    "slice first divergence": lambda: _bitslice()["first"],
+    "slice worst divergence": lambda: _bitslice()["worst"],
+    "slice lanes": lambda: _bitslice()["lanes"],
 }
 
 # ---------------------------------------------------------------------------
@@ -235,6 +274,12 @@ CLAIMS = [
     ("docs/README.md", r"(\d+) groups and the \w+ containers that exist only", "groups"),
     ("docs/README.md", r"\d+ groups and the (\w+) containers that exist only", "absorbed containers"),
     ("docs/README.md", r"All (\d+) are generated into `web/chip-elk/`", "groups"),
+    # The kernel section of the engine note, held to the example's own output.
+    ("docs/notes/engine.md", r"\*\*(\d+) of 3000 half-cycles agree on all \d+ live nodes\*\*", "slice agreeing half-cycles"),
+    ("docs/notes/engine.md", r"\*\*\d+ of 3000 half-cycles agree on all (\d+) live nodes\*\*", "slice live nodes"),
+    ("docs/notes/engine.md", r"the first divergence is at half-cycle (\d+), and the worst", "slice first divergence"),
+    ("docs/notes/engine.md", r"the worst half-cycle differs on\s+(\d+) of \d+ nodes", "slice worst divergence"),
+    ("docs/notes/engine.md", r"so that (\d+) machines can\s+share one instruction stream", "slice lanes"),
 ]
 
 

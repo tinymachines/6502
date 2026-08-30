@@ -281,6 +281,75 @@ half-cycle.
 - **Throughput and latency are different problems.** One machine is bounded by
   the above; machines per second is bounded by cores, and there are 12.
 
+### The solver as a kernel: `halfphi::slice`
+
+The same fixed point computed the other way round, so that 64 machines can
+share one instruction stream. `engine::Engine` is queue-driven and
+materialises groups, which is the right shape for one machine and the wrong
+shape for many: the queue is data dependent, so two machines cannot share a
+control path, and its inner loop branches on "is this transistor conducting",
+which is the thing being simulated. `halfphi::slice` (`SliceNetlist`,
+`SliceState`, `LANES`) keeps no queue and no groups: every node repeatedly
+takes the maximum drive of its conducting neighbours until nothing moves, one
+bit of every `u64` being one machine. Two encodings make that a straight
+sweep with no per-lane control flow:
+
+- **The drive lattice is a thermometer, so `max` is `|`.** `Floating <
+  ChargedHigh < PullDown < PullUp < Vcc < Vss` becomes five planes, plane `k`
+  meaning "at least level k+1", and the maximum of two drives is the bitwise
+  OR of their planes: one instruction for all 64 lanes.
+- **Nothing branches on machine state.** Conduction is a mask (`& on`), not
+  an `if`. Every lane executes every step; the ones for which it is a no-op
+  OR in zero.
+
+Rails are recorded but never crossed, the same invariant `build_group` gets by
+giving them no adjacency; here it is a per-transistor direction computed once,
+and the 17 vss-gated transistors fall out as permanently off. It is
+deliberately kernel-shaped (flat arrays, a fixed sweep over all nodes and all
+transistors, no early exit per lane) because that is what ports to a compute
+shader without being redesigned: a `u64` lane becomes a `u32` lane and the
+sweep becomes the dispatch.
+
+```bash
+cargo run --release -p v6502-sim --example bitslice [half-cycles]   # default 2000
+```
+
+`examples/bitslice.rs` is the harness. It runs the scalar `Cpu` and the kernel
+side by side on `INC $20; JMP` and compares the level of every live node every
+half-cycle; then it gives lane 1 a different program (`INC $21`) and checks
+that each lane touched only its own memory, because 64 copies of one machine
+would pass the first comparison while proving nothing about independence.
+That check began as a perturbed byte, which passed at 400 half-cycles and
+failed at 3000 because the run starts mid-instruction and the next write can
+put the same value in every lane; a check that depends on where the clock
+stopped is not a check.
+
+**It is not bit-exact with the scalar engine, and that is a property of the
+problem rather than a defect.** Over 3000 half-cycles the program result is
+identical in both, **2061 of 3000 half-cycles agree on all 1702 live nodes**,
+the first divergence is at half-cycle 8, and the worst half-cycle differs on
+2 of 1702 nodes. The cause is charge: a node briefly joined to a driver keeps
+that level after the switch reopens, so the settled state depends on the path
+and not only on the final switch configuration. The queue stages a specific
+sequence of configurations including momentary ones (node 802 goes low
+because 781 rises just long enough to join it to vss through t254), and the
+sweep reaches a consistent state without entering that configuration. Queue
+order is data dependent, therefore lane dependent, which is exactly what a
+lane-uniform kernel cannot reproduce. So the kernel agrees at the level
+`functional.rs` tests and not at the level `golden.rs` tests, the example
+says so instead of printing a pass, and any engine built on this encoding
+needs its own oracle at that level. `tools/check-self-counts.py` re-runs the
+example and holds the four counts above.
+
+Measured, best of three at 3000 half-cycles on the usual loaded box (load
+5.6): **68,235 machine-half-cycles/s, 1,066 sweeps/s**, with every transistor
+swept every round and nothing skipped. Per machine that is more work than the
+queue does (the whole die every round against ~900 nodes touched), and the 64
+lanes pay for it. The scalar figure to set it against is the one in
+`CLAUDE.md`, and the ratio is not typed here: a timing is not held by the
+count check, and the two are rarely measured in the same minute. Not wired
+into anything; the scalar engine remains the one the site and the API run.
+
 ## The reference (`extern/visual6502/`)
 
 Load order in its HTML *is* its dependency graph (`wires.js` reads
