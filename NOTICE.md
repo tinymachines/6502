@@ -17,7 +17,11 @@ into `tools/pin-golden/` are derived from the die data and are gitignored,
 like the golden trace. `crates/v6502-hybrid` builds its tables from the
 schematic derived from the die data at run time and so ships nothing of its
 own, but anything built with it embeds `netlist.bin` and is under the terms
-below, exactly as `v6502-sim` is.
+below, exactly as `v6502-sim` is. `crates/v6502-compiled` generates its kernel
+from the same schematic at build time into `OUT_DIR`; the generated file is
+derived from the die data, is never committed, and is under the terms below
+wherever it is built. `tools/check-compiled-nodata.py` checks that nothing
+from the MIT name table leaks into it either.
 
 ## Why the die data is a submodule
 

@@ -171,6 +171,24 @@ def _bitslice() -> dict:
     return _BITSLICE
 
 
+_KERNEL: dict | None = None
+
+
+def _kernel() -> dict:
+    """The constants the compiled kernel's generator wrote, from the newest
+    generated kernel.rs. Skips if none has been built."""
+    global _KERNEL
+    if _KERNEL is not None:
+        return _KERNEL
+    import glob
+    paths = glob.glob(str(ROOT / "target" / "*" / "build" / "v6502-compiled-*" / "out" / "kernel.rs"))
+    if not paths:
+        raise Skip("no generated kernel.rs (cargo build -p v6502-compiled)")
+    text = open(max(paths, key=os.path.getmtime)).read()
+    _KERNEL = {k: int(v) for k, v in re.findall(r"pub const ([A-Z_]+): usize = (\d+);", text)}
+    return _KERNEL
+
+
 MEASURE = {
     "cargo tests": cargo_tests,
     "service tests": lambda: pytest_counts()["total"],
@@ -224,6 +242,11 @@ MEASURE = {
     "slice first divergence": lambda: _bitslice()["first"],
     "slice worst divergence": lambda: _bitslice()["worst"],
     "slice lanes": lambda: _bitslice()["lanes"],
+    "kernel folded gates": lambda: _kernel()["FOLDED_GATES"],
+    "kernel absorbed": lambda: _kernel()["ABSORBED"],
+    "kernel switches": lambda: _kernel()["SWITCHES"],
+    "kernel junctions": lambda: _kernel()["JUNCTIONS"],
+    "kernel dead": lambda: _kernel()["DEAD"],
 }
 
 # ---------------------------------------------------------------------------
@@ -283,6 +306,11 @@ CLAIMS = [
     ("docs/notes/engine.md", r"\(\*\*(\d+) gates\*\* absorbing", "gates"),
     ("docs/notes/engine.md", r"absorbing\s+\*\*(\d+) transistors\*\*, \*\*\d+ switches\*\* left", "absorbed transistors"),
     ("docs/notes/engine.md", r"absorbing\s+\*\*\d+ transistors\*\*, \*\*(\d+) switches\*\* left", "switches"),
+    ("docs/notes/engine.md", r"\*\*(\d+) gates folded\*\* \(\d+ transistors\)", "kernel folded gates"),
+    ("docs/notes/engine.md", r"\*\*\d+ gates folded\*\* \((\d+) transistors\)", "kernel absorbed"),
+    ("docs/notes/engine.md", r"\*\*(\d+) switches swept\*\*", "kernel switches"),
+    ("docs/notes/engine.md", r"(\d+) junction rules", "kernel junctions"),
+    ("docs/notes/engine.md", r"(\d+) transistors that can never conduct dropped", "kernel dead"),
 ]
 
 

@@ -278,6 +278,61 @@ construction cannot touch it**, because the recalc list is the queue order
 and the queue order is what bit-exactness hangs on. Rung 2 is where that
 overhead is compiled away rather than skipped.
 
+## Rung 2: `v6502-compiled`, the network as code, 64 machines per word
+
+`build.rs` reads the die through `Schematic::derive` and emits the kernel
+into `OUT_DIR` as Rust: **1159 gates folded** (2633 transistors), each
+output's ground drive one sum-of-products expression over its inputs'
+values; **871 switches swept**, unrolled, as guarded merges of the five
+thermometer planes; 154 junction rules; the one unresolved gate left as
+switches; 6 transistors that can never conduct dropped. No engine crate at
+run time: the netlist is gone and what remains is what it compiled to,
+2225 lines of numbers. `tools/check-compiled-nodata.py` holds the generated
+file to that (no string literal, no identifier outside the generator's
+vocabulary), because the die's name table is MIT and the network is NC-SA
+and neither should leak into the other; `deploy.sh` runs it.
+
+The semantics are `halfphi::slice`'s on purpose: the same planes, the same
+round (switches follow gates; each node's own drive; spread to closure;
+resolve), Jacobi within a round, so the two share one account of why they
+are not bit-exact with rung 0. What the fold changes is which loop the
+transistors are in. The spread loop runs to closure several times a round
+(3.4 passes measured); the 2633 absorbed transistors leave it, and a gate
+costs one expression once per round. Levelising the gates would take fewer
+rounds and change trajectories; it is not done here.
+
+**Two things the kernel never met, because it started from the scalar's
+reset state.** First, from the all-low power-on condition every latch on the
+die is undefined and a simultaneous update flips both halves of a
+cross-coupled pair every round, forever: the power-on settle hit the
+100-round cap. `settle_power_on` damps it with a tie-break (a node that
+flipped last round and would flip again is frozen for the rest of that
+settle): 10 rounds, 708 node-lanes frozen per lane, and no other settle in
+a run ever needs it (4,124 settles, none nonconvergent, 13.3 rounds each).
+Second, the persistent disagreement with rung 0 is those latches: after
+reset the odd accumulator bits and their storage nodes differ at every
+half-cycle, because the queue resolves an undefined latch by visiting one
+side first and the sweep by the tie-break, and a real chip by noise. The
+program result agrees. `examples/agree.rs` reports the node agreement and
+names the persistent nodes; it asserts nothing.
+
+**Held to the pin golden, all of it.** Lane 0 replays every one of the 271
+traces identically: the seven programs, the reference's program, the seven
+scripted interrupt and RDY runs, all 256 opcodes including the twelve that
+never finish. `MUTATE=1` goes red by name. `tests/lanes.rs` gives lane 1 a
+different program and checks each lane touched only its own memory and
+counted the same number of times, that lanes 2 to 63 are identical to lane
+0 in every node, and that the accumulator carries `LDA #$41 / ADC #$01`'s
+result one cycle late.
+
+**Measured**, `examples/bench.rs`, best of three on `INC $20; JMP`:
+**3,442 sweeps/s, 220,286 machine-half-cycles/s over 64 lanes, 6.83x rung
+0 per machine** (rung 0 at 32,276 half-cycles/s in the same run). Per
+sweep it is 0.11x the scalar: one machine is slower here and 64 are not,
+and this is where "machines per second is bounded by cores" stops being
+true. The kernel it descends from measured 2.3x on the same box. Not wired
+into anything yet.
+
 ## Performance
 
 **~29,600 half-cycles/s native (~14.8 kHz simulated 6502)**, against the

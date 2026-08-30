@@ -436,6 +436,9 @@ PREVIOUS_DEPLOY="$PREV_COMMIT" python3 tools/build-info.py web --kind simulator
 # Three of these had drifted silently before it existed.
 log "checking the counts the docs keep of themselves"
 NODE="$NODE_BIN" python3 tools/check-self-counts.py || exit 1
+# The compiled kernel (rung 2) is generated into target/ by the test run
+# above; it must be numbers only, no name from the die's table.
+REQUIRE_KERNEL=1 python3 tools/check-compiled-nodata.py || exit 1
 
 rm -f "$TESTS_JSON"
 

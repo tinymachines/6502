@@ -1,0 +1,21 @@
+[package]
+name = "v6502-compiled"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Rung 2 of the engine ladder (docs/engine-ladder.md): the recognised network
+# compiled into straight-line code at build time, bit-sliced 64 machines per
+# word. No engine crate at run time: build.rs derives the schematic from the
+# die data and emits the kernel into OUT_DIR. The generated file is derived
+# from CC BY-NC-SA data and carries that position, like v6502-netlist.
+
+[dependencies]
+v6502-pins = { path = "../v6502-pins" }
+
+[build-dependencies]
+v6502-netlist = { path = "../v6502-netlist" }
+
+[dev-dependencies]
+v6502-sim = { path = "../v6502-sim" }
+v6502-netlist = { path = "../v6502-netlist" }
