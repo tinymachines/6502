@@ -173,6 +173,63 @@ Two independent oracles. Both must pass; either alone is insufficient.
 If you change the test program in `gen.js`, regenerate the golden file — the Rust
 test reads the program bytes out of its header rather than duplicating them.
 
+## The pin contract (`v6502-pins`)
+
+`docs/engine-ladder.md` plans four engines that present the same chip at the
+package pins and differ in how much silicon they still simulate; rung 0 is the
+`Cpu` above, and it is the oracle for the rest. What "the same chip at the
+pins" means lives in one crate with no dependencies and no die data, so the
+definition cannot drift between engines:
+
+- **`PinFrame`**: `h`, `clk0`, `ab`, `db`, `rw`, `sync` and the five inputs
+  as driven. `Copy` and `Eq`, so a trace is a `Vec` and a comparison is `==`.
+  Not in it, deliberately: the internal clock phase (it lags `clk0` through
+  the on-die generator and is not visible at the pins) and the registers (the
+  ALU hold-register lag is real silicon; an engine reproduces its visible
+  consequences, not the register).
+- **`h` counts from the end of the reset sequence**, the way `Cpu::half_cycle`
+  and the golden trace count, and a frame is the state after `h` steps, so a
+  run of `n` steps is `n + 1` frames. `db` is the value on D0..D7 at the point
+  the bus is serviced this half-cycle: reads as `clk0` falls, writes as it
+  rises, which is what `half_step` already does.
+- **`PinEngine`**: `power_cycle`, `set_inputs`, `half_step`, `pins`, `h`.
+  `v6502-sim/src/pins.rs` implements it for `Cpu<B>` by calling the crate's
+  own accessors (`address_bus`, `data_bus`, `rw`, `sync`, `clk0`) rather than
+  reading nodes, so if those are wrong the golden test says so first.
+- **One driver, one comparison.** `run(engine, steps, stim)` cold-starts any
+  engine and applies a `.stim` script (at `h`, before the step to `h + 1`,
+  set the five inputs; visible in the frame at `h + 1`); `compare` returns
+  the first differing `h` and field, and refuses a short trace by name. The
+  recorder and every replay test go through the same two functions, and
+  through the same `rung0(loads, reset_vector)` builder for memory, so a
+  trace cannot be recorded one way and replayed another.
+
+**The pin golden** (`tools/pin-golden/`, gitignored, 1.8 MB) is recorded by
+`examples/pin-golden.rs`: the seven programs from `web/programs.txt` at 3000
+half-cycles; the reference's program read out of `golden.txt`'s header; the
+`tests/interrupts.rs` fixture scripted seven ways so every input pin is
+exercised (IRQ inside the window where the BRK is lost and outside it, reset
+in mid-run, RDY held low ten half-cycles, an NMI edge, an SO pulse, and the
+free run); and all 256 opcodes after a fixed preamble, 96 half-cycles each,
+so the twelve that never finish are recorded not finishing. The scripted
+half-cycles are measured from rung 0 in the recording run (the BRK's fetch is
+found by watching `sync` and the bus) and written into the `.stim` file as
+numbers; a replay reads the numbers and measures nothing, because the engine
+under test is the thing that might get the fetch wrong. Each recorded trace
+was read back to check it shows what its name claims: the lost BRK pushes
+`$0203` and the ordinary IRQ `$0202`; the NMI reads `$FFFA`; the mid-run
+reset reaches `$FFFC`; RDY holds `$0202` for exactly the scripted span; the
+SO pulse shows in the pushed P (`$72` against `$32`); `KIL` sits on `$FFFF`
+to the end.
+
+`tests/replay.rs` replays all 271 through rung 0 and is the shape every other
+rung's test takes: swap the constructor, nothing else. It SKIPS without the
+files (`REQUIRE_PINS=1` insists) and `MUTATE=1` flips one `db` bit halfway
+through the first trace and must go red, which it does, naming the trace, the
+half-cycle and the field. The stamp in each header is the crate version and
+the netlist's node and transistor counts, not a digest: nothing here computes
+one, and it is labelled as what it is.
+
 ## Performance
 
 **~29,600 half-cycles/s native (~14.8 kHz simulated 6502)**, against the

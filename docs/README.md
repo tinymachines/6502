@@ -31,7 +31,7 @@ whoever last got it wrong.
 
 | | what is in it |
 |---|---|
-| [`notes/engine.md`](notes/engine.md) | the crates, the `halfphi` split and why it is a licence boundary, the solver, the ported invariants in full, the two oracles, the performance measurements and the search profile, `graph.json`, the two wasm builds, the machine as a value |
+| [`notes/engine.md`](notes/engine.md) | the crates, the `halfphi` split and why it is a licence boundary, the solver, the ported invariants in full, the two oracles, the pin contract and its golden, the performance measurements and the search profile, `graph.json`, the two wasm builds, the machine as a value |
 | [`notes/service.md`](notes/service.md) | `halfwave`'s line protocol, the stateless state model, the pool measurements, every API route, cartridges and what minting found, the registry, MCP |
 | [`notes/web-shell.md`](notes/web-shell.md) | the site menu, the harnesses, the transport, responsive layout and PWA, the CSP, the renderer invariants, the hashed bundle and service worker, the version footer |
 | [`notes/tracer-and-chipmap.md`](notes/tracer-and-chipmap.md) | all twenty-five container kinds and how each is derived, the partition into 132 groups, the node grids, the ADC tour, the optimizer |

@@ -6,6 +6,10 @@ __pycache__/
 # Generated oracle: 5 MB of reference trace, rebuilt on demand.
 # node tools/golden-trace/gen.js --steps 3000
 /tools/golden-trace/golden.txt
+# The pin golden: rung 0 at its pins, recorded by
+# cargo run --release -p v6502-pins --example pin-golden
+/tools/pin-golden/*.pins
+/tools/pin-golden/*.stim
 /web/layout.bin
 
 # cargo run -p v6502-netlist --bin export-blueprint -- web/blueprint.json

@@ -100,6 +100,16 @@ if [ -s "$GOLDEN" ]; then
 else
   log "testing the workspace (NO golden oracle at $GOLDEN: the differential test will skip; node tools/golden-trace/gen.js --steps 3000 makes it)"
 fi
+# The pin golden (tools/pin-golden/, generated, gitignored): rung 0 at its
+# pins, which v6502-pins' replay test holds every engine on the ladder to.
+# Recorded here from the commit being published, so the traces are never from
+# an older engine than the one under test, and then REQUIRED, because the
+# replay test skips green without them. Needs web/programs.txt, hence node.
+log "recording the pin golden"
+"$NODE_BIN" tools/export-programs.mjs >/dev/null || exit 1
+cargo run --release --quiet -p v6502-pins --example pin-golden >/dev/null \
+  || { echo "deploy: recording the pin golden failed; nothing published" >&2; exit 1; }
+export REQUIRE_PINS=1
 export HALFPHI_REQUIRE_CHIPS=1
 CARGO_OUT=$(mktemp)
 if ! cargo test --quiet --workspace >"$CARGO_OUT" 2>&1; then
@@ -133,7 +143,7 @@ out, cp, cf, sp, golden = sys.argv[1:]
 json.dump({
     "ran": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     "cargo": {"command": "cargo test --workspace", "passed": int(cp), "failed": int(cf),
-              "require_chips": True, "require_golden": golden == "1"},
+              "require_chips": True, "require_golden": golden == "1", "require_pins": True},
     "service": {"command": "pytest service/", "passed": int(sp)},
 }, open(out, "w"), indent=2)
 PY

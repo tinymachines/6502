@@ -114,11 +114,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "v6502-pins"
+version = "0.1.0"
+dependencies = [
+ "v6502-sim",
+]
+
+[[package]]
 name = "v6502-sim"
 version = "0.1.0"
 dependencies = [
  "halfphi",
  "v6502-netlist",
+ "v6502-pins",
 ]
 
 [[package]]

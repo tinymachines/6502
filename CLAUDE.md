@@ -26,7 +26,8 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 94 tests, bit-exact against the original. |
+| Simulation | Complete. 100 tests, bit-exact against the original. |
+| Pin contract | `v6502-pins`: what "the same chip at the pins" means, in one crate with no dependencies. Rung 0 of the engine ladder (`docs/engine-ladder.md`) is the switch-level `Cpu` behind it; its pin golden is 271 recorded traces (seven programs, the reference's program, seven scripted interrupt and RDY runs, all 256 opcodes), replayed by `cargo test -p v6502-pins` and mutation-proved. Rungs 1 to 3 are not started. |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone to desktop), installable PWA, offline. One header owning program, transport and clock across every page. |
@@ -108,10 +109,14 @@ writes the counts into `build-info.json` beside the commit. A release that
 carries no `tests` key was made by hand.
 
 ```bash
-cargo test --workspace              # 94 tests: netlist, functional, golden,
+cargo test --workspace              # 100 tests: netlist, functional, golden,
                                     # rewind, state, rows, blueprint, pla,
-                                    # decode, blocks, interrupts
+                                    # decode, blocks, interrupts, pins
 cargo test -p v6502-sim --test golden      # differential vs the reference
+cargo run --release -p v6502-pins --example pin-golden   # record the pin golden
+cargo test -p v6502-pins                   # replay it through rung 0. SKIPS
+                                           # without the files; REQUIRE_PINS=1
+                                           # insists; MUTATE=1 must go red.
 cargo test -p halfphi --test chips         # the 6502, the 6800 and the Z80,
                                            # through identical calls. SKIPS without
                                            # extern/; HALFPHI_REQUIRE_CHIPS=1 to
@@ -281,7 +286,8 @@ python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 
 `web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/blocks.json`,
 `web/schematic.json`, `web/graph.json`, `web/groups.json`, `web/decode.json`,
-`web/timing.json`, `web/build-info.json`, `dist/`, the golden trace and
+`web/timing.json`, `web/build-info.json`, `dist/`, the golden trace, the pin
+golden (`tools/pin-golden/*.pins`, `*.stim`) and
 everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
 die data.
@@ -413,7 +419,7 @@ is in the note for its page. Three worth knowing by name:
   viewport. Its "elements past the edge" list is informational, not causal.
 ## Architecture
 
-Four crates, split so the topology is shared and read-only while state is
+Five crates, split so the topology is shared and read-only while state is
 per-instance and mutable.
 
 | Crate | Role |
@@ -422,6 +428,7 @@ per-instance and mutable.
 | `v6502-netlist` | The 6502's die data (`netlist.bin`, 31 KiB, built by `build.rs`, embedded with `include_bytes!`), and the analyses seeded from its names. Carries the CC BY-NC-SA obligations. |
 | `v6502-sim` | The 6502 clock/bus layer, timing chain, rewind, state codec, `halfwave`. |
 | `v6502-wasm` | `wasm-bindgen` surface consumed by `web/`. Builds two ways: with die data (117 KB, NC-SA) and `--no-default-features` (85 KB, MIT, takes a netlist at runtime). |
+| `v6502-pins` | The pin contract: `PinFrame`, `PinEngine`, the `.pins`/`.stim` text format, the replay driver and the comparison. No dependencies, no die data. `v6502-sim` implements it for `Cpu` in `src/pins.rs`; the recorder and replay test live here and use that adapter. |
 
 Facts: **1725 nodes, 3510 transistors, 846 names.** Adjacency is **CSR**, not the
 reference's array-of-arrays, with two lists per node (transistors it gates, and

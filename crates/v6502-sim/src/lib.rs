@@ -39,6 +39,7 @@
 pub mod bus;
 pub mod cpu;
 pub mod history;
+pub mod pins;
 pub mod rows;
 pub mod state;
 pub mod timing;
@@ -61,6 +62,7 @@ pub use cpu::{BusState, Cpu, CycleState, InternalNodes, Internals, ReadWrite, Re
 // unaffected by where it moved to.
 pub use halfphi::engine::{ChipState, Drive, Engine, Stats};
 pub use history::{History, RewindError};
+pub use v6502_pins::{PinEngine, PinFrame};
 pub use timing::{Hidden, Phase, StoreData, TimingState};
 
 #[cfg(feature = "mos6502")]

@@ -1,0 +1,19 @@
+[package]
+name = "v6502-pins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# The pin contract: what "the same chip at the package pins" means, in one
+# place, so four engines cannot each carry their own definition. No
+# dependencies and no die data. The rung 0 adapter lives in v6502-sim (which
+# depends on this crate); the recorder and the replay test need that adapter,
+# which is why v6502-sim appears below as a DEV dependency only.
+
+[dependencies]
+
+[dev-dependencies]
+v6502-sim = { path = "../v6502-sim" }
+
+[[example]]
+name = "pin-golden"

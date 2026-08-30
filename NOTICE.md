@@ -12,6 +12,10 @@ Portions of `crates/v6502-sim` and `crates/v6502-netlist` are a Rust port of
 MIT-licensed visual6502 JavaScript; that copyright notice is reproduced in
 `LICENSE-THIRD-PARTY`.
 
+`crates/v6502-pins` is MIT and carries no die data. The traces it records
+into `tools/pin-golden/` are derived from the die data and are gitignored,
+like the golden trace.
+
 ## Why the die data is a submodule
 
 `extern/visual6502` is referenced as a git submodule rather than vendored. This
