@@ -1,0 +1,18 @@
+[package]
+name = "v6502-micro"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Rung 3: no engine crate at run time. The table is measured from rung 0 at
+# build time, so the recorder is a build-dependency and nothing else is.
+[dependencies]
+v6502-pins = { path = "../v6502-pins" }
+
+[build-dependencies]
+v6502-sim = { path = "../v6502-sim" }
+v6502-netlist = { path = "../v6502-netlist" }
+
+[dev-dependencies]
+v6502-sim = { path = "../v6502-sim" }
+v6502-netlist = { path = "../v6502-netlist" }

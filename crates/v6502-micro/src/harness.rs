@@ -1,0 +1,45 @@
+// The measurement harness: one memory image shape, one boot, one vector
+// encoding. Shared by include! between build.rs and the coverage test so a
+// test could never pass by encoding the vector differently than the
+// recorder did.
+
+fn memory_image(base: u16, preamble: &[u8], op: u8, operands: &[u8]) -> Vec<u8> {
+    let mut mem = vec![0xeau8; 0x10000];
+    let b = base as usize;
+    mem[b..b + preamble.len()].copy_from_slice(preamble);
+    let at = b + preamble.len();
+    mem[at] = op;
+    mem[at + 1..at + 1 + operands.len()].copy_from_slice(operands);
+    mem[0x0300..0x0303].copy_from_slice(&[0x4c, 0x00, 0x03]);
+    // NMI and IRQ/BRK to the $0300 loop, reset to the context's base.
+    mem[0xfffa..0x10000].copy_from_slice(&[0x00, 0x03, base as u8, (base >> 8) as u8, 0x00, 0x03]);
+    mem
+}
+
+fn boot(image: &[u8]) -> Cpu<FlatMemory> {
+    let mut m = FlatMemory::new();
+    m.load(0, image);
+    let mut cpu = Cpu::new(Arc::new(v6502_netlist::mos6502()), m).expect("signals resolve");
+    cpu.power_cycle();
+    cpu
+}
+
+/// The 51-bit vector, bit i from `LINE_NAMES[i]`.
+fn vector(cpu: &Cpu<FlatMemory>, ids: &[u16]) -> u64 {
+    let mut v = 0u64;
+    for (i, &id) in ids.iter().enumerate() {
+        if cpu.engine().is_high(id) {
+            v |= 1 << i;
+        }
+    }
+    let bus = cpu.bus_state();
+    if bus.rw == v6502_sim::ReadWrite::Read {
+        v |= 1 << BIT_RW;
+    }
+    if bus.sync {
+        v |= 1 << BIT_SYNC;
+    }
+    // The incrementer carries are the datapath's to compute, not the
+    // table's to say; see lines.rs.
+    v & !DATA_BITS
+}

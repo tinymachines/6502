@@ -9,6 +9,7 @@ members = [
     "crates/v6502-hybrid",
     "crates/v6502-compiled",
     "crates/v6502-gpu",
+    "crates/v6502-micro",
 ]
 
 [workspace.package]
