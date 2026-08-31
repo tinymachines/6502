@@ -17,7 +17,17 @@
 #![forbid(unsafe_code)]
 
 pub mod datapath;
+pub mod flags;
 pub mod lines;
+pub mod machine;
+
+/// The recorder-side selectors, shared with `build.rs` by include so the
+/// two cannot drift; the sequencer uses them with its own memory as the
+/// image, which is the same full knowledge the recorder had.
+pub mod select {
+    use crate::lines::*;
+    include!("select.rs");
+}
 
 pub mod table {
     include!(concat!(env!("OUT_DIR"), "/table.rs"));
@@ -31,7 +41,23 @@ pub mod table {
         let (first, count) = OPS[op as usize];
         let vs = &VARIANTS[first..first + count];
         let k = key & MASKS[op as usize];
-        vs.iter().find(|(vk, ..)| *vk == k).map(|&(_, off, len, _)| &SPANS[off..off + len])
+        vs.iter().find(|(vk, ..)| *vk == k).map(|&(_, off, len, ..)| &SPANS[off..off + len])
+    }
+
+    /// Whether this opcode's overlap carry-in comes from the C flag (its
+    /// recorded alucin was data there) rather than from the recording.
+    pub fn overlap_cin_from_c(op: u8, key: u8) -> bool {
+        let (first, count) = OPS[op as usize];
+        let k = key & MASKS[op as usize];
+        VARIANTS[first..first + count].iter().find(|(vk, ..)| *vk == k).map(|&(_, _, _, f, _)| f & 2 != 0).unwrap_or(false)
+    }
+
+    /// The seam word: this op's write-back inside the next span's first
+    /// half-cycle (lines.rs, WB_MASK).
+    pub fn seam(op: u8, key: u8) -> u64 {
+        let (first, count) = OPS[op as usize];
+        let k = key & MASKS[op as usize];
+        VARIANTS[first..first + count].iter().find(|(vk, ..)| *vk == k).map(|&(.., wb)| wb).unwrap_or(0)
     }
 
     pub fn is_kil(op: u8) -> bool {

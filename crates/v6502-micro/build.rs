@@ -60,11 +60,32 @@ const WINDOW: usize = 40;
 /// A KIL's recorded span: enough to show the loop it is stuck in.
 const KIL_SPAN: usize = 16;
 
+type Variant = (u8, Vec<u64>, u8, u64);
+
 struct Recorded {
     key: u8,
     context: &'static str,
     span: Vec<u64>,
     kil: bool,
+    /// The overlap's alucin was data: the sequencer supplies its C flag.
+    cin_from_c: bool,
+    /// The seam word: this op's write-back at the next span's h=2.
+    wb: u64,
+}
+
+fn report_conflict(op: u8, prev: &Recorded, r: &Recorded) -> ! {
+    let n = prev.span.len().min(r.span.len());
+    for h in 0..n {
+        let d = prev.span[h] ^ r.span[h];
+        if d != 0 {
+            let names: Vec<&str> = (0..52).filter(|i| d >> i & 1 != 0).map(|i| if i == 51 { "alucin" } else { LINE_NAMES[i] }).collect();
+            eprintln!("op {op:02x} h={} ({} vs {}): {}", h + 2, prev.context, r.context, names.join(", "));
+        }
+    }
+    panic!(
+        "op {op:02x}: contexts {} and {} share key {:#04x} but recorded different spans (lengths {} and {})",
+        prev.context, r.context, r.key, prev.span.len(), r.span.len()
+    );
 }
 
 fn record(op: u8, ids: &[u16], name: &'static str, base: u16, preamble: &[u8], operands: &[u8]) -> Recorded {
@@ -102,18 +123,16 @@ fn record(op: u8, ids: &[u16], name: &'static str, base: u16, preamble: &[u8], o
             break;
         }
     }
+    // One more half-cycle: the seam word, the write-back this op performs
+    // inside the NEXT instruction's first execution half-cycle.
+    let wb = if kil {
+        0
+    } else {
+        cpu.half_step();
+        vector(&cpu, ids) & WB_MASK
+    };
     span.drain(..2);
-    // The overlap's alucin is the finishing instruction's own tail: for the
-    // ADC class it is the old carry (already in this span's key), for an
-    // RMW it rides the freshly computed carry, which is data (op 2e's
-    // recorder conflict). The table says nothing there; the sequencer
-    // supplies its own not-yet-updated C flag, which is the old carry.
-    if !kil {
-        let n = span.len();
-        span[n - 1] &= !(1 << BIT_ALUCIN);
-        span[n - 2] &= !(1 << BIT_ALUCIN);
-    }
-    Recorded { key, context: name, span, kil }
+    Recorded { key, context: name, span, kil, cin_from_c: false, wb }
 }
 
 fn main() {
@@ -129,29 +148,45 @@ fn main() {
     ids.push(nl.node("alucin").expect("alucin is a node"));
 
     // Per opcode: variants after the gate, as (masked key, span).
-    let mut variants_of: Vec<Vec<(u8, Vec<u64>, bool)>> = Vec::with_capacity(256);
+    // (masked key, span, flags, seam word)
+    let mut variants_of: Vec<Vec<Variant>> = Vec::with_capacity(256);
     let mut kils = Vec::new();
     let mut masks: Vec<u8> = Vec::with_capacity(256);
     for op in 0..=255u8 {
         let mut seen: Vec<Recorded> = Vec::new();
         for &(name, base, pre, ops) in CONTEXTS {
             let r = record(op, &ids, name, base, pre, ops);
-            if let Some(prev) = seen.iter().find(|s| s.key == r.key) {
-                // The gate: one key, one span. Refuse to build otherwise,
-                // naming the half-cycle and the lines.
-                if prev.span != r.span {
-                    let n = prev.span.len().min(r.span.len());
-                    for h in 0..n {
-                        let d = prev.span[h] ^ r.span[h];
-                        if d != 0 {
-                            let names: Vec<&str> = (0..52).filter(|i| d >> i & 1 != 0).map(|i| if i == 51 { "alucin" } else { LINE_NAMES[i] }).collect();
-                            eprintln!("op {op:02x} h={} ({} vs {}): {}", h + 2, prev.context, r.context, names.join(", "));
+            if let Some(prev) = seen.iter().position(|s| s.key == r.key) {
+                let prev = &mut seen[prev];
+                // The overlap's alucin is the finishing instruction's own
+                // tail. Where it is control (an increment's +1) it records
+                // and replays; where two same-key recordings disagree it is
+                // riding data (an RMW's fresh carry, op 2e), so THOSE spans
+                // mask it and the sequencer supplies its not-yet-updated C,
+                // which is what the ADC class computes with there anyway.
+                if !prev.kil && prev.span.len() == r.span.len() {
+                    let n = prev.span.len();
+                    for i in [n - 2, n - 1] {
+                        if (prev.span[i] ^ r.span[i]) & (1 << BIT_ALUCIN) != 0 {
+                            prev.span[i] &= !(1 << BIT_ALUCIN);
+                            prev.cin_from_c = true;
                         }
                     }
-                    panic!(
-                        "op {op:02x}: contexts {} and {} share key {:#04x} but recorded different spans (lengths {} and {})",
-                        prev.context, r.context, r.key, prev.span.len(), r.span.len()
-                    );
+                    let mut masked = r.span.clone();
+                    if prev.cin_from_c {
+                        masked[n - 2] &= !(1 << BIT_ALUCIN);
+                        masked[n - 1] &= !(1 << BIT_ALUCIN);
+                    }
+                    if prev.span != masked || prev.wb != r.wb {
+                        let r = Recorded { span: masked, ..r };
+                        report_conflict(op, prev, &r);
+                    }
+                    continue;
+                }
+                // The gate: one key, one span. Refuse to build otherwise,
+                // naming the half-cycle and the lines.
+                if prev.span != r.span || prev.wb != r.wb {
+                    report_conflict(op, prev, &r);
                 }
             } else {
                 seen.push(r);
@@ -168,7 +203,9 @@ fn main() {
         let single_valued = |mask: u8| -> bool {
             for a in 0..seen.len() {
                 for b in a + 1..seen.len() {
-                    if seen[a].key & mask == seen[b].key & mask && seen[a].span != seen[b].span {
+                    if seen[a].key & mask == seen[b].key & mask
+                        && (seen[a].span != seen[b].span || seen[a].wb != seen[b].wb)
+                    {
                         return false;
                     }
                 }
@@ -184,35 +221,65 @@ fn main() {
             .find(|&&m| single_valued(m))
             .unwrap_or_else(|| panic!("op {op:02x}: no selector mask makes the recordings single-valued"));
         // Dedupe to the masked key; the gate already proved same-key spans equal.
-        let mut folded: Vec<(u8, Vec<u64>, bool)> = Vec::new();
+        let mut folded: Vec<Variant> = Vec::new();
         for s2 in seen {
             if !folded.iter().any(|(k, ..)| *k == s2.key & mask) {
-                folded.push((s2.key & mask, s2.span, s2.kil));
+                folded.push((s2.key & mask, s2.span, s2.kil as u8 | (s2.cin_from_c as u8) << 1, s2.wb));
             }
         }
         masks.push(mask);
         variants_of.push(folded);
     }
 
-    // The reset tail, from the plain context: vectors from h=0 to the first
-    // fetch, and the architectural state at h=0.
-    let (name0, base0, pre0, _) = CONTEXTS[0];
-    let _ = name0;
-    let image = memory_image(base0, pre0, 0xea, &[0xea, 0xea, 0x00]);
-    let mut cpu = boot(&image);
-    let r0 = cpu.registers();
-    let i0 = cpu.internals().expect("the netlist names the internal buses");
-    // From h=0 through the first fetch AND its overlap half-cycle, so the
-    // tail hands over exactly where an opcode's span (which starts at its
-    // own h=2) picks up.
-    let mut tail = vec![vector(&cpu, &ids)];
-    while tail.last().unwrap() >> BIT_SYNC & 1 == 0 {
+    // The reset tail and the h=0 seed. The seed's registers depend on the
+    // reset vector and the memory (the golden trace found this: its base
+    // is not the recorder's), so reset is recorded under TWO vectors and
+    // every field classified: constant, the vector's low or high byte, or
+    // the byte the vector points at. A field that classifies as none of
+    // those refuses the build.
+    let reset_probe = |vec: u16, fill: u8| -> ([u8; 16], Vec<u64>) {
+        let mut image = vec![fill; 0x10000];
+        image[0xfffc] = vec as u8;
+        image[0xfffd] = (vec >> 8) as u8;
+        let mut cpu = boot(&image);
+        let r0 = cpu.registers();
+        let i0 = cpu.internals().expect("the netlist names the internal buses");
+        let regs = [
+            r0.a, r0.x, r0.y, r0.s, r0.p, r0.pc as u8, (r0.pc >> 8) as u8,
+            i0.pclp, i0.pchp, i0.abl, i0.abh, i0.idl, i0.dor, i0.alu, i0.alua, i0.alub,
+        ];
+        let mut tail = vec![vector(&cpu, &ids)];
+        while tail.last().unwrap() >> BIT_SYNC & 1 == 0 {
+            cpu.half_step();
+            tail.push(vector(&cpu, &ids));
+            assert!(tail.len() < 64, "no fetch after reset");
+        }
         cpu.half_step();
         tail.push(vector(&cpu, &ids));
-        assert!(tail.len() < 64, "no fetch after reset");
-    }
-    cpu.half_step();
-    tail.push(vector(&cpu, &ids));
+        (regs, tail)
+    };
+    let (va, fa) = (0x0200u16, 0xeau8);
+    let (vb, fb) = (0x03ffu16, 0x37u8);
+    let (ra, tail) = reset_probe(va, fa);
+    let (rb, tail_b) = reset_probe(vb, fb);
+    assert_eq!(tail, tail_b, "the reset tail's control vectors depend on the image");
+    // 0 constant, 1 vector low, 2 vector high, 3 the byte at the vector.
+    let kinds: Vec<u8> = (0..16)
+        .map(|i| {
+            if ra[i] == rb[i] {
+                0
+            } else if ra[i] == va as u8 && rb[i] == vb as u8 {
+                1
+            } else if ra[i] == (va >> 8) as u8 && rb[i] == (vb >> 8) as u8 {
+                2
+            } else if ra[i] == fa && rb[i] == fb {
+                3
+            } else {
+                panic!("reset field {i}: {:02x} vs {:02x} classifies as nothing", ra[i], rb[i])
+            }
+        })
+        .collect();
+    let r0 = ra;
 
     // Emit: numbers only. The names live in src/lines.rs.
     let mut w = String::with_capacity(1 << 20);
@@ -222,8 +289,8 @@ fn main() {
     let (mut off, mut vi) = (0usize, 0usize);
     for (op, vs) in variants_of.iter().enumerate() {
         let first = vi;
-        for (key, span, kil) in vs {
-            let _ = writeln!(vtab, "    ({key}, {off}, {}, {}),", span.len(), *kil as u8);
+        for (key, span, flags, wb) in vs {
+            let _ = writeln!(vtab, "    ({key}, {off}, {}, {}, {wb:#x}),", span.len(), flags);
             for v in span {
                 let _ = writeln!(spans, "    {v:#018x},");
             }
@@ -234,8 +301,8 @@ fn main() {
     }
     let _ = writeln!(w, "pub const SPAN_WORDS: usize = {off};");
     let _ = writeln!(w, "pub static SPANS: [u64; {off}] = [\n{spans}];");
-    let _ = writeln!(w, "/// (selector key, offset into SPANS, half-cycles, kil)");
-    let _ = writeln!(w, "pub static VARIANTS: [(u8, usize, usize, u8); {vi}] = [\n{vtab}];");
+    let _ = writeln!(w, "/// (selector key, offset into SPANS, half-cycles, flags: bit 0 kil, bit 1 overlap cin from C, seam write-back word)");
+    let _ = writeln!(w, "pub static VARIANTS: [(u8, usize, usize, u8, u64); {vi}] = [\n{vtab}];");
     let _ = writeln!(w, "/// Per opcode: (first variant, variant count)");
     let _ = writeln!(w, "pub static OPS: [(usize, usize); 256] = [\n{ops}];");
     let _ = writeln!(w, "pub static KILS: [u8; {}] = {kils:?};", kils.len());
@@ -244,9 +311,7 @@ fn main() {
     let _ = writeln!(w, "pub static RESET_TAIL: [u64; {}] = {:?};", tail.len(), tail);
     let _ = writeln!(
         w,
-        "/// a x y s p pcl pch pclp pchp abl abh dl dor add ai bi at h=0, measured.\npub static RESET_REGS: [u8; 16] = [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}];",
-        r0.a, r0.x, r0.y, r0.s, r0.p, r0.pc & 0xff, r0.pc >> 8, i0.pclp, i0.pchp,
-        i0.abl, i0.abh, i0.idl, i0.dor, i0.alu, i0.alua, i0.alub
+        "/// a x y s p pcl pch pclp pchp abl abh dl dor add ai bi at h=0,\n/// measured under the recorder's vector; RESET_KINDS says how each\n/// follows the machine's own (0 constant, 1 vector low, 2 vector high,\n/// 3 the byte at the vector).\npub static RESET_REGS: [u8; 16] = {r0:?};\npub static RESET_KINDS: [u8; 16] = {kinds:?};"
     );
     let _ = writeln!(
         w,

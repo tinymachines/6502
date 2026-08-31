@@ -39,6 +39,14 @@ pub const BIT_PCLC: usize = 36;
 pub const BIT_PCHC: usize = 37;
 pub const DATA_BITS: u64 = (1 << BIT_PCLC) | (1 << BIT_PCHC);
 
+// The ADD-path write-backs land one half-cycle into the NEXT instruction's
+// execution (the famous overlap: a result is not in the accumulator when
+// sync rises). Measured at the seam: SBX after INX, SBAC after ADC, nothing
+// after CLC; direct loads (LDA/LDY) complete inside their own span. Each
+// recorded variant carries its seam word, and the sequencer ORs the
+// finished instruction's word into the next span's first half-cycle.
+pub const WB_MASK: u64 = (1 << bit::SBY) | (1 << bit::SBX) | (1 << bit::SBS) | (1 << bit::SBAC);
+
 /// The selector key's bits: which way each measured mechanism went for one
 /// execution. The RECORDER computes these from full knowledge (registers,
 /// flags and memory at the opcode's fetch); the sequencer reproduces each

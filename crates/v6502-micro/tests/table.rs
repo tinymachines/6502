@@ -71,9 +71,9 @@ fn fresh_contexts_are_predicted_line_for_line() {
                     eprintln!("MUTATE=1: flipped sync in LDA #'s expected span at h=3");
                 }
                 let mut got = vector(&cpu, &ids);
-                // The recorder's overlap rule (build.rs): the table says
-                // nothing about alucin in the two overlap half-cycles.
-                if h + 2 >= span.len() {
+                // The recorder's overlap rule (build.rs): where the flag
+                // says the overlap alucin was data, the table masks it.
+                if h + 2 >= span.len() && table::overlap_cin_from_c(op, key) {
                     got &= !(1 << BIT_ALUCIN);
                 }
                 if got != want {

@@ -225,7 +225,13 @@ impl Datapath {
             } else if on(w, EORS) {
                 self.add = (a ^ b) as u8;
             } else if on(w, SRS) {
-                self.add = ((a | b) >> 1) as u8;
+                // The right shift is of the B input ALONE, with the
+                // carry-in into bit 7 (how ROR and LSR share one line).
+                // The Python model's (a | b) >> 1 could not be told apart
+                // on the four programs, because an accumulator shift loads
+                // both latches with A; rung 0's own latches through LSR zp
+                // (ai=ff, bi=ea, add=75) settled it.
+                self.add = ((b >> 1) as u8) | (cin as u8) << 7;
             }
             self.dl = data_in;
             self.s_out = self.s_in;

@@ -21,7 +21,7 @@ below, exactly as `v6502-sim` is. `crates/v6502-compiled` generates its kernel
 from the same schematic at build time into `OUT_DIR`; the generated file is
 derived from the die data, is never committed, and is under the terms below
 wherever it is built. `tools/check-compiled-nodata.py` checks that nothing
-from the MIT name table leaks into it either. `crates/v6502-gpu` is MIT, carries
+from the MIT name table leaks into it either. `crates/v6502-micro` generates its control table by running `v6502-sim` at build time; the generated table is derived from the die data, never committed, and under the terms below wherever it is built, while the crate's own source (the datapath, the flags, the line names) is MIT. `crates/v6502-gpu` is MIT, carries
 no data of its own, and depends on `wgpu` and `pollster` from crates.io (their
 licences are theirs; nothing shipped from this repository includes them).
 

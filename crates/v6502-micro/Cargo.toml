@@ -12,6 +12,7 @@ v6502-pins = { path = "../v6502-pins" }
 [build-dependencies]
 v6502-sim = { path = "../v6502-sim" }
 v6502-netlist = { path = "../v6502-netlist" }
+v6502-pins = { path = "../v6502-pins" }
 
 [dev-dependencies]
 v6502-sim = { path = "../v6502-sim" }

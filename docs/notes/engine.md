@@ -397,6 +397,88 @@ memory, half_cycle and last_fetch. What is expected to differ, and says so
 in the type's doc: exported `value`/`trans_on` against another rung.
 Compare memory and gates instead.
 
+## Rung 3: `v6502-micro`, the table measured out of the transistors
+
+No nodes. `build.rs` runs rung 0 over all 256 opcodes in ten contexts
+(registers, flags, operands, base pages and the C-versus-offset-sign
+correlation all varied) and records, per opcode and per half-cycle from its
+own h=2, the 52-bit control vector of `src/lines.rs`: the 46 named lines,
+the three vector-address constants, rw and sync read through the same pins
+adapter the pin golden is recorded through, and the ALU carry-in where an
+ALU operation consumes it. Spans are keyed by six authored selector bits
+(branch taken, branch page cross, X and Y index cross, the carry, the
+offset's sign), the build refuses if one key ever maps to two spans, and
+the smallest single-valued selector mask per opcode is found by exhaustive
+search over the six bits: 402 variants, the twelve known KILs, and a
+vector-relative reset seed classified against two reset vectors. The
+sequencer (`machine.rs`) plays spans through the datapath
+(`datapath.rs`, the proven `m4-datapath.py` model ported line for line),
+with the flags and the P-to-stack timing authored (`flags.rs`) and the
+selector shared with the recorder by include.
+
+**Held to the pin golden: 259 of 265 traces replay with every pin equal at
+every half-cycle**, `EXPECTED_FAILURES` empty, undocumented opcodes
+included. The six stimulus traces are skipped by name: interrupts and RDY
+are not yet authored, and that gap is recorded in the replay test rather
+than papered over. Decimal mode is unexercised by any trace. `MUTATE=1`
+goes red on the table (one expected bit), the datapath (one suppressed
+#IPC, caught at pclp that half-cycle) and the replay (one flipped db bit,
+named by trace).
+
+**39.0 M half-cycles/s on the inc loop, about 1,465x rung 0: 19.5x a real
+1 MHz part.** This is the latency rung: the other rungs settle a network
+per half-cycle, this one looks a vector up.
+
+What the pin golden taught that the experiments had not, each now encoded
+where it belongs:
+
+- **`SRS` shifts the B input alone** (plus the carry-in into bit 7). The
+  Python model's `(a | b) >> 1` could not be told apart on the four
+  programs because an accumulator shift loads both latches with A; rung 0's
+  own latches through `LSR zp` (ai=ff, bi=ea, add=75) settled it.
+- **DL latches written bytes too; the external pin holds the last read.**
+  Through BRK's three pushes the input latch steps 34 -> 02 -> 09 -> 34
+  while the data pin shows the operand byte at every write's phi1. The
+  machine keeps the two apart (`pin_hold` against `dp.dl`); DCP's compare
+  is what consumes the latched written byte.
+- **The ADD-path write-back lands inside the NEXT instruction's first
+  execution half-cycle** (SBX after INX, SBAC after ADC, nothing after
+  CLC, measured at the seam), which is the famous result-overlap seen from
+  the control side. Each variant records its seam word and the sequencer
+  ORs the finished instruction's word into the next span's first
+  half-cycle. Direct loads complete inside their own span, which is why
+  the recorder's contexts, all ending in loads or flag ops, recorded clean
+  spans.
+- **`dpc34_PCLC`/`dpc35_PCHC` are data signals wearing control-line
+  names** (the PC incrementer's carries), masked out of the table; the
+  datapath computes them.
+- **The overlap's alucin is control where it is an increment's +1 and data
+  where an RMW's fresh carry rides it**; the recorder keeps it per
+  variant, masking only where same-key recordings disagreed, and the
+  sequencer supplies its not-yet-updated C there, which is also what the
+  ADC class computes with.
+- **One instrument bug worth remembering**: when the alucin node joined
+  the id list, the vector packer kept looping over the whole list and
+  OR-ed alucin into bit 49, which is rw. The recorder, its probe and the
+  coverage test all shared the bug and agreed with each other while every
+  RMW's dummy write replayed as a read. The measurement that broke the
+  symmetry was reading the pins directly beside the packed vector.
+
+The coverage test (`tests/table.rs`) is the other half of the
+single-valuedness claim: three contexts the recorder never saw run all 256
+opcodes on rung 0 and the table must predict every control line at every
+half-cycle through the same included harness and selectors. The datapath
+test (`tests/datapath.rs`) drives the model from the chip's own line levels
+and holds `abl abh pc pclp pchp a x y s` exact over 2,400 half-cycles,
+with the hold registers at their measured figures (alu 95.4%, dor 97.8%,
+idl 98.9%) above a 90% floor.
+
+Still open, deliberately: the stimulus traces (interrupt and RDY
+sequencing, authored, held by the scripted `.pins` files), decimal mode,
+and M5's `ENGINE` word in halfwave. The rung 3 state codec (registers plus
+table position) is its own and smaller than the four bitsets, and does not
+pretend to be them.
+
 ### The same kernel on a GPU (`v6502-gpu`)
 
 The same `build.rs` emits the kernel a second time as WGSL, from the same

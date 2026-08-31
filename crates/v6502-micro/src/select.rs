@@ -7,7 +7,7 @@
 /// The addressing shape the X/Y cross bits need. Authored (it is the
 /// manual's mode table, folded to the one question the selector asks);
 /// everything else about the opcode is measured.
-fn index_reg(op: u8) -> Option<char> {
+pub fn index_reg(op: u8) -> Option<char> {
     // aaabbbcc: bbb is the addressing mode row, cc the block.
     let (a, b, c) = (op >> 5, op >> 2 & 7, op & 3);
     match (b, c) {
@@ -25,7 +25,7 @@ fn index_reg(op: u8) -> Option<char> {
 /// The selector key for one context, from full knowledge at the fetch:
 /// the flags, the index registers, the operand bytes and (for the
 /// zp-pointer forms) the pointer bytes in memory. Bit meanings in lines.rs.
-fn selector(op: u8, p: u8, x: u8, y: u8, fetch_pc: u16, image: &[u8]) -> u8 {
+pub fn selector(op: u8, p: u8, x: u8, y: u8, fetch_pc: u16, image: &[u8]) -> u8 {
     let mut key = 0u8;
     let op0 = image[fetch_pc.wrapping_add(1) as usize];
     if p & 1 != 0 {
