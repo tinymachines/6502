@@ -91,7 +91,7 @@ log "building halfwave"
 # The API holds the old one in memory: this script cannot restart it (it runs
 # unprivileged), so it says so below when the binary changed.
 HALFWAVE_BEFORE=$(sha256sum target/release/halfwave 2>/dev/null | cut -c1-64 || true)
-cargo build --release --quiet -p v6502-sim --bin halfwave
+cargo build --release --quiet -p v6502-halfwave --bin halfwave
 
 GOLDEN=tools/golden-trace/golden.txt
 if [ -s "$GOLDEN" ]; then

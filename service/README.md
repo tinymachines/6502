@@ -44,7 +44,7 @@ nginx location with any `add_header` discards every inherited one, so the
 ```bash
 # The engine (once):
 export PATH="$HOME/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH"
-cargo build --release -p v6502-sim --bin halfwave
+cargo build --release -p v6502-halfwave --bin halfwave
 
 # The service:
 uvicorn app:app --app-dir service --port 6502

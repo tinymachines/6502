@@ -1,6 +1,10 @@
 //! 6502 as a service: the engine end of it.
 //!
-//!     cargo run --release -p v6502-sim --bin halfwave
+//!     cargo run --release -p v6502-halfwave --bin halfwave
+//!
+//! (A crate of its own since M5: every other rung depends on `v6502-sim`,
+//! so a binary that can answer as more than rung 0 sits above them. The
+//! built artifact keeps its path, `target/release/halfwave`.)
 //!
 //! A warm, resident, STATELESS chip. The netlist is parsed once at startup and
 //! one machine is kept constructed; every request carries the entire state in
@@ -26,7 +30,9 @@
 //!     STEP <n>                    advance n half-cycles from STATE
 //!     RUN <max>                   advance to the next opcode fetch, capped
 //!     RUNTO <max> <hex4>          advance to the opcode fetch AT an address
+//!     ENGINE <rung>               which rung answers: 0 (default) or 3
 //!     STATE <value> <pullup> <pulldown> <trans_on> <half_cycle> <fetch|->
+//!     MICRO <hex>                 rung 3's own machine value (with ENGINE 3)
 //!     FILL <hex2>                 memory background byte (default 00)
 //!     PAGE <hex2> <512 hex>       one 256-byte page over the fill
 //!     WATCH <name> [name...]     node names to read out (repeatable)
@@ -39,6 +45,25 @@
 //! JSON object: `{"ok":true, "state":..., "memory":..., "observe":...}` or
 //! `{"ok":false, "error":"..."}`. A malformed block gets an error, never a
 //! guess, and never kills the process.
+//!
+//! `ENGINE` (M5 of the engine ladder) picks which rung answers the block:
+//! 0 is rung 0, the switch-level solver, exactly as before the word
+//! existed; 3 is rung 3 (`v6502-micro`), the measured control table, held
+//! to the whole pin golden and about 1,400x quicker. Rung 3's machine
+//! value is ITS OWN (`MICRO`, the versioned byte codec, about 90 bytes as
+//! hex; the response's `state` carries it as `micro`) and does not
+//! pretend to be the four node planes: `STATE` under `ENGINE 3` and
+//! `MICRO` under `ENGINE 0` are both refused by name, which is the same
+//! line the console's worker draws. Rungs 1 and 2 are refused by name
+//! too: rung 1 is bit-exact with rung 0 and no faster, so rung 0 answers
+//! for it, and rung 2 is a 64-lane throughput engine where one machine
+//! would pay for the whole word. `WATCH` under rung 3 resolves the 51
+//! control-vector columns (`v6502-micro`'s `lines.rs`) instead of die
+//! nodes, and `TRACE`/`ROWS` are refused there: the columnar rows are
+//! rung 0's node encoding, and this rung has no nodes to fill them with.
+//! Its observation carries what the rung genuinely has (pins, registers,
+//! the datapath latches) and omits the timing-chain fields rather than
+//! faking them.
 
 use std::fmt::Write as _;
 use std::io::{BufRead, Write};
@@ -65,6 +90,10 @@ struct Request {
     vec: Option<u16>,
     pins: Vec<(String, bool)>,
     state: Option<[String; 6]>,
+    /// Rung 3's own machine value, hex (with `ENGINE 3`).
+    micro: Option<String>,
+    /// Which rung answers this block: 0 (default) or 3.
+    engine: u8,
     fill: u8,
     pages: Vec<(u8, Vec<u8>)>,
     watch: Vec<String>,
@@ -81,6 +110,8 @@ impl Request {
             vec: None,
             pins: Vec::new(),
             state: None,
+            micro: None,
+            engine: 0,
             fill: 0,
             pages: Vec::new(),
             watch: Vec::new(),
@@ -217,9 +248,9 @@ fn state_json(cpu: &Cpu<FlatMemory>) -> String {
 
 /// Memory back out as fill plus the pages that differ from it. Canonical:
 /// a supplied page that turned out to be all-fill is dropped, because
-/// "fill everywhere except the listed pages" is the whole meaning.
-fn memory_json(cpu: &Cpu<FlatMemory>, fill: u8) -> String {
-    let mem = cpu.bus.as_slice();
+/// "fill everywhere except the listed pages" is the whole meaning. One
+/// emitter for both engines, so the two cannot drift in shape.
+fn memory_json(mem: &[u8], fill: u8) -> String {
     let mut s = format!("{{\"fill\":\"{fill:02x}\",\"pages\":{{");
     let mut first = true;
     for page in 0..=255u16 {
@@ -245,11 +276,222 @@ fn err(msg: &str) -> String {
     format!("{{\"ok\":false,\"error\":\"{}\"}}", json_escape(msg))
 }
 
-fn handle(cpu: &mut Cpu<FlatMemory>, req: &Request) -> String {
+// -- rung 3 ---------------------------------------------------------------
+
+use v6502_micro::machine::{MicroCpu, MicroState};
+use v6502_pins::PinEngine;
+
+/// Rung 3's observation: the same keys as rung 0's where the rung
+/// genuinely has the value (pins, registers, the datapath latches), and
+/// none of the timing-chain fields, which are node readings this rung
+/// does not have. `ir` is the opcode whose span is playing.
+fn micro_obs_json(m: &MicroCpu, watch: &[(String, usize)]) -> String {
+    let pf = PinEngine::pins(m);
+    let (a, x, y, sp, p, pc) = m.registers();
+    let (faddr, fop) = m.last_fetch();
+    let regs = v6502_sim::cpu::Registers { pc, a, x, y, s: sp, p, ir: m.opcode() };
+    let d = m.datapath();
+    let mut s = String::with_capacity(320);
+    let _ = write!(
+        s,
+        "{{\"half_cycle\":{},\"cycle\":{},\"clk0\":{},\"phase\":\"{}\",\
+         \"addr\":{},\"data\":{},\"rw\":\"{}\",\"sync\":{},\
+         \"pc\":{},\"a\":{},\"x\":{},\"y\":{},\"s\":{},\"p\":{},\"ir\":{},\"flags\":\"{}\"",
+        pf.h,
+        pf.h / 2,
+        pf.clk0,
+        if pf.clk0 { "phi2" } else { "phi1" },
+        pf.ab,
+        pf.db,
+        if pf.rw { "read" } else { "write" },
+        pf.sync,
+        pc,
+        a,
+        x,
+        y,
+        sp,
+        p,
+        m.opcode(),
+        regs.flags_string(),
+    );
+    let _ = write!(
+        s,
+        ",\"alu\":{},\"alua\":{},\"alub\":{},\"sb\":{},\"idb\":{},\"idl\":{},\"dor\":{},\
+         \"adl\":{},\"adh\":{},\"abl\":{},\"abh\":{},\"pclp\":{},\"pchp\":{}",
+        d.add, d.ai, d.bi, d.sb, d.db, d.dl, d.dor, d.adl, d.adh, d.abl, d.abh, d.pclp, d.pchp,
+    );
+    let _ = write!(s, ",\"fetch\":{{\"addr\":{faddr},\"opcode\":{fop}}}");
+    if !watch.is_empty() {
+        s.push_str(",\"watch\":{");
+        let w = m.control_word();
+        for (i, (name, line)) in watch.iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            let _ = write!(s, "\"{}\":{}", json_escape(name), w >> line & 1 != 0);
+        }
+        s.push('}');
+    }
+    s.push('}');
+    s
+}
+
+fn micro_state_json(m: &MicroCpu) -> String {
+    let st = m.snapshot();
+    let (faddr, fop) = m.last_fetch();
+    let mut hex = String::with_capacity(200);
+    for b in st.encode() {
+        let _ = write!(hex, "{b:02x}");
+    }
+    format!(
+        "{{\"version\":1,\"half_cycle\":{},\"last_fetch\":{{\"addr\":{faddr},\"opcode\":{fop}}},\
+         \"micro\":\"{hex}\"}}",
+        st.half_cycle,
+    )
+}
+
+/// The block, answered by rung 3. The refusals mirror the console
+/// worker's: a node-shaped `STATE` has no way in here, and the way onto
+/// this rung is `BOOT`.
+fn handle_micro(m: &mut MicroCpu, req: &Request) -> String {
+    let verb = req.verb.as_deref().unwrap_or("");
+    if req.state.is_some() {
+        return err("STATE is a node engine's machine; rung 3 carries its own. Send MICRO, or BOOT to start here.");
+    }
+    if req.trace || req.rows {
+        return err("TRACE and ROWS are rung 0's node encodings; rung 3 has no nodes to fill them with");
+    }
+    let mut watch: Vec<(String, usize)> = Vec::new();
+    for name in &req.watch {
+        match v6502_micro::lines::LINE_NAMES.iter().position(|n| n == name) {
+            Some(i) => watch.push((name.clone(), i)),
+            None => {
+                return err(&format!(
+                    "{name:?} is not a control column on rung 3 (the 44 dpc lines, 0/ADL0..2, rw, sync)"
+                ))
+            }
+        }
+    }
+    for (name, _) in &req.pins {
+        if !matches!(name.as_str(), "res" | "irq" | "nmi" | "rdy" | "so") {
+            return err(&format!("unknown pin {name:?} (res, irq, nmi, rdy, so)"));
+        }
+    }
+
+    match verb {
+        "BOOT" => {
+            let mut image = vec![req.fill; 65536];
+            for (page, bytes) in &req.pages {
+                image[(*page as usize) * 256..(*page as usize + 1) * 256].copy_from_slice(bytes);
+            }
+            m.mem.copy_from_slice(&image);
+            if let Some(v) = req.vec {
+                m.mem[0xfffc] = v as u8;
+                m.mem[0xfffd] = (v >> 8) as u8;
+            }
+            m.power_cycle();
+        }
+        "STEP" | "RUN" | "RUNTO" => {
+            let hex = match &req.micro {
+                Some(h) => h,
+                None => return err("STEP/RUN on rung 3 needs a MICRO line"),
+            };
+            let n = match req.arg {
+                Some(n) if n <= MAX_STEP => n,
+                Some(n) => return err(&format!("{n} half-cycles exceeds max_step {MAX_STEP}")),
+                None => return err("STEP/RUN needs a count"),
+            };
+            if verb == "RUNTO" && req.target.is_none() {
+                return err("RUNTO needs a target address");
+            }
+            let blob = match hex_bytes(hex) {
+                Ok(b) => b,
+                Err(e) => return err(&format!("MICRO: {e}")),
+            };
+            let mut st = match MicroState::decode(&blob, req.fill) {
+                Ok(st) => st,
+                Err(e) => return err(&e),
+            };
+            for (page, bytes) in &req.pages {
+                st.mem[(*page as usize) * 256..(*page as usize + 1) * 256].copy_from_slice(bytes);
+            }
+            // Pins are levels, carried in the state; a PIN line sets one on
+            // top before the run, exactly as rung 0's pad pulls persist.
+            let mut inputs = st.inputs;
+            for (name, level) in &req.pins {
+                let i = match name.as_str() {
+                    "res" => 0,
+                    "irq" => 1,
+                    "nmi" => 2,
+                    "rdy" => 3,
+                    "so" => 4,
+                    _ => unreachable!("validated above"),
+                };
+                inputs[i] = *level;
+            }
+            if let Err(e) = m.restore(&st) {
+                return err(&e);
+            }
+            PinEngine::set_inputs(m, inputs[0], inputs[1], inputs[2], inputs[3], inputs[4]);
+
+            let mut stepped = 0u64;
+            for _ in 0..n {
+                PinEngine::half_step(m);
+                stepped += 1;
+                let pf = PinEngine::pins(m);
+                let at_fetch = pf.sync && !pf.clk0;
+                let stop = match verb {
+                    "RUN" => at_fetch,
+                    "RUNTO" => at_fetch && m.last_fetch().0 == req.target.unwrap_or(0),
+                    _ => false,
+                };
+                if stop {
+                    break;
+                }
+            }
+            let pf = PinEngine::pins(m);
+            let at_fetch = pf.sync && !pf.clk0;
+            let completed = match verb {
+                "RUN" => at_fetch,
+                "RUNTO" => at_fetch && m.last_fetch().0 == req.target.unwrap_or(0),
+                _ => true,
+            };
+            return format!(
+                "{{\"ok\":true,\"stepped\":{},\"completed\":{},\"state\":{},\"memory\":{},\"observe\":{}}}",
+                stepped,
+                completed,
+                micro_state_json(m),
+                memory_json(&m.mem, req.fill),
+                micro_obs_json(m, &watch),
+            );
+        }
+        "" => return err("no verb (META, NODES, BOOT, STEP, RUN or RUNTO) before GO"),
+        v => return err(&format!("unknown verb {v:?}")),
+    }
+
+    // BOOT falls through to here.
+    format!(
+        "{{\"ok\":true,\"stepped\":0,\"completed\":true,\"state\":{},\"memory\":{},\"observe\":{}}}",
+        micro_state_json(m),
+        memory_json(&m.mem, req.fill),
+        micro_obs_json(m, &watch)
+    )
+}
+
+fn handle(cpu: &mut Cpu<FlatMemory>, micro: &mut MicroCpu, req: &Request) -> String {
     let verb = match &req.verb {
         Some(v) => v.as_str(),
         None => return err("no verb (META, NODES, BOOT, STEP, RUN or RUNTO) before GO"),
     };
+
+    // META and NODES describe the die and the process, whatever answers
+    // the frames; everything below them is the chosen rung's.
+    if req.engine == 3 && verb != "META" && verb != "NODES" {
+        return handle_micro(micro, req);
+    }
+    if req.micro.is_some() {
+        return err("MICRO is rung 3's machine; add ENGINE 3, or send STATE for the node engine");
+    }
 
     if verb == "NODES" {
         // Every named node, sorted by name so the output is deterministic.
@@ -269,7 +511,7 @@ fn handle(cpu: &mut Cpu<FlatMemory>, req: &Request) -> String {
     if verb == "META" {
         return format!(
             "{{\"ok\":true,\"meta\":{{\"chip\":\"mos6502\",\"nodes\":1725,\"transistors\":3510,\
-             \"version\":\"{VERSION}\",\"commit\":\"{COMMIT}\",\
+             \"version\":\"{VERSION}\",\"commit\":\"{COMMIT}\",\"engines\":[0,3],\
              \"max_step\":{MAX_STEP},\"max_traced\":{MAX_TRACED},\
              \"encoding\":\"lowercase hex; bit i of a set is byte i/8, LSB first; \
 node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 bytes\"}}}}"
@@ -427,7 +669,7 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                 stepped,
                 completed,
                 state_json(cpu),
-                memory_json(cpu, req.fill),
+                memory_json(cpu.bus.as_slice(), req.fill),
                 obs_json(cpu, &watch),
                 trace
             );
@@ -439,7 +681,7 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
     format!(
         "{{\"ok\":true,\"stepped\":0,\"completed\":true,\"state\":{},\"memory\":{},\"observe\":{}}}",
         state_json(cpu),
-        memory_json(cpu, req.fill),
+        memory_json(cpu.bus.as_slice(), req.fill),
         obs_json(cpu, &watch)
     )
 }
@@ -459,6 +701,7 @@ fn main() {
     let netlist = Arc::new(mos6502());
     let mut cpu = Cpu::new(netlist, FlatMemory::new()).expect("6502 signals resolve");
     cpu.bus.set_journalling(false);
+    let mut micro = MicroCpu::new();
 
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
@@ -522,6 +765,22 @@ fn main() {
                 ]);
                 Ok(false)
             }
+            "ENGINE" => {
+                let n = parts.next().ok_or("ENGINE needs a rung number")?;
+                r.engine = match n {
+                    "0" => 0,
+                    "3" => 3,
+                    "1" => return Err("rung 1 is bit-exact with rung 0 and no faster; ENGINE 0 answers for it".into()),
+                    "2" => return Err("rung 2 is a 64-lane throughput engine; one machine would pay for the whole word. ENGINE 0 or 3".into()),
+                    _ => return Err(format!("unknown engine {n:?} (0 or 3)")),
+                };
+                Ok(false)
+            }
+            "MICRO" => {
+                let h = parts.next().ok_or("MICRO needs the state as hex")?;
+                r.micro = Some(h.into());
+                Ok(false)
+            }
             "FILL" => {
                 let v = parts.next().ok_or("FILL needs a hex byte")?;
                 r.fill = u8::from_str_radix(v, 16).map_err(|_| format!("bad FILL {v:?}"))?;
@@ -571,7 +830,7 @@ fn main() {
             Ok(true) => {
                 let response = match bad.take() {
                     Some(e) => err(&e),
-                    None => handle(&mut cpu, &req),
+                    None => handle(&mut cpu, &mut micro, &req),
                 };
                 let _ = writeln!(out, "{response}");
                 let _ = out.flush();

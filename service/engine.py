@@ -111,7 +111,7 @@ class Pool:
         if not self.binary.exists():
             raise FileNotFoundError(
                 f"halfwave binary not found at {self.binary}; build it with "
-                "`cargo build --release -p v6502-sim --bin halfwave` "
+                "`cargo build --release -p v6502-halfwave --bin halfwave` "
                 "or set HALFWAVE_BIN"
             )
         n = size or int(os.environ.get("HALFWAVE_POOL", str(DEFAULT_POOL)))

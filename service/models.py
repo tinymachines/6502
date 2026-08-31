@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 HEX_NODE_CHARS = 432   # ceil(1725 / 8) bytes, two chars each
 HEX_TRANS_CHARS = 878  # ceil(3510 / 8) bytes, two chars each
@@ -41,27 +41,47 @@ class LastFetch(BaseModel):
 
 
 class ChipState(BaseModel):
-    """Every switch and every latch, as a value. Restoring this into a fresh
-    engine resumes the simulation bit for bit (proven in tests/state.rs over
-    every node at every half-cycle)."""
+    """Every switch and every latch, as a value. Two shapes exist: the node
+    engine's four bitsets (restoring them into a fresh engine resumes the
+    simulation bit for bit, proven in tests/state.rs over every node at
+    every half-cycle), or rung 3's own `micro` value (about 90 bytes; its
+    resume proof is v6502-micro's tests/state.rs, held to the pin golden).
+    Exactly one shape is present, and the shape says which engine can
+    continue the machine."""
 
     version: Literal[1] = 1
     half_cycle: int = Field(ge=0)
     last_fetch: Optional[LastFetch] = None
-    value: str = Field(description="node levels, 432 hex chars")
-    pullup: str = Field(description="per-node pullup, 432 hex chars")
-    pulldown: str = Field(description="per-node pulldown, 432 hex chars")
-    trans_on: str = Field(description="conducting transistors, 878 hex chars")
+    value: Optional[str] = Field(default=None, description="node levels, 432 hex chars")
+    pullup: Optional[str] = Field(default=None, description="per-node pullup, 432 hex chars")
+    pulldown: Optional[str] = Field(default=None, description="per-node pulldown, 432 hex chars")
+    trans_on: Optional[str] = Field(default=None, description="conducting transistors, 878 hex chars")
+    micro: Optional[str] = Field(
+        default=None,
+        description="rung 3's own machine value, hex; present instead of the four bitsets",
+    )
 
     @field_validator("value", "pullup", "pulldown")
     @classmethod
-    def _nodes(cls, v: str) -> str:
-        return _hex(v, HEX_NODE_CHARS, "a node bitset")
+    def _nodes(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else _hex(v, HEX_NODE_CHARS, "a node bitset")
+
+    @model_validator(mode="after")
+    def _one_shape(self) -> "ChipState":
+        planes = [self.value, self.pullup, self.pulldown, self.trans_on]
+        if self.micro is not None:
+            if any(p is not None for p in planes):
+                raise ValueError("a machine carries the four bitsets or micro, never both")
+            if len(self.micro) % 2 or any(c not in "0123456789abcdef" for c in self.micro.lower()):
+                raise ValueError("micro wants an even count of hex chars")
+        elif any(p is None for p in planes):
+            raise ValueError("a machine carries all four bitsets, or micro")
+        return self
 
     @field_validator("trans_on")
     @classmethod
-    def _trans(cls, v: str) -> str:
-        return _hex(v, HEX_TRANS_CHARS, "the transistor bitset")
+    def _trans(cls, v: Optional[str]) -> Optional[str]:
+        return None if v is None else _hex(v, HEX_TRANS_CHARS, "the transistor bitset")
 
 
 class SparseMemory(BaseModel):
@@ -156,9 +176,12 @@ class Observation(BaseModel):
     p: int
     ir: int
     flags: str
-    tstates: str
-    hidden: str
-    store_data: str
+    tstates: Optional[str] = Field(
+        default=None,
+        description="the timing chain's active T-states; absent on rung 3, which has no timing-chain nodes to read",
+    )
+    hidden: Optional[str] = None
+    store_data: Optional[str] = None
     alu: int = Field(description="the adder's hold register: where a sum is real before any register holds it")
     alua: int = Field(description="the adder's A input latch")
     alub: int = Field(description="the adder's B input latch (loaded inverted by nDBADD for SBC)")
@@ -178,12 +201,30 @@ class Observation(BaseModel):
 
 class BootRequest(BaseModel):
     """Start a machine. A rom is laid over the memory at its org, and the
-    reset vector defaults to that org so the program is what runs."""
+    reset vector defaults to that org so the program is what runs.
+
+    `engine` picks the rung that answers: 0 (default) is the switch-level
+    chip; 3 is the measured microcode, about 1,400x quicker, whose machine
+    value comes back as `state.micro` instead of the four bitsets. A step
+    needs no engine field: the machine value's shape says which rung can
+    continue it."""
 
     rom: Optional[Rom] = None
     memory: SparseMemory = Field(default_factory=SparseMemory)
     reset_vector: Optional[int] = Field(default=None, ge=0, le=0xFFFF)
     watch: list[str] = Field(default_factory=list)
+    engine: int = 0
+
+    @field_validator("engine")
+    @classmethod
+    def _engine(cls, v: int) -> int:
+        if v in (0, 3):
+            return v
+        if v == 1:
+            raise ValueError("rung 1 is bit-exact with rung 0 and no faster; engine 0 answers for it")
+        if v == 2:
+            raise ValueError("rung 2 is a 64-lane throughput engine; one machine would pay for the whole word. 0 or 3")
+        raise ValueError(f"unknown engine {v} (0 or 3)")
 
 
 class StepRequest(BaseModel):

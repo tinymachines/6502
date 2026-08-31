@@ -43,6 +43,23 @@ state that decodes to the wrong chip is worse than one that is rejected.
   once and keeps one constructed machine; each request overwrites all four
   bitsets and all 64 KiB. The Python `Pool` is N such processes behind
   per-worker locks, respawned on death. `HALFWAVE_BIN`, `HALFWAVE_POOL`.
+- **`ENGINE rung` (M5, 2026-08-31): the same doors, answered by rung 3 on
+  request.** The binary moved to its own crate (`v6502-halfwave`; every
+  other rung depends on `v6502-sim`, so a multi-rung binary had to sit
+  above them; the artifact keeps `target/release/halfwave`). `ENGINE 0` is
+  the default and byte-for-byte the old behaviour; `ENGINE 3` answers with
+  `v6502-micro`, whose machine value travels as `MICRO <hex>` in and
+  `state.micro` out, about 90 bytes against 1.3 KB of node planes and
+  about 1,400x quicker per half-cycle. Rungs 1 and 2 are refused by name
+  with the reason (1 is bit-exact and no faster; 2 is a 64-lane throughput
+  word). The SHAPE routes a step in the FastAPI half: `/v1/boot` takes
+  `engine`, `/v1/step` follows whatever machine it is handed, so a machine
+  cannot land on a rung that cannot continue it, and a state carrying both
+  shapes is refused at the model boundary. On rung 3, `WATCH` resolves the
+  51 control-vector columns instead of die nodes, `TRACE`/`ROWS` are
+  refused (they are node encodings), and the observation omits the
+  timing-chain fields rather than faking them: `tstates` is null there and
+  the model says why.
 - **Twelve chips, started at boot rather than on first use.** A chip is
   **3 ms and 2.2 MB** measured, so the pool is 40 ms and 26 MB and there is
   nothing to weigh. Lazy spawning made "a pool of warm instances" false for

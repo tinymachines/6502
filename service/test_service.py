@@ -703,3 +703,104 @@ def test_the_docs_ask_for_the_schema_at_their_own_door():
     fronted = c.get("/api/docs", headers={"x-forwarded-prefix": "/6502/api"})
     assert "/6502/api/openapi.json" in fronted.text
     assert c.get("/api/redoc").status_code == 200
+
+
+# -- the ENGINE word (M5): rung 3 behind the same doors ----------------------
+#
+# The machine value's SHAPE routes a step: a machine with `state.micro` is
+# rung 3's and every stepping endpoint follows it there, while a boot picks
+# the rung explicitly. The parity claim is rung 3's own (held to the whole
+# pin golden in its crate); here what is proven is the service's half:
+# both engines answer the same doors, the shapes stay apart, and the
+# refusals name the way out.
+
+
+def test_engine_3_boots_and_steps_with_its_own_machine_value(client):
+    b3 = boot_add(client, engine=3)
+    st = b3["machine"]["state"]
+    assert isinstance(st["micro"], str) and len(st["micro"]) > 100
+    assert st.get("value") is None, "rung 3 carries no node planes"
+    assert b3["observe"]["tstates"] is None, "no timing chain to read on rung 3"
+    assert b3["observe"]["pc"] == 0x0200
+
+    # No engine field on the step: the shape routes it.
+    r = client.post("/v1/step", json={"machine": b3["machine"], "half_cycles": 41})
+    assert r.status_code == 200, r.text
+    s = r.json()
+    assert s["machine"]["state"]["micro"] != st["micro"]
+    assert s["machine"]["state"]["half_cycle"] == 41
+    # The known answer, computed by the measured table: $2E + $14 at $82.
+    page0 = bytes.fromhex(s["machine"]["memory"]["pages"]["00"])
+    assert page0[0x80:0x83] == bytes([0x2E, 0x14, 0x42])
+
+
+def test_engine_3_and_engine_0_answer_the_same_memory(client):
+    b0 = boot_add(client)
+    b3 = boot_add(client, engine=3)
+    r0 = client.post("/v1/step", json={"machine": b0["machine"], "half_cycles": 60,
+                                       "watch": ["dpc25_SBDB", "dpc23_SBAC"]}).json()
+    r3 = client.post("/v1/step", json={"machine": b3["machine"], "half_cycles": 60,
+                                       "watch": ["dpc25_SBDB", "dpc23_SBAC"]}).json()
+    assert r0["machine"]["memory"] == r3["machine"]["memory"]
+    assert r0["observe"]["watch"] == r3["observe"]["watch"]
+    assert r0["machine"]["state"]["last_fetch"] == r3["machine"]["state"]["last_fetch"]
+
+
+def test_engine_refusals_name_the_reason(client):
+    r = client.post("/v1/boot", json={"rom": {"source": ADD_SOURCE}, "engine": 1})
+    assert r.status_code == 422
+    assert "bit-exact with rung 0" in r.text
+    r = client.post("/v1/boot", json={"rom": {"source": ADD_SOURCE}, "engine": 2})
+    assert r.status_code == 422
+    assert "throughput" in r.text
+
+    b3 = boot_add(client, engine=3)
+    # A die node rung 3 cannot sample, and the node trace it does not have.
+    r = client.post("/v1/step", json={"machine": b3["machine"], "half_cycles": 2,
+                                      "watch": ["cclk"]})
+    assert r.status_code == 400
+    assert "not a control column on rung 3" in r.text
+    r = client.post("/v1/step", json={"machine": b3["machine"], "half_cycles": 2,
+                                      "trace": True})
+    assert r.status_code == 400
+    assert "no nodes to fill" in r.text
+
+
+def test_a_machine_cannot_carry_both_shapes(client):
+    b3 = boot_add(client, engine=3)
+    b0 = boot_add(client)
+    both = dict(b3["machine"]["state"])
+    both.update({k: b0["machine"]["state"][k] for k in ("value", "pullup", "pulldown", "trans_on")})
+    r = client.post("/v1/step", json={"machine": {"state": both, "memory": b3["machine"]["memory"]},
+                                      "half_cycles": 2})
+    assert r.status_code == 422
+    assert "never both" in r.text
+
+
+def test_a_console_frame_runs_on_rung_3(client):
+    # The console's own flow (games/console.js: boot, then step a whole
+    # frame with the cartridge's watched gates), on rung 3: Die Runner's
+    # eight watch names are control columns this rung carries, and a frame
+    # is 8,704 half-cycles the way the console counts them.
+    rom = (Path(__file__).resolve().parent.parent / "games" / "rom" / "dierunner.rom").read_bytes()
+    image = bytearray(65536)
+    image[0x0200 : 0x0200 + len(rom)] = rom
+    image[0xFFFC:0xFFFE] = bytes([0x00, 0x02])
+    pages = {
+        f"{p:02x}": image[p * 256 : (p + 1) * 256].hex()
+        for p in range(256)
+        if any(image[p * 256 : (p + 1) * 256])
+    }
+    watch = ["dpc25_SBDB", "dpc9_DBADD", "dpc10_ADLADD", "dpc21_ADDADL",
+             "dpc23_SBAC", "dpc30_ADHPCH", "dpc40_ADLPCL", "dpc2_XSB"]
+    b3 = client.post("/v1/boot", json={"memory": {"fill": "00", "pages": pages},
+                                       "engine": 3, "watch": watch})
+    assert b3.status_code == 200, b3.text
+    r = client.post("/v1/step", json={"machine": b3.json()["machine"],
+                                      "half_cycles": 8704, "watch": watch})
+    assert r.status_code == 200, r.text
+    f = r.json()
+    assert f["machine"]["state"]["micro"], "the frame came back on rung 3"
+    assert f["machine"]["state"]["half_cycle"] == 8704
+    assert sorted(f["observe"]["watch"]) == sorted(watch)
+    assert "04" in f["machine"]["memory"]["pages"], "the screen page travelled"

@@ -173,10 +173,10 @@ python3 tools/analyse-searches.py /tmp/searches.json /tmp/addr.json
                                     # anything that wants to draw "what changed".
 
 # 6502 as a service: the stateless engine, and its HTTP reference implementation
-cargo build --release -p v6502-sim --bin halfwave   # the warm engine process
+cargo build --release -p v6502-halfwave --bin halfwave   # the warm engine process
 cargo test -p v6502-sim --test state                # snapshot/restore, bit-exact
-python3 -m pytest service/ -q                       # 182 tests: the service end to
-                                                    # end (30), the chip atlas (56),
+python3 -m pytest service/ -q                       # 187 tests: the service end to
+                                                    # end (35), the chip atlas (56),
                                                     # cartridges (32), the registry
                                                     # (48), MCP (16).
                                                     # Atlas SKIPS without groups.json.
@@ -268,7 +268,7 @@ RESCAN=1 python3 tools/check-timing-vs-manual.py
 # three-way Balazs/Hanson/JSSim name table. 37 of 37 agree. SKIPS without the
 # archive or a halfwave build; REQUIRE_DPC=1 insists; MUTATE=1 swaps the two
 # clocks and MUST go red. deploy.sh runs it.
-cargo build --release -p v6502-sim --bin halfwave
+cargo build --release -p v6502-halfwave --bin halfwave
 python3 tools/check-dpc-vs-wiki.py
 MUTATE=1 python3 tools/check-dpc-vs-wiki.py     # the proof it can fail
 
@@ -455,14 +455,15 @@ is in the note for its page. Three worth knowing by name:
   viewport. Its "elements past the edge" list is informational, not causal.
 ## Architecture
 
-Nine crates, split so the topology is shared and read-only while state is
+Ten crates, split so the topology is shared and read-only while state is
 per-instance and mutable.
 
 | Crate | Role |
 |---|---|
 | `halfphi` | Chip-agnostic: the die-data parser, the netlist, the solver. **Names no chip.** Embeds no die data, and is MIT for that reason. |
 | `v6502-netlist` | The 6502's die data (`netlist.bin`, 31 KiB, built by `build.rs`, embedded with `include_bytes!`), and the analyses seeded from its names. Carries the CC BY-NC-SA obligations. |
-| `v6502-sim` | The 6502 clock/bus layer, timing chain, rewind, state codec, `halfwave`. |
+| `v6502-sim` | The 6502 clock/bus layer, timing chain, rewind, state codec. |
+| `v6502-halfwave` | The `halfwave` binary: the stateless engine behind the service, moved out of `v6502-sim` when M5's `ENGINE` word made it multi-rung (every other rung depends on `v6502-sim`, so the binary has to sit above them; the artifact keeps its `target/release/halfwave` path). `ENGINE 0` is rung 0 exactly as before; `ENGINE 3` answers with `v6502-micro`, taking and returning rung 3's own `MICRO` value; rungs 1 and 2 are refused by name with the reason. |
 | `v6502-wasm` | `wasm-bindgen` surface consumed by `web/`. Builds two ways: with die data (NC-SA) and `--no-default-features` (85 KB, MIT, takes a netlist at runtime). The data build also carries `HybridMachine` (rung 1) and `CompiledMachine` (rung 2) behind the console's own verbs, all three sharing one machine-JSON emitter; `CompiledMachine` resolves names through the embedded netlist so the generated kernel stays numbers. |
 | `v6502-pins` | The pin contract: `PinFrame`, `PinEngine`, the `.pins`/`.stim` text format, the replay driver and the comparison. No dependencies, no die data. `v6502-sim` implements it for `Cpu` in `src/pins.rs`; the recorder and replay test live here and use that adapter. |
 | `v6502-hybrid` | Rung 1 of the engine ladder: the queue solver with the recognised gates folded into per-output counters. Bit-exact with rung 0 by construction and held to it every node every half-cycle. Carries rung 0's machine value (`state.rs`: snapshot/restore, counters rebuilt from `trans_on`), so a run crosses between the rungs mid-flight. NC-SA, like `v6502-netlist`: it is built from the schematic derived from the die data. |

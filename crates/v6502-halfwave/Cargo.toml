@@ -1,0 +1,23 @@
+# halfwave: the stateless engine binary behind the service. It lived as a
+# bin in v6502-sim until the ENGINE word (M5): the other rungs all depend
+# on v6502-sim, so a binary that can answer as more than rung 0 has to sit
+# above them. The built artifact keeps its path (target/release/halfwave);
+# only the build command names this crate.
+#
+# Licence: rung 3's measured table is derived from the die data, so this
+# binary carries CC BY-NC-SA the way the data wasm build does (NOTICE.md).
+[package]
+name = "v6502-halfwave"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "halfwave"
+path = "src/main.rs"
+
+[dependencies]
+v6502-netlist = { path = "../v6502-netlist" }
+v6502-sim = { path = "../v6502-sim" }
+v6502-micro = { path = "../v6502-micro" }
+v6502-pins = { path = "../v6502-pins" }

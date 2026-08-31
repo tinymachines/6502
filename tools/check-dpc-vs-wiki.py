@@ -20,7 +20,7 @@ SKIPS when the archive or the halfwave binary is absent.  REQUIRE_DPC=1 makes
 either absence a failure.  MUTATE=1 inverts the phase reading and must go red:
 an all-green comparison is exactly what a broken one produces.
 
-    cargo build --release -p v6502-sim --bin halfwave
+    cargo build --release -p v6502-halfwave --bin halfwave
     python3 tools/check-dpc-vs-wiki.py
 """
 import json, os, re, subprocess, sys
@@ -38,7 +38,7 @@ def skip(why):
     print("SKIP " + why); sys.exit(0)
 
 if not os.path.exists(WIKI): skip("no %s" % os.path.relpath(WIKI, ROOT))
-if not os.path.exists(BIN):  skip("no target/release/halfwave -- cargo build --release -p v6502-sim --bin halfwave")
+if not os.path.exists(BIN):  skip("no target/release/halfwave -- cargo build --release -p v6502-halfwave --bin halfwave")
 
 wt = open(WIKI, encoding="utf-8", errors="replace").read()
 

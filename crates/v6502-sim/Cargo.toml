@@ -30,10 +30,6 @@ v6502-netlist = { path = "../v6502-netlist", optional = true }
 # is what lets `--no-default-features` build the library without trying to
 # build tools that cannot work without a chip.
 [[bin]]
-name = "halfwave"
-required-features = ["mos6502"]
-
-[[bin]]
 name = "export-decode"
 required-features = ["mos6502"]
 

@@ -11,7 +11,7 @@
 #     assembler bridge. Same failure that once cost a deploy; point at a
 #     real node explicitly.
 #   - HALFWAVE_BIN: the engine binary, by absolute path. Rebuild it with
-#     `cargo build --release -p v6502-sim --bin halfwave` before restarting
+#     `cargo build --release -p v6502-halfwave --bin halfwave` before restarting
 #     after engine changes.
 #
 # --root-path /api is what makes the generated /docs ask for

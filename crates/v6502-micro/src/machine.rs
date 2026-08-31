@@ -269,6 +269,16 @@ impl MicroCpu {
         self.pin_w
     }
 
+    /// The opcode whose span is playing: the IR's reading on this rung.
+    pub fn opcode(&self) -> u8 {
+        self.op
+    }
+
+    /// The datapath's registers and latches, for observation.
+    pub fn datapath(&self) -> &Datapath {
+        &self.dp
+    }
+
     fn in_overlap(&self) -> bool {
         // The tail IS an overlap (the first fetch); a span's last two
         // half-cycles are the next one's.

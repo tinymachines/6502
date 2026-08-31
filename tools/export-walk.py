@@ -5,7 +5,7 @@ Writes `docs/walk-snake.md`. The chip state is measured by running the real
 Snake ROM on the real simulation; the schematics are pulled from the live
 schematic page rather than drawn again here.
 
-    cargo build --release -p v6502-sim --bin halfwave
+    cargo build --release -p v6502-halfwave --bin halfwave
     python3 tools/export-walk.py           # reuses cached SVGs
     FRESH=1 python3 tools/export-walk.py   # re-grabs them
 

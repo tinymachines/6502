@@ -259,13 +259,19 @@ async def redoc_at_this_door(request: Request) -> HTMLResponse:
     return get_redoc_html(openapi_url=f"{root}/openapi.json", title=f"{app.title} - redoc")
 
 
-def _state_line(m: Machine) -> str:
+def _machine_lines(m: Machine) -> list[str]:
+    """The lines that put a machine into the engine: rung 3's own value
+    rides `ENGINE 3` + `MICRO`, everything else the four-bitset `STATE`.
+    The shape decides, so every caller that steps a machine follows it onto
+    whichever rung produced it, cartridge frames included."""
     st = m.state
+    if st.micro is not None:
+        return ["ENGINE 3", f"MICRO {st.micro}"]
     fetch = "-" if st.last_fetch is None else f"{st.last_fetch.addr:04x}{st.last_fetch.opcode:02x}"
-    return (
+    return [
         f"STATE {st.value} {st.pullup} {st.pulldown} {st.trans_on} "
         f"{st.half_cycle} {fetch}"
-    )
+    ]
 
 
 def _memory_lines(mem: SparseMemory) -> list[str]:
@@ -276,15 +282,20 @@ def _memory_lines(mem: SparseMemory) -> list[str]:
 
 def _machine_from(res: dict) -> Machine:
     st = res["state"]
-    return Machine(
-        state=ChipState(
+    chip = (
+        ChipState(half_cycle=st["half_cycle"], last_fetch=st["last_fetch"], micro=st["micro"])
+        if "micro" in st
+        else ChipState(
             half_cycle=st["half_cycle"],
             last_fetch=st["last_fetch"],
             value=st["value"],
             pullup=st["pullup"],
             pulldown=st["pulldown"],
             trans_on=st["trans_on"],
-        ),
+        )
+    )
+    return Machine(
+        state=chip,
         memory=SparseMemory(fill=res["memory"]["fill"], pages=res["memory"]["pages"]),
     )
 
@@ -613,6 +624,8 @@ def boot(req: BootRequest) -> StepResponse:
             vector = res["org"]
 
     lines = ["BOOT"]
+    if req.engine == 3:
+        lines.insert(0, "ENGINE 3")
     if vector is not None:
         lines.append(f"VEC {vector:04x}")
     lines += _memory_lines(memory)
@@ -648,7 +661,7 @@ def step(req: StepRequest) -> StepResponse:
     else:
         verb = f"STEP {req.half_cycles}"
 
-    lines = [verb, _state_line(req.machine)]
+    lines = [verb, *_machine_lines(req.machine)]
     lines += _memory_lines(req.machine.memory)
     for pin, level in req.pins.items():
         lines.append(f"PIN {pin} {level}")
@@ -700,11 +713,11 @@ def _poke(mem: SparseMemory, addr: int, value: int) -> SparseMemory:
 
 
 def _step_machine(m: Machine, n: int) -> Machine:
-    return _machine_from(_engine([f"STEP {n}", _state_line(m), *_memory_lines(m.memory)]))
+    return _machine_from(_engine([f"STEP {n}", *_machine_lines(m), *_memory_lines(m.memory)]))
 
 
 def _step_observed(m: Machine, n: int) -> tuple[Machine, dict]:
-    res = _engine([f"STEP {n}", _state_line(m), *_memory_lines(m.memory)])
+    res = _engine([f"STEP {n}", *_machine_lines(m), *_memory_lines(m.memory)])
     return _machine_from(res), res["observe"]
 
 
@@ -1187,18 +1200,18 @@ def _tool_run(args: dict) -> dict:
         }
     elif args.get("until_pc") is not None:
         target = mcp_server._addr(args["until_pc"], "until_pc")
-        r = _engine([f"RUNTO 200000 {target:04x}", _state_line(m), *_memory_lines(m.memory),
+        r = _engine([f"RUNTO 200000 {target:04x}", *_machine_lines(m), *_memory_lines(m.memory),
                      *(["WATCH " + " ".join(watch)] if watch else [])])
         m, out["reached"] = _machine_from(r), r["completed"]
         if not r["completed"]:
             out["warning"] = f"never fetched an opcode at ${target:04X} within 200000 half-cycles"
     else:
         n = int(args["half_cycles"])
-        r = _engine([f"STEP {n}", _state_line(m), *_memory_lines(m.memory),
+        r = _engine([f"STEP {n}", *_machine_lines(m), *_memory_lines(m.memory),
                      *(["WATCH " + " ".join(watch)] if watch else [])])
         m = _machine_from(r)
 
-    obs = _engine(["STEP 0", _state_line(m), *_memory_lines(m.memory),
+    obs = _engine(["STEP 0", *_machine_lines(m), *_memory_lines(m.memory),
                    *(["WATCH " + " ".join(watch)] if watch else [])])["observe"]
     out["half_cycle"] = m.state.half_cycle
     out["registers"] = {

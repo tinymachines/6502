@@ -530,11 +530,18 @@ gates are) and refuses every other name with -1; there is deliberately
 no `importMachine`, so a node-shaped value has no way in and an engine
 switch onto this rung means powering the cartridge here.
 
-Still open, deliberately: decimal mode (unexercised by any trace), M5's
-`ENGINE` word in halfwave, and a fetch-boundary crossing from a node
-rung's machine value (the seam word of the finishing instruction is the
-hard part: it needs the previous opcode's variant, which a node state
-does not carry at the boundary).
+In wasm the whole per-frame flow, export, import into a fresh machine and
+an 8,704 half-cycle frame, measured **0.86 ms per frame (10.1 M hc/s)**
+in node against the same frame's 350 ms on rung 0's wasm: the first
+in-page engine that is real time with headroom. M5's `ENGINE` word is
+live in halfwave (the account is in `service.md`: the binary moved to
+`v6502-halfwave`, `ENGINE 3` speaks `MICRO`, and the FastAPI half routes
+a step by the machine value's shape).
+
+Still open, deliberately: decimal mode (unexercised by any trace), and a
+fetch-boundary crossing from a node rung's machine value (the seam word
+of the finishing instruction is the hard part: it needs the previous
+opcode's variant, which a node state does not carry at the boundary).
 
 ### The same kernel on a GPU (`v6502-gpu`)
 
