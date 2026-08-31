@@ -192,6 +192,53 @@ fn fixture_cases() -> Vec<Case> {
     ]
 }
 
+/// Decimal mode, exposed at the pins: every case runs a chain of BCD
+/// operations under `SED` and lands each result in a `STA` (the byte on
+/// the write cycle) and each flag set in a `PHP` (the byte on the push),
+/// so an engine that adds in binary where the chip adjusts in decimal
+/// fails by address and value rather than by register. The values cover
+/// the low-nibble adjust, the high-nibble adjust, the wrap with carry,
+/// borrow cases, and one invalid-BCD input each way, whose answer is
+/// whatever the silicon does (the recording is the claim).
+fn decimal_cases() -> Vec<Case> {
+    let case = |name: &str, body: &[u8]| {
+        let mut prog = body.to_vec();
+        prog.extend([0x4c, 0x00, 0x03]); // JMP the fixture's handler loop
+        let mut loads = fixture_loads();
+        loads[0] = Load { org: 0x0200, bytes: prog };
+        Case {
+            name: format!("decimal-{name}"),
+            loads,
+            reset_vector: 0x0200,
+            steps: FIXTURE_STEPS,
+            stim: vec![],
+        }
+    };
+    vec![
+        // 19+28=47, 09+01=10 (low adjust), 99+99+1=99 C=1 (wrap), 50+50=00 C=1.
+        case("adc", &[
+            0xf8, 0x18, 0xa9, 0x19, 0x69, 0x28, 0x85, 0x80, 0x08,
+            0xa9, 0x09, 0x69, 0x01, 0x85, 0x81, 0x08,
+            0x38, 0xa9, 0x99, 0x69, 0x99, 0x85, 0x82, 0x08,
+            0x18, 0xa9, 0x50, 0x69, 0x50, 0x85, 0x83, 0x08,
+        ]),
+        // 42-13=29, 10-05=05 (borrow into the low nibble), 00-01=99 C=0.
+        case("sbc", &[
+            0xf8, 0x38, 0xa9, 0x42, 0xe9, 0x13, 0x85, 0x80, 0x08,
+            0xa9, 0x10, 0xe9, 0x05, 0x85, 0x81, 0x08,
+            0xa9, 0x00, 0xe9, 0x01, 0x85, 0x82, 0x08,
+        ]),
+        // Invalid BCD in ($1f+$01, $9a-$00), a compare under D (unaffected),
+        // and CLD mid-stream so the next add is binary again.
+        case("mixed", &[
+            0xf8, 0x18, 0xa9, 0x1f, 0x69, 0x01, 0x85, 0x80, 0x08,
+            0x38, 0xa9, 0x9a, 0xe9, 0x00, 0x85, 0x81, 0x08,
+            0xa9, 0x19, 0xc9, 0x11, 0x08,
+            0xd8, 0x18, 0xa9, 0x19, 0x69, 0x28, 0x85, 0x82, 0x08,
+        ]),
+    ]
+}
+
 /// One case per opcode: the trace page's preamble (`LDA #$41 / LDX #$02 /
 /// LDY #$03 / CLC`), the opcode with `$34 $12` as its operand bytes, then
 /// NOPs. The handler and vectors are the fixture's, so a BRK or a jam has
@@ -218,6 +265,7 @@ fn main() {
         None => eprintln!("pin-golden: no tools/golden-trace/golden.txt, so no golden.pins (node tools/golden-trace/gen.js --steps 3000)"),
     }
     cases.extend(fixture_cases());
+    cases.extend(decimal_cases());
     cases.extend(opcode_cases());
 
     let mut frames = 0usize;

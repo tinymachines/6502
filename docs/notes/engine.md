@@ -222,7 +222,7 @@ reset reaches `$FFFC`; RDY holds `$0202` for exactly the scripted span; the
 SO pulse shows in the pushed P (`$72` against `$32`); `KIL` sits on `$FFFF`
 to the end.
 
-`tests/replay.rs` replays all 271 through rung 0 and is the shape every other
+`tests/replay.rs` replays all 274 through rung 0 and is the shape every other
 rung's test takes: swap the constructor, nothing else. It SKIPS without the
 files (`REQUIRE_PINS=1` insists) and `MUTATE=1` flips one `db` bit halfway
 through the first trace and must go red, which it does, naming the trace, the
@@ -346,10 +346,10 @@ side first and the sweep by the tie-break, and a real chip by noise. The
 program result agrees. `examples/agree.rs` reports the node agreement and
 names the persistent nodes; it asserts nothing.
 
-**Held to the pin golden, all of it.** Lane 0 replays every one of the 271
+**Held to the pin golden, all of it.** Lane 0 replays every one of the 274
 traces identically: the seven programs, the reference's program, the seven
-scripted interrupt and RDY runs, all 256 opcodes including the twelve that
-never finish. `MUTATE=1` goes red by name. `tests/lanes.rs` gives lane 1 a
+scripted interrupt and RDY runs, the three decimal chains, all 256 opcodes
+including the twelve that never finish. `MUTATE=1` goes red by name. `tests/lanes.rs` gives lane 1 a
 different program and checks each lane touched only its own memory and
 counted the same number of times, that lanes 2 to 63 are identical to lane
 0 in every node, and that the accumulator carries `LDA #$41 / ADC #$01`'s
@@ -416,7 +416,7 @@ sequencer (`machine.rs`) plays spans through the datapath
 with the flags and the P-to-stack timing authored (`flags.rs`) and the
 selector shared with the recorder by include.
 
-**Held to the pin golden: all 271 traces replay with every pin equal at
+**Held to the pin golden: all 274 traces replay with every pin equal at
 every half-cycle**, `EXPECTED_FAILURES` and `UNAUTHORED_STIM` both empty,
 undocumented opcodes and the six scripted stimulus traces included.
 Decimal mode is unexercised by any trace. `MUTATE=1` goes red on the
@@ -538,10 +538,38 @@ live in halfwave (the account is in `service.md`: the binary moved to
 `v6502-halfwave`, `ENGINE 3` speaks `MICRO`, and the FastAPI half routes
 a step by the machine value's shape).
 
-Still open, deliberately: decimal mode (unexercised by any trace), and a
-fetch-boundary crossing from a node rung's machine value (the seam word
-of the finishing instruction is the hard part: it needs the previous
-opcode's variant, which a node state does not carry at the boundary).
+**Decimal mode, measured and authored (2026-08-31).** Three BCD chain
+fixtures joined the pin golden (274 traces now): every result lands in a
+`STA` and every flag set in a `PHP`, so a binary add where the chip
+adjusts fails by address and byte. `decimal-probe` (a `v6502-sim`
+example, the `reset-probe` method) showed where the adjust lives: `#DAA`
+drops through the ALU compute half-cycles, the ADD register holds the
+BINARY sum ($41 for $19+$28), SB carries it, and A receives the adjusted
+$47: Hanson's decimal adjust adders sit on the SB-to-AC path alone. The
+authoring follows the silicon: a seventh selector bit (`SEL_D`), two
+`SED` recorder contexts so the `#DAA`/`#DSA` drops are recorded control,
+a `dec_add` latch in the datapath set beside a decimal-enabled SUMS and
+applied only on `SBAC`, and NMOS decimal flags for the ADC family (Z
+binary, N and V from the intermediate, C decimal; SBC keeps every flag
+binary, so its ordinary path serves).
+
+The decimal fresh context (`gen-d` in the coverage test) then flushed
+two latent bugs the recorder's contexts had agreed past by luck, both
+the same disease: **data in the table wearing a control bit's clothes.**
+The overlap alucin was recorded wherever any ALU op ran, including ANDS
+and kin that ignore it (op 3b's AND carried a data level, single-valued
+across ten contexts, wrong on the eleventh); the recording rule now
+names the consumers (SUMS, SRS), and where nothing consumes the overlap
+sum at all the bit is masked outright. And the RRA family's overlap
+carry-in is its own ROR's carry OUT, the fresh-carry case: no selector
+key can determine it, so the recorder masks it and the sequencer
+computes it from its own mid-span shift capture, which is also what the
+ADC-half's flags consume.
+
+Still open, deliberately: a fetch-boundary crossing from a node rung's
+machine value (the seam word of the finishing instruction is the hard
+part: it needs the previous opcode's variant, which a node state does
+not carry at the boundary).
 
 ### The same kernel on a GPU (`v6502-gpu`)
 

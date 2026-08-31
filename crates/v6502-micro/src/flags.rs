@@ -21,6 +21,9 @@ pub struct Caps {
     /// The last SUMS capture at the overlap: the accumulator path's own
     /// compute (ADC, compares, ASL A) runs under the next fetch.
     pub sum: Option<(u8, u8, bool, u8)>,
+    /// Whether that SUMS ran with `#DAA` asserted (low): the decimal add,
+    /// whose C, N and V follow the adjusted value rather than the binary.
+    pub sum_daa: bool,
     /// The last SUMS capture before the overlap: an RMW's modify.
     pub sum_pre: Option<(u8, u8, bool, u8)>,
     /// The same split for SRS, the right shift.
@@ -47,6 +50,21 @@ fn adc_flags(p: &mut u8, (a, b, cin, r): (u8, u8, bool, u8)) {
     put(p, C, (a as u16 + b as u16 + cin as u16) > 0xff);
     put(p, V, (a ^ r) & (b ^ r) & 0x80 != 0);
     nz(p, r);
+}
+
+/// The decimal add's flags, NMOS rules held to the recorded pushes
+/// (`decimal-adc.pins`): Z from the BINARY sum, N and V from the value
+/// after the low-nibble adjust and before the high fix-up, C from the
+/// decimal carry. SBC in decimal keeps every flag binary on NMOS, so the
+/// ordinary path serves it.
+fn adc_decimal_flags(p: &mut u8, (a, b, cin, r): (u8, u8, bool, u8)) {
+    put(p, Z, r == 0);
+    let al = (a as u16 & 0xf) + (b as u16 & 0xf) + cin as u16;
+    let al = if al >= 0x0a { ((al + 6) & 0xf) + 0x10 } else { al };
+    let s = (a as u16 & 0xf0) + (b as u16 & 0xf0) + al;
+    put(p, N, s & 0x80 != 0);
+    put(p, V, (a as u16 ^ s) & (b as u16 ^ s) & 0x80 != 0);
+    put(p, C, s >= 0xa0);
 }
 
 /// Applied at the instruction boundary, after the overlap half-cycles and
@@ -100,7 +118,11 @@ pub fn update(op: u8, p: &mut u8, a: u8, x: u8, y: u8, s: u8, c: &Caps) {
         | 0xf9 | 0xe1 | 0xf1 | 0xeb | 0x67 | 0x77 | 0x6f | 0x7f | 0x7b | 0x63 | 0x73 | 0xe7
         | 0xf7 | 0xef | 0xff | 0xfb | 0xe3 | 0xf3 => {
             if let Some(s) = c.sum {
-                adc_flags(p, s);
+                if c.sum_daa {
+                    adc_decimal_flags(p, s);
+                } else {
+                    adc_flags(p, s);
+                }
             }
         }
         // Compares: carry and NZ from the captured subtract.

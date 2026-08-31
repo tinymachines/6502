@@ -32,6 +32,9 @@ const CONTEXTS: &[(&str, u16, &[u8], &[u8])] = &[
     // V=1, C=1 near the page end: BVS and BCS taken across a page, X
     // crossing.
     ("gen-c", 0x02f4, &[0xa9, 0x40, 0x85, 0x10, 0x24, 0x10, 0xa2, 0xc0, 0x38], &[0x55, 0x02, 0x00]),
+    // D=1 with values the recorder never used: the ADC/SBC families must
+    // find their SEL_D variants (the `#DAA`/`#DSA` drops are control).
+    ("gen-d", 0x0231, &[0xa9, 0x77, 0xa2, 0x05, 0xa0, 0x06, 0xf8, 0x18], &[0x33, 0x02, 0x00]),
 ];
 
 #[test]
@@ -71,9 +74,14 @@ fn fresh_contexts_are_predicted_line_for_line() {
                     eprintln!("MUTATE=1: flipped sync in LDA #'s expected span at h=3");
                 }
                 let mut got = vector(&cpu, &ids);
-                // The recorder's overlap rule (build.rs): where the flag
-                // says the overlap alucin was data, the table masks it.
-                if h + 2 >= span.len() && table::overlap_cin_from_c(op, key) {
+                // The recorder's overlap rules (build.rs): where the flag
+                // says the overlap alucin was data, or nothing consumes it
+                // (lines.rs), the table masks it and so does this reading.
+                if h + 2 >= span.len()
+                    && (table::overlap_cin_from_c(op, key)
+                        || (!overlap_alucin_consumed(op) && table::seam(op, key) == 0)
+                        || overlap_cin_from_shift(op))
+                {
                     got &= !(1 << BIT_ALUCIN);
                 }
                 if got != want {

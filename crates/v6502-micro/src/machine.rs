@@ -223,7 +223,7 @@ impl MicroCpu {
             pcl: r[5], pch: r[6], pclp: r[7], pchp: r[8],
             abl: r[9], abh: r[10], dl: r[11], dor: r[12], add: r[13],
             ai: r[14], bi: r[15],
-            sb: 0xff, db: 0xff, adl: 0xff, adh: 0xff,
+            sb: 0xff, db: 0xff, adl: 0xff, adh: 0xff, dec_add: 0,
         };
         self.p = r[4] | 0x20;
         self.stream = Stream::Tail;
@@ -354,9 +354,17 @@ impl MicroCpu {
         let phase = self.next_phase;
         let overlap = self.in_overlap();
         let rw_read = w >> BIT_RW & 1 != 0;
-        // At the overlap, an increment's +1 is recorded; only where the
-        // recording proved data-ridden does the C flag stand in.
-        let cin = if overlap && self.cin_from_c { self.p & 1 != 0 } else { w >> BIT_ALUCIN & 1 != 0 };
+        // At the overlap, an increment's +1 is recorded; where the
+        // recording proved data-ridden the C flag stands in, and the RRA
+        // family's carry-in is its own ROR's carry out, in flight in the
+        // mid-span shift capture (lines.rs, `overlap_cin_from_shift`).
+        let cin = if overlap && crate::lines::overlap_cin_from_shift(self.op) {
+            self.caps.srs_pre.map(|(before, _)| before & 1 != 0).unwrap_or(false)
+        } else if overlap && self.cin_from_c {
+            self.p & 1 != 0
+        } else {
+            w >> BIT_ALUCIN & 1 != 0
+        };
 
         let db;
         if phase == Phase::Phi1 {
@@ -423,6 +431,7 @@ impl MicroCpu {
             if w >> bit::SUMS & 1 != 0 {
                 if overlap {
                     self.caps.sum = Some((ai, bi, cin, r));
+                    self.caps.sum_daa = w >> bit::DAA_N & 1 == 0;
                 } else {
                     self.caps.sum_pre = Some((ai, bi, cin, r));
                 }
@@ -626,7 +635,7 @@ impl MicroState {
         let d = &self.dp;
         b.extend_from_slice(&[
             d.a, d.x, d.y, d.s_in, d.s_out, d.pcl, d.pch, d.pclp, d.pchp, d.abl, d.abh, d.dl,
-            d.dor, d.add, d.ai, d.bi, d.sb, d.db, d.adl, d.adh,
+            d.dor, d.add, d.ai, d.bi, d.sb, d.db, d.adl, d.adh, d.dec_add,
         ]);
         b.push(self.stream);
         b.extend_from_slice(&(self.pos as u16).to_le_bytes());
@@ -639,6 +648,7 @@ impl MicroState {
         let c = &self.caps;
         b.push(c.last_read);
         b.push(c.last_write);
+        b.push(c.sum_daa as u8);
         let opt4 = |b: &mut Vec<u8>, o: Option<(u8, u8, bool, u8)>| match o {
             Some((x, y, z, r)) => b.extend_from_slice(&[1, x, y, z as u8, r]),
             None => b.extend_from_slice(&[0, 0, 0, 0, 0]),
@@ -698,11 +708,11 @@ impl MicroState {
         }
         let half_cycle = u64::from_le_bytes(take(8)?.try_into().unwrap());
         let p = take(1)?[0];
-        let d = take(20)?;
+        let d = take(21)?;
         let dp = Datapath {
             a: d[0], x: d[1], y: d[2], s_in: d[3], s_out: d[4], pcl: d[5], pch: d[6],
             pclp: d[7], pchp: d[8], abl: d[9], abh: d[10], dl: d[11], dor: d[12], add: d[13],
-            ai: d[14], bi: d[15], sb: d[16], db: d[17], adl: d[18], adh: d[19],
+            ai: d[14], bi: d[15], sb: d[16], db: d[17], adl: d[18], adh: d[19], dec_add: d[20],
         };
         let bit = |b: u8, what: &str| -> Result<bool, String> {
             match b {
@@ -721,6 +731,7 @@ impl MicroState {
         let seam = u64::from_le_bytes(take(8)?.try_into().unwrap());
         let last_read = take(1)?[0];
         let last_write = take(1)?[0];
+        let sum_daa = bit(take(1)?[0], "sum_daa")?;
         let mut opt4 = |what: &str| -> Result<Option<(u8, u8, bool, u8)>, String> {
             let s = take(5)?;
             match s[0] {
@@ -778,7 +789,7 @@ impl MicroState {
             kil,
             cin_from_c,
             seam,
-            caps: Caps { last_read, last_write, sum, sum_pre, srs, srs_pre, logic },
+            caps: Caps { last_read, last_write, sum_daa, sum, sum_pre, srs, srs_pre, logic },
             reads,
             writes,
             next_op,

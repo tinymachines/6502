@@ -53,6 +53,10 @@ const CONTEXTS: &[(&str, u16, &[u8], &[u8])] = &[
     // for it. C=1 with a positive offset, and C=0 with a negative one.
     ("cpos", 0x0200, &[0xa9, 0x01, 0xa2, 0x02, 0xa0, 0x03, 0x38], &[0x34, 0x02, 0x00]),
     ("cneg", 0x0240, &[0xa9, 0x01, 0xa2, 0x02, 0xa0, 0x03, 0x18], &[0xf8, 0x02, 0x00]),
+    // Decimal mode, both carry values: the ADC/SBC families drop #DAA or
+    // #DSA under D, which is a control difference SEL_D has to carry.
+    ("dec", 0x0200, &[0xa9, 0x19, 0xa2, 0x02, 0xa0, 0x03, 0xf8, 0x18], &[0x28, 0x02, 0x00]),
+    ("decc", 0x0200, &[0xa9, 0x99, 0xa2, 0x02, 0xa0, 0x03, 0xf8, 0x38], &[0x99, 0x02, 0x00]),
 ];
 
 /// How far past the fetch the recorder looks before calling an opcode KIL.
@@ -132,6 +136,17 @@ fn record(op: u8, ids: &[u16], name: &'static str, base: u16, preamble: &[u8], o
         vector(&cpu, ids) & WB_MASK
     };
     span.drain(..2);
+    // The overlap alucin, where nothing consumes it, is data the key
+    // cannot determine (lines.rs, `overlap_alucin_consumed`): masked here
+    // and in the coverage test's reading, held harmless by the pin replay.
+    // The RRA family's is data too, but consumed (the fresh carry): masked
+    // here, computed by the sequencer from its own shift capture.
+    if ((!overlap_alucin_consumed(op) && wb == 0) || overlap_cin_from_shift(op)) && !kil {
+        let n = span.len();
+        for w in &mut span[n.saturating_sub(2)..] {
+            *w &= !(1 << BIT_ALUCIN);
+        }
+    }
     Recorded { key, context: name, span, kil, cin_from_c: false, wb }
 }
 
@@ -212,9 +227,9 @@ fn main() {
             }
             true
         };
-        // The SMALLEST single-valued mask, by exhaustive search over the six
-        // bits: a greedy pick chose whichever correlate came first.
-        let mut candidates: Vec<u8> = (0u8..64).collect();
+        // The SMALLEST single-valued mask, by exhaustive search over the
+        // seven bits: a greedy pick chose whichever correlate came first.
+        let mut candidates: Vec<u8> = (0u8..128).collect();
         candidates.sort_by_key(|m| (m.count_ones(), *m));
         let mask = *candidates
             .iter()

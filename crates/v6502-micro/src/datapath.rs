@@ -51,6 +51,13 @@ pub struct Datapath {
     /// The ALU's two input latches.
     pub ai: u8,
     pub bi: u8,
+    /// The decimal adjust, latched beside a SUMS that ran with `#DAA` or
+    /// `#DSA` asserted (low) and applied on the SB-to-AC transfer: the
+    /// probe measured ADD holding the BINARY sum ($41 for $19+$28) and SB
+    /// carrying it while A received the adjusted $47, which is Hanson's
+    /// decimal adjust adders sitting on that one path. Zero after any
+    /// binary ALU operation, so nothing else ever feels it.
+    pub dec_add: u8,
     /// The four internal buses as of the last step, for observation.
     pub sb: u8,
     pub db: u8,
@@ -185,7 +192,7 @@ impl Datapath {
                 self.s_in = self.s_out;
             }
             if on(w, SBAC) {
-                self.a = sb;
+                self.a = sb.wrapping_add(self.dec_add);
             }
             if on(w, SBADD) {
                 self.ai = sb;
@@ -218,12 +225,42 @@ impl Datapath {
             let (a, b) = (self.ai as u16, self.bi as u16);
             if on(w, SUMS) {
                 self.add = (a + b + cin) as u8;
+                // The decimal adjust decision rides beside the binary sum
+                // (Bruce Clark's NMOS algorithm, held to the recorded
+                // traces): the adjusted result minus the binary one is
+                // what the SB-to-AC adders will add. `#DSA` works on the
+                // COMPLEMENTED B the latch already holds, which is what
+                // SBC loaded through nDBADD.
+                self.dec_add = if !on(w, DAA_N) {
+                    let al = (a & 0xf) + (b & 0xf) + cin;
+                    let al = if al >= 0x0a { ((al + 6) & 0xf) + 0x10 } else { al };
+                    let mut s = (a & 0xf0) + (b & 0xf0) + al;
+                    if s >= 0xa0 {
+                        s += 0x60;
+                    }
+                    (s as u8).wrapping_sub(self.add)
+                } else if !on(w, DSA_N) {
+                    let ob = !(b as u8) as i16; // the operand as written
+                    let oa = a as i16;
+                    let al = (oa & 0xf) - (ob & 0xf) + cin as i16 - 1;
+                    let al = if al < 0 { ((al - 6) & 0xf) - 0x10 } else { al };
+                    let mut s = (oa & 0xf0) - (ob & 0xf0) + al;
+                    if s < 0 {
+                        s -= 0x60;
+                    }
+                    (s as u8).wrapping_sub(self.add)
+                } else {
+                    0
+                };
             } else if on(w, ANDS) {
                 self.add = (a & b) as u8;
+                self.dec_add = 0;
             } else if on(w, ORS) {
                 self.add = (a | b) as u8;
+                self.dec_add = 0;
             } else if on(w, EORS) {
                 self.add = (a ^ b) as u8;
+                self.dec_add = 0;
             } else if on(w, SRS) {
                 // The right shift is of the B input ALONE, with the
                 // carry-in into bit 7 (how ROR and LSR share one line).
@@ -232,6 +269,7 @@ impl Datapath {
                 // both latches with A; rung 0's own latches through LSR zp
                 // (ai=ff, bi=ea, add=75) settled it.
                 self.add = ((b >> 1) as u8) | (cin as u8) << 7;
+                self.dec_add = 0;
             }
             self.dl = data_in;
             self.s_out = self.s_in;

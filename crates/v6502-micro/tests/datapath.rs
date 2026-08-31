@@ -75,7 +75,7 @@ fn nine_fields_exact_over_four_programs() {
             pcl: regs.pc as u8, pch: (regs.pc >> 8) as u8,
             pclp: ints.pclp, pchp: ints.pchp, abl: ints.abl, abh: ints.abh,
             dl: ints.idl, dor: ints.dor, add: ints.alu, ai: ints.alua, bi: ints.alub,
-            sb: 0xff, db: 0xff, adl: 0xff, adh: 0xff,
+            sb: 0xff, db: 0xff, adl: 0xff, adh: 0xff, dec_add: 0,
         };
         for i in 0..N {
             cpu.half_step();

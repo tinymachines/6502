@@ -65,6 +65,43 @@ pub const SEL_YCROSS: u8 = 1 << 3;
 pub const SEL_CARRY: u8 = 1 << 4;
 //   bit 5  a taken branch's offset is negative (nDBADD against DBADD)
 pub const SEL_NEG: u8 = 1 << 5;
+//   bit 6  the decimal flag (into #DAA/#DSA for the ADC and SBC families)
+pub const SEL_D: u8 = 1 << 6;
+
+/// Whether the OVERLAP's ALU carry-in lands anywhere: the ops whose flag
+/// update reads the overlap captures (`flags.rs`: the ADC/SBC family and
+/// its composites, the compares, SBX, the accumulator shifts, the
+/// register increments). For everything else the overlap sum is the fetch
+/// cycle's incidental add, and its carry-in is data the selector key
+/// cannot determine (the decimal fresh context proved it on ROL abs,X:
+/// same key, different memory, different level). The recorder masks the
+/// bit where this is false AND the variant has no seam write-back, and
+/// the coverage test masks its reading the same way; the pin replay is
+/// what proves the masking harmless.
+pub fn overlap_alucin_consumed(op: u8) -> bool {
+    matches!(op,
+        // ADC / SBC and the RRA/ISC composites.
+        0x69 | 0x65 | 0x75 | 0x6d | 0x7d | 0x79 | 0x61 | 0x71
+        | 0xe9 | 0xe5 | 0xf5 | 0xed | 0xfd | 0xf9 | 0xe1 | 0xf1 | 0xeb
+        | 0x67 | 0x77 | 0x6f | 0x7f | 0x7b | 0x63 | 0x73
+        | 0xe7 | 0xf7 | 0xef | 0xff | 0xfb | 0xe3 | 0xf3
+        // Compares and SBX.
+        | 0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1
+        | 0xe0 | 0xe4 | 0xec | 0xc0 | 0xc4 | 0xcc
+        | 0xc7 | 0xd7 | 0xcf | 0xdf | 0xdb | 0xc3 | 0xd3 | 0xcb
+        // Accumulator shifts, ANC's kin, and the register increments.
+        | 0x0a | 0x2a | 0x4a | 0x6a | 0x4b
+        | 0xe8 | 0xc8 | 0xca | 0x88)
+}
+
+/// The RRA family: ROR memory, then ADC, whose overlap carry-in is the
+/// ROR's own carry OUT: the famous fresh-carry case, data from the
+/// operand byte that no selector key can determine. The recorder masks
+/// the bit and the sequencer computes it from its own mid-span shift
+/// capture (`srs_pre`), which is also what the ADC's flags consume.
+pub fn overlap_cin_from_shift(op: u8) -> bool {
+    matches!(op, 0x67 | 0x77 | 0x6f | 0x7f | 0x7b | 0x63 | 0x73)
+}
 
 /// Every column by name, so the datapath and the sequencer index the vector
 /// without a string in sight. `tests/datapath.rs` holds each one against

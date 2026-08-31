@@ -31,6 +31,9 @@ pub fn selector(op: u8, p: u8, x: u8, y: u8, fetch_pc: u16, image: &[u8]) -> u8 
     if p & 1 != 0 {
         key |= SEL_CARRY;
     }
+    if p & 8 != 0 {
+        key |= SEL_D;
+    }
     if op & 0x1f == 0x10 {
         // Branch: opcode bits 7..6 pick the flag, bit 5 the level it takes on.
         let flag = match op >> 6 {

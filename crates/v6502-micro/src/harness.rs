@@ -50,11 +50,14 @@ fn vector(cpu: &Cpu<FlatMemory>, ids: &[u16]) -> u64 {
     if pf.sync {
         v |= 1 << BIT_SYNC;
     }
-    // Only where an ALU operation consumes it, in phi2: elsewhere the node
-    // rides the data (op 2e's recorder conflict found this) and recording
-    // it would put data in the table.
-    let alu_op = v >> 15 & 0x1f != 0; // ORS SRS ANDS EORS SUMS
-    if alu_op && cpu.phase() == v6502_sim::Phase::Phi2 && cpu.engine().is_high(ids[49]) {
+    // Only where an ALU operation CONSUMES it, in phi2: elsewhere the node
+    // rides the data and recording it would put data in the table. Op 2e's
+    // recorder conflict found the phi1 case; the decimal fresh context
+    // found the rest (op 3b: RLA's AND ran with a data level on the node,
+    // single-valued across the recorder's contexts by luck). The consumers
+    // are SUMS and SRS; ANDS, ORS and EORS ignore the carry-in.
+    let alu_consumes = v >> 19 & 1 != 0 || v >> 16 & 1 != 0; // SUMS, SRS
+    if alu_consumes && cpu.phase() == v6502_sim::Phase::Phi2 && cpu.engine().is_high(ids[49]) {
         v |= 1 << BIT_ALUCIN;
     }
     // The incrementer carries are the datapath's to compute, not the
