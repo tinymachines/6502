@@ -416,14 +416,51 @@ sequencer (`machine.rs`) plays spans through the datapath
 with the flags and the P-to-stack timing authored (`flags.rs`) and the
 selector shared with the recorder by include.
 
-**Held to the pin golden: 259 of 265 traces replay with every pin equal at
-every half-cycle**, `EXPECTED_FAILURES` empty, undocumented opcodes
-included. The six stimulus traces are skipped by name: interrupts and RDY
-are not yet authored, and that gap is recorded in the replay test rather
-than papered over. Decimal mode is unexercised by any trace. `MUTATE=1`
-goes red on the table (one expected bit), the datapath (one suppressed
-#IPC, caught at pclp that half-cycle) and the replay (one flipped db bit,
-named by trace).
+**Held to the pin golden: all 271 traces replay with every pin equal at
+every half-cycle**, `EXPECTED_FAILURES` and `UNAUTHORED_STIM` both empty,
+undocumented opcodes and the six scripted stimulus traces included.
+Decimal mode is unexercised by any trace. `MUTATE=1` goes red on the
+table (one expected bit), the datapath (one suppressed #IPC, caught at
+pclp that half-cycle) and the replay (one flipped db bit, named by
+trace).
+
+The input pins are authored against those six traces (2026-08-31), and
+the mechanism is smaller than it sounds because the silicon's own trick
+carries over: **an interrupt is the recorded BRK span hijacked**. The
+poll at the coming fetch (IRQ level sampled every phi2 except the final
+cycle's, the NMI edge latched until serviced) turns the next instruction
+into op 00's span with three word edits: `#IPC` forced through the
+fetch's and T1's phi2, so the pins re-read the fetch address and push the
+un-incremented PC; the pushed P carries B clear; and the flavour's vector
+select asserts beside the recorded lines, through BOTH vector cycles.
+That last clause was the one measured surprise: T6's low address byte is
+undriven precharge in the recorded span (ffff is just a precharged bus),
+so an NMI keyed off `0/ADL0` alone read ffff where the chip reads fffb.
+I sets right after the P push, which also closed a latent gap in plain
+BRK: nothing had observed I before an IRQ could be held asserted into
+the handler. RDY holds a read cycle still while the clock keeps toggling
+(latched at the phi1 that would begin a new cycle after a read; writes
+ignore it), and SO's false-to-true transition sets V.
+
+The reset-mid-run trace looked unauthorable from the pins alone: three
+cycles of junk addresses (0200 without sync, 5801, 0057, then a sync at
+00ff) between the in-flight BRK and the warm reset sequence. It was
+measured instead (`v6502-sim --example reset-probe`: the fixture's own
+script on rung 0, printing the 51 control lines and the datapath latches
+per half-cycle), and the freewheel turned out to be mechanical: **under
+res the fetch never registers, and the machine replays the overlap
+word-pair; the junk addresses are the datapath itself**, `ADDADL` and
+`DL/ADH` walking DL and ADD through 58:01, 00:57, 00:ff. One pair after
+release the same words play with sync, the warm reset's own fetch, and
+the BRK span follows in the Res flavour: rw forced high through the span
+(the pushes read; measured, and independent of the pin's level by then),
+`0/ADL1` through both vector cycles (fffc, fffd), I set. Two latches
+carry the measured timing: the boundary decisions consult res as of the
+last phi1 (release takes one extra pair, exactly as recorded), and the
+vector-select arm is double-latched at phi2 (an in-flight BRK's T6
+steals to fffd while its T5 still read fffe). What res does mid-way
+through a non-BRK instruction is the same machinery by construction and
+is not separately measured; the fixture is the one oracle.
 
 **39.0 M half-cycles/s on the inc loop, about 1,465x rung 0: 19.5x a real
 1 MHz part.** This is the latency rung: the other rungs settle a network
@@ -473,9 +510,8 @@ and holds `abl abh pc pclp pchp a x y s` exact over 2,400 half-cycles,
 with the hold registers at their measured figures (alu 95.4%, dor 97.8%,
 idl 98.9%) above a 90% floor.
 
-Still open, deliberately: the stimulus traces (interrupt and RDY
-sequencing, authored, held by the scripted `.pins` files), decimal mode,
-and M5's `ENGINE` word in halfwave. The rung 3 state codec (registers plus
+Still open, deliberately: decimal mode (unexercised by any trace), and
+M5's `ENGINE` word in halfwave. The rung 3 state codec (registers plus
 table position) is its own and smaller than the four bitsets, and does not
 pretend to be them.
 
