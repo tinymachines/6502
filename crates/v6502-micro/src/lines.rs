@@ -53,3 +53,56 @@ pub const SEL_YCROSS: u8 = 1 << 3;
 pub const SEL_CARRY: u8 = 1 << 4;
 //   bit 5  a taken branch's offset is negative (nDBADD against DBADD)
 pub const SEL_NEG: u8 = 1 << 5;
+
+/// Every column by name, so the datapath and the sequencer index the vector
+/// without a string in sight. `tests/datapath.rs` holds each one against
+/// `LINE_NAMES`, so a reorder cannot drift past it.
+pub mod bit {
+    pub const ADH_ABH: usize = 0;
+    pub const ADL_ABL: usize = 1;
+    pub const YSB: usize = 2;
+    pub const SBY: usize = 3;
+    pub const XSB: usize = 4;
+    pub const SBX: usize = 5;
+    pub const SSB: usize = 6;
+    pub const SADL: usize = 7;
+    pub const SBS: usize = 8;
+    pub const SS: usize = 9;
+    pub const NDBADD: usize = 10;
+    pub const DBADD: usize = 11;
+    pub const ADLADD: usize = 12;
+    pub const SBADD: usize = 13;
+    pub const ZADD: usize = 14;
+    pub const ORS: usize = 15;
+    pub const SRS: usize = 16;
+    pub const ANDS: usize = 17;
+    pub const EORS: usize = 18;
+    pub const SUMS: usize = 19;
+    pub const DAA_N: usize = 20;
+    pub const ADDSB7: usize = 21;
+    pub const ADDSB06: usize = 22;
+    pub const ADDADL: usize = 23;
+    pub const DSA_N: usize = 24;
+    pub const SBAC: usize = 25;
+    pub const ACSB: usize = 26;
+    pub const SBDB: usize = 27;
+    pub const ACDB: usize = 28;
+    pub const SBADH: usize = 29;
+    pub const ZADH0: usize = 30;
+    pub const ZADH17: usize = 31;
+    pub const ADHPCH: usize = 32;
+    pub const PCHPCH: usize = 33;
+    pub const PCHADH: usize = 34;
+    pub const PCHDB: usize = 35;
+    pub const IPC_N: usize = 38;
+    pub const PCLDB: usize = 39;
+    pub const PCLADL: usize = 40;
+    pub const PCLPCL: usize = 41;
+    pub const ADLPCL: usize = 42;
+    pub const DL_ADL: usize = 43;
+    pub const DL_ADH: usize = 44;
+    pub const DL_DB: usize = 45;
+    pub const VADL0: usize = 46;
+    pub const VADL1: usize = 47;
+    pub const VADL2: usize = 48;
+}

@@ -16,6 +16,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod datapath;
 pub mod lines;
 
 pub mod table {

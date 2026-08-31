@@ -25,6 +25,7 @@ use std::sync::Arc;
 use v6502_sim::bus::FlatMemory;
 use v6502_sim::cpu::Cpu;
 
+#[allow(dead_code)] // the bit constants are the library's and the datapath's
 mod lines {
     include!("src/lines.rs");
 }
