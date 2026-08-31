@@ -38,10 +38,11 @@ const CONTEXTS: &[(&str, u16, &[u8], &[u8])] = &[
 fn fresh_contexts_are_predicted_line_for_line() {
     let mutate = std::env::var_os("MUTATE").is_some();
     let nl = v6502_netlist::mos6502();
-    let ids: Vec<u16> = LINE_NAMES[..49]
+    let mut ids: Vec<u16> = LINE_NAMES[..49]
         .iter()
         .map(|n| nl.node(n).expect("a line is a node on this die"))
         .collect();
+    ids.push(nl.node("alucin").expect("alucin is a node"));
     let mut checked_hc = 0u64;
     let mut variants_hit = std::collections::HashSet::new();
     for &(name, base, pre, ops) in CONTEXTS {
@@ -69,10 +70,15 @@ fn fresh_contexts_are_predicted_line_for_line() {
                     want ^= 1 << BIT_SYNC;
                     eprintln!("MUTATE=1: flipped sync in LDA #'s expected span at h=3");
                 }
-                let got = vector(&cpu, &ids);
+                let mut got = vector(&cpu, &ids);
+                // The recorder's overlap rule (build.rs): the table says
+                // nothing about alucin in the two overlap half-cycles.
+                if h + 2 >= span.len() {
+                    got &= !(1 << BIT_ALUCIN);
+                }
                 if got != want {
                     let d = got ^ want;
-                    let names: Vec<&str> = (0..51).filter(|i| d >> i & 1 != 0).map(|i| LINE_NAMES[i]).collect();
+                    let names: Vec<&str> = (0..52).filter(|i| d >> i & 1 != 0).map(|i| if i == 51 { "alucin" } else { LINE_NAMES[i] }).collect();
                     panic!("op {op:02x} in {name} at h={}: table and chip disagree on {}", h + 2, names.join(", "));
                 }
                 checked_hc += 1;

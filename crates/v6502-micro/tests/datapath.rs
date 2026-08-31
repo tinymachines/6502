@@ -58,8 +58,8 @@ fn bits_match_names() {
 fn nine_fields_exact_over_four_programs() {
     let mut mutate = std::env::var_os("MUTATE").is_some();
     let nl = v6502_netlist::mos6502();
-    let ids: Vec<u16> = LINE_NAMES[..49].iter().map(|n| nl.node(n).expect("a line is a node")).collect();
-    let alucin = nl.node("alucin").expect("alucin is a node");
+    let mut ids: Vec<u16> = LINE_NAMES[..49].iter().map(|n| nl.node(n).expect("a line is a node")).collect();
+    ids.push(nl.node("alucin").expect("alucin is a node"));
     let mut total = 0u64;
     let mut soft_ok = [0u64; 3]; // alu, dor, idl
     for (pname, code) in PROGS {
@@ -95,7 +95,7 @@ fn nine_fields_exact_over_four_programs() {
             }
             let bus = cpu.bus_state();
             let data_in = if bus.rw == v6502_sim::ReadWrite::Read { bus.data } else { m.dor };
-            m.step(w, phase, data_in, cpu.engine().is_high(alucin));
+            m.step(w, phase, data_in, w >> BIT_ALUCIN & 1 != 0);
             total += 1;
             let regs = cpu.registers();
             let ints = cpu.internals().unwrap();

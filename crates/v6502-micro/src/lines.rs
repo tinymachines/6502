@@ -26,6 +26,10 @@ pub const LINE_NAMES: [&str; 51] = [
 
 pub const BIT_RW: usize = 49;
 pub const BIT_SYNC: usize = 50;
+// The ALU carry-in, recorded beside the controls: a data signal, but a
+// single-valued one under the selector key, because the carry flag is a
+// key bit wherever it feeds the ALU.
+pub const BIT_ALUCIN: usize = 51;
 
 // Two of the 46 are not control at all: `dpc34_PCLC` and `dpc35_PCHC` are
 // the PC incrementer's carries, data signals wearing control-line names

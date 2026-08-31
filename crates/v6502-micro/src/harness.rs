@@ -24,7 +24,7 @@ fn boot(image: &[u8]) -> Cpu<FlatMemory> {
     cpu
 }
 
-/// The 51-bit vector, bit i from `LINE_NAMES[i]`.
+/// The vector, bit i from `LINE_NAMES[i]`, plus rw, sync and alucin.
 fn vector(cpu: &Cpu<FlatMemory>, ids: &[u16]) -> u64 {
     let mut v = 0u64;
     for (i, &id) in ids.iter().enumerate() {
@@ -38,6 +38,13 @@ fn vector(cpu: &Cpu<FlatMemory>, ids: &[u16]) -> u64 {
     }
     if bus.sync {
         v |= 1 << BIT_SYNC;
+    }
+    // Only where an ALU operation consumes it, in phi2: elsewhere the node
+    // rides the data (op 2e's recorder conflict found this) and recording
+    // it would put data in the table.
+    let alu_op = v >> 15 & 0x1f != 0; // ORS SRS ANDS EORS SUMS
+    if alu_op && cpu.phase() == v6502_sim::Phase::Phi2 && cpu.engine().is_high(ids[49]) {
+        v |= 1 << BIT_ALUCIN;
     }
     // The incrementer carries are the datapath's to compute, not the
     // table's to say; see lines.rs.

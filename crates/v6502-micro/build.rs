@@ -103,6 +103,16 @@ fn record(op: u8, ids: &[u16], name: &'static str, base: u16, preamble: &[u8], o
         }
     }
     span.drain(..2);
+    // The overlap's alucin is the finishing instruction's own tail: for the
+    // ADC class it is the old carry (already in this span's key), for an
+    // RMW it rides the freshly computed carry, which is data (op 2e's
+    // recorder conflict). The table says nothing there; the sequencer
+    // supplies its own not-yet-updated C flag, which is the old carry.
+    if !kil {
+        let n = span.len();
+        span[n - 1] &= !(1 << BIT_ALUCIN);
+        span[n - 2] &= !(1 << BIT_ALUCIN);
+    }
     Recorded { key, context: name, span, kil }
 }
 
@@ -112,10 +122,11 @@ fn main() {
     println!("cargo:rerun-if-changed=src/select.rs");
     println!("cargo:rerun-if-changed=src/harness.rs");
     let nl = v6502_netlist::mos6502();
-    let ids: Vec<u16> = LINE_NAMES[..49]
+    let mut ids: Vec<u16> = LINE_NAMES[..49]
         .iter()
         .map(|n| nl.node(n).unwrap_or_else(|| panic!("line {n} is not a node on this die")))
         .collect();
+    ids.push(nl.node("alucin").expect("alucin is a node"));
 
     // Per opcode: variants after the gate, as (masked key, span).
     let mut variants_of: Vec<Vec<(u8, Vec<u64>, bool)>> = Vec::with_capacity(256);
@@ -133,7 +144,7 @@ fn main() {
                     for h in 0..n {
                         let d = prev.span[h] ^ r.span[h];
                         if d != 0 {
-                            let names: Vec<&str> = (0..51).filter(|i| d >> i & 1 != 0).map(|i| LINE_NAMES[i]).collect();
+                            let names: Vec<&str> = (0..52).filter(|i| d >> i & 1 != 0).map(|i| if i == 51 { "alucin" } else { LINE_NAMES[i] }).collect();
                             eprintln!("op {op:02x} h={} ({} vs {}): {}", h + 2, prev.context, r.context, names.join(", "));
                         }
                     }
@@ -233,8 +244,9 @@ fn main() {
     let _ = writeln!(w, "pub static RESET_TAIL: [u64; {}] = {:?};", tail.len(), tail);
     let _ = writeln!(
         w,
-        "/// a x y s p pcl pch pclp pchp at h=0, measured.\npub static RESET_REGS: [u8; 9] = [{}, {}, {}, {}, {}, {}, {}, {}, {}];",
-        r0.a, r0.x, r0.y, r0.s, r0.p, r0.pc & 0xff, r0.pc >> 8, i0.pclp, i0.pchp
+        "/// a x y s p pcl pch pclp pchp abl abh dl dor add ai bi at h=0, measured.\npub static RESET_REGS: [u8; 16] = [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}];",
+        r0.a, r0.x, r0.y, r0.s, r0.p, r0.pc & 0xff, r0.pc >> 8, i0.pclp, i0.pchp,
+        i0.abl, i0.abh, i0.idl, i0.dor, i0.alu, i0.alua, i0.alub
     );
     let _ = writeln!(
         w,
