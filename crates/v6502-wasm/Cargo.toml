@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 #                      one at runtime, which is what lets the published
 #                      package be MIT the way `halfphi` is.
 default = ["mos6502"]
-mos6502 = ["v6502-sim/mos6502", "dep:v6502-hybrid", "dep:v6502-compiled"]
+mos6502 = ["v6502-sim/mos6502", "dep:v6502-hybrid", "dep:v6502-compiled", "dep:v6502-micro", "dep:v6502-pins"]
 
 [dependencies]
 wasm-bindgen = "0.2.127"
@@ -29,3 +29,8 @@ v6502-sim = { path = "../v6502-sim", default-features = false }
 v6502-hybrid = { path = "../v6502-hybrid", optional = true }
 # Rung 2, same terms: the generated kernel is derived from the die data.
 v6502-compiled = { path = "../v6502-compiled", optional = true }
+# Rung 3, same terms again: the measured table is derived from the die data.
+# The pin contract comes with it for the PinEngine surface; it carries no
+# die data of its own.
+v6502-micro = { path = "../v6502-micro", optional = true }
+v6502-pins = { path = "../v6502-pins", optional = true }

@@ -642,7 +642,16 @@ fn machine_json(st: &MachineState, image: &[u8]) -> String {
         out.push_str(v);
         out.push('"');
     }
-    out.push_str("},\"memory\":{\"fill\":\"00\",\"pages\":{");
+    out.push_str("},\"memory\":");
+    push_memory(&mut out, image);
+    out.push('}');
+    out
+}
+
+/// The sparse memory object every engine's export shares: a fill byte plus
+/// only the pages that differ from it.
+fn push_memory(out: &mut String, image: &[u8]) {
+    out.push_str("{\"fill\":\"00\",\"pages\":{");
     let mut first = true;
     for page in 0..256usize {
         let bytes = &image[page * 256..(page + 1) * 256];
@@ -659,8 +668,7 @@ fn machine_json(st: &MachineState, image: &[u8]) -> String {
         }
         out.push('"');
     }
-    out.push_str("}}}");
-    out
+    out.push_str("}}");
 }
 
 /// Refuse a page list that cannot be cut apart unambiguously; shared by every
@@ -1129,6 +1137,200 @@ impl CompiledMachine {
 
 #[cfg(feature = "mos6502")]
 impl Default for CompiledMachine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// -- rung 3 ---------------------------------------------------------------
+
+/// Rung 3 of the engine ladder (`v6502-micro`): no nodes at all, the
+/// measured control table through the authored datapath, behind the same
+/// console verbs. Held to the whole pin golden, stimulus traces included.
+///
+/// **Its machine value is its own** (`state.micro` on the wire, about 90
+/// bytes plus the memory pages) and does not pretend to be the four node
+/// planes: there is no `importMachine` here, and a node-shaped value has
+/// no way in. The worker that owns the engine switch says so by name;
+/// moving a running cartridge onto this rung means powering it here.
+///
+/// `nodeId` resolves the 51 control-vector columns (`lines.rs`: the 44
+/// dpc lines, the vector constants, rw and sync), which are exactly what
+/// Die Runner's eight watched gates are; every other name is refused with
+/// -1, because this rung has nothing to sample it from.
+///
+/// Only in the default build: the table is derived from the die data.
+#[cfg(feature = "mos6502")]
+#[wasm_bindgen]
+pub struct MicroMachine {
+    cpu: v6502_micro::machine::MicroCpu,
+}
+
+#[cfg(feature = "mos6502")]
+#[wasm_bindgen]
+impl MicroMachine {
+    /// Not yet reset -- load a program and set the reset vector first,
+    /// exactly as [`Machine::new`].
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> MicroMachine {
+        MicroMachine { cpu: v6502_micro::machine::MicroCpu::new() }
+    }
+
+    pub fn load(&mut self, addr: u16, bytes: &[u8]) {
+        let o = addr as usize;
+        self.cpu.mem[o..o + bytes.len()].copy_from_slice(bytes);
+    }
+
+    #[wasm_bindgen(js_name = setResetVector)]
+    pub fn set_reset_vector(&mut self, addr: u16) {
+        self.load(0xfffc, &[addr as u8, (addr >> 8) as u8]);
+    }
+
+    /// Set all 64 KiB to one byte, so a sparse image can be written over it.
+    #[wasm_bindgen(js_name = fillMemory)]
+    pub fn fill_memory(&mut self, byte: u8) {
+        self.cpu.mem.iter_mut().for_each(|b| *b = byte);
+    }
+
+    /// Cold boot: seed from the measured reset state and stand at h = 0.
+    #[wasm_bindgen(js_name = powerCycle)]
+    pub fn power_cycle(&mut self) {
+        self.cpu.power_cycle();
+    }
+
+    /// This rung has no warm reset apart from the RES pin itself; the
+    /// console only powers, and this alias keeps the verb set whole.
+    pub fn reset(&mut self) {
+        self.cpu.power_cycle();
+    }
+
+    #[wasm_bindgen(js_name = halfStep)]
+    pub fn half_step(&mut self) {
+        v6502_pins::PinEngine::half_step(&mut self.cpu);
+    }
+
+    #[wasm_bindgen(js_name = runHalfCycles)]
+    pub fn run_half_cycles(&mut self, n: u32) {
+        for _ in 0..n {
+            v6502_pins::PinEngine::half_step(&mut self.cpu);
+        }
+    }
+
+    #[wasm_bindgen(js_name = halfCycle)]
+    pub fn half_cycle(&self) -> f64 {
+        v6502_pins::PinEngine::h(&self.cpu) as f64
+    }
+    #[wasm_bindgen(js_name = addressBus)]
+    pub fn address_bus(&self) -> u16 {
+        v6502_pins::PinEngine::pins(&self.cpu).ab
+    }
+    #[wasm_bindgen(js_name = dataBus)]
+    pub fn data_bus(&self) -> u8 {
+        v6502_pins::PinEngine::pins(&self.cpu).db
+    }
+    #[wasm_bindgen(js_name = isRead)]
+    pub fn is_read(&self) -> bool {
+        v6502_pins::PinEngine::pins(&self.cpu).rw
+    }
+    pub fn sync(&self) -> bool {
+        v6502_pins::PinEngine::pins(&self.cpu).sync
+    }
+    pub fn clk0(&self) -> bool {
+        v6502_pins::PinEngine::pins(&self.cpu).clk0
+    }
+
+    /// Drive the five input pins, active low where the chip says so.
+    #[wasm_bindgen(js_name = setInputs)]
+    pub fn set_inputs(&mut self, res: bool, irq: bool, nmi: bool, rdy: bool, so: bool) {
+        v6502_pins::PinEngine::set_inputs(&mut self.cpu, res, irq, nmi, rdy, so);
+    }
+
+    /// No nodes on this rung; what `nodeId` resolves is the control
+    /// vector's columns.
+    #[wasm_bindgen(js_name = nodeCount)]
+    pub fn node_count(&self) -> u32 {
+        0
+    }
+    /// A control-vector column by its die name (`dpc25_SBDB` and kin, plus
+    /// rw and sync), or -1: the refusal the console's gate sampling is
+    /// built on, and here it also covers every name that is a real node on
+    /// the die but not a line this rung carries.
+    #[wasm_bindgen(js_name = nodeId)]
+    pub fn node_id(&self, name: &str) -> i32 {
+        v6502_micro::lines::LINE_NAMES
+            .iter()
+            .position(|&n| n == name)
+            .map_or(-1, |i| i as i32)
+    }
+    /// The named column's level as of the last played half-cycle: the
+    /// table's own word, which the coverage test holds to the chip line
+    /// for line.
+    #[wasm_bindgen(js_name = isNodeHigh)]
+    pub fn is_node_high(&self, line: u16) -> bool {
+        (line as usize) < v6502_micro::lines::LINE_NAMES.len()
+            && self.cpu.control_word() >> line & 1 != 0
+    }
+
+    pub fn peek(&self, addr: u16) -> u8 {
+        self.cpu.mem[addr as usize]
+    }
+    #[wasm_bindgen(js_name = memorySlice)]
+    pub fn memory_slice(&self, addr: u16, len: u32) -> Vec<u8> {
+        (0..len).map(|i| self.cpu.mem[addr.wrapping_add(i as u16) as usize]).collect()
+    }
+
+    /// The whole machine as the API's JSON shape, with rung 3's own state
+    /// where the node planes would be: `state.micro`, the versioned byte
+    /// codec as hex. `half_cycle` and `last_fetch` ride beside it for the
+    /// console's readouts, emitted from the same machine in the same call.
+    #[wasm_bindgen(js_name = exportMachine)]
+    pub fn export_machine(&self) -> String {
+        let st = self.cpu.snapshot();
+        let (addr, opcode) = self.cpu.last_fetch();
+        let mut out = String::with_capacity(1024);
+        out.push_str("{\"state\":{\"half_cycle\":");
+        out.push_str(&st.half_cycle.to_string());
+        out.push_str(",\"last_fetch\":{\"addr\":");
+        out.push_str(&addr.to_string());
+        out.push_str(",\"opcode\":");
+        out.push_str(&opcode.to_string());
+        out.push_str("},\"micro\":\"");
+        for b in st.encode() {
+            out.push_str(&format!("{b:02x}"));
+        }
+        out.push_str("\"},\"memory\":");
+        push_memory(&mut out, &st.mem);
+        out.push('}');
+        out
+    }
+
+    /// The counterpart to `exportMachine`: rung 3's own value, decoded and
+    /// refused by name where it cannot stand (a bad version, a span the
+    /// table does not hold). The memory is the fill plus the pages, as
+    /// every engine's import lays it.
+    #[wasm_bindgen(js_name = importMicro)]
+    pub fn import_micro(
+        &mut self,
+        micro_hex: &str,
+        fill: u8,
+        page_ids: &[u8],
+        page_bytes: &[u8],
+    ) -> Result<(), JsError> {
+        check_page_cut(page_ids, page_bytes)?;
+        let blob = decode_hex("micro", micro_hex)?;
+        let mut st = v6502_micro::machine::MicroState::decode(&blob, fill)
+            .map_err(|e| JsError::new(&e))?;
+        for (i, &page) in page_ids.iter().enumerate() {
+            let from = i * 256;
+            let o = usize::from(page) << 8;
+            st.mem[o..o + 256].copy_from_slice(&page_bytes[from..from + 256]);
+        }
+        self.cpu.restore(&st).map_err(|e| JsError::new(&e))
+    }
+}
+
+#[cfg(feature = "mos6502")]
+impl Default for MicroMachine {
     fn default() -> Self {
         Self::new()
     }

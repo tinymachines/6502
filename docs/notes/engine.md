@@ -510,10 +510,31 @@ and holds `abl abh pc pclp pchp a x y s` exact over 2,400 half-cycles,
 with the hold registers at their measured figures (alu 95.4%, dor 97.8%,
 idl 98.9%) above a 90% floor.
 
-Still open, deliberately: decimal mode (unexercised by any trace), and
-M5's `ENGINE` word in halfwave. The rung 3 state codec (registers plus
-table position) is its own and smaller than the four bitsets, and does not
-pretend to be them.
+**The rung 3 machine value** (`machine.rs`: `MicroState`, 2026-08-31) is
+its own and smaller than the four bitsets, and does not pretend to be
+them: every sequencer field, the datapath latches, the authored input
+latches and the memory, with the span pointer reconstructed from
+`(op, key)` on restore so a state cannot smuggle in control words the
+table never measured. On the wire it is a versioned byte codec of about
+90 bytes (`state.micro` in the machine JSON, beside the same sparse
+memory pages every engine emits), against rung 0's 1.3 KB of node
+planes. `tests/state.rs` proves it the only way that counts here: run to
+a half-cycle, snapshot, restore into a COLD machine, and the rest of the
+recorded trace must hold at the pins, with the ten snapshot points
+placed inside an interrupt's pushes, a RDY stall, the reset freewheel
+and the Res span; MUTATE flips one P bit and goes red at the push that
+exposes it. The wasm surface (`MicroMachine`, `crates/v6502-wasm`)
+speaks the console's verbs over it, resolves `nodeId` against the 51
+control-vector columns (which is exactly what Die Runner's eight watched
+gates are) and refuses every other name with -1; there is deliberately
+no `importMachine`, so a node-shaped value has no way in and an engine
+switch onto this rung means powering the cartridge here.
+
+Still open, deliberately: decimal mode (unexercised by any trace), M5's
+`ENGINE` word in halfwave, and a fetch-boundary crossing from a node
+rung's machine value (the seam word of the finishing instruction is the
+hard part: it needs the previous opcode's variant, which a node state
+does not carry at the boundary).
 
 ### The same kernel on a GPU (`v6502-gpu`)
 

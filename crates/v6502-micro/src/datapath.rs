@@ -27,7 +27,7 @@ pub enum Phase {
 }
 
 /// Every register and latch of the diagram, one byte each.
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Datapath {
     pub a: u8,
     pub x: u8,

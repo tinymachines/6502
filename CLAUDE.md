@@ -26,7 +26,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 114 tests, bit-exact against the original. |
+| Simulation | Complete. 115 tests, bit-exact against the original. |
 | Pin contract | `v6502-pins`: what "the same chip at the pins" means, in one crate with no dependencies. Rung 0 of the engine ladder (`docs/engine-ladder.md`) is the switch-level `Cpu` behind it; its pin golden is 271 recorded traces (seven programs, the reference's program, seven scripted interrupt and RDY runs, all 256 opcodes), replayed by `cargo test -p v6502-pins` and mutation-proved. Rung 1 (`v6502-hybrid`, the gates folded into per-output counters) is done and bit-exact with rung 0 by construction, every node every half-cycle; it is not faster (4.5% fewer instructions, inside noise), and that finding is the point: the lever is the recalc count, which an exact rung cannot touch. Because the state is the same four bitsets, rung 0's machine value restores into it mid-run and back, proven every node (`v6502-hybrid/tests/state.rs`), which is what the console's engine switch rides on. Rung 2 (`v6502-compiled`, the network as generated code, 64 machines per word) passes the whole pin golden through lane 0 at **6.83x rung 0 per machine**; it is not node-exact with rung 0 by nature, and says so. A machine value still crosses mid-run between rung 0 and rung 2 in both directions, held at the pins, Die Runner's eight watched gates and memory every half-cycle (`tests/crossing.rs`; measured first: 20,000/20,000 half-cycles of pin and gate agreement while internal nodes diverged as expected), which is what its console engine rides on. The same kernel as WGSL runs on a GPU (`v6502-gpu`), bit-exact with the CPU rung lane for lane, at **3.78 M machine-half-cycles/s** on one RTX 3070, about 128x rung 0. Rung 3 (`v6502-micro`) is built: no nodes, the control table measured out of rung 0 at build time, the datapath authored from the proven model, the input pins authored against the six scripted stimulus traces (an interrupt is the recorded BRK span hijacked; the warm reset's freewheel was measured with `reset-probe` before being written), and the whole pin golden, **all 271 traces, replays exactly**. **39.0 M half-cycles/s, about 1,465x rung 0: 19.5x a real 1 MHz part.** |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
@@ -109,11 +109,12 @@ writes the counts into `build-info.json` beside the commit. A release that
 carries no `tests` key was made by hand.
 
 ```bash
-cargo test --workspace              # 114 tests: netlist, functional, golden,
+cargo test --workspace              # 115 tests: netlist, functional, golden,
                                     # rewind, state, rows, blueprint, pla,
                                     # decode, blocks, interrupts, pins,
                                     # hybrid (lockstep + replay + state), compiled
-                                    # (replay + lanes + crossing), gpu (parity;
+                                    # (replay + lanes + crossing), micro (table +
+                                    # datapath + replay + state), gpu (parity;
                                     # SKIPS without an adapter, REQUIRE_GPU=1)
 cargo test -p v6502-sim --test golden      # differential vs the reference
 cargo run --release -p v6502-pins --example pin-golden   # record the pin golden
@@ -136,9 +137,11 @@ cargo run --release -p v6502-compiled --example agree   # node agreement with ru
 cargo test -p v6502-micro                  # rung 3: the recorded table proven on
                                            # fresh contexts line for line, the
                                            # datapath held to the chip at nine
-                                           # fields, and the whole pin golden
-                                           # replayed exactly, the six stimulus
-                                           # traces included; MUTATE=1 on all three
+                                           # fields, the whole pin golden replayed
+                                           # exactly (six stimulus traces included),
+                                           # and its machine value resumed cold at
+                                           # ten mid-run points against the golden;
+                                           # MUTATE=1 on all four
 cargo run --release -p v6502-sim --example reset-probe  # rung 0 through the
                                            # reset-mid-run script: control lines
                                            # and latches per half-cycle, the

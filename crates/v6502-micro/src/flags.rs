@@ -12,7 +12,7 @@
 //! flag updates at the instruction boundary.
 
 /// What the playback captured while an instruction ran.
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Caps {
     /// The last byte read before the overlap: the operand for loads and BIT.
     pub last_read: u8,

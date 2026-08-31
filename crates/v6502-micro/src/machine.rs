@@ -257,6 +257,18 @@ impl MicroCpu {
         (self.dp.a, self.dp.x, self.dp.y, self.dp.s_in, self.p, self.dp.pc())
     }
 
+    /// The last opcode fetch the machine saw: address and byte, the same
+    /// bookkeeping rung 0 latches in `service_read` on sync.
+    pub fn last_fetch(&self) -> (u16, u8) {
+        (self.fetch_pc, self.next_op)
+    }
+
+    /// The control word as of the last played half-cycle, `lines.rs`
+    /// order: what the console's gate sampling reads on this rung.
+    pub fn control_word(&self) -> u64 {
+        self.pin_w
+    }
+
     fn in_overlap(&self) -> bool {
         // The tail IS an overlap (the first fetch); a span's last two
         // half-cycles are the next one's.
@@ -540,6 +552,378 @@ impl MicroCpu {
 impl Default for MicroCpu {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Rung 3's machine value: its own codec, smaller than the four bitsets,
+/// and it does not pretend to be them. Every field of the sequencer, the
+/// datapath and the authored input latches, plus the memory; the span
+/// pointer is NOT here, it is reconstructed from `(op, cur_key)` (or the
+/// reset tail, or the overlap pair) on restore, so a state cannot smuggle
+/// in control words the table never measured.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct MicroState {
+    pub mem: Vec<u8>,
+    pub half_cycle: u64,
+    pub p: u8,
+    pub dp: Datapath,
+    /// 0 = the reset tail, 1 = the span for `(op, cur_key)`, 2 = that
+    /// span's overlap pair (the freewheel's unit).
+    pub stream: u8,
+    pub pos: usize,
+    /// The phase the NEXT half-cycle plays in: true = phi1.
+    pub phi1_next: bool,
+    pub op: u8,
+    pub cur_key: u8,
+    pub kil: bool,
+    pub cin_from_c: bool,
+    pub seam: u64,
+    pub caps: Caps,
+    pub reads: u32,
+    pub writes: u32,
+    pub next_op: u8,
+    pub fetch_pc: u16,
+    pub pin_w: u64,
+    pub pin_db: u8,
+    pub pin_hold: u8,
+    /// res irq nmi rdy so, as driven.
+    pub inputs: [bool; 5],
+    pub irq_seen: bool,
+    pub nmi_pending: bool,
+    /// 0 = none, 1 = irq, 2 = nmi, 3 = res.
+    pub hijack_next: u8,
+    pub hijacked: u8,
+    pub stalled: bool,
+    pub res_seen: bool,
+    pub res_pend: bool,
+    pub res_sel: bool,
+    /// 0 = run, 1 = freewheel, 2 = fetch.
+    pub res_phase: u8,
+    pub mask_sync: bool,
+}
+
+impl MicroState {
+    /// The wire form of everything but the memory, which travels as the
+    /// API's own sparse pages beside it: a version byte, then each field
+    /// in declaration order. About 90 bytes against rung 0's 1.3 KB of
+    /// node planes; a different value for a different kind of machine,
+    /// and it says so with its own field name on the wire.
+    pub fn encode(&self) -> Vec<u8> {
+        let mut b = Vec::with_capacity(96);
+        b.push(1u8);
+        b.extend_from_slice(&self.half_cycle.to_le_bytes());
+        b.push(self.p);
+        let d = &self.dp;
+        b.extend_from_slice(&[
+            d.a, d.x, d.y, d.s_in, d.s_out, d.pcl, d.pch, d.pclp, d.pchp, d.abl, d.abh, d.dl,
+            d.dor, d.add, d.ai, d.bi, d.sb, d.db, d.adl, d.adh,
+        ]);
+        b.push(self.stream);
+        b.extend_from_slice(&(self.pos as u16).to_le_bytes());
+        b.push(self.phi1_next as u8);
+        b.push(self.op);
+        b.push(self.cur_key);
+        b.push(self.kil as u8);
+        b.push(self.cin_from_c as u8);
+        b.extend_from_slice(&self.seam.to_le_bytes());
+        let c = &self.caps;
+        b.push(c.last_read);
+        b.push(c.last_write);
+        let opt4 = |b: &mut Vec<u8>, o: Option<(u8, u8, bool, u8)>| match o {
+            Some((x, y, z, r)) => b.extend_from_slice(&[1, x, y, z as u8, r]),
+            None => b.extend_from_slice(&[0, 0, 0, 0, 0]),
+        };
+        opt4(&mut b, c.sum);
+        opt4(&mut b, c.sum_pre);
+        let opt2 = |b: &mut Vec<u8>, o: Option<(u8, u8)>| match o {
+            Some((x, r)) => b.extend_from_slice(&[1, x, r]),
+            None => b.extend_from_slice(&[0, 0, 0]),
+        };
+        opt2(&mut b, c.srs);
+        opt2(&mut b, c.srs_pre);
+        match c.logic {
+            Some(r) => b.extend_from_slice(&[1, r]),
+            None => b.extend_from_slice(&[0, 0]),
+        }
+        b.extend_from_slice(&self.reads.to_le_bytes());
+        b.extend_from_slice(&self.writes.to_le_bytes());
+        b.push(self.next_op);
+        b.extend_from_slice(&self.fetch_pc.to_le_bytes());
+        b.extend_from_slice(&self.pin_w.to_le_bytes());
+        b.push(self.pin_db);
+        b.push(self.pin_hold);
+        for i in self.inputs {
+            b.push(i as u8);
+        }
+        b.extend_from_slice(&[
+            self.irq_seen as u8,
+            self.nmi_pending as u8,
+            self.hijack_next,
+            self.hijacked,
+            self.stalled as u8,
+            self.res_seen as u8,
+            self.res_pend as u8,
+            self.res_sel as u8,
+            self.res_phase,
+            self.mask_sync as u8,
+        ]);
+        b
+    }
+
+    /// The inverse of `encode`, with `mem` set to `fill`: the caller lays
+    /// the sparse pages over it, the way every engine's import does.
+    pub fn decode(blob: &[u8], fill: u8) -> Result<MicroState, String> {
+        let mut at = 0usize;
+        let mut take = |n: usize| -> Result<&[u8], String> {
+            if at + n > blob.len() {
+                return Err(format!("micro state blob is {} bytes, short at offset {at}", blob.len()));
+            }
+            let s = &blob[at..at + n];
+            at += n;
+            Ok(s)
+        };
+        let version = take(1)?[0];
+        if version != 1 {
+            return Err(format!("micro state version {version} is not 1"));
+        }
+        let half_cycle = u64::from_le_bytes(take(8)?.try_into().unwrap());
+        let p = take(1)?[0];
+        let d = take(20)?;
+        let dp = Datapath {
+            a: d[0], x: d[1], y: d[2], s_in: d[3], s_out: d[4], pcl: d[5], pch: d[6],
+            pclp: d[7], pchp: d[8], abl: d[9], abh: d[10], dl: d[11], dor: d[12], add: d[13],
+            ai: d[14], bi: d[15], sb: d[16], db: d[17], adl: d[18], adh: d[19],
+        };
+        let bit = |b: u8, what: &str| -> Result<bool, String> {
+            match b {
+                0 => Ok(false),
+                1 => Ok(true),
+                n => Err(format!("{what}: {n} is not a flag")),
+            }
+        };
+        let stream = take(1)?[0];
+        let pos = u16::from_le_bytes(take(2)?.try_into().unwrap()) as usize;
+        let phi1_next = bit(take(1)?[0], "phi1_next")?;
+        let op = take(1)?[0];
+        let cur_key = take(1)?[0];
+        let kil = bit(take(1)?[0], "kil")?;
+        let cin_from_c = bit(take(1)?[0], "cin_from_c")?;
+        let seam = u64::from_le_bytes(take(8)?.try_into().unwrap());
+        let last_read = take(1)?[0];
+        let last_write = take(1)?[0];
+        let mut opt4 = |what: &str| -> Result<Option<(u8, u8, bool, u8)>, String> {
+            let s = take(5)?;
+            match s[0] {
+                0 => Ok(None),
+                1 => Ok(Some((s[1], s[2], s[3] != 0, s[4]))),
+                n => Err(format!("{what}: {n} is not an option tag")),
+            }
+        };
+        let sum = opt4("sum")?;
+        let sum_pre = opt4("sum_pre")?;
+        let mut opt2 = |what: &str| -> Result<Option<(u8, u8)>, String> {
+            let s = take(3)?;
+            match s[0] {
+                0 => Ok(None),
+                1 => Ok(Some((s[1], s[2]))),
+                n => Err(format!("{what}: {n} is not an option tag")),
+            }
+        };
+        let srs = opt2("srs")?;
+        let srs_pre = opt2("srs_pre")?;
+        let logic = {
+            let s = take(2)?;
+            match s[0] {
+                0 => None,
+                1 => Some(s[1]),
+                n => return Err(format!("logic: {n} is not an option tag")),
+            }
+        };
+        let reads = u32::from_le_bytes(take(4)?.try_into().unwrap());
+        let writes = u32::from_le_bytes(take(4)?.try_into().unwrap());
+        let next_op = take(1)?[0];
+        let fetch_pc = u16::from_le_bytes(take(2)?.try_into().unwrap());
+        let pin_w = u64::from_le_bytes(take(8)?.try_into().unwrap());
+        let pin_db = take(1)?[0];
+        let pin_hold = take(1)?[0];
+        let inp = take(5)?.to_vec();
+        let tail = take(10)?.to_vec();
+        if at != blob.len() {
+            return Err(format!("micro state blob has {} trailing bytes", blob.len() - at));
+        }
+        let mut inputs = [false; 5];
+        for (i, &v) in inp.iter().enumerate() {
+            inputs[i] = bit(v, "inputs")?;
+        }
+        Ok(MicroState {
+            mem: vec![fill; 0x10000],
+            half_cycle,
+            p,
+            dp,
+            stream,
+            pos,
+            phi1_next,
+            op,
+            cur_key,
+            kil,
+            cin_from_c,
+            seam,
+            caps: Caps { last_read, last_write, sum, sum_pre, srs, srs_pre, logic },
+            reads,
+            writes,
+            next_op,
+            fetch_pc,
+            pin_w,
+            pin_db,
+            pin_hold,
+            inputs,
+            irq_seen: bit(tail[0], "irq_seen")?,
+            nmi_pending: bit(tail[1], "nmi_pending")?,
+            hijack_next: tail[2],
+            hijacked: tail[3],
+            stalled: bit(tail[4], "stalled")?,
+            res_seen: bit(tail[5], "res_seen")?,
+            res_pend: bit(tail[6], "res_pend")?,
+            res_sel: bit(tail[7], "res_sel")?,
+            res_phase: tail[8],
+            mask_sync: bit(tail[9], "mask_sync")?,
+        })
+    }
+}
+
+fn intr_code(i: Option<Intr>) -> u8 {
+    match i {
+        None => 0,
+        Some(Intr::Irq) => 1,
+        Some(Intr::Nmi) => 2,
+        Some(Intr::Res) => 3,
+    }
+}
+
+fn intr_from(c: u8) -> Result<Option<Intr>, String> {
+    Ok(match c {
+        0 => None,
+        1 => Some(Intr::Irq),
+        2 => Some(Intr::Nmi),
+        3 => Some(Intr::Res),
+        _ => return Err(format!("interrupt flavour {c} is not one of 0..=3")),
+    })
+}
+
+impl MicroCpu {
+    pub fn snapshot(&self) -> MicroState {
+        MicroState {
+            mem: self.mem.clone(),
+            half_cycle: self.half_cycle,
+            p: self.p,
+            dp: self.dp,
+            stream: match self.stream {
+                Stream::Tail => 0,
+                // A 2-word span is the overlap pair: real spans are at
+                // least two cycles of their own plus the overlap.
+                Stream::Span if self.span.len() == 2 => 2,
+                Stream::Span => 1,
+            },
+            pos: self.pos,
+            phi1_next: self.next_phase == Phase::Phi1,
+            op: self.op,
+            cur_key: self.cur_key,
+            kil: self.kil,
+            cin_from_c: self.cin_from_c,
+            seam: self.seam,
+            caps: self.caps,
+            reads: self.reads,
+            writes: self.writes,
+            next_op: self.next_op,
+            fetch_pc: self.fetch_pc,
+            pin_w: self.pin_w,
+            pin_db: self.pin_db,
+            pin_hold: self.pin_hold,
+            inputs: [self.in_res, self.in_irq, self.in_nmi, self.in_rdy, self.in_so],
+            irq_seen: self.irq_seen,
+            nmi_pending: self.nmi_pending,
+            hijack_next: intr_code(self.hijack_next),
+            hijacked: intr_code(self.hijacked),
+            stalled: self.stalled,
+            res_seen: self.res_seen,
+            res_pend: self.res_pend,
+            res_sel: self.res_sel,
+            res_phase: match self.res_phase {
+                ResPhase::Run => 0,
+                ResPhase::Freewheel => 1,
+                ResPhase::Fetch => 2,
+            },
+            mask_sync: self.mask_sync,
+        }
+    }
+
+    /// The inverse of `snapshot`. Refuses, by name, a state whose span the
+    /// table does not hold or whose position falls outside it.
+    pub fn restore(&mut self, st: &MicroState) -> Result<(), String> {
+        if st.mem.len() != 0x10000 {
+            return Err(format!("memory is {} bytes, not 65536", st.mem.len()));
+        }
+        let span: &'static [u64] = match st.stream {
+            0 => &table::RESET_TAIL,
+            1 | 2 => {
+                let s = table::span(st.op, st.cur_key).ok_or_else(|| {
+                    format!("op {:02x} has no recorded variant for key {:#04x}", st.op, st.cur_key)
+                })?;
+                if st.stream == 2 { &s[s.len() - 2..] } else { s }
+            }
+            n => return Err(format!("stream {n} is not one of 0..=2")),
+        };
+        if st.pos >= span.len() {
+            return Err(format!("position {} is outside the {}-word span", st.pos, span.len()));
+        }
+        // Everything fallible resolves before anything mutates, so a
+        // refused state leaves the machine as it was.
+        let hijack_next = intr_from(st.hijack_next)?;
+        let hijacked = intr_from(st.hijacked)?;
+        let res_phase = match st.res_phase {
+            0 => ResPhase::Run,
+            1 => ResPhase::Freewheel,
+            2 => ResPhase::Fetch,
+            n => return Err(format!("res phase {n} is not one of 0..=2")),
+        };
+        self.mem.copy_from_slice(&st.mem);
+        self.half_cycle = st.half_cycle;
+        self.p = st.p;
+        self.dp = st.dp;
+        self.stream = if st.stream == 0 { Stream::Tail } else { Stream::Span };
+        self.span = span;
+        self.pos = st.pos;
+        self.next_phase = if st.phi1_next { Phase::Phi1 } else { Phase::Phi2 };
+        self.op = st.op;
+        self.cur_key = st.cur_key;
+        self.kil = st.kil;
+        self.cin_from_c = st.cin_from_c;
+        self.seam = st.seam;
+        self.caps = st.caps;
+        self.reads = st.reads;
+        self.writes = st.writes;
+        self.next_op = st.next_op;
+        self.fetch_pc = st.fetch_pc;
+        self.pin_w = st.pin_w;
+        self.pin_db = st.pin_db;
+        self.pin_hold = st.pin_hold;
+        let [r, i, n, y, s] = st.inputs;
+        self.in_res = r;
+        self.in_irq = i;
+        self.in_nmi = n;
+        self.in_rdy = y;
+        self.in_so = s;
+        self.irq_seen = st.irq_seen;
+        self.nmi_pending = st.nmi_pending;
+        self.hijack_next = hijack_next;
+        self.hijacked = hijacked;
+        self.stalled = st.stalled;
+        self.res_seen = st.res_seen;
+        self.res_pend = st.res_pend;
+        self.res_sel = st.res_sel;
+        self.res_phase = res_phase;
+        self.mask_sync = st.mask_sync;
+        Ok(())
     }
 }
 
