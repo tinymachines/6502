@@ -89,6 +89,13 @@ export const MENU = [
         hint: 'every instruction, timed sync to sync' },
     ],
   },
+  {
+    title: 'The engine, wide',
+    items: [
+      { label: 'Swarm', page: 'swarm',
+        hint: 'thousands of transistor-level chips on your own GPU' },
+    ],
+  },
   // Things to build against rather than things to read, which is why they are
   // their own group and not entries under About. Both are `off`: deployed
   // beside this tree rather than inside it, so they are 404s against the dev

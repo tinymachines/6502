@@ -275,6 +275,9 @@ def main() -> None:
     b.copy_hashed("blueprint.json")
     b.copy_hashed("decode.json")
     b.copy_hashed("timing.json")
+    # The rung 2 kernel and its tables for the swarm page's WebGPU host
+    # (export-gpu). Derived from the die data, like the geometry.
+    b.copy_hashed("gpu.json")
     for icon in sorted((src / "icons").iterdir()):
         if icon.suffix in {".png", ".svg"}:
             b.copy_hashed(f"icons/{icon.name}")
@@ -872,6 +875,20 @@ def main() -> None:
                      "icons/icon.svg", "icons/apple-touch-icon.png"]:
         timh = replace_once(timh, f'"{original}"', f'"{b.ref(original)}"', where="timing.html")
     b.emit("timing.html", timh.encode(), hashed=False)
+
+    # 5j. swarm: the rung 2 kernel in the browser. The js fetches gpu.json
+    #     and boots the wasm chip once, so both references are rewritten.
+    swj = b.read("swarm.js").decode()
+    swj = replace_once(swj, "'./pkg/v6502_wasm.js'", f"'./{b.ref('pkg/v6502_wasm.js')}'", where="swarm.js")
+    swj = replace_once(swj, "'./asm.js'", f"'./{b.ref('asm.js')}'", where="swarm.js")
+    swj = replace_once(swj, "fetch('gpu.json')", f"fetch('{b.ref('gpu.json')}')", where="swarm.js")
+    b.emit("swarm.js", swj.encode())
+    swh = b.read("swarm.html").decode()
+    for original in ["style.css", "swarm.js", "version-footer.js", "site-menu.js",
+                     "manifest.webmanifest",
+                     "icons/icon.svg", "icons/apple-touch-icon.png"]:
+        swh = replace_once(swh, f'"{original}"', f'"{b.ref(original)}"', where="swarm.html")
+    b.emit("swarm.html", swh.encode(), hashed=False)
 
     # 6. build-info.json: copied unhashed, and deliberately NOT routed through
     #    emit(), so it never enters the precache list. Everything else here is

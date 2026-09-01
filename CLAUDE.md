@@ -26,13 +26,13 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 116 tests, bit-exact against the original. |
+| Simulation | Complete. 117 tests, bit-exact against the original. |
 | Pin contract | `v6502-pins`: what "the same chip at the pins" means, in one crate with no dependencies. Rung 0 of the engine ladder (`docs/engine-ladder.md`) is the switch-level `Cpu` behind it; its pin golden is 274 recorded traces (seven programs, the reference's program, seven scripted interrupt and RDY runs, three decimal-mode chains, all 256 opcodes), replayed by `cargo test -p v6502-pins` and mutation-proved. Rung 1 (`v6502-hybrid`, the gates folded into per-output counters) is done and bit-exact with rung 0 by construction, every node every half-cycle; it is not faster (4.5% fewer instructions, inside noise), and that finding is the point: the lever is the recalc count, which an exact rung cannot touch. Because the state is the same four bitsets, rung 0's machine value restores into it mid-run and back, proven every node (`v6502-hybrid/tests/state.rs`), which is what the console's engine switch rides on. Rung 2 (`v6502-compiled`, the network as generated code, 64 machines per word) passes the whole pin golden through lane 0 at **6.83x rung 0 per machine**; it is not node-exact with rung 0 by nature, and says so. A machine value still crosses mid-run between rung 0 and rung 2 in both directions, held at the pins, Die Runner's eight watched gates and memory every half-cycle (`tests/crossing.rs`; measured first: 20,000/20,000 half-cycles of pin and gate agreement while internal nodes diverged as expected), which is what its console engine rides on. The same kernel as WGSL runs on a GPU (`v6502-gpu`), bit-exact with the CPU rung lane for lane, with memory sparse per lane (one shared base, copy-on-write pages, a spent pool refusing by the numbers): **4.95 M machine-half-cycles/s at 128,000 machines** on one RTX 3070, about 167x rung 0, and 512,000 machines run at 4.46 M. Rung 3 (`v6502-micro`) is built: no nodes, the control table measured out of rung 0 at build time, the datapath authored from the proven model, the input pins authored against the six scripted stimulus traces (an interrupt is the recorded BRK span hijacked; the warm reset's freewheel was measured with `reset-probe` before being written), decimal mode measured (`decimal-probe`: the adjust lives on the SB-to-AC path) and authored under a seventh selector bit, and the whole pin golden, **all 274 traces, replays exactly**. **39.0 M half-cycles/s, about 1,465x rung 0: 19.5x a real 1 MHz part.** |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
 | Front end | Responsive page (phone to desktop), installable PWA, offline. One header owning program, transport and clock across every page. |
 | Programs | Seven programs as **source**, assembled in the page, annotated, run on the chip. One choice, shared by every page. |
-| Reading pages | Primer, Lab, Trace, Programs, Halfshot, Timing, Decode, talk, designer, block diagram, pinout. See `docs/notes/pages.md`. |
+| Reading pages | Primer, Lab, Trace, Programs, Halfshot, Timing, Decode, Swarm (the rung 2 kernel in the visitor's own browser through WebGPU, thousands of chips wide), talk, designer, block diagram, pinout. See `docs/notes/pages.md`. |
 | Drawings | Explorer (the die), Exploded, Schematic workbench, Blueprint, die graph, Blocks (twelve pages), Tracer, Chip map. See `docs/notes/tracer-and-chipmap.md` and `docs/notes/schematic-and-blocks.md`. |
 | Clustering | 25 kinds of container on the tracer; the chip map makes them disjoint into **132 groups over 23 kinds covering all 1547 nodes once**, 534 counted bundles, live off the running chip. The arc is complete. |
 | Schematic | 1160 gates recognised from the switch network; one node fails to resolve. |
@@ -109,7 +109,7 @@ writes the counts into `build-info.json` beside the commit. A release that
 carries no `tests` key was made by hand.
 
 ```bash
-cargo test --workspace              # 116 tests: netlist, functional, golden,
+cargo test --workspace              # 117 tests: netlist, functional, golden,
                                     # rewind, state, rows, blueprint, pla,
                                     # decode, blocks, interrupts, pins,
                                     # hybrid (lockstep + replay + state), compiled
@@ -228,6 +228,9 @@ node tools/export-groups.mjs                       # web/groups.json
 #  who wants the network without learning the gate/switch encoding.)
 cargo run --release -p v6502-sim --bin export-decode -- web/decode.json
 cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
+cargo run --release -p v6502-compiled --bin export-gpu -- web/gpu.json
+# (the rung 2 kernel as WGSL plus its tables, for the swarm page's WebGPU
+#  host: the same file the native harness's tests are built from)
 # (primer.html and programs.html need no export of their own: the primer reads
 #  schematic/decode/timing.json, and the programs are assembled in the page)
 python3 tools/serve.py web 8777                    # http://localhost:8777/
@@ -325,7 +328,7 @@ python3 -m http.server 8000 --directory extern/visual6502   # /expert.html
 
 `web/pkg/`, `web/layout.bin`, `web/blueprint.json`, `web/blocks.json`,
 `web/schematic.json`, `web/graph.json`, `web/groups.json`, `web/decode.json`,
-`web/timing.json`, `web/build-info.json`, `dist/`, the golden trace, the pin
+`web/timing.json`, `web/gpu.json`, `web/build-info.json`, `dist/`, the golden trace, the pin
 golden (`tools/pin-golden/*.pins`, `*.stim`) and
 everything under `archive/` except `urls/` and `tools/` are generated or
 fetched, and gitignored. Regenerate after any change to the Rust crates or the
@@ -442,7 +445,7 @@ for each page.
 
 ### Development harnesses in `web/`
 
-Thirty-six harnesses plus three probes, all prefixed `_` and **never shipped**
+Thirty-seven harnesses plus three probes, all prefixed `_` and **never shipped**
 (`build-web.py` copies only the files it names, so they cannot reach `dist/`).
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug. Read the title with `--dump-dom`: each reports

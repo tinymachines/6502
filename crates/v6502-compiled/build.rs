@@ -132,7 +132,7 @@ fn main() {
     // as [junction, out, tops, bottoms, top literals..., bottom literals...].
     // The straight-line form is what the CPU rung runs; the driver could not
     // compile it as code.
-    {
+    let (gt_len, jt_len, go_len, jo_len) = {
         let mut gt: Vec<u32> = Vec::new();
         for f in &folds {
             gt.push(f.out as u32);
@@ -180,7 +180,8 @@ fn main() {
             i += 4 + tops.len() + bots.len();
         }
         writeln!(w, "pub static JUNCTION_OFFSETS: [u32; {}] = [{}];", jo.len(), jo.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",")).unwrap();
-    }
+        (gt.len(), jt.len(), go.len(), jo.len())
+    };
 
     // The gate node of every transistor, for step 0 (switches follow gates).
     write!(w, "pub static GATE_OF: [u16; TRANS] = [").unwrap();
@@ -274,14 +275,27 @@ fn main() {
     writeln!(w, "// atomicOr and reach the same fixed point the serial sweep reaches.").unwrap();
     writeln!(w, "// Loop bounds travel in the uniform on purpose: as constants the driver").unwrap();
     writeln!(w, "// unrolled nested loops and ran out of memory.").unwrap();
-    writeln!(w, "struct Params {{ words: u32, op: u32, max_rounds: u32, nodes: u32, trans: u32, switches: u32, gates: u32, junctions: u32 }}").unwrap();
+    writeln!(w, "struct Params {{ words: u32, op: u32, max_rounds: u32, nodes: u32, trans: u32, switches: u32, gates: u32, junctions: u32, p4s_off: u32, pad0: u32, pad1: u32, pad2: u32 }}").unwrap();
+    writeln!(w, "// Eight buffers, which is the WebGPU spec's own floor for storage").unwrap();
+    writeln!(w, "// buffers per stage, so a browser host binds this on ANY adapter:").unwrap();
+    writeln!(w, "// the four node planes share one buffer (value, pullup, pulldown,").unwrap();
+    writeln!(w, "// next, each words*NODES apart), the six read-only tables share one").unwrap();
+    writeln!(w, "// (offsets are the build-time constants below), and the atomics").unwrap();
+    writeln!(w, "// share one: pmeta at 0, the page pool at POOL_O, the lite").unwrap();
+    writeln!(w, "// variant's fifth plane at params.p4s_off.").unwrap();
     writeln!(w, "@group(0) @binding(0) var<uniform> params: Params;").unwrap();
-    writeln!(w, "@group(0) @binding(1) var<storage, read_write> value: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(2) var<storage, read_write> pullup: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(3) var<storage, read_write> pulldown: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(4) var<storage, read_write> trans_on: array<u32>;").unwrap();
+    writeln!(w, "@group(0) @binding(1) var<storage, read_write> planes: array<u32>;").unwrap();
+    writeln!(w, "@group(0) @binding(2) var<storage, read_write> trans_on: array<u32>;").unwrap();
+    writeln!(w, "@group(0) @binding(3) var<storage, read> tabs: array<u32>;").unwrap();
     writeln!(w, "// The planes live in workgroup memory: five per node, 34.5 KB, where atomics\n// are cheap and the working set stays on chip whatever the word count.").unwrap();
     writeln!(w, "var<workgroup> pl: array<atomic<u32>, {}>;", 5 * n).unwrap();
+    writeln!(w, "// The LITE variant's planes: four on chip (27.6 KB, under the 32 KB").unwrap();
+    writeln!(w, "// workgroup-storage floor that Apple, AMD and headless adapters share)").unwrap();
+    writeln!(w, "// and the fifth, the sparsest (Vss strength), in storage. Both variants").unwrap();
+    writeln!(w, "// come from one emission below; a pipeline pays only for the array its").unwrap();
+    writeln!(w, "// own entry point touches, so `half_step` needs 34.5 KB and").unwrap();
+    writeln!(w, "// `half_step_lite` 27.6 KB.").unwrap();
+    writeln!(w, "var<workgroup> pl4: array<atomic<u32>, {}>;", 4 * n).unwrap();
     writeln!(w, "@group(0) @binding(6) var<storage, read_write> nxt: array<u32>;").unwrap();
     writeln!(w, "// Memory is SPARSE per lane: one shared base image, a page table per").unwrap();
     writeln!(w, "// lane (256 entries, 0xffffffff = the base's page), and a pool of").unwrap();
@@ -290,17 +304,12 @@ fn main() {
     writeln!(w, "// the one shared atomic is the allocator; a spent pool raises the").unwrap();
     writeln!(w, "// flag in pmeta[2] and drops the write, and the host REFUSES the run").unwrap();
     writeln!(w, "// on readback rather than serving memory that silently diverged.").unwrap();
-    writeln!(w, "@group(0) @binding(5) var<storage, read> base: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(7) var<storage, read_write> pool: array<atomic<u32>>;").unwrap();
-    writeln!(w, "@group(0) @binding(14) var<storage, read_write> ptab: array<u32>;").unwrap();
-    writeln!(w, "// pmeta[0] = next free page, pmeta[1] = capacity, pmeta[2] = spent flag.").unwrap();
-    writeln!(w, "@group(0) @binding(15) var<storage, read_write> pmeta: array<atomic<u32>>;").unwrap();
-    writeln!(w, "@group(0) @binding(8) var<storage, read> gate_of: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(9) var<storage, read> sw: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(10) var<storage, read> gt: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(11) var<storage, read> jt: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(12) var<storage, read> go: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(13) var<storage, read> jo: array<u32>;").unwrap();
+    writeln!(w, "@group(0) @binding(4) var<storage, read> base: array<u32>;").unwrap();
+    writeln!(w, "// am[0] = next free page, am[1] = capacity, am[2] = spent flag; the").unwrap();
+    writeln!(w, "// pool's page e is the 64 words at POOL_O + e * 64.").unwrap();
+    writeln!(w, "@group(0) @binding(5) var<storage, read_write> am: array<atomic<u32>>;").unwrap();
+    writeln!(w, "@group(0) @binding(6) var<storage, read_write> ptab: array<u32>;").unwrap();
+    writeln!(w, "const POOL_O: u32 = 4u;").unwrap();
     writeln!(w, "const SIG_CLK0: u32 = {}u;\nconst SIG_RW: u32 = {}u;", node("clk0"), node("rw")).unwrap();
     let ab: Vec<String> = (0..16).map(|i| format!("{}u", node(&format!("ab{i}")))).collect();
     let db: Vec<String> = (0..8).map(|i| format!("{}u", node(&format!("db{i}")))).collect();
@@ -308,6 +317,15 @@ fn main() {
     writeln!(w, "var<private> DB: array<u32, 8> = array<u32, 8>({});", db.join(", ")).unwrap();
     let mstr: Vec<String> = (0..nl.node_count() as NodeId).filter(|&x| !nl.exists(x)).map(|x| format!("{x}u")).collect();
     writeln!(w, "const MISSING_N: u32 = {}u;", mstr.len()).unwrap();
+    // The read-only tables, packed into `tabs`: gate_of, then the switch,
+    // gate, junction tables and the two offset lists. Build-time constants.
+    let tab_sw = nl.transistor_count() as usize;
+    let tab_gt = tab_sw + switches.len() * 4;
+    let tab_jt = tab_gt + gt_len;
+    let tab_go = tab_jt + jt_len;
+    let tab_jo = tab_go + go_len;
+    let _ = jo_len;
+    writeln!(w, "const TAB_SW: u32 = {tab_sw}u;\nconst TAB_GT: u32 = {tab_gt}u;\nconst TAB_JT: u32 = {tab_jt}u;\nconst TAB_GO: u32 = {tab_go}u;\nconst TAB_JO: u32 = {tab_jo}u;").unwrap();
     writeln!(w, "var<private> MISSING: array<u32, {}> = array<u32, {}>({});", mstr.len(), mstr.len(), mstr.join(", ")).unwrap();
     writeln!(w, r#"
 const WG: u32 = 256u;
@@ -332,7 +350,54 @@ fn uniform_take(which: u32, lid: u32) -> u32 {{
   return v;
 }}
 
-fn round(b: u32, pb: u32, tb: u32, lid: u32) -> u32 {{
+"#).unwrap();
+
+    // The settle, emitted twice from one body: the full variant with all
+    // five planes in workgroup memory, and the lite variant with four
+    // there and the fifth (Vss strength, the sparsest) in the `p4s`
+    // storage scratch, for adapters whose workgroup-storage limit is the
+    // common 32 KB floor. The plane-access expressions are the ONLY
+    // difference; the native parity test runs both against the CPU rung.
+    for (sfx, lite) in [("", false), ("_lite", true)] {
+        let p = |k: u32, i: &str| -> String {
+            match (lite, k) {
+                (true, 4) => format!("p4s[b + {i}]"),
+                (true, 0) => format!("pl4[{i}]"),
+                (true, _) => format!("pl4[{k}u * NODES + {i}]"),
+                (false, 0) => format!("pl[{i}]"),
+                (false, _) => format!("pl[{k}u * NODES + {i}]"),
+            }
+        };
+        let spread_pair = |arr: &str, ia: &str, ic: &str| -> String {
+            format!(
+                "        let pa = atomicLoad(&{arr}[{ia}]);\n\
+                 \x20       let pc = atomicLoad(&{arr}[{ic}]);\n\
+                 \x20       if (flow != 2u) {{ let add = pa & on & ~pc; if (add != 0u) {{ let old = atomicOr(&{arr}[{ic}], add); moved |= add & ~old; }} }}\n\
+                 \x20       if (flow != 1u) {{ let add = pc & on & ~pa; if (add != 0u) {{ let old = atomicOr(&{arr}[{ia}], add); moved |= add & ~old; }} }}"
+            )
+        };
+        let spread = if lite {
+            format!(
+                "      for (var k = 0u; k < 4u; k++) {{\n\
+                 \x20       let ia = k * NODES + a;\n\
+                 \x20       let ic = k * NODES + c;\n{}\n\
+                 \x20     }}\n\
+                 \x20     {{\n{}\n\
+                 \x20     }}",
+                spread_pair("pl4", "ia", "ic"),
+                spread_pair("p4s", "b + a", "b + c")
+            )
+        } else {
+            format!(
+                "      for (var k = 0u; k < 5u; k++) {{\n\
+                 \x20       let ia = k * NODES + a;\n\
+                 \x20       let ic = k * NODES + c;\n{}\n\
+                 \x20     }}",
+                spread_pair("pl", "ia", "ic")
+            )
+        };
+        writeln!(w, r#"
+fn round{sfx}(b: u32, pb: u32, tb: u32, lid: u32) -> u32 {{
   // 0. switches follow gates
   var toggled: u32 = 0u;
   for (var t = lid; t < params.trans; t += WG) {{
@@ -347,8 +412,8 @@ fn round(b: u32, pb: u32, tb: u32, lid: u32) -> u32 {{
     var p4: u32 = 0u; var p3: u32 = 0u; var p2: u32 = pu; var p1: u32 = pu | pd; var p0: u32 = pu | pd | v;
     if (i == VSS) {{ p4 = 0xffffffffu; p3 = 0xffffffffu; p2 = 0xffffffffu; p1 = 0xffffffffu; p0 = 0xffffffffu; }}
     if (i == VCC) {{ p3 = 0xffffffffu; p2 = 0xffffffffu; p1 = 0xffffffffu; p0 = 0xffffffffu; }}
-    atomicStore(&pl[4u * NODES + i], p4); atomicStore(&pl[3u * NODES + i], p3);
-    atomicStore(&pl[2u * NODES + i], p2); atomicStore(&pl[NODES + i], p1); atomicStore(&pl[i], p0);
+    atomicStore(&{p4i}, p4); atomicStore(&{p3i}, p3);
+    atomicStore(&{p2i}, p2); atomicStore(&{p1i}, p1); atomicStore(&{p0i}, p0);
   }}
   workgroupBarrier();
   // 1b. the folded gates
@@ -366,10 +431,10 @@ fn round(b: u32, pb: u32, tb: u32, lid: u32) -> u32 {{
       i += 3u;
     }}
     if (s != 0u) {{
-      atomicOr(&pl[4u * NODES + o], s); atomicOr(&pl[3u * NODES + o], s); atomicOr(&pl[2u * NODES + o], s);
-      atomicOr(&pl[NODES + o], s);
+      atomicOr(&{p4o}, s); atomicOr(&{p3o}, s); atomicOr(&{p2o}, s);
+      atomicOr(&{p1o}, s);
     }}
-    if ((s | charge) != 0u) {{ atomicOr(&pl[o], s | charge); }}
+    if ((s | charge) != 0u) {{ atomicOr(&{p0o}, s | charge); }}
   }}
   workgroupBarrier();
   // 2. spread across the switches to closure, in parallel: OR is monotone.
@@ -383,14 +448,7 @@ fn round(b: u32, pb: u32, tb: u32, lid: u32) -> u32 {{
       let a = sw[4u * s + 1u];
       let c = sw[4u * s + 2u];
       let flow = sw[4u * s + 3u];
-      for (var k = 0u; k < 5u; k++) {{
-        let ia = k * NODES + a;
-        let ic = k * NODES + c;
-        let pa = atomicLoad(&pl[ia]);
-        let pc = atomicLoad(&pl[ic]);
-        if (flow != 2u) {{ let add = pa & on & ~pc; if (add != 0u) {{ let old = atomicOr(&pl[ic], add); moved |= add & ~old; }} }}
-        if (flow != 1u) {{ let add = pc & on & ~pa; if (add != 0u) {{ let old = atomicOr(&pl[ia], add); moved |= add & ~old; }} }}
-      }}
+{spread}
     }}
     atomicOr(&acc_moved, moved);
     let m = uniform_take(0u, lid);
@@ -398,8 +456,8 @@ fn round(b: u32, pb: u32, tb: u32, lid: u32) -> u32 {{
   }}
   // 3. resolve
   for (var i = lid; i < params.nodes; i += WG) {{
-    let p0 = atomicLoad(&pl[i]); let p1 = atomicLoad(&pl[NODES + i]); let p2 = atomicLoad(&pl[2u * NODES + i]);
-    let p3 = atomicLoad(&pl[3u * NODES + i]); let p4 = atomicLoad(&pl[4u * NODES + i]);
+    let p0 = atomicLoad(&{p0i}); let p1 = atomicLoad(&{p1i}); let p2 = atomicLoad(&{p2i});
+    let p3 = atomicLoad(&{p3i}); let p4 = atomicLoad(&{p4i});
     var high = (p0 & ~p1) | (p2 & ~p3) | (p3 & ~p4);
     if (i == VSS) {{ high = 0u; }}
     if (i == VCC) {{ high = 0xffffffffu; }}
@@ -426,12 +484,18 @@ fn round(b: u32, pb: u32, tb: u32, lid: u32) -> u32 {{
   return uniform_take(1u, lid);
 }}
 
-fn settle(b: u32, pb: u32, tb: u32, lid: u32) {{
+fn settle{sfx}(b: u32, pb: u32, tb: u32, lid: u32) {{
   for (var r = 0u; r < params.max_rounds; r++) {{
-    if (round(b, pb, tb, lid) == 0u) {{ return; }}
+    if (round{sfx}(b, pb, tb, lid) == 0u) {{ return; }}
   }}
-}}
-
+}}"#,
+            sfx = sfx,
+            spread = spread,
+            p0i = p(0, "i"), p1i = p(1, "i"), p2i = p(2, "i"), p3i = p(3, "i"), p4i = p(4, "i"),
+            p0o = p(0, "o"), p1o = p(1, "o"), p2o = p(2, "o"), p3o = p(3, "o"), p4o = p(4, "o"),
+        ).unwrap();
+    }
+    writeln!(w, r#"
 fn read_bus8(b: u32, lane: u32) -> u32 {{
   var v: u32 = 0u;
   for (var i = 0u; i < 8u; i++) {{ v |= ((value[b + DB[i]] >> lane) & 1u) << i; }}
@@ -469,9 +533,15 @@ fn mem_write(lane_global: u32, addr: u32, data: u32) {{
   atomicOr(&pool[byte >> 2u], (data & 0xffu) << sh);
 }}
 
+"#).unwrap();
+
+    // The whole half-step, once per settle variant: op picking, the settle,
+    // the bus service, the settle again after a read lands.
+    for sfx in ["", "_lite"] {
+        writeln!(w, r#"
 // op 0: clk0 falls, then reads are serviced; op 1: clk0 rises, then writes.
 @compute @workgroup_size(256)
-fn half_step(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id) l: vec3<u32>) {{
+fn half_step{sfx}(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id) l: vec3<u32>) {{
   let word = wid.x;
   let lid = l.x;
   let b = word * NODES;
@@ -484,7 +554,7 @@ fn half_step(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id
     else {{ pullup[b + SIG_CLK0] = 0xffffffffu; pulldown[b + SIG_CLK0] = 0u; }}
   }}
   workgroupBarrier();
-  settle(b, pb, tb, lid);
+  settle{sfx}(b, pb, tb, lid);
   if (params.op == 0u) {{
     if (lid < 32u) {{
       let lane = lid;
@@ -503,7 +573,7 @@ fn half_step(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id
         pulldown[n] = (pulldown[n] & ~read_mask) | (~bits & read_mask);
       }}
       workgroupBarrier();
-      settle(b, pb, tb, lid);
+      settle{sfx}(b, pb, tb, lid);
     }}
   }} else {{
     if (lid < 32u) {{
@@ -513,8 +583,62 @@ fn half_step(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id
       }}
     }}
   }}
+}}"#).unwrap();
+    }
+    writeln!(w, r#"
+// The two small entry points a host uses to look at and steer many lanes
+// at once, emitted beside the kernel so the sparse-memory walk is written
+// once. `shuttle` is the host's exchange buffer for both.
+@group(0) @binding(7) var<storage, read_write> shuttle: array<u32>;
+// gather_page: shuttle[0] names a page; each lane's 256 bytes of it land
+// at shuttle[1 + lane*64 ..], reconstructed through the lane's table.
+@compute @workgroup_size(64)
+fn gather_page(@builtin(global_invocation_id) g: vec3<u32>) {{
+  let lane = g.x;
+  if (lane >= params.words * 32u) {{ return; }}
+  let p = shuttle[0];
+  let e = ptab[lane * 256u + p];
+  for (var i = 0u; i < 64u; i++) {{
+    var v: u32;
+    if (e == 0xffffffffu) {{ v = base[p * 64u + i]; }} else {{ v = atomicLoad(&pool[e * 64u + i]); }}
+    shuttle[1u + lane * 64u + i] = v;
+  }}
+}}
+// poke_frame: shuttle[0]/[1] are a broadcast write every lane takes (addr,
+// value; addr 0xffffffff skips it), shuttle[2] a per-lane write's address
+// (same skip) whose byte for lane k sits at shuttle[4 + k]. The console
+// contract's two bytes, done wide, through the same copy-on-write path.
+@compute @workgroup_size(64)
+fn poke_frame(@builtin(global_invocation_id) g: vec3<u32>) {{
+  let lane = g.x;
+  if (lane >= params.words * 32u) {{ return; }}
+  if (shuttle[0] != 0xffffffffu) {{ mem_write(lane, shuttle[0], shuttle[1]); }}
+  if (shuttle[2] != 0xffffffffu) {{ mem_write(lane, shuttle[2], shuttle[4u + lane]); }}
 }}
 "#).unwrap();
+    // The consolidation pass: the identifiers above were written against
+    // one buffer each, and this rewrites every access onto the eight-buffer
+    // layout the declarations promise. Purely additive index prefixes, so
+    // operator precedence cannot bite (the two shifted pool indices are
+    // parenthesized at their sites); tables first, then the atomics, then
+    // the planes, so no rewritten text matches a later pattern.
+    let g = g
+        .replace("gate_of[", "tabs[")
+        .replace("sw[", "tabs[TAB_SW + ")
+        .replace("gt[", "tabs[TAB_GT + ")
+        .replace("jt[", "tabs[TAB_JT + ")
+        .replace("go[", "tabs[TAB_GO + ")
+        .replace("jo[", "tabs[TAB_JO + ")
+        .replace("pool[byte >> 2u]", "am[POOL_O + (byte >> 2u)]")
+        .replace("pool[e * 64u + i]", "am[POOL_O + e * 64u + i]")
+        .replace("pmeta[0]", "am[0]")
+        .replace("pmeta[1]", "am[1]")
+        .replace("pmeta[2]", "am[2]")
+        .replace("p4s[", "am[params.p4s_off + ")
+        .replace("value[", "planes[")
+        .replace("pullup[", "planes[params.words * NODES + ")
+        .replace("pulldown[", "planes[2u * params.words * NODES + ")
+        .replace("nxt[", "planes[3u * params.words * NODES + ");
     std::fs::write(PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("kernel.wgsl"), g).unwrap();
     println!("cargo:rerun-if-changed=build.rs");
     println!(

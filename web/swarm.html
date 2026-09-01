@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Swarm: thousands of chips on your GPU</title>
+<meta name="description" content="The recognised switch network of the 6502, compiled to WGSL and run many machines wide on this device's GPU through WebGPU. Every cell is one transistor-level chip's screen page.">
+<meta name="theme-color" content="#0b1120">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+<style>
+  .swarm-wallwrap { overflow-x: auto; background: #0b0f1a; border: 1px solid #1e293b; border-radius: 10px; padding: 1px; }
+  #swarm-wall { display: block; image-rendering: pixelated; cursor: crosshair; }
+  #swarm-zoom { image-rendering: pixelated; background: #0b0f1a; border: 1px solid #1e293b; border-radius: 8px; }
+  .swarm-side { display: flex; gap: 1.2rem; align-items: flex-start; flex-wrap: wrap; margin-top: 1rem; }
+  .swarm-stats { font-size: .92rem; line-height: 1.9; }
+  .swarm-stats b { font-weight: 600; }
+  #swarm-status { min-height: 1.4em; margin-top: .6rem; }
+  #swarm-status.bad { color: #f87171; }
+  .swarm-btn { font: inherit; padding: .3rem .9rem; border-radius: 8px; border: 1px solid #334155; background: #16213a; color: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<header class="site-head" id="site-head">
+  <div class="wrap">
+    <nav aria-label="Site">
+      <a class="mark" href="./"><span>Visual<span>6502</span></span></a>
+      <div class="navlinks" id="site-nav"></div>
+      <div class="nav-ctl">
+        <div class="nav-prog" data-program-nav></div>
+        <div class="nav-chip" data-chip-nav></div>
+      </div>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">
+        <span class="mi" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="mtxt">Menu</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero wrap">
+    <p class="eyebrow">Rung 2 · in this browser</p>
+    <h1>Every switch of every chip,<br><span class="hl">as wide as your GPU.</span></h1>
+    <p class="lede">
+      The recognised switch network of the 6502, compiled into code by
+      <span class="mono">v6502-compiled</span>'s own build and emitted a second
+      time as WGSL, runs here on this device's GPU through WebGPU: the same
+      kernel the native harness holds bit-exact against the CPU rung, lane
+      for lane. Each cell below is one transistor-level chip's screen page.
+      One machine is booted honestly at the switches (the wasm chip in this
+      page, running the painter program assembled from the source further
+      down), and that machine value crosses onto the GPU rung the way the
+      crossing test proves it crosses: at the four planes, then wide.
+    </p>
+  </section>
+
+  <section class="wrap" id="swarm">
+    <div class="swarm-wallwrap"><canvas id="swarm-wall" width="640" height="360"></canvas></div>
+    <p id="swarm-status">starting</p>
+    <div class="swarm-side">
+      <div>
+        <canvas id="swarm-zoom" width="128" height="128"></canvas>
+        <p class="swarm-stats"><span id="swarm-focus">machine 0</span> · click a cell to focus it</p>
+      </div>
+      <div class="swarm-stats">
+        <div><b id="swarm-count">0</b> machines on <b id="swarm-adapter">no adapter yet</b></div>
+        <div><b id="swarm-rate">0</b> aggregate · <b id="swarm-sweeps">0</b></div>
+        <div>sparse memory: <b id="swarm-pool">0</b> of the copy-on-write pool</div>
+        <div><button class="swarm-btn" id="swarm-pause" type="button">pause</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap prose">
+    <h2>The clock here is the count</h2>
+    <p>
+      Rung 2 is a throughput engine, and this page does not pretend
+      otherwise: one sweep of the GPU advances every machine one half-cycle,
+      so each chip runs at a few hundred half-cycles a second while the wall
+      as a whole runs millions. The native measurement on one RTX 3070 is
+      4.95 million machine-half-cycles a second at 128,000 machines; what
+      this device does is printed live above. A single chip in real time is
+      a different rung's job: the games console runs rung 3 at 0.86
+      milliseconds a frame.
+    </p>
+    <h2>What each cell shows</h2>
+    <p>
+      The 256 bytes of the machine's screen page, one pixel per byte,
+      colored by value. Every chip runs the same program; the byte at
+      <span class="mono">$FF</span>, poked per lane before the first
+      half-cycle through the kernel's copy-on-write memory, is the LFSR tap
+      set that makes every chip a different run. Moving the pointer across
+      the wall broadcasts a brush byte to <span class="mono">$FE</span> and
+      every lane hears it at once. The pool readout above is the sparse
+      memory doing its work: pages exist only where a lane has written.
+    </p>
+    <h2>The program, as source</h2>
+    <pre class="mono" id="swarm-src"></pre>
+    <p>
+      Assembled in this page by the same assembler the programs page uses,
+      booted once on the switch-level chip, then run wide. A browser without
+      WebGPU, an adapter whose limits cannot hold the kernel's workgroup
+      planes, or a spent page pool each stop the wall with the reason named,
+      because a wall that silently showed wrong memory would be worse than
+      no wall.
+    </p>
+  </section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span class="mark">Visual<span>6502</span></span>
+    <span class="foot-meta">A Tiny Machines project · built on visual6502</span>
+    <span class="version-foot" data-version-footer></span>
+  </div>
+</footer>
+
+<script type="module" src="swarm.js"></script>
+<script type="module" src="site-menu.js"></script>
+<script type="module" src="version-footer.js"></script>
+</body>
+</html>

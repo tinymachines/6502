@@ -15,8 +15,20 @@ fn pullups() -> Vec<bool> {
 
 #[test]
 fn gpu_lanes_match_cpu_lanes_bit_for_bit() {
+    parity(false);
+}
+
+/// The lite variant (four planes on chip, the fifth in storage, for
+/// adapters at the 32 KB workgroup-storage floor) is the SAME claim: it
+/// exists for other people's GPUs, and it is proven on this one.
+#[test]
+fn the_lite_variant_matches_the_cpu_lanes_too() {
+    parity(true);
+}
+
+fn parity(lite: bool) {
     let words = 4;
-    let Some(mut gpu) = Gpu::new(words) else {
+    let Some(mut gpu) = Gpu::new_with_entry(words, words * 32 * 16, lite) else {
         assert!(std::env::var_os("REQUIRE_GPU").is_none(), "REQUIRE_GPU is set but no adapter");
         eprintln!("\n  SKIPPED (gpu): no WebGPU adapter\n");
         return;
@@ -26,7 +38,7 @@ fn gpu_lanes_match_cpu_lanes_bit_for_bit() {
     m.load_lane(1, &[Load { org: 0x200, bytes: vec![0xe6, 0x21, 0x4c, 0x00, 0x02] }], 0x200);
     m.power_cycle();
     gpu.load(&m);
-    let mutate = std::env::var_os("MUTATE").is_some();
+    let mutate = std::env::var_os("MUTATE").is_some() && !lite;
     let mut checked = 0u64;
     for batch in 0..6 {
         let n = [1u64, 1, 2, 7, 50, 300][batch];
@@ -70,7 +82,7 @@ fn gpu_lanes_match_cpu_lanes_bit_for_bit() {
         assert!(diff.is_empty(), "lane {lane}: {} bytes differ, first at {:04x} (gpu {:02x} cpu {:02x})",
             diff.len(), diff[0], g[diff[0]], c[diff[0]]);
     }
-    eprintln!("gpu parity on {}: {words} words x 32 lanes, 361 half-steps, every node and transistor identical to the CPU rung (lane 1 on a different program); {taken} pool pages of {cap} carry every lane's memory exactly", gpu.adapter_name);
+    eprintln!("gpu parity ({}) on {}: {words} words x 32 lanes, 361 half-steps, every node and transistor identical to the CPU rung (lane 1 on a different program); {taken} pool pages of {cap} carry every lane's memory exactly", if lite { "half_step_lite" } else { "half_step" }, gpu.adapter_name);
 }
 
 #[test]

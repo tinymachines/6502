@@ -31,6 +31,9 @@ __pycache__/
 # cargo run --release -p v6502-sim --bin export-timing -- web/timing.json
 /web/timing.json
 
+# cargo run --release -p v6502-compiled --bin export-gpu -- web/gpu.json
+/web/gpu.json
+
 # Git metadata for the version footer, stamped at build time.
 # python3 tools/build-info.py web --kind simulator
 /web/build-info.json

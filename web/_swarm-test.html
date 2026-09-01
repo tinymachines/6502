@@ -1,0 +1,129 @@
+<!doctype html>
+<!--
+  Development harness, never shipped: build-web.py copies only the files it
+  names, so nothing here reaches dist/.
+
+  The swarm page's ground floor, checked without a GPU in the room:
+
+    1. gpu.json is served, carries every table the WebGPU host binds, the
+       counts agree with each other (gate_of is per transistor), and the
+       WGSL text carries all three entry points.
+
+    2. The painter assembles, lands at $0200, and boots on the wasm chip;
+       the exported machine's planes expand to the kernel's sizes with a
+       plausible population, and the base image built from its memory
+       carries the program bytes and the reset vector.
+
+    3. A browser without WebGPU is refused by name, which is the path every
+       headless run of this harness itself takes.
+
+  What this cannot reach headlessly is the wall itself: WebGPU under
+  SwiftShader is not a rendering of this page's claim. The live check is a
+  real browser on a real GPU, like every other device gap this project
+  records.
+
+    http://localhost:8777/_swarm-test.html
+-->
+<html lang="en"><head><meta charset="utf-8"><title>pending</title>
+<style>body{margin:0;background:#0b1120;color:#eaf2ff;font:12px ui-monospace,monospace}
+pre{padding:1rem;white-space:pre-wrap}</style>
+</head><body>
+<script type="module">
+const results = [];
+const pre = document.createElement('pre');
+document.body.append(pre);
+// Incremental, so a dump that lands mid-run shows how far it got.
+const ok = (n, c, d) => { results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' + d : ''}`); pre.textContent = results.join('\n'); };
+
+(async () => {
+  try {
+    const { PAINTER, SCREEN_PAGE, expandPlane, baseImage, refusal } = await import('./swarm.js');
+    const { assemble } = await import('./asm.js');
+    const wasm = await import('./pkg/v6502_wasm.js');
+
+    // 1. the kernel file
+    const r = await fetch('gpu.json');
+    ok('gpu.json is served', r.ok, `HTTP ${r.status}`);
+    const k = await r.json();
+    for (const key of ['wgsl', 'nodes', 'trans', 'max_rounds', 'folded_gates', 'junctions', 'sig',
+                       'gate_of', 'switch_table', 'gate_table', 'junction_table', 'gate_offsets', 'junction_offsets']) {
+      ok(`gpu.json carries ${key}`, key in k);
+    }
+    ok('gate_of is per transistor', k.gate_of.length === k.trans, `${k.gate_of.length} of ${k.trans}`);
+    ok('the switch table cuts into fours', k.switch_table.length % 4 === 0, `${k.switch_table.length}`);
+    for (const entry of ['half_step', 'gather_page', 'poke_frame']) {
+      ok(`the WGSL carries ${entry}`, k.wgsl.includes(`fn ${entry}(`));
+    }
+    ok('the WGSL walks the sparse memory', k.wgsl.includes('ptab[') && k.wgsl.includes('POOL_O'));
+
+    // 2. the painter, booted at the switches
+    const asm = assemble(PAINTER);
+    ok('the painter assembles at $0200', asm.org === 0x0200 && asm.bytes.length > 20, `org ${asm.org.toString(16)}, ${asm.bytes.length} bytes`);
+    ok('the painter paints the screen page', PAINTER.includes(`$0${(SCREEN_PAGE << 8).toString(16).toUpperCase()}`), `page ${SCREEN_PAGE}`);
+    await wasm.default();
+    const chip = new wasm.Machine();
+    chip.fillMemory(0);
+    chip.load(asm.org, new Uint8Array(asm.bytes));
+    chip.setResetVector(asm.org);
+    chip.powerCycle();
+    const m = JSON.parse(chip.exportMachine());
+    const value = expandPlane(m.state.value, k.nodes);
+    const trans = expandPlane(m.state.trans_on, k.trans);
+    ok('the value plane is one lane-mask per node', value.length === k.nodes);
+    const high = value.reduce((a, v) => a + (v !== 0 ? 1 : 0), 0);
+    ok('a booted chip is neither all high nor all low', high > k.nodes * 0.2 && high < k.nodes * 0.8, `${high} of ${k.nodes} high`);
+    const on = trans.reduce((a, v) => a + (v !== 0 ? 1 : 0), 0);
+    ok('some transistors conduct and most do not', on > 100 && on < k.trans * 0.9, `${on} of ${k.trans} on`);
+    const img = baseImage(m.memory);
+    ok('the base image is 64 KiB', img.length === 0x10000);
+    ok('the base image carries the program', asm.bytes.every((b, i) => img[0x0200 + i] === b));
+    ok('the base image carries the reset vector', img[0xfffc] === 0x00 && img[0xfffd] === 0x02, `${img[0xfffc]} ${img[0xfffd]}`);
+
+    // 3. refusal by name
+    ok('a browser without WebGPU is refused by name', /WebGPU/.test(refusal({}) ?? ''), refusal({}));
+    ok('a browser with WebGPU is not refused here', refusal({ gpu: {} }) === null);
+
+    // 4. where WebGPU exists (headless chromium: --enable-unsafe-webgpu
+    //    --use-webgpu-adapter=swiftshader), the kernel itself runs: one
+    //    word, the seeds poked, frames stepped imperatively (no RAF, so no
+    //    headless frame-throttling to lie about it), and the painter's
+    //    writes must land on the screen page through the copy-on-write
+    //    pool. This is the wall's whole mechanism minus the pixels.
+    if (!navigator.gpu) {
+      results.push('NOTE this browser has no WebGPU, so the kernel run is skipped; the wall needs the live check');
+    } else {
+      const { gpuHost } = await import('./swarm.js');
+      const planes = {
+        value: expandPlane(m.state.value, k.nodes),
+        pullup: expandPlane(m.state.pullup, k.nodes),
+        pulldown: expandPlane(m.state.pulldown, k.nodes),
+        trans_on: expandPlane(m.state.trans_on, k.trans),
+      };
+      // gpuHost validates its whole setup (module, pipelines, bind
+      // groups) under an error scope and throws by name, so this PASS
+      // means the host's layout matches the kernel's, on this adapter.
+      const host = await gpuHost(k, planes, img, 1);
+      ok('the GPU host sets up clean under a validation scope', host.lanes === 32, host.adapter);
+      if (/swiftshader|llvmpipe|software/i.test(host.adapter)) {
+        results.push(`NOTE ${host.adapter} is a software adapter, minutes per dispatch: the run itself is the native parity test's claim on the real card, and the wall needs the live check`);
+      } else {
+        const seeds = new Uint8Array(host.lanes);
+        for (let i = 0; i < host.lanes; i++) seeds[i] = (i * 151 + 43) & 0xff || 0xa5;
+        host.poke(0xffffffff, 0, 0x00ff, seeds);
+        const f0 = await host.frame(0, SCREEN_PAGE);
+        ok('the seed poke took one copy-on-write page per lane', f0.poolUsed === 32 && !f0.spent, `${f0.poolUsed} of ${f0.poolCap}`);
+        ok('the gather brings every lane\'s screen page home', f0.screens.length === 32 * 256);
+        const f1 = await host.frame(120, SCREEN_PAGE);
+        const painted = f1.screens.reduce((a, v) => a + (v !== 0 ? 1 : 0), 0);
+        ok('the settle runs and the painter reaches the screen page', painted > 0 && !f1.spent, `${painted} bytes painted, pool ${f1.poolUsed} of ${f1.poolCap}`);
+      }
+    }
+  } catch (e) {
+    ok('harness ran to the end', false, e instanceof Error ? (e.stack || e.message) : String(e));
+  }
+  const fails = results.filter((r) => r.startsWith('FAIL')).length;
+  document.title = fails ? `${fails} FAILING` : 'ALL PASS';
+  pre.textContent = `${document.title}\n\n${results.join('\n')}`;
+})();
+</script>
+</body></html>

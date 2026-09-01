@@ -1258,3 +1258,48 @@ instead sweeps in the terms describing the instruction's class (`op-implied`,
 - Term names are emitted into `timing.json` rather than shared by index with
   `decode.json`. Both index the same `Pla::rows` order, but coupling two
   published files by index alone mislabels everything the day that order moves.
+
+## The Swarm (`swarm.html`, `swarm.js`, `export-gpu.rs`, `_swarm-test.html`)
+
+The rung 2 kernel, in the visitor's own browser. `export-gpu` (a
+`v6502-compiled` bin) writes `web/gpu.json`: the same WGSL the native
+harness runs, its tables concatenated for the eight-buffer layout, and the
+counts the params uniform wants. The page boots ONE machine honestly at
+the switches (the wasm chip, running the painter program assembled in the
+page by `asm.js`), expands its exported machine value to u32 lane planes,
+and runs it thousands wide through WebGPU. Each cell of the wall is one
+machine's screen page, one pixel per byte; the byte at `$FF`, poked per
+lane through the kernel's copy-on-write memory before the first
+half-cycle, is the LFSR tap set that makes every chip a different run,
+and the pointer broadcasts a brush byte to `$FE` that every lane hears.
+
+What the page is honest about, each stated on it:
+
+- **Rung 2 is a throughput engine.** Each chip runs at a few hundred
+  half-cycles a second while the wall runs millions; the page prints both
+  live and points a single-chip appetite at the games console's rung 3.
+- **Refusals by name**: no WebGPU, no adapter, an adapter whose limits
+  cannot hold the kernel, a spent page pool (the wall STOPS rather than
+  showing memory whose writes were dropped). The GPU host's whole setup
+  runs under a validation error scope, so a binding mistake surfaces as a
+  named refusal rather than a silent black wall.
+- **The kernel fits any adapter.** Two lessons the headless run taught,
+  both now emitted by `v6502-compiled`'s build: the five workgroup planes
+  (34.5 KB) exceed the 32 KB workgroup-storage floor that Apple, AMD and
+  software adapters share, so a `half_step_lite` variant keeps four
+  planes on chip and the fifth in storage, chosen at run time by the
+  adapter's limit; and the original sixteen storage buffers exceeded
+  common `maxStorageBuffersPerShaderStage` caps, so the kernel now binds
+  EIGHT buffers, the spec's own floor (planes share one, the six
+  read-only tables share one, the atomics share one). Both variants are
+  held to the CPU rung by the native parity test, on the real card.
+
+`_swarm-test.html` checks the ground floor without a GPU: gpu.json's
+shape, the painter assembling and booting, the plane expansion, the base
+image, the refusals. Under `--enable-unsafe-webgpu
+--use-webgpu-adapter=swiftshader` it also sets the host up on a real
+WebGPU implementation (minutes per dispatch there, so the settle itself
+stays with the native parity test and the wall's live check). The trap
+that cost the most: **`--virtual-time-budget` gallops while the page
+waits on real GPU work**, so a dump lands mid-setup looking like a hang;
+the harness prints incrementally so a mid-run dump shows how far it got.

@@ -107,7 +107,7 @@ Same reasoning as `version-footer.js` and `block-palette.js`.
 
 ## Development harnesses in `web/`
 
-Thirty-six harnesses plus three probes, all prefixed `_` and **never shipped** —
+Thirty-seven harnesses plus three probes, all prefixed `_` and **never shipped** —
 `build-web.py` copies only the files it names, so they cannot reach `dist/`.
 They exist because the front end has no other test route and screenshots do not
 catch this class of bug.

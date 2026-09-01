@@ -639,6 +639,23 @@ dense 3.78 M, inside run noise), rising to 4.95 M at 128,000 machines
 is now the serial phases inside a word (the barriers between steps and
 the per-word settle loop), not memory.
 
+**The same kernel in a browser (the swarm page, 2026-09-01).** Getting
+the WGSL through WebGPU's portable limits reshaped it twice, both
+emissions still from the one `build.rs`: the five workgroup planes
+(34.5 KB) sit over the 32 KB workgroup-storage floor that Apple, AMD and
+software adapters share, so a second entry point (`half_step_lite`)
+keeps four planes on chip and the fifth, the sparsest (Vss strength), in
+a storage scratch; and the original sixteen storage buffers sat over
+common per-stage caps, so the kernel now binds EIGHT buffers, the spec's
+own floor: the four node planes share one, the six read-only tables
+share one (offsets are build-time constants), and the atomics share one
+(pool meta at 0, the page pool at `POOL_O`, the lite plane at
+`params.p4s_off`). The native host mirrors the layout, the browser host
+(`web/swarm.js`) mirrors the native one, and `tests/parity.rs` holds
+BOTH entry points to the CPU rung on the real card. Re-measured after
+the consolidation: 3.69 M at 200 words, 4.85 M at 4,000, unchanged
+inside noise. The page's own account is in `pages.md`, "The Swarm".
+
 ## Performance
 
 **~29,600 half-cycles/s native (~14.8 kHz simulated 6502)**, against the

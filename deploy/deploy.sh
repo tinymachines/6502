@@ -177,6 +177,9 @@ cargo run --release --quiet -p v6502-sim --bin export-decode -- web/decode.json
 log "timing every instruction"
 cargo run --release --quiet -p v6502-sim --bin export-timing -- web/timing.json
 
+log "emitting the rung 2 kernel for the swarm page"
+cargo run --release --quiet -p v6502-compiled --bin export-gpu -- web/gpu.json
+
 # ---------------------------------------------------------------------------
 # Sanity-check the build before it can replace a working site
 # ---------------------------------------------------------------------------
