@@ -53,5 +53,48 @@ fn gpu_lanes_match_cpu_lanes_bit_for_bit() {
         checked += n;
     }
     assert_eq!(checked, 361);
-    eprintln!("gpu parity on {}: {words} words x 32 lanes, 361 half-steps, every node and transistor identical to the CPU rung (lane 1 on a different program)", gpu.adapter_name);
+
+    // The sparse memory, reconstructed per lane, equals what the dense CPU
+    // lane holds: lane 0 (the base image's own lane, dirtied by its
+    // writes), lane 1 (loaded DIFFERENT, so its pre-seeded pages are what
+    // reconstruction must find), and lane 1 of word 1 (the same program
+    // evolving in another word's pool pages). The programs write zero page
+    // and stack, so a reconstruction that only ever returned the base
+    // would fail here by address.
+    let (taken, cap, spent) = gpu.pool_state();
+    assert!(!spent && taken > 0, "pool: {taken} of {cap}, spent {spent}");
+    for lane in [0usize, 1, 2, 33] {
+        let g = gpu.memory(lane);
+        let c = &m.mem[lane % 32];
+        let diff: Vec<usize> = (0..0x10000).filter(|&i| g[i] != c[i]).collect();
+        assert!(diff.is_empty(), "lane {lane}: {} bytes differ, first at {:04x} (gpu {:02x} cpu {:02x})",
+            diff.len(), diff[0], g[diff[0]], c[diff[0]]);
+    }
+    eprintln!("gpu parity on {}: {words} words x 32 lanes, 361 half-steps, every node and transistor identical to the CPU rung (lane 1 on a different program); {taken} pool pages of {cap} carry every lane's memory exactly", gpu.adapter_name);
+}
+
+#[test]
+fn a_spent_pool_refuses_the_run_by_the_numbers() {
+    // Four pages for 32 lanes that each write two: the pool WILL be spent,
+    // and the refusal has to happen at readback rather than the memory
+    // quietly serving a run whose writes were dropped.
+    let Some(mut gpu) = Gpu::new_with_pool(1, 4) else {
+        assert!(std::env::var_os("REQUIRE_GPU").is_none(), "REQUIRE_GPU is set but no adapter");
+        eprintln!("\n  SKIPPED (gpu): no WebGPU adapter\n");
+        return;
+    };
+    let mut m = Machines::new(&pullups());
+    m.load_all(&[Load { org: 0x200, bytes: vec![0xe6, 0x20, 0x4c, 0x00, 0x02] }], 0x200);
+    m.power_cycle();
+    gpu.load(&m);
+    gpu.half_steps(120);
+    gpu.sync();
+    let (_, _, spent) = gpu.pool_state();
+    assert!(spent, "the pool was sized to be spent and was not; this test is testing nothing");
+    let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| gpu.values()));
+    let msg = match refused {
+        Ok(_) => panic!("a spent pool served node values anyway"),
+        Err(e) => e.downcast_ref::<String>().cloned().unwrap_or_default(),
+    };
+    assert!(msg.contains("pool is spent"), "the refusal does not name the pool: {msg:?}");
 }

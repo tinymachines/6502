@@ -4,12 +4,24 @@
 //! emitted by the same `build.rs` from the same folds, with `u32` lanes. One
 //! invocation owns one word of 32 machines and does a whole half-step (the
 //! clock edge, the settle to closure, the bus service against that lane's
-//! 64 KiB in a storage buffer), so the CPU only dispatches half-steps in
-//! batches and reads back what it wants to look at.
+//! memory), so the CPU only dispatches half-steps in batches and reads back
+//! what it wants to look at.
+//!
+//! **Memory is sparse per lane.** A dense 64 KiB per lane was 99% of the
+//! footprint (400 MB of the 408 at 6,400 machines) and was the stated
+//! ceiling on machine count; the lanes mostly run one ROM and differ only
+//! in the pages they write. So the kernel now carries ONE shared base
+//! image, a 256-entry page table per lane, and a pool of 256-byte pages
+//! allocated copy-on-write at a lane's first write into a page. The pool's
+//! size is the host's promise; a spent pool raises a flag and every
+//! readback REFUSES the run by name rather than serving memory that
+//! silently diverged. Lanes loaded with different images (the parity
+//! test's lane 1) get their differing pages pre-seeded into the pool.
 //!
 //! Per-lane semantics are lane-independent, so GPU lane `k` of any word must
 //! equal CPU lane `k` of a `Machines` given the same memory, bit for bit,
-//! after the same number of half-steps; `tests/parity.rs` holds that.
+//! after the same number of half-steps; `tests/parity.rs` holds that, and
+//! holds the reconstructed per-lane memory against the CPU lane's too.
 
 #![forbid(unsafe_code)]
 
@@ -17,6 +29,12 @@ use v6502_compiled::kernel::{NODES, TRANS};
 use v6502_compiled::{Machines, KERNEL_WGSL};
 
 pub const LANES_PER_WORD: usize = 32;
+/// The default pool budget: pages per lane, averaged across the pool (a
+/// hot lane can take more as long as the whole pool holds). Sixteen is
+/// 4 KiB a lane against the dense 64 KiB.
+pub const DEFAULT_POOL_PAGES_PER_LANE: usize = 16;
+
+const NO_PAGE: u32 = 0xffff_ffff;
 
 fn bytes(v: &[u32]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_le_bytes()).collect()
@@ -31,9 +49,14 @@ pub struct Gpu {
     pullup: wgpu::Buffer,
     pulldown: wgpu::Buffer,
     trans_on: wgpu::Buffer,
-    mem: wgpu::Buffer,
+    base: wgpu::Buffer,
+    ptab: wgpu::Buffer,
+    pool: wgpu::Buffer,
+    pmeta: wgpu::Buffer,
     staging: wgpu::Buffer,
     pub words: usize,
+    /// The pool's capacity in 256-byte pages.
+    pub pool_pages: usize,
     pub half_cycle: u64,
     /// The clock as loaded, toggled per half-step: it picks the edge to dispatch.
     clk_high: bool,
@@ -41,8 +64,13 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    /// `None` when no adapter or device is available.
+    /// `None` when no adapter or device is available. The pool takes the
+    /// default budget; `new_with_pool` names one.
     pub fn new(words: usize) -> Option<Gpu> {
+        Gpu::new_with_pool(words, words * LANES_PER_WORD * DEFAULT_POOL_PAGES_PER_LANE)
+    }
+
+    pub fn new_with_pool(words: usize, pool_pages: usize) -> Option<Gpu> {
         let instance = wgpu::Instance::default();
         // GPU_INDEX picks among the adapters (a box with two cards and one
         // busy); otherwise the high-performance one.
@@ -85,9 +113,14 @@ impl Gpu {
         let pulldown = mk("pulldown", words * NODES * 4, st);
         let trans_on = mk("trans_on", words * TRANS * 4, st);
         let nxt = mk("next", words * NODES * 4, st);
-        let mem = mk("mem", words * LANES_PER_WORD * 0x10000, st);
+        let base = mk("base image", 0x10000, st);
+        let ptab = mk("page table", words * LANES_PER_WORD * 256 * 4, st);
+        let pool = mk("page pool", pool_pages.max(1) * 256, st);
+        let pmeta = mk("pool meta", 16, st);
         let gate_of = mk("gate_of", TRANS * 4, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST);
-        let staging = mk("staging", words * TRANS * 4, wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST);
+        // The staging buffer serves node readbacks and one lane's memory
+        // reconstruction (the base plus that lane's table).
+        let staging = mk("staging", (words * TRANS * 4).max(0x10000 + 256 * 4 + 16), wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST);
         let gates: Vec<u32> = v6502_compiled::kernel::GATE_OF.iter().map(|&g| g as u32).collect();
         queue.write_buffer(&gate_of, 0, &bytes(&gates));
         let sw = mk("switches", v6502_compiled::kernel::SWITCH_TABLE.len() * 4, wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST);
@@ -120,22 +153,31 @@ impl Gpu {
                     wgpu::BindGroupEntry { binding: 2, resource: pullup.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 3, resource: pulldown.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 4, resource: trans_on.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 5, resource: base.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 6, resource: nxt.as_entire_binding() },
-                    wgpu::BindGroupEntry { binding: 7, resource: mem.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 7, resource: pool.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 8, resource: gate_of.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 9, resource: sw.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 10, resource: gt.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 11, resource: jt.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 12, resource: go.as_entire_binding() },
                     wgpu::BindGroupEntry { binding: 13, resource: jo.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 14, resource: ptab.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 15, resource: pmeta.as_entire_binding() },
                 ],
             })
         });
-        Some(Gpu { device, queue, pipeline, bind, value, pullup, pulldown, trans_on, mem, staging, words, half_cycle: 0, clk_high: false, adapter_name })
+        Some(Gpu { device, queue, pipeline, bind, value, pullup, pulldown, trans_on, base, ptab, pool, pmeta, staging,
+                   words, pool_pages: pool_pages.max(1), half_cycle: 0, clk_high: false, adapter_name })
     }
 
     /// Fill every word from the lower 32 lanes of a CPU `Machines`: node
     /// state and each lane's memory. Lane `k` of every word is CPU lane `k`.
+    ///
+    /// Lane 0's image becomes the shared base; a lane whose image differs
+    /// gets its differing pages pre-seeded into the pool, per word (every
+    /// word's copy of that lane evolves separately). A load whose seeding
+    /// alone would spend the pool refuses here, by the numbers.
     pub fn load(&mut self, m: &Machines) {
         let lanes = |src: &[u64]| -> Vec<u32> {
             let one: Vec<u32> = src.iter().map(|&w| w as u32).collect();
@@ -145,13 +187,45 @@ impl Gpu {
         self.queue.write_buffer(&self.pullup, 0, &bytes(&lanes(&m.state.pullup)));
         self.queue.write_buffer(&self.pulldown, 0, &bytes(&lanes(&m.state.pulldown)));
         self.queue.write_buffer(&self.trans_on, 0, &bytes(&lanes(&m.state.trans_on)));
-        let mut mem = Vec::with_capacity(self.words * LANES_PER_WORD * 0x10000);
-        for _ in 0..self.words {
-            for lane in 0..LANES_PER_WORD {
-                mem.extend_from_slice(&m.mem[lane]);
+
+        let base = &m.mem[0];
+        self.queue.write_buffer(&self.base, 0, base);
+        // Which pages of which lanes differ from the base: computed once,
+        // seeded into the pool for every word.
+        let dirty: Vec<(usize, Vec<usize>)> = (0..LANES_PER_WORD)
+            .map(|lane| {
+                let pages = (0..256)
+                    .filter(|&p| m.mem[lane][p * 256..(p + 1) * 256] != base[p * 256..(p + 1) * 256])
+                    .collect::<Vec<_>>();
+                (lane, pages)
+            })
+            .filter(|(_, p)| !p.is_empty())
+            .collect();
+        let per_word: usize = dirty.iter().map(|(_, p)| p.len()).sum();
+        let used = per_word * self.words;
+        assert!(
+            used <= self.pool_pages,
+            "loading these machines needs {used} pool pages ({per_word} differing pages per word x {} words) but the pool holds {}",
+            self.words,
+            self.pool_pages
+        );
+        let mut ptab = vec![NO_PAGE; self.words * LANES_PER_WORD * 256];
+        let mut seed: Vec<u8> = Vec::with_capacity(used * 256);
+        let mut next = 0u32;
+        for w in 0..self.words {
+            for (lane, pages) in &dirty {
+                for &p in pages {
+                    ptab[(w * LANES_PER_WORD + lane) * 256 + p] = next;
+                    seed.extend_from_slice(&m.mem[*lane][p * 256..(p + 1) * 256]);
+                    next += 1;
+                }
             }
         }
-        self.queue.write_buffer(&self.mem, 0, &mem);
+        self.queue.write_buffer(&self.ptab, 0, &bytes(&ptab));
+        if !seed.is_empty() {
+            self.queue.write_buffer(&self.pool, 0, &seed);
+        }
+        self.queue.write_buffer(&self.pmeta, 0, &bytes(&[next, self.pool_pages as u32, 0, 0]));
         self.half_cycle = m.half_cycle();
         self.clk_high = m.state.value[v6502_compiled::kernel::sig::CLK0] != 0;
     }
@@ -176,9 +250,9 @@ impl Gpu {
         self.queue.submit(Some(enc.finish()));
     }
 
-    fn read(&self, src: &wgpu::Buffer, words: usize) -> Vec<u32> {
+    fn read_raw(&self, src: &wgpu::Buffer, src_off: u64, words: usize) -> Vec<u32> {
         let mut enc = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("read") });
-        enc.copy_buffer_to_buffer(src, 0, &self.staging, 0, (words * 4) as u64);
+        enc.copy_buffer_to_buffer(src, src_off, &self.staging, 0, (words * 4) as u64);
         self.queue.submit(Some(enc.finish()));
         let slice = self.staging.slice(0..(words * 4) as u64);
         let (tx, rx) = std::sync::mpsc::channel();
@@ -190,6 +264,30 @@ impl Gpu {
         out
     }
 
+    /// The pool as it stands: pages taken (allocation count, which can
+    /// exceed the capacity once spent), capacity, and whether a write was
+    /// dropped. Reading anything else first goes through [`Gpu::refuse_if_spent`].
+    pub fn pool_state(&self) -> (u32, u32, bool) {
+        let m = self.read_raw(&self.pmeta, 0, 3);
+        (m[0], m[1], m[2] != 0)
+    }
+
+    /// A spent pool means a write was dropped and the lanes have silently
+    /// diverged from what a dense memory would hold: every readback calls
+    /// this and panics by the numbers rather than serving that state.
+    fn refuse_if_spent(&self) {
+        let (taken, cap, spent) = self.pool_state();
+        assert!(
+            !spent,
+            "the page pool is spent: {taken} pages asked of {cap}; writes were dropped and this run's memory is not to be believed. Size the pool for the workload (Gpu::new_with_pool)."
+        );
+    }
+
+    fn read(&self, src: &wgpu::Buffer, words: usize) -> Vec<u32> {
+        self.refuse_if_spent();
+        self.read_raw(src, 0, words)
+    }
+
     /// Every word's node values, word-major.
     pub fn values(&self) -> Vec<u32> {
         self.read(&self.value, self.words * NODES)
@@ -197,6 +295,25 @@ impl Gpu {
     pub fn trans_on(&self) -> Vec<u32> {
         self.read(&self.trans_on, self.words * TRANS)
     }
+
+    /// One lane's 64 KiB, reconstructed from the base, its page table and
+    /// the pool: what a dense buffer would hold, or a refusal.
+    pub fn memory(&self, lane_global: usize) -> Vec<u8> {
+        self.refuse_if_spent();
+        assert!(lane_global < self.words * LANES_PER_WORD, "lane {lane_global} of {}", self.words * LANES_PER_WORD);
+        let table = self.read_raw(&self.ptab, (lane_global * 256 * 4) as u64, 256);
+        let base = self.read_raw(&self.base, 0, 0x4000);
+        let mut out: Vec<u8> = base.iter().flat_map(|w| w.to_le_bytes()).collect();
+        for (p, &e) in table.iter().enumerate() {
+            if e != NO_PAGE {
+                let page = self.read_raw(&self.pool, (e as usize * 256) as u64, 64);
+                let bytes: Vec<u8> = page.iter().flat_map(|w| w.to_le_bytes()).collect();
+                out[p * 256..(p + 1) * 256].copy_from_slice(&bytes);
+            }
+        }
+        out
+    }
+
     /// Wait for everything submitted so far.
     pub fn sync(&self) {
         self.device.poll(wgpu::Maintain::Wait);

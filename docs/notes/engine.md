@@ -616,13 +616,28 @@ must be the rising one.
    `INC $20; JMP` loop, one readback at the end), about 17x the CPU rung 2
    and about 128x rung 0, still rising with width.
 
-What stops the curve is the box, not the kernel: each lane carries 64 KiB
-of memory, 2 MB a word, and the two cards had about 500 MB free under
-other tenants, so 200 words was the widest measured. The next lever is a
-sparse per-lane memory (the API already describes an image as a fill byte
-and the pages that differ), which would put thousands of words on the same
-card; after that, the serial phases inside a word (the barriers between
-steps 0, 1, 2 and 3 and the per-word settle loop).
+What stopped the curve at first was the box, not the kernel: each lane
+carried a dense 64 KiB of memory, 2 MB a word, 99% of the footprint, and
+200 words was the widest that fit. **Sparse per-lane memory removed that
+ceiling (2026-08-31)**: one shared base image, a 256-entry page table per
+lane, and a pool of 256-byte pages allocated copy-on-write at a lane's
+first write into a page. Each lane's table and pages belong to that
+lane's thread alone, so the one shared atomic is the allocator; a spent
+pool raises a flag and every readback refuses the run by the numbers
+rather than serving memory whose writes were dropped (`tests/parity.rs`
+proves the refusal fires, and holds the reconstructed per-lane memory
+byte-for-byte against the CPU lane, including a lane loaded with a
+different image whose pages are pre-seeded into the pool). The budget is
+the host's: 16 pages a lane by default, 4 KiB against the dense 64.
+
+Measured on the same card, same bench, after the change: **3.69 M
+machine-half-cycles/s at the old 6,400-machine ceiling (parity with the
+dense 3.78 M, inside run noise), rising to 4.95 M at 128,000 machines
+(4,000 words), and 512,000 machines run at 4.46 M** (16,000 words, about
+3.3 GB) -- eighty times the machine count, with the aggregate at about
+167x rung 0 at the peak. The card was underfed at 200 words; the limit
+is now the serial phases inside a word (the barriers between steps and
+the per-word settle loop), not memory.
 
 ## Performance
 

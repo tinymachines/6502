@@ -283,7 +283,18 @@ fn main() {
     writeln!(w, "// The planes live in workgroup memory: five per node, 34.5 KB, where atomics\n// are cheap and the working set stays on chip whatever the word count.").unwrap();
     writeln!(w, "var<workgroup> pl: array<atomic<u32>, {}>;", 5 * n).unwrap();
     writeln!(w, "@group(0) @binding(6) var<storage, read_write> nxt: array<u32>;").unwrap();
-    writeln!(w, "@group(0) @binding(7) var<storage, read_write> mem: array<atomic<u32>>;").unwrap();
+    writeln!(w, "// Memory is SPARSE per lane: one shared base image, a page table per").unwrap();
+    writeln!(w, "// lane (256 entries, 0xffffffff = the base's page), and a pool of").unwrap();
+    writeln!(w, "// 256-byte pages allocated copy-on-write at the first write. Each").unwrap();
+    writeln!(w, "// lane's table and pages are touched only by that lane's thread, so").unwrap();
+    writeln!(w, "// the one shared atomic is the allocator; a spent pool raises the").unwrap();
+    writeln!(w, "// flag in pmeta[2] and drops the write, and the host REFUSES the run").unwrap();
+    writeln!(w, "// on readback rather than serving memory that silently diverged.").unwrap();
+    writeln!(w, "@group(0) @binding(5) var<storage, read> base: array<u32>;").unwrap();
+    writeln!(w, "@group(0) @binding(7) var<storage, read_write> pool: array<atomic<u32>>;").unwrap();
+    writeln!(w, "@group(0) @binding(14) var<storage, read_write> ptab: array<u32>;").unwrap();
+    writeln!(w, "// pmeta[0] = next free page, pmeta[1] = capacity, pmeta[2] = spent flag.").unwrap();
+    writeln!(w, "@group(0) @binding(15) var<storage, read_write> pmeta: array<atomic<u32>>;").unwrap();
     writeln!(w, "@group(0) @binding(8) var<storage, read> gate_of: array<u32>;").unwrap();
     writeln!(w, "@group(0) @binding(9) var<storage, read> sw: array<u32>;").unwrap();
     writeln!(w, "@group(0) @binding(10) var<storage, read> gt: array<u32>;").unwrap();
@@ -432,14 +443,30 @@ fn read_bus16(b: u32, lane: u32) -> u32 {{
   return v;
 }}
 fn mem_read(lane_global: u32, addr: u32) -> u32 {{
-  let byte = lane_global * 65536u + addr;
-  return (atomicLoad(&mem[byte >> 2u]) >> ((byte & 3u) * 8u)) & 0xffu;
+  let e = ptab[lane_global * 256u + (addr >> 8u)];
+  if (e == 0xffffffffu) {{
+    return (base[addr >> 2u] >> ((addr & 3u) * 8u)) & 0xffu;
+  }}
+  let byte = e * 256u + (addr & 0xffu);
+  return (atomicLoad(&pool[byte >> 2u]) >> ((byte & 3u) * 8u)) & 0xffu;
 }}
 fn mem_write(lane_global: u32, addr: u32, data: u32) {{
-  let byte = lane_global * 65536u + addr;
+  var e = ptab[lane_global * 256u + (addr >> 8u)];
+  if (e == 0xffffffffu) {{
+    // First write into this page: take a pool page, seed it from the
+    // base, install it. Only this lane's thread touches this entry.
+    e = atomicAdd(&pmeta[0], 1u);
+    if (e >= atomicLoad(&pmeta[1])) {{
+      atomicStore(&pmeta[2], 1u);
+      return;
+    }}
+    for (var i = 0u; i < 64u; i++) {{ atomicStore(&pool[e * 64u + i], base[(addr >> 8u) * 64u + i]); }}
+    ptab[lane_global * 256u + (addr >> 8u)] = e;
+  }}
+  let byte = e * 256u + (addr & 0xffu);
   let sh = (byte & 3u) * 8u;
-  atomicAnd(&mem[byte >> 2u], ~(0xffu << sh));
-  atomicOr(&mem[byte >> 2u], (data & 0xffu) << sh);
+  atomicAnd(&pool[byte >> 2u], ~(0xffu << sh));
+  atomicOr(&pool[byte >> 2u], (data & 0xffu) << sh);
 }}
 
 // op 0: clk0 falls, then reads are serviced; op 1: clk0 rises, then writes.
