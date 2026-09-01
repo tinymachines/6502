@@ -3434,3 +3434,17 @@ body.no-scroll #bench { z-index: 70; }
   background: color-mix(in srgb, var(--space) 70%, #000);
   border: 1px solid var(--line); border-radius: 0.25rem;
 }
+
+/* Swarm (swarm.html): the wall, its zoom and its readouts. Here rather
+   than in the page's head because the roof site carries this sheet and
+   drops a page's own, so a rule that lived there would vanish under
+   /6502/swarm. */
+  .swarm-wallwrap { overflow-x: auto; background: #0b0f1a; border: 1px solid #1e293b; border-radius: 10px; padding: 1px; }
+  #swarm-wall { display: block; image-rendering: pixelated; cursor: crosshair; }
+  #swarm-zoom { image-rendering: pixelated; background: #0b0f1a; border: 1px solid #1e293b; border-radius: 8px; }
+  .swarm-side { display: flex; gap: 1.2rem; align-items: flex-start; flex-wrap: wrap; margin-top: 1rem; }
+  .swarm-stats { font-size: .92rem; line-height: 1.9; }
+  .swarm-stats b { font-weight: 600; }
+  #swarm-status { min-height: 1.4em; margin-top: .6rem; }
+  #swarm-status.bad { color: #f87171; }
+  .swarm-btn { font: inherit; padding: .3rem .9rem; border-radius: 8px; border: 1px solid #334155; background: #16213a; color: inherit; cursor: pointer; }
