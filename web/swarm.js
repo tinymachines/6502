@@ -253,7 +253,7 @@ function palette() {
   return lut;
 }
 
-async function boot(root) {
+export async function boot(root) {
   const say = (msg, bad) => {
     const el = root.querySelector('#swarm-status');
     el.textContent = msg;
@@ -264,7 +264,9 @@ async function boot(root) {
   if (no) { say(no, true); return; }
   try {
     say('fetching the kernel');
-    const kern = await (await fetch('gpu.json')).json();
+    // Relative to THIS module, not the page: the roof site serves this
+    // file out of the 6502 release at /6502/chip/ under its own routes.
+    const kern = await (await fetch(new URL('gpu.json', import.meta.url))).json();
     say('booting one chip at the switches');
     await init();
     const asm = assemble(PAINTER);

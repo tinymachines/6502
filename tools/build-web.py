@@ -881,7 +881,7 @@ def main() -> None:
     swj = b.read("swarm.js").decode()
     swj = replace_once(swj, "'./pkg/v6502_wasm.js'", f"'./{b.ref('pkg/v6502_wasm.js')}'", where="swarm.js")
     swj = replace_once(swj, "'./asm.js'", f"'./{b.ref('asm.js')}'", where="swarm.js")
-    swj = replace_once(swj, "fetch('gpu.json')", f"fetch('{b.ref('gpu.json')}')", where="swarm.js")
+    swj = replace_once(swj, "new URL('gpu.json', import.meta.url)", f"new URL('{b.basename('gpu.json')}', import.meta.url)", where="swarm.js")
     b.emit("swarm.js", swj.encode())
     swh = b.read("swarm.html").decode()
     for original in ["style.css", "swarm.js", "version-footer.js", "site-menu.js",

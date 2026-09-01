@@ -89,8 +89,12 @@ const ok = (n, c, d) => { results.push(`${c ? 'PASS' : 'FAIL'} ${n}${d ? ' :: ' 
     //    headless frame-throttling to lie about it), and the painter's
     //    writes must land on the screen page through the copy-on-write
     //    pool. This is the wall's whole mechanism minus the pixels.
-    if (!navigator.gpu) {
-      results.push('NOTE this browser has no WebGPU, so the kernel run is skipped; the wall needs the live check');
+    // navigator.gpu can exist with no adapter behind it (headless chromium
+    // without --enable-unsafe-webgpu does exactly that): that is the page's
+    // named refusal, and here it is a skip by name rather than a failure.
+    const adapter = navigator.gpu ? await navigator.gpu.requestAdapter().catch(() => null) : null;
+    if (!adapter) {
+      results.push(`NOTE ${navigator.gpu ? 'WebGPU is present but no adapter answered' : 'this browser has no WebGPU'}: the kernel run is skipped; the wall needs the live check`);
     } else {
       const { gpuHost } = await import('./swarm.js');
       const planes = {
