@@ -495,7 +495,7 @@ groups, resolve, propagate, repeat to a fixed point (capped at 100 rounds, like
 the reference). Group resolution takes the **maximum** of `Drive`:
 
 ```
-Floating < ChargedHigh < PullDown < PullUp < Vcc < Vss
+Floating < ChargedHigh < PullUp < PullDown < Vcc < Vss
 ```
 
 `ChargedHigh` is a group with no driver that still contains a node holding charge
@@ -505,8 +505,15 @@ enough to need it.
 
 The reference resolves by *first match in traversal order*, not by maximum. These
 differ only when a group contains both a pullup and a pulldown.
-`Stats::contested_groups` counts that case; it is **0** across all tests -- but if
-it ever goes nonzero, that is the first thing to suspect.
+`Stats::contested_groups` counts that case; it is **0** across all of this
+repository's tests. The warning that used to sit here ("if it ever goes nonzero,
+that is the first thing to suspect") fired on 2026-09-02: the 2A03 forms three
+such groups at power-on (its SO input chain: a layout pullup grouped with the
+init-driven-low pin), which is what decided halfphi 0.1.3's order above --
+PullDown outranks PullUp, the external drive beating the depletion load, matching
+the 2A03 reference's own resolution. On this chip the order is unobservable
+(contested = 0 is asserted in halfphi's chips test), and the whole workspace was
+re-proven green on 0.1.3 with the goldens required.
 
 `half_cycle` is the fundamental unit -- the chip does work on both clock edges.
 Bus reads are serviced as `clk0` falls, writes as it rises.

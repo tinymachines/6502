@@ -77,7 +77,7 @@ the reference).
 Group resolution takes the **maximum** of `Drive`:
 
 ```
-Floating < ChargedHigh < PullDown < PullUp < Vcc < Vss
+Floating < ChargedHigh < PullUp < PullDown < Vcc < Vss
 ```
 
 `ChargedHigh` is a group with no driver that still contains a node holding charge —
@@ -87,9 +87,21 @@ to need it.
 
 Note the reference resolves by *first match in traversal order*, not by maximum.
 These differ only when a group contains both a pullup and a pulldown.
-`Stats::contested_groups` counts that case; it is **0** across all tests, so the
-divergence is unobservable in practice — but if it ever goes nonzero, that is the
-first thing to suspect.
+`Stats::contested_groups` counts that case; it is **0** across all of this
+repository's tests, so the divergence is unobservable here — and the warning that
+used to close this paragraph ("if it ever goes nonzero, that is the first thing to
+suspect") fired on 2026-09-02, on the fifth chip. The 2A03's SO input chain forms
+three contested groups at power-on: Quietust's init drives the `so` node low while
+its group carries a layout pullup, the reference's first-match walk (seeded at the
+driven node) resolves low, and halfphi's old order (`PullDown < PullUp`) resolved
+high — eight nodes inverted for the whole trace, found by the 2a03 repo's
+`a0-diverge-probe`. halfphi 0.1.3 swaps the two: PullDown outranks PullUp, the
+external drive beating the depletion load, which is both the physical reading and
+the reference's observed one. With the swap the 2A03 golden replays bit-exact with
+no exemptions; on the 6502, 6800, Z80 and 2C02 the order is unobservable
+(contested = 0, now asserted in halfphi's chips test), re-proven by this
+workspace's full suite with the goldens required. The slice encoding swapped its
+two planes in step, and the same suite (rungs 1 and 2 ride it) is the proof.
 
 ## Invariants ported deliberately — do not "clean up"
 
@@ -778,7 +790,7 @@ bit of every `u64` being one machine. Two encodings make that a straight
 sweep with no per-lane control flow:
 
 - **The drive lattice is a thermometer, so `max` is `|`.** `Floating <
-  ChargedHigh < PullDown < PullUp < Vcc < Vss` becomes five planes, plane `k`
+  ChargedHigh < PullUp < PullDown < Vcc < Vss` becomes five planes, plane `k`
   meaning "at least level k+1", and the maximum of two drives is the bitwise
   OR of their planes: one instruction for all 64 lanes.
 - **Nothing branches on machine state.** Conduction is a mask (`& on`), not
