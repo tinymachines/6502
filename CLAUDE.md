@@ -109,6 +109,14 @@ writes the counts into `build-info.json` beside the commit. A release that
 carries no `tests` key was made by hand.
 
 ```bash
+cargo test --workspace --profile proof   # the verification build: same
+                                    # opt-level, thin LTO over parallel codegen
+                                    # units. A cold full build measured 3m50s
+                                    # against ~20m under release's fat LTO,
+                                    # 117 green either way. Benches and
+                                    # anything shipped stay on --release,
+                                    # whose published figures were measured
+                                    # there.
 cargo test --workspace              # 117 tests: netlist, functional, golden,
                                     # rewind, state, rows, blueprint, pla,
                                     # decode, blocks, interrupts, pins,

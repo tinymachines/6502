@@ -25,6 +25,18 @@ lto = "fat"
 codegen-units = 1
 panic = "abort"
 
+# Verification builds: same optimisation, but thin LTO over parallel
+# codegen units, because a --release workspace test run builds dozens of
+# binaries and fat LTO makes each one a serial pass (one core working,
+# eleven idle; measured ~20 minutes for a full rebuild). Tests behave
+# identically under it. Benches and anything shipped stay on
+# [profile.release]: the published throughput figures were measured
+# there, and a quiet profile change would change them.
+[profile.proof]
+inherits = "release"
+lto = "thin"
+codegen-units = 8
+
 # The differential test replays 3000 half-cycles of full-chip state; unoptimised
 # it takes minutes, so give test dependencies real optimisation.
 [profile.test]
