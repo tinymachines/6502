@@ -1,6 +1,6 @@
 [package]
 name = "halfphi"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "Switch-level simulation and analysis of transistor-level chip netlists"
 license = "MIT"
