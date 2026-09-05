@@ -24,10 +24,13 @@ pub fn index_reg(op: u8) -> Option<char> {
 
 /// The selector key for one context, from full knowledge at the fetch:
 /// the flags, the index registers, the operand bytes and (for the
-/// zp-pointer forms) the pointer bytes in memory. Bit meanings in lines.rs.
-pub fn selector(op: u8, p: u8, x: u8, y: u8, fetch_pc: u16, image: &[u8]) -> u8 {
+/// zp-pointer forms) the pointer bytes in memory, read through `peek`
+/// (a look at memory that is not a bus cycle: on a console it must not
+/// touch a register with a side effect, which is why the bus has a peek
+/// apart from its read). Bit meanings in lines.rs.
+pub fn selector(op: u8, p: u8, x: u8, y: u8, fetch_pc: u16, peek: &mut dyn FnMut(u16) -> u8) -> u8 {
     let mut key = 0u8;
-    let op0 = image[fetch_pc.wrapping_add(1) as usize];
+    let op0 = peek(fetch_pc.wrapping_add(1));
     if p & 1 != 0 {
         key |= SEL_CARRY;
     }
@@ -57,7 +60,7 @@ pub fn selector(op: u8, p: u8, x: u8, y: u8, fetch_pc: u16, image: &[u8]) -> u8 
     if let Some(reg) = index_reg(op) {
         let (idx, low) = match (op >> 2 & 7, op & 3) {
             // (zp),Y: the pointer's low byte from zero page.
-            (4, 1) | (4, 3) => (y, image[op0 as usize]),
+            (4, 1) | (4, 3) => (y, peek(op0 as u16)),
             _ => (if reg == 'X' { x } else { y }, op0),
         };
         if (low as u16 + idx as u16) > 0xff {

@@ -104,7 +104,7 @@ fn record(op: u8, ids: &[u16], name: &'static str, base: u16, preamble: &[u8], o
         assert!(guard < 400, "op {op:02x} in {name}: never fetched at {at:04x}");
     }
     let regs = cpu.registers();
-    let key = selector(op, regs.p, regs.x, regs.y, at, &image);
+    let key = selector(op, regs.p, regs.x, regs.y, at, &mut |a| image[a as usize]);
     // The fetch's own two half-cycles belong to the PREVIOUS instruction
     // (its T0 overlapping the new T1), so the opcode's span starts at h=2
     // from its fetch and runs through the two overlap half-cycles of the

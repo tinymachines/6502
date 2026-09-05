@@ -33,6 +33,11 @@ impl MicroBus for Flat {
     fn write(&mut self, a: u16, v: u8) {
         self.mem[a as usize] = v;
     }
+    /// The selector's looks: not counted, not lied to (the lie is about
+    /// what crosses the pins).
+    fn peek(&mut self, a: u16) -> u8 {
+        self.mem[a as usize]
+    }
 }
 
 fn golden() -> Option<v6502_pins::Trace> {

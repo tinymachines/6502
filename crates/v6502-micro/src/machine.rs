@@ -99,6 +99,13 @@ enum ResPhase {
 pub trait MicroBus {
     fn read(&mut self, a: u16) -> u8;
     fn write(&mut self, a: u16, v: u8);
+    /// A look at memory that is NOT a bus cycle: the selector's peeks at
+    /// an operand byte and a zero-page pointer. A console answers from
+    /// RAM and ROM and must not touch a register a read would clear;
+    /// flat memory has no such register, so the default is a read.
+    fn peek(&mut self, a: u16) -> u8 {
+        self.read(a)
+    }
 }
 
 pub struct MicroCpu {
@@ -614,7 +621,12 @@ impl MicroCpu {
         // With the adjust disconnected the selector never sees D, so the
         // binary variant plays and its lines never assert #DAA/#DSA.
         let p_seen = if self.decimal_adjust { self.p } else { self.p & !0x08 };
-        let key = select::selector(op, p_seen, self.dp.x, self.dp.y, self.fetch_pc, &self.mem);
+        let (bus, mem) = (&mut self.bus, &self.mem);
+        let mut peek = |a: u16| match bus.as_mut() {
+            Some(b) => b.peek(a),
+            None => mem[a as usize],
+        };
+        let key = select::selector(op, p_seen, self.dp.x, self.dp.y, self.fetch_pc, &mut peek);
         let span = table::span(op, key).unwrap_or_else(|| {
             panic!(
                 "op {op:02x} at {:04x}: no recorded variant for key {key:#04x} (mask {:#04x})",

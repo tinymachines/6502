@@ -60,7 +60,7 @@ fn fresh_contexts_are_predicted_line_for_line() {
                 assert!(guard < 400, "op {op:02x} in {name}: never fetched at {at:04x}");
             }
             let regs = cpu.registers();
-            let key = selector(op, regs.p, regs.x, regs.y, at, &image);
+            let key = selector(op, regs.p, regs.x, regs.y, at, &mut |a| image[a as usize]);
             let span = table::span(op, key).unwrap_or_else(|| {
                 panic!("op {op:02x} in {name}: no recorded variant for key {key:#04x} (mask {:#04x})", table::MASKS[op as usize])
             });
