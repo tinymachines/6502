@@ -13,7 +13,9 @@
 //!   - the interrupt fixture from `v6502-sim/tests/interrupts.rs`, scripted
 //!     seven ways so every input pin is exercised: IRQ in the window where
 //!     the BRK is lost, IRQ early enough to be ordinary, reset in mid-run,
-//!     RDY held low, an NMI edge, an SO pulse, and the free run;
+//!     RDY held low, an NMI edge, an SO pulse, and the free run; an eighth
+//!     script on a store, RDY falling inside the write cycle; and a ninth
+//!     with RDY released on a phi1 frame rather than a phi2;
 //!   - all 256 opcodes, one each after a fixed preamble, 96 half-cycles, so
 //!     the twelve that never finish are recorded not finishing.
 //!
@@ -185,10 +187,36 @@ fn fixture_cases() -> Vec<Case> {
         // RDY low for ten half-cycles across the NOPs: the chip must stall on
         // read cycles and resume where it was.
         case("rdy-stall", vec![stim(first + 6, true, true, true, false, false), idle(first + 16)]),
+        // The same stall released one half-cycle earlier, so RDY rises on a
+        // phi1 frame: the chip samples RDY at phi2, and the held cycle must
+        // run once more before the next begins (the 2A03's DMA units
+        // release RDY on phi1 frames; tinymachines/2a03, N3 step 5).
+        case("rdy-release-phi1", vec![stim(first + 6, true, true, true, false, false), idle(first + 15)]),
         // NMI is edge triggered: one falling edge, released six later.
         case("nmi-edge", vec![stim(brk - 8, true, true, false, true, false), idle(brk - 2)]),
         // SO sets the overflow flag on its own edge; a four-half-cycle pulse.
         case("so-pulse", vec![stim(first + 8, true, true, true, true, true), idle(first + 12)]),
+        // RDY falling DURING A WRITE cycle: the write completes (NMOS
+        // ignores RDY on writes) and the read cycle after it is the one
+        // held. The program is `STA $0210` then NOPs; the store's write
+        // cycle is the fourth, so its phi2 is first + 7 and the script
+        // drives RDY low there, releasing eight half-cycles on. The 2A03's
+        // DMA units assert RDY on exactly this shape (a $4014 write), which
+        // is where the case came from (tinymachines/2a03, N3 step 5).
+        {
+            let mut prog = vec![0x8d, 0x10, 0x02];
+            prog.extend([0xea; 8]);
+            let mut loads = loads.clone();
+            loads[0] = Load { org: 0x0200, bytes: prog };
+            let first_w = fetch_h(&loads, vector, 0x0200);
+            Case {
+                name: "fixture-rdy-in-write".into(),
+                loads,
+                reset_vector: vector,
+                steps: FIXTURE_STEPS,
+                stim: vec![stim(first_w + 6, true, true, true, false, false), idle(first_w + 14)],
+            }
+        },
     ]
 }
 

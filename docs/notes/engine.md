@@ -234,7 +234,7 @@ reset reaches `$FFFC`; RDY holds `$0202` for exactly the scripted span; the
 SO pulse shows in the pushed P (`$72` against `$32`); `KIL` sits on `$FFFF`
 to the end.
 
-`tests/replay.rs` replays all 274 through rung 0 and is the shape every other
+`tests/replay.rs` replays all 276 through rung 0 and is the shape every other
 rung's test takes: swap the constructor, nothing else. It SKIPS without the
 files (`REQUIRE_PINS=1` insists) and `MUTATE=1` flips one `db` bit halfway
 through the first trace and must go red, which it does, naming the trace, the
@@ -358,7 +358,7 @@ side first and the sweep by the tie-break, and a real chip by noise. The
 program result agrees. `examples/agree.rs` reports the node agreement and
 names the persistent nodes; it asserts nothing.
 
-**Held to the pin golden, all of it.** Lane 0 replays every one of the 274
+**Held to the pin golden, all of it.** Lane 0 replays every one of the 276
 traces identically: the seven programs, the reference's program, the seven
 scripted interrupt and RDY runs, the three decimal chains, all 256 opcodes
 including the twelve that never finish. `MUTATE=1` goes red by name. `tests/lanes.rs` gives lane 1 a
@@ -428,7 +428,7 @@ sequencer (`machine.rs`) plays spans through the datapath
 with the flags and the P-to-stack timing authored (`flags.rs`) and the
 selector shared with the recorder by include.
 
-**Held to the pin golden: all 274 traces replay with every pin equal at
+**Held to the pin golden: all 276 traces replay with every pin equal at
 every half-cycle**, `EXPECTED_FAILURES` and `UNAUTHORED_STIM` both empty,
 undocumented opcodes and the six scripted stimulus traces included.
 Decimal mode is unexercised by any trace. `MUTATE=1` goes red on the
@@ -454,6 +454,17 @@ state: they survive `power_cycle` and are not in the machine value.
 `tests/knobs.rs` holds each to the golden: the adjust off must diverge at
 exactly the listed stores and nowhere else, and a seeded S must move
 every stack address by its offset and nothing else.
+
+**Two RDY scripts joined the golden on 2026-09-05**, recorded from rung 0
+because the 2A03's DMA units (tinymachines/2a03, N3 step 5) assert RDY in
+shapes the original fixture never did: `fixture-rdy-in-write` drops RDY
+during a store's write cycle (the write completes, NMOS ignoring RDY on
+writes, and the read cycle after it is the one held), and
+`fixture-rdy-release-phi1` releases RDY on a phi1 frame rather than a
+phi2 (the chip goes straight to the next cycle). Rung 3 replays both
+unchanged, which is what settled a question the 2A03 raised: after its
+sprite DMA the held fetch runs once more with RDY already high, and that
+is the bus coming back with RDY, not a property of the core's release.
 
 The input pins are authored against those six traces (2026-08-31), and
 the mechanism is smaller than it sounds because the silicon's own trick
@@ -570,7 +581,7 @@ live in halfwave (the account is in `service.md`: the binary moved to
 a step by the machine value's shape).
 
 **Decimal mode, measured and authored (2026-08-31).** Three BCD chain
-fixtures joined the pin golden (274 traces now): every result lands in a
+fixtures joined the pin golden (274 traces then; 276 since the two RDY scripts below): every result lands in a
 `STA` and every flag set in a `PHP`, so a binary add where the chip
 adjusts fails by address and byte. `decimal-probe` (a `v6502-sim`
 example, the `reset-probe` method) showed where the adjust lives: `#DAA`

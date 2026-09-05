@@ -251,7 +251,7 @@ is not needed, because the control vectors can be measured directly.
   experiment 4**, with the ALU, the flags, decimal mode, and `P/DB` written
   by hand and listed by name in the note with the run that justified each.
   Anything taken from the manual rather than measured is labelled as such.
-- **Verification**: the pin golden, all 274 traces, is the gate; the
+- **Verification**: the pin golden, all 276 traces, is the gate; the
   `m4-datapath.py` comparison becomes a Rust test that drives the datapath
   from recorded line levels and holds the nine fields at 100%; `MUTATE=1`
   for both.
