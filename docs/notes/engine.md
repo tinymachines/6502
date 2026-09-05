@@ -234,7 +234,7 @@ reset reaches `$FFFC`; RDY holds `$0202` for exactly the scripted span; the
 SO pulse shows in the pushed P (`$72` against `$32`); `KIL` sits on `$FFFF`
 to the end.
 
-`tests/replay.rs` replays all 277 through rung 0 and is the shape every other
+`tests/replay.rs` replays all 280 through rung 0 and is the shape every other
 rung's test takes: swap the constructor, nothing else. It SKIPS without the
 files (`REQUIRE_PINS=1` insists) and `MUTATE=1` flips one `db` bit halfway
 through the first trace and must go red, which it does, naming the trace, the
@@ -358,7 +358,7 @@ side first and the sweep by the tie-break, and a real chip by noise. The
 program result agrees. `examples/agree.rs` reports the node agreement and
 names the persistent nodes; it asserts nothing.
 
-**Held to the pin golden, all of it.** Lane 0 replays every one of the 277
+**Held to the pin golden, all of it.** Lane 0 replays every one of the 280
 traces identically: the seven programs, the reference's program, the seven
 scripted interrupt and RDY runs, the three decimal chains, all 256 opcodes
 including the twelve that never finish. `MUTATE=1` goes red by name. `tests/lanes.rs` gives lane 1 a
@@ -428,7 +428,7 @@ sequencer (`machine.rs`) plays spans through the datapath
 with the flags and the P-to-stack timing authored (`flags.rs`) and the
 selector shared with the recorder by include.
 
-**Held to the pin golden: all 277 traces replay with every pin equal at
+**Held to the pin golden: all 280 traces replay with every pin equal at
 every half-cycle**, `EXPECTED_FAILURES` and `UNAUTHORED_STIM` both empty,
 undocumented opcodes and the six scripted stimulus traces included.
 Decimal mode is unexercised by any trace. `MUTATE=1` goes red on the
@@ -477,13 +477,18 @@ on the very read it lies on. Configuration, not state; the machine value
 neither carries nor restores it. The NES console (tinymachines/nes) is
 the host it was made for.
 
-**A flags chain joined the golden the same day**: `flags-zero` runs the
-transfers, the register increments and decrements and a pull through
-zero and through bit 7, each result landing in a PHP, because the
-opcode traces run every one of those once but with the preamble's
-nonzero registers. Every rung replays it; it was recorded while chasing
-a wrong branch on the NES console (tinymachines/nes, N5) that turned out
-not to be the core's.
+**Four flag chains joined the golden the same day**, recorded while the
+NES console (tinymachines/nes, N5) ran real programs on this rung:
+`flags-zero` (the transfers, increments, decrements and a pull through
+zero and bit 7), `flags-wrap` and `flags-fontloop` (Y wrapping to zero
+by INY inside a copy loop transcribed from a real program), and
+`flags-plp` (PLP and PHP round trips of chosen bytes, and BRK's pushed
+status). Each result lands in a PHP or a store, because the opcode traces
+run every instruction once with the preamble's nonzero registers and
+never expose P after a PLP. The last one found rung 3 taking P from
+PLP's second read (the dummy at S) rather than its third (the pull), a
+line the 256 opcode traces could not see; fixed, every rung replays all
+four.
 
 The input pins are authored against those six traces (2026-08-31), and
 the mechanism is smaller than it sounds because the silicon's own trick
@@ -600,7 +605,7 @@ live in halfwave (the account is in `service.md`: the binary moved to
 a step by the machine value's shape).
 
 **Decimal mode, measured and authored (2026-08-31).** Three BCD chain
-fixtures joined the pin golden (274 traces then; 277 since the two RDY scripts and the flags chain below): every result lands in a
+fixtures joined the pin golden (274 traces then; 280 since the two RDY scripts and the flag chains below): every result lands in a
 `STA` and every flag set in a `PHP`, so a binary add where the chip
 adjusts fails by address and byte. `decimal-probe` (a `v6502-sim`
 example, the `reset-probe` method) showed where the adjust lives: `#DAA`

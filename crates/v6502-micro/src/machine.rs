@@ -480,8 +480,13 @@ impl MicroCpu {
                 if !overlap {
                     self.caps.last_read = db;
                     // P from the stack, by position: PLP's and RTI's
-                    // second read. Authored; P/DB has no named node.
-                    if (self.op == 0x28 || self.op == 0x40) && self.reads == 2 {
+                    // THIRD read after the fetch (the next byte, the
+                    // dummy at S, then the pull at S+1). It was the
+                    // second, which took the dummy read's byte: no golden
+                    // trace exposed P after a PLP until flags-plp did
+                    // (blargg's instr_test 01-basics found it through the
+                    // NES console). Authored; P/DB has no named node.
+                    if (self.op == 0x28 || self.op == 0x40) && self.reads == 3 {
                         self.p = (db & 0xcf) | 0x20;
                     }
                 } else if w >> BIT_SYNC & 1 != 0 {

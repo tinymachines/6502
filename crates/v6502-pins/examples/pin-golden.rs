@@ -336,7 +336,22 @@ fn flags_cases() -> Vec<Case> {
     loads3[0] = Load { org: 0x0200, bytes: copy };
     loads3.push(Load { org: 0x0400, bytes: (0..=255u8).map(|i| i.wrapping_mul(0x5b) ^ 0x3c).collect() });
     loads3.push(Load { org: 0x0500, bytes: (0..=255u8).map(|i| i.wrapping_mul(0x2f) ^ 0xa5).collect() });
+    // PLP and PHP round trips of chosen bytes, and BRK's pushed status:
+    // each pull lands in a PHP and a store, so what P holds after a PLP
+    // and what the stack receives from PHP and BRK show at the pins
+    // (blargg's instr_test 01-basics #4 and 16-special #5 test these).
+    let mut plp: Vec<u8> = Vec::new();
+    for v in [0xffu8, 0x00, 0x5a, 0xa5, 0x30, 0xcf] {
+        plp.extend([0xa9, v, 0x48, 0x28, 0x08, 0x68, 0x8d, 0x00, 0x04]); // LDA #v; PHA; PLP; PHP; PLA; STA $0400
+    }
+    plp.extend([0x00, 0xea]); // BRK (the handler pulls and stores the pushed status), NOP
+    plp.extend([0x4c, 0x00, 0x03]);
+    let mut loads4 = fixture_loads();
+    loads4[0] = Load { org: 0x0200, bytes: plp };
+    // The BRK/IRQ handler: PLA (the pushed status) ; STA $0401 ; PHA ; RTI... simpler: store and loop.
+    loads4[1] = Load { org: 0x0300, bytes: vec![0x68, 0x8d, 0x01, 0x04, 0x4c, 0x04, 0x03] };
     vec![
+        Case { name: "flags-plp".into(), loads: loads4, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
         Case { name: "flags-zero".into(), loads, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
         Case { name: "flags-wrap".into(), loads: loads2, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
         Case { name: "flags-fontloop".into(), loads: loads3, reset_vector: 0x0200, steps: 700, stim: vec![] },
