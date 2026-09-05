@@ -350,7 +350,22 @@ fn flags_cases() -> Vec<Case> {
     loads4[0] = Load { org: 0x0200, bytes: plp };
     // The BRK/IRQ handler: PLA (the pushed status) ; STA $0401 ; PHA ; RTI... simpler: store and loop.
     loads4[1] = Load { org: 0x0300, bytes: vec![0x68, 0x8d, 0x01, 0x04, 0x4c, 0x04, 0x03] };
+    // blargg's instr_test harness, transcribed: set S, P (through the
+    // stack), A, X, Y; run the instruction; then PHP, store A, PLA, store
+    // X, TSX, store S. Two value sets, NOP and ROL A as the instruction.
+    let mut harness: Vec<u8> = Vec::new();
+    for (s_in, p_in, a_in, op) in [(0xffu8, 0x00u8, 0x5au8, 0xeau8), (0x80, 0xff, 0x80, 0x2a), (0x00, 0x34, 0x01, 0xea), (0x7f, 0xc3, 0xff, 0x2a)] {
+        harness.extend([0xa2, s_in, 0x9a]); // LDX #s; TXS
+        harness.extend([0xa9, p_in, 0x48]); // LDA #p; PHA
+        harness.extend([0xa9, a_in, 0xa2, 0x22, 0xa0, 0x33]); // LDA #a; LDX #$22; LDY #$33
+        harness.extend([0x28, op]); // PLP; the instruction
+        harness.extend([0x08, 0x8d, 0x00, 0x04, 0x68, 0x8d, 0x01, 0x04, 0x8e, 0x02, 0x04, 0xba, 0x8e, 0x03, 0x04, 0x8c, 0x04, 0x04]); // PHP; STA $0400; PLA; STA $0401; STX $0402; TSX; STX $0403; STY $0404
+    }
+    harness.extend([0xa2, 0xfd, 0x9a, 0x4c, 0x00, 0x03]); // LDX #$FD; TXS; JMP $0300
+    let mut loads5 = fixture_loads();
+    loads5[0] = Load { org: 0x0200, bytes: harness };
     vec![
+        Case { name: "flags-harness".into(), loads: loads5, reset_vector: 0x0200, steps: 600, stim: vec![] },
         Case { name: "flags-plp".into(), loads: loads4, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
         Case { name: "flags-zero".into(), loads, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
         Case { name: "flags-wrap".into(), loads: loads2, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
