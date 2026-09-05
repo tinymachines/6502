@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use v6502_micro::machine::{MicroBus, MicroCpu};
-use v6502_pins::{compare, parse_trace, run, PinEngine};
+use v6502_pins::{compare, parse_trace, run};
 
 struct Flat {
     mem: Vec<u8>,
