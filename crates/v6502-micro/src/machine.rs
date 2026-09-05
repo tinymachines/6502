@@ -130,6 +130,10 @@ pub struct MicroCpu {
     pin_w: u64,
     pin_db: u8,
     pin_hold: u8,
+    /// A read cycle's byte, taken from the bus once as the clock falls
+    /// and consumed at phi2: the bus is asked exactly once per read, so
+    /// a register with a side effect (a PPU status read) sees one read.
+    phi1_read: Option<u8>,
     /// The five input pins as driven, echoed at the pins and consumed by
     /// the authored interrupt and stall logic above.
     in_res: bool,
@@ -200,6 +204,7 @@ impl MicroCpu {
             pin_w: 0,
             pin_db: 0,
             pin_hold: 0,
+            phi1_read: None,
             in_res: true,
             in_irq: true,
             in_nmi: true,
@@ -437,9 +442,11 @@ impl MicroCpu {
             self.dp.step(w, Phase::Phi1, 0, cin);
             if rw_read {
                 // The bus is serviced as the clock falls: a read half-cycle
-                // shows its data from here on.
+                // shows its data from here on, and phi2 consumes this same
+                // byte rather than asking the bus again.
                 db = self.bus_read(self.dp.address());
                 self.pin_hold = db;
+                self.phi1_read = Some(db);
             } else {
                 // A write drives DOR only as the clock rises; through phi1
                 // the external pin shows the LAST BYTE READ (0x34 through
@@ -452,7 +459,10 @@ impl MicroCpu {
         } else {
             let addr = self.dp.address();
             if rw_read {
-                db = self.bus_read(addr);
+                db = match self.phi1_read.take() {
+                    Some(b) => b,
+                    None => self.bus_read(addr),
+                };
                 self.pin_hold = db;
                 self.reads += 1;
                 if !overlap {

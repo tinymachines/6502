@@ -67,8 +67,11 @@ fn a_bus_that_is_flat_memory_replays_the_golden_and_is_asked_for_every_read() {
     };
     let (frames, reads) = on_bus(&trace, None);
     compare(&trace.frames, &frames).unwrap_or_else(|m| panic!("through the bus: {m}"));
-    let read_frames = trace.frames.iter().filter(|f| f.rw && !f.clk0).count() as u64;
-    assert!(reads >= read_frames, "the bus answered {reads} reads for {read_frames} read half-cycles; it is not on the path");
+    // Every read cycle asks the bus exactly once (a PPU status register
+    // cleared by a read must see one read); the reset sequence's vector
+    // and seed reads come before h=0 and are the surplus.
+    let read_cycles = trace.frames.iter().filter(|f| f.rw && !f.clk0).count() as u64;
+    assert!(reads >= read_cycles && reads <= read_cycles + 8, "the bus answered {reads} reads for {read_cycles} read cycles; each cycle must ask once");
     eprintln!("golden through a MicroBus: {} frames exact, {reads} bus reads", frames.len());
 }
 
