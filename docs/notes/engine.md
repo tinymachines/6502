@@ -466,6 +466,17 @@ unchanged, which is what settled a question the 2A03 raised: after its
 sprite DMA the held fetch runs once more with RDY already high, and that
 is the bus coming back with RDY, not a property of the core's release.
 
+**The bus hook (2026-09-05).** `MicroBus` is the world outside the pins
+for a host that is not flat memory: a console routes each read and write
+to its RAM, its PPU, its ports and its cartridge at the moment the core
+services it (`MicroCpu::bus`, `None` meaning `mem`, which every golden
+runs on). `tests/bus.rs` holds it two ways: a bus that is flat memory in
+disguise replays the reference's program exactly and is asked for every
+read half-cycle, and a bus that lies about one byte is seen at the pins
+on the very read it lies on. Configuration, not state; the machine value
+neither carries nor restores it. The NES console (tinymachines/nes) is
+the host it was made for.
+
 The input pins are authored against those six traces (2026-08-31), and
 the mechanism is smaller than it sounds because the silicon's own trick
 carries over: **an interrupt is the recorded BRK span hijacked**. The

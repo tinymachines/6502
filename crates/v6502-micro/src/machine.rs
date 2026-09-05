@@ -91,10 +91,22 @@ enum ResPhase {
     Fetch,
 }
 
+/// The world outside the pins, for a host that is not flat memory: a
+/// console routes each read and write to its RAM, its PPU, its ports and
+/// its cartridge at the moment the core services it. When none is set
+/// the core reads and writes `mem`. Configuration, not state: a machine
+/// value neither carries nor restores it.
+pub trait MicroBus {
+    fn read(&mut self, a: u16) -> u8;
+    fn write(&mut self, a: u16, v: u8);
+}
+
 pub struct MicroCpu {
     dp: Datapath,
     p: u8,
     pub mem: Vec<u8>,
+    /// See `MicroBus`. `None` is flat `mem`, which every golden runs on.
+    pub bus: Option<Box<dyn MicroBus>>,
     half_cycle: u64,
     stream: Stream,
     span: &'static [u64],
@@ -169,6 +181,7 @@ impl MicroCpu {
             dp: Datapath::default(),
             p: 0x20,
             mem: vec![0; 0x10000],
+            bus: None,
             half_cycle: 0,
             stream: Stream::Tail,
             span: &table::RESET_TAIL,
@@ -207,6 +220,22 @@ impl MicroCpu {
         }
     }
 
+    /// One byte from the world: the bus if one is set, else `mem`.
+    pub fn bus_read(&mut self, a: u16) -> u8 {
+        match self.bus.as_mut() {
+            Some(b) => b.read(a),
+            None => self.mem[a as usize],
+        }
+    }
+
+    /// One byte to the world.
+    pub fn bus_write(&mut self, a: u16, v: u8) {
+        match self.bus.as_mut() {
+            Some(b) => b.write(a, v),
+            None => self.mem[a as usize] = v,
+        }
+    }
+
     /// Connect or disconnect the decimal adjust (see `decimal_adjust`).
     /// Configuration, not state: it survives `power_cycle` and is not
     /// part of the machine value.
@@ -240,14 +269,14 @@ impl MicroCpu {
     /// Seed from the measured h=0 state and play the tail's first
     /// half-cycle, so the pins show what rung 0's show at h=0.
     pub fn power_cycle(&mut self) {
-        let vec = self.mem[0xfffc] as u16 | (self.mem[0xfffd] as u16) << 8;
+        let vec = self.bus_read(0xfffc) as u16 | (self.bus_read(0xfffd) as u16) << 8;
         let mut r = [0u8; 16];
         for (i, slot) in r.iter_mut().enumerate() {
             *slot = match table::RESET_KINDS[i] {
                 0 => table::RESET_REGS[i],
                 1 => vec as u8,
                 2 => (vec >> 8) as u8,
-                _ => self.mem[vec as usize],
+                _ => self.bus_read(vec),
             };
         }
         let r = &r;
@@ -409,7 +438,7 @@ impl MicroCpu {
             if rw_read {
                 // The bus is serviced as the clock falls: a read half-cycle
                 // shows its data from here on.
-                db = self.mem[self.dp.address() as usize];
+                db = self.bus_read(self.dp.address());
                 self.pin_hold = db;
             } else {
                 // A write drives DOR only as the clock rises; through phi1
@@ -421,9 +450,9 @@ impl MicroCpu {
                 db = self.pin_hold;
             }
         } else {
-            let addr = self.dp.address() as usize;
+            let addr = self.dp.address();
             if rw_read {
-                db = self.mem[addr];
+                db = self.bus_read(addr);
                 self.pin_hold = db;
                 self.reads += 1;
                 if !overlap {
@@ -455,7 +484,7 @@ impl MicroCpu {
                 if self.op == 0x00 && self.writes == 3 {
                     self.p |= 0x04;
                 }
-                self.mem[addr] = data;
+                self.bus_write(addr, data);
                 db = data;
                 if !overlap {
                     self.caps.last_write = data;
