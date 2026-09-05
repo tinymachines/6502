@@ -57,6 +57,13 @@ const CONTEXTS: &[(&str, u16, &[u8], &[u8])] = &[
     // #DSA under D, which is a control difference SEL_D has to carry.
     ("dec", 0x0200, &[0xa9, 0x19, 0xa2, 0x02, 0xa0, 0x03, 0xf8, 0x18], &[0x28, 0x02, 0x00]),
     ("decc", 0x0200, &[0xa9, 0x99, 0xa2, 0x02, 0xa0, 0x03, 0xf8, 0x38], &[0x99, 0x02, 0x00]),
+    // An X-indexed page cross with the carry CLEAR, and a Y one likewise:
+    // `pagecross` and `ycross` both fire their cross with SEC/CLC fixed
+    // the other way for the family whose mask keeps both bits (the
+    // rotates and their unofficial kin), so a real program's ROL abs,X
+    // across a page with C=0 had no variant (tinymachines/nes, N5).
+    ("xcrossc0", 0x02f0, &[0x18, 0xa9, 0x80, 0xa2, 0xff, 0xa0, 0x01], &[0x7f, 0x02, 0x00]),
+    ("ycrossc1", 0x02f0, &[0x38, 0xa9, 0x80, 0xa2, 0x01, 0xa0, 0xff], &[0x7f, 0x02, 0x00]),
 ];
 
 /// How far past the fetch the recorder looks before calling an opcode KIL.
