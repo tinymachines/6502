@@ -47,6 +47,19 @@ pub const DATA_BITS: u64 = (1 << BIT_PCLC) | (1 << BIT_PCHC);
 // finished instruction's word into the next span's first half-cycle.
 pub const WB_MASK: u64 = (1 << bit::SBY) | (1 << bit::SBX) | (1 << bit::SBS) | (1 << bit::SBAC);
 
+// One line the seam CLEARS rather than sets. ROR A with the carry set
+// puts the carry into bit 7 by leaving `ADD/SB7` off, so SB7 stays high
+// while the ALU register's bit 7 holds zero; the chip keeps that line
+// off through the next instruction's first half-cycle, where SB/AC loads
+// A (measured: `v6502-sim --example ror-probe`, h=13 and h=14). Every
+// recorded span's own first word has the line on, because no context
+// precedes its opcode with such a ROR, so the seam word carries the
+// chip's level at that half-cycle as this bit, and the sequencer clears
+// the line where it is set. blargg's instr_test 02-implied found it:
+// every CRC ran through a ROR A with the carry set, and A came back
+// with bit 7 clear.
+pub const SEAM_ADDSB7_OFF: u64 = 1 << 63;
+
 /// The selector key's bits: which way each measured mechanism went for one
 /// execution. The RECORDER computes these from full knowledge (registers,
 /// flags and memory at the opcode's fetch); the sequencer reproduces each

@@ -79,7 +79,7 @@ fn fresh_contexts_are_predicted_line_for_line() {
                 // (lines.rs), the table masks it and so does this reading.
                 if h + 2 >= span.len()
                     && (table::overlap_cin_from_c(op, key)
-                        || (!overlap_alucin_consumed(op) && table::seam(op, key) == 0)
+                        || (!overlap_alucin_consumed(op) && table::seam(op, key) & WB_MASK == 0)
                         || overlap_cin_from_shift(op))
                 {
                     got &= !(1 << BIT_ALUCIN);

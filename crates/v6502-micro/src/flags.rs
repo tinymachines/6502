@@ -150,16 +150,22 @@ pub fn update(op: u8, p: &mut u8, a: u8, x: u8, y: u8, s: u8, c: &Caps) {
         }
         0x4a | 0x6a | 0x4b => {
             if let Some((before, r)) = c.srs {
+                // ROR's bit 7 is the incoming carry, which rides SB7
+                // rather than the ALU register (lines.rs,
+                // `SEAM_ADDSB7_OFF`): N is of the value A receives.
+                let r = if op == 0x6a { r | (*p & C) << 7 } else { r };
                 put(p, C, before & 1 != 0);
                 nz(p, r);
             }
         }
-        // Memory shifts and their composites: carry from the captured ALU,
+        // Memory shifts and their composites: the left shift's carry is
+        // bit 7 of the operand read (the byte in flight: the mid-span SUMS
+        // capture is not it, because the write cycle adds again with the
+        // result on both inputs, so a result with bit 7 set read as a
+        // carry; blargg's 02-implied found it through ASL $1a of $40).
         // NZ from what was written back (or the accumulator for composites).
         0x06 | 0x16 | 0x0e | 0x1e | 0x26 | 0x36 | 0x2e | 0x3e => {
-            if let Some((ai, _, _, _)) = c.sum_pre {
-                put(p, C, ai & 0x80 != 0);
-            }
+            put(p, C, c.last_read & 0x80 != 0);
             nz(p, c.last_write);
         }
         0x46 | 0x56 | 0x4e | 0x5e | 0x66 | 0x76 | 0x6e | 0x7e => {
@@ -170,18 +176,14 @@ pub fn update(op: u8, p: &mut u8, a: u8, x: u8, y: u8, s: u8, c: &Caps) {
         }
         0x07 | 0x17 | 0x0f | 0x1f | 0x1b | 0x03 | 0x13 => {
             // SLO: ASL memory, then ORA; NZ from the ORA in flight.
-            if let Some((ai, _, _, _)) = c.sum_pre {
-                put(p, C, ai & 0x80 != 0);
-            }
+            put(p, C, c.last_read & 0x80 != 0);
             if let Some(r) = logic {
                 nz(p, r);
             }
         }
         0x27 | 0x37 | 0x2f | 0x3f | 0x3b | 0x23 | 0x33 => {
             // RLA: ROL memory, then AND.
-            if let Some((ai, _, _, _)) = c.sum_pre {
-                put(p, C, ai & 0x80 != 0);
-            }
+            put(p, C, c.last_read & 0x80 != 0);
             if let Some(r) = logic {
                 nz(p, r);
             }

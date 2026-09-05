@@ -234,7 +234,7 @@ reset reaches `$FFFC`; RDY holds `$0202` for exactly the scripted span; the
 SO pulse shows in the pushed P (`$72` against `$32`); `KIL` sits on `$FFFF`
 to the end.
 
-`tests/replay.rs` replays all 281 through rung 0 and is the shape every other
+`tests/replay.rs` replays all 282 through rung 0 and is the shape every other
 rung's test takes: swap the constructor, nothing else. It SKIPS without the
 files (`REQUIRE_PINS=1` insists) and `MUTATE=1` flips one `db` bit halfway
 through the first trace and must go red, which it does, naming the trace, the
@@ -358,7 +358,7 @@ side first and the sweep by the tie-break, and a real chip by noise. The
 program result agrees. `examples/agree.rs` reports the node agreement and
 names the persistent nodes; it asserts nothing.
 
-**Held to the pin golden, all of it.** Lane 0 replays every one of the 281
+**Held to the pin golden, all of it.** Lane 0 replays every one of the 282
 traces identically: the seven programs, the reference's program, the seven
 scripted interrupt and RDY runs, the three decimal chains, all 256 opcodes
 including the twelve that never finish. `MUTATE=1` goes red by name. `tests/lanes.rs` gives lane 1 a
@@ -428,7 +428,7 @@ sequencer (`machine.rs`) plays spans through the datapath
 with the flags and the P-to-stack timing authored (`flags.rs`) and the
 selector shared with the recorder by include.
 
-**Held to the pin golden: all 281 traces replay with every pin equal at
+**Held to the pin golden: all 282 traces replay with every pin equal at
 every half-cycle**, `EXPECTED_FAILURES` and `UNAUTHORED_STIM` both empty,
 undocumented opcodes and the six scripted stimulus traces included.
 Decimal mode is unexercised by any trace. `MUTATE=1` goes red on the
@@ -477,19 +477,50 @@ on the very read it lies on. Configuration, not state; the machine value
 neither carries nor restores it. The NES console (tinymachines/nes) is
 the host it was made for.
 
-**Five flag chains joined the golden the same day**, recorded while the
+**Six flag chains joined the golden the same day**, recorded while the
 NES console (tinymachines/nes, N5) ran real programs on this rung:
 `flags-zero` (the transfers, increments, decrements and a pull through
 zero and bit 7), `flags-wrap` and `flags-fontloop` (Y wrapping to zero
 by INY inside a copy loop transcribed from a real program), and
 `flags-plp` (PLP and PHP round trips of chosen bytes, and BRK's pushed
 status), and `flags-harness` (blargg's instr_test register harness
-transcribed: S, P, A, X, Y set, an instruction, everything stored). Each result lands in a PHP or a store, because the opcode traces
-run every instruction once with the preamble's nonzero registers and
-never expose P after a PLP. The last one found rung 3 taking P from
-PLP's second read (the dummy at S) rather than its third (the pull), a
-line the 256 opcode traces could not see; fixed, every rung replays all
-four.
+transcribed: S, P, A, X, Y set, an instruction, everything stored), and
+`flags-shifts` (the four accumulator shifts under both carries, each
+followed by a store, a TAX and a second shift; then the memory shifts
+and SLO and RLA on operands with bits 7 and 6 set). Each result lands
+in a PHP or a store, because the opcode traces run every instruction
+once with the preamble's nonzero registers and never expose P after a
+PLP. The harness one found rung 3 taking P from PLP's second read (the
+dummy at S) rather than its third (the pull), a line the 256 opcode
+traces could not see.
+
+The shifts chain came from blargg's instr_test 02-implied, which
+failed every instruction on rung 3 alone, located by running rung 0 and
+rung 3 in lockstep on the ROM until the pins or the register files
+disagreed (`v6502-micro --example diverge`). Two misses, both in the
+slow CRC routine every test runs through, and both measured on rung 0
+with `v6502-sim --example alu-probe` before being authored:
+
+- **ROR A with the carry set puts the carry into bit 7 by leaving
+  `ADD/SB7` off**, so SB7 stays high while the ALU register's bit 7
+  holds zero, and the chip keeps that line off through the next
+  instruction's first half-cycle, where SB/AC loads A. Every recorded
+  span's own first word has the line on, because no context precedes
+  its opcode with such a ROR, so the seam word (the finished op's
+  write-back inside the next span's first half-cycle) now carries the
+  chip's level as one bit the sequencer CLEARS (`SEAM_ADDSB7_OFF`,
+  lines.rs), beside the four lines it sets. ROR A's N flag follows the
+  same value.
+- **The left memory shifts' carry is bit 7 of the operand read**, not
+  of the mid-span SUMS capture: the RMW's write cycle adds again with
+  the result on both ALU inputs (measured: ai = bi = $80 after ASL of
+  $40), so a result with bit 7 set read as a carry out. ASL, ROL, SLO
+  and RLA on memory take the byte in flight.
+
+Under the old rules the chain fails at the first PHP after each
+(mutation-proved in the session, by hand); with them, rung 0 and rung 3
+agree over twelve million half-cycles of 02-implied, through to its
+idle loop, and every rung replays all 282.
 
 The input pins are authored against those six traces (2026-08-31), and
 the mechanism is smaller than it sounds because the silicon's own trick
@@ -606,7 +637,7 @@ live in halfwave (the account is in `service.md`: the binary moved to
 a step by the machine value's shape).
 
 **Decimal mode, measured and authored (2026-08-31).** Three BCD chain
-fixtures joined the pin golden (274 traces then; 281 since the two RDY scripts and the flag chains below): every result lands in a
+fixtures joined the pin golden (274 traces then; 282 since the two RDY scripts and the flag chains below): every result lands in a
 `STA` and every flag set in a `PHP`, so a binary add where the chip
 adjusts fails by address and byte. `decimal-probe` (a `v6502-sim`
 example, the `reset-probe` method) showed where the adjust lives: `#DAA`

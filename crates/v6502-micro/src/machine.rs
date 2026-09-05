@@ -55,7 +55,7 @@
 
 use crate::datapath::{Datapath, Phase};
 use crate::flags::{self, Caps};
-use crate::lines::{BIT_ALUCIN, BIT_RW, BIT_SYNC};
+use crate::lines::{BIT_ALUCIN, BIT_RW, BIT_SYNC, SEAM_ADDSB7_OFF};
 use crate::lines::bit;
 use crate::select;
 use crate::table;
@@ -335,6 +335,11 @@ impl MicroCpu {
         (self.dp.a, self.dp.x, self.dp.y, self.dp.s_in, self.p, self.dp.pc())
     }
 
+    /// The span in play: the opcode and the selector key it was chosen by.
+    pub fn playing(&self) -> (u8, u8) {
+        (self.op, self.cur_key)
+    }
+
     /// The last opcode fetch the machine saw: address and byte, the same
     /// bookkeeping rung 0 latches in `service_read` on sync.
     pub fn last_fetch(&self) -> (u16, u8) {
@@ -389,7 +394,13 @@ impl MicroCpu {
         }
         let mut w = self.span[self.pos];
         if self.pos == 0 && self.stream == Stream::Span {
-            w |= self.seam;
+            // The finished op's write-back lines, and the one line it
+            // holds OFF (lines.rs, `SEAM_ADDSB7_OFF`: ROR A's carry into
+            // bit 7 rides SB7 left undriven).
+            if self.seam & SEAM_ADDSB7_OFF != 0 {
+                w &= !(1 << bit::ADDSB7);
+            }
+            w |= self.seam & !SEAM_ADDSB7_OFF;
         }
         // The freewheel never fetches: the sync pin (and the fetch it
         // would register) is masked out of the word itself.

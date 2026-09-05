@@ -147,7 +147,8 @@ fn record(op: u8, ids: &[u16], name: &'static str, base: u16, preamble: &[u8], o
         0
     } else {
         cpu.half_step();
-        vector(&cpu, ids) & WB_MASK
+        let v = vector(&cpu, ids);
+        (v & WB_MASK) | if v >> bit::ADDSB7 & 1 == 0 { SEAM_ADDSB7_OFF } else { 0 }
     };
     span.drain(..2);
     // The overlap alucin, where nothing consumes it, is data the key
@@ -155,7 +156,7 @@ fn record(op: u8, ids: &[u16], name: &'static str, base: u16, preamble: &[u8], o
     // and in the coverage test's reading, held harmless by the pin replay.
     // The RRA family's is data too, but consumed (the fresh carry): masked
     // here, computed by the sequencer from its own shift capture.
-    if ((!overlap_alucin_consumed(op) && wb == 0) || overlap_cin_from_shift(op)) && !kil {
+    if ((!overlap_alucin_consumed(op) && wb & WB_MASK == 0) || overlap_cin_from_shift(op)) && !kil {
         let n = span.len();
         for w in &mut span[n.saturating_sub(2)..] {
             *w &= !(1 << BIT_ALUCIN);

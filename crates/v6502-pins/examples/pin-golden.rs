@@ -364,7 +364,37 @@ fn flags_cases() -> Vec<Case> {
     harness.extend([0xa2, 0xfd, 0x9a, 0x4c, 0x00, 0x03]); // LDX #$FD; TXS; JMP $0300
     let mut loads5 = fixture_loads();
     loads5[0] = Load { org: 0x0200, bytes: harness };
+    // The accumulator shifts under both carries, each followed by an
+    // instruction that loads a register from SB in its first half-cycle
+    // (a store, TAX, a second shift): ROR A with the carry set leaves
+    // ADD/SB7 off into that half-cycle (`ror-probe`), which is the seam
+    // bit blargg's 02-implied found missing. Every result lands in a
+    // store and a PHP.
+    let mut shifts: Vec<u8> = Vec::new();
+    for (flag, a) in [(0x38u8, 0xdbu8), (0x18, 0xdb), (0x38, 0x24), (0x18, 0x25), (0x38, 0x80), (0x18, 0x01)] {
+        for op in [0x6au8, 0x4a, 0x2a, 0x0a] {
+            shifts.extend([flag, 0xa9, a, op, 0x8d, 0x00, 0x04, 0x08]); // SEC/CLC; LDA #a; op; STA $0400; PHP
+            shifts.extend([flag, 0xa9, a, op, 0xaa, 0x8e, 0x01, 0x04, 0x08]); // ...; op; TAX; STX $0401; PHP
+            shifts.extend([flag, 0xa9, a, op, op, 0x8d, 0x02, 0x04, 0x08]); // ...; op; op; STA $0402; PHP
+        }
+    }
+    // The memory shifts and their two composites on operands with bit 7
+    // and bit 6 set, both carries: the carry out is the operand's bit,
+    // and the write cycle's idle add (the result on both ALU inputs) is
+    // not where it lives (blargg's 02-implied, ASL $1a of $40).
+    for (flag, v) in [(0x38u8, 0x40u8), (0x18, 0x40), (0x38, 0x80), (0x18, 0x80), (0x38, 0xc0), (0x18, 0x01)] {
+        for op in [0x06u8, 0x26, 0x46, 0x66, 0x07, 0x27] {
+            shifts.extend([flag, 0xa9, v, 0x85, 0x10, op, 0x10, 0x08, 0xa5, 0x10, 0x8d, 0x03, 0x04]); // SEC/CLC; LDA #v; STA $10; op $10; PHP; LDA $10; STA $0403
+        }
+    }
+    shifts.extend([0x4c, 0x00, 0x03]);
+    // Over a kilobyte of program: it runs from $0500, clear of the
+    // handler at $0300 (a first draft at $0200 ran into it, and the trace
+    // spun there without a word).
+    let mut loads6 = fixture_loads();
+    loads6.push(Load { org: 0x0500, bytes: shifts });
     vec![
+        Case { name: "flags-shifts".into(), loads: loads6, reset_vector: 0x0500, steps: 8200, stim: vec![] },
         Case { name: "flags-harness".into(), loads: loads5, reset_vector: 0x0200, steps: 600, stim: vec![] },
         Case { name: "flags-plp".into(), loads: loads4, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
         Case { name: "flags-zero".into(), loads, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
