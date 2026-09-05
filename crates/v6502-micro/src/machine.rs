@@ -440,6 +440,11 @@ impl MicroCpu {
         let db;
         if phase == Phase::Phi1 {
             self.dp.step(w, Phase::Phi1, 0, cin);
+            // A byte cached here belongs to THIS cycle only: a cycle whose
+            // phi1 word is not a read (an RMW's, where the rw node sits
+            // low through the cycle and the service point is later) must
+            // ask the bus at phi2 rather than consume the last cycle's.
+            self.phi1_read = None;
             if rw_read {
                 // The bus is serviced as the clock falls: a read half-cycle
                 // shows its data from here on, and phi2 consumes this same

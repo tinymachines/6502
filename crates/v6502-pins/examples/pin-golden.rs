@@ -297,7 +297,50 @@ fn flags_cases() -> Vec<Case> {
     prog.extend([0x4c, 0x00, 0x03]);
     let mut loads = fixture_loads();
     loads[0] = Load { org: 0x0200, bytes: prog };
-    vec![Case { name: "flags-zero".into(), loads, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] }]
+    // The shape a font-copy loop has: Y wraps to zero by INY, other
+    // instructions run, then TYA decides a branch. Each step's flags
+    // land in a PHP.
+    let wrap: &[u8] = &[
+        0xa0, 0xff, 0xc8, 0x08, // LDY #$FF; INY; PHP
+        0x98, 0x08, // TYA; PHP
+        0xa0, 0xff, 0xc8, 0xa2, 0x01, 0xca, 0x98, 0x08, // LDY #$FF; INY; LDX #1; DEX; TYA; PHP
+        0xa0, 0xff, 0xa2, 0x01, 0xc8, 0x8d, 0x00, 0x03, 0xca, 0xd0, 0x00, 0x98, 0xd0, 0x02, 0xe6, 0xf1, 0x08, // LDY #$FF; LDX #1; INY; STA $0300; DEX; BNE +0; TYA; BNE +2; INC $F1; PHP
+        0xa2, 0xff, 0xe8, 0xa0, 0x01, 0x88, 0x8a, 0x08, // LDX #$FF; INX; LDY #1; DEY; TXA; PHP
+    ];
+    let mut prog2 = wrap.to_vec();
+    prog2.extend([0x4c, 0x00, 0x03]);
+    let mut loads2 = fixture_loads();
+    loads2[0] = Load { org: 0x0200, bytes: prog2 };
+    // A font-copy loop as a real program has it (blargg's, transcribed:
+    // eight zeros then eight bytes through a zero-page pointer per
+    // character, the pointer's page bumped when Y wraps), with Y set to
+    // wrap inside the first character. The source is a page of data at
+    // $0400; the sink is $0700.
+    let mut copy: Vec<u8> = vec![
+        0xa9, 0x00, 0x85, 0xf0, // LDA #0; STA $F0
+        0xa9, 0x04, 0x85, 0xf1, // LDA #4; STA $F1
+        0xa9, 0x02, 0x85, 0xf2, // LDA #2; STA $F2
+        0xa0, 0xf8, // LDY #$F8
+    ];
+    let top = copy.len();
+    copy.extend([0xa2, 0x08, 0xa9, 0x00]); // LDX #8; LDA #0
+    copy.extend([0x8d, 0x00, 0x07, 0xca, 0xd0, 0xfa]); // z: STA $0700; DEX; BNE z
+    copy.extend([0xa2, 0x08]); // LDX #8
+    copy.extend([0xb1, 0xf0, 0xc8, 0x8d, 0x00, 0x07, 0xca, 0xd0, 0xf7]); // f: LDA (F0),Y; INY; STA $0700; DEX; BNE f
+    copy.extend([0x98, 0xd0, 0x02, 0xe6, 0xf1]); // TYA; BNE +2; INC $F1
+    copy.extend([0xc6, 0xf2]); // DEC $F2
+    let here = copy.len() + 2;
+    copy.extend([0xd0, (top as i32 - here as i32) as i8 as u8]); // BNE top
+    copy.extend([0x08, 0x4c, 0x00, 0x03]); // PHP; JMP $0300
+    let mut loads3 = fixture_loads();
+    loads3[0] = Load { org: 0x0200, bytes: copy };
+    loads3.push(Load { org: 0x0400, bytes: (0..=255u8).map(|i| i.wrapping_mul(0x5b) ^ 0x3c).collect() });
+    loads3.push(Load { org: 0x0500, bytes: (0..=255u8).map(|i| i.wrapping_mul(0x2f) ^ 0xa5).collect() });
+    vec![
+        Case { name: "flags-zero".into(), loads, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
+        Case { name: "flags-wrap".into(), loads: loads2, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] },
+        Case { name: "flags-fontloop".into(), loads: loads3, reset_vector: 0x0200, steps: 700, stim: vec![] },
+    ]
 }
 
 /// One case per opcode: the trace page's preamble (`LDA #$41 / LDX #$02 /

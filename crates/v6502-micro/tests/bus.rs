@@ -72,6 +72,7 @@ fn a_bus_that_is_flat_memory_replays_the_golden_and_is_asked_for_every_read() {
     // and seed reads come before h=0 and are the surplus.
     let read_cycles = trace.frames.iter().filter(|f| f.rw && !f.clk0).count() as u64;
     assert!(reads >= read_cycles && reads <= read_cycles + 8, "the bus answered {reads} reads for {read_cycles} read cycles; each cycle must ask once");
+
     eprintln!("golden through a MicroBus: {} frames exact, {reads} bus reads", frames.len());
 }
 
