@@ -270,6 +270,36 @@ fn decimal_cases() -> Vec<Case> {
     ]
 }
 
+/// Flags through zero and through bit 7 on the transfers, the register
+/// increments and decrements, and the stack pulls: every result lands
+/// in a `PHP`, so an engine whose N or Z came from the wrong capture
+/// fails by the pushed byte. The opcode traces run every one of these
+/// once, but with the preamble's A=$41, X=$02, Y=$03, so a zero never
+/// flows through a transfer there (tinymachines/nes found TYA of a
+/// zero Y leaving Z clear on rung 3, N5 step 1).
+fn flags_cases() -> Vec<Case> {
+    let body: &[u8] = &[
+        0xa0, 0x00, 0x98, 0x08, // LDY #0; TYA; PHP
+        0xa2, 0x00, 0x8a, 0x08, // LDX #0; TXA; PHP
+        0xa9, 0x00, 0xaa, 0x08, 0xa8, 0x08, // LDA #0; TAX; PHP; TAY; PHP
+        0xa2, 0x80, 0x8a, 0x08, // LDX #$80; TXA; PHP
+        0xa0, 0xff, 0x98, 0x08, // LDY #$FF; TYA; PHP
+        0xba, 0x08, // TSX; PHP
+        0xa2, 0x01, 0xca, 0x08, // LDX #1; DEX; PHP
+        0xa0, 0x01, 0x88, 0x08, // LDY #1; DEY; PHP
+        0xa2, 0xff, 0xe8, 0x08, // LDX #$FF; INX; PHP
+        0xa0, 0x7f, 0xc8, 0x08, // LDY #$7F; INY; PHP
+        0xa9, 0x00, 0x48, 0xa9, 0x55, 0x68, 0x08, // LDA #0; PHA; LDA #$55; PLA; PHP
+        0xa9, 0x01, 0x4a, 0x08, // LDA #1; LSR; PHP
+        0xa9, 0x00, 0xa2, 0x00, 0x9a, 0xba, 0x08, // LDA #0; LDX #0; TXS; TSX; PHP
+    ];
+    let mut prog = body.to_vec();
+    prog.extend([0x4c, 0x00, 0x03]);
+    let mut loads = fixture_loads();
+    loads[0] = Load { org: 0x0200, bytes: prog };
+    vec![Case { name: "flags-zero".into(), loads, reset_vector: 0x0200, steps: FIXTURE_STEPS, stim: vec![] }]
+}
+
 /// One case per opcode: the trace page's preamble (`LDA #$41 / LDX #$02 /
 /// LDY #$03 / CLC`), the opcode with `$34 $12` as its operand bytes, then
 /// NOPs. The handler and vectors are the fixture's, so a BRK or a jam has
@@ -297,6 +327,7 @@ fn main() {
     }
     cases.extend(fixture_cases());
     cases.extend(decimal_cases());
+    cases.extend(flags_cases());
     cases.extend(opcode_cases());
 
     let mut frames = 0usize;
