@@ -198,13 +198,16 @@ fn fixture_cases() -> Vec<Case> {
         case("so-pulse", vec![stim(first + 8, true, true, true, true, true), idle(first + 12)]),
         // RDY falling DURING A WRITE cycle: the write completes (NMOS
         // ignores RDY on writes) and the read cycle after it is the one
-        // held. The program is `STA $0210` then NOPs; the store's write
-        // cycle is the fourth, so its phi2 is first + 7 and the script
-        // drives RDY low there, releasing eight half-cycles on. The 2A03's
-        // DMA units assert RDY on exactly this shape (a $4014 write), which
-        // is where the case came from (tinymachines/2a03, N3 step 5).
+        // held. The program is `LDA #$5A / STA $0210` then NOPs (A is
+        // loaded first: a store of the power-on A would test the rungs'
+        // undefined power-on state, which is not this script's claim, and
+        // rung 2's differs). The store's write cycle is the sixth, so its
+        // phi2 is first + 11 and the script drives RDY low there, releasing
+        // eight half-cycles on. The 2A03's DMA units assert RDY on exactly
+        // this shape (a $4014 write), which is where the case came from
+        // (tinymachines/2a03, N3 step 5).
         {
-            let mut prog = vec![0x8d, 0x10, 0x02];
+            let mut prog = vec![0xa9, 0x5a, 0x8d, 0x10, 0x02];
             prog.extend([0xea; 8]);
             let mut loads = loads.clone();
             loads[0] = Load { org: 0x0200, bytes: prog };
@@ -214,7 +217,7 @@ fn fixture_cases() -> Vec<Case> {
                 loads,
                 reset_vector: vector,
                 steps: FIXTURE_STEPS,
-                stim: vec![stim(first_w + 6, true, true, true, false, false), idle(first_w + 14)],
+                stim: vec![stim(first_w + 10, true, true, true, false, false), idle(first_w + 18)],
             }
         },
     ]
