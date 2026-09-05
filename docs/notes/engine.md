@@ -436,6 +436,25 @@ table (one expected bit), the datapath (one suppressed #IPC, caught at
 pclp that half-cycle) and the replay (one flipped db bit, named by
 trace).
 
+**Another chip's core (2026-09-05).** The Ricoh 2A03 (tinymachines/2a03)
+is a 6502 core with the decimal adjust disconnected on the die and its
+own power-on register state, and its N3 rung presents this rung as that
+core. Two configuration knobs on `MicroCpu` carry the difference, each
+measured on the 2A03's switch-level chip against this repository's
+recorded pin golden before it was written here (`lockstep-probe` there):
+`set_decimal_adjust(false)` keeps D out of the selector, so the ADC/SBC
+families play their binary spans under SED, no `#DAA`/`#DSA`, binary
+flags, and the three decimal chains then store exactly the bytes the 2A03
+stores ($41, $0a, $33, $a0 and a PHP of $fc where the 6502 wrote $47,
+$10, $99, $00, $fd; $2f, $0b, $ff; $20); `set_stack_at_h0(Some(s))` seeds
+S at h=0 with another die's measured value in place of the recorder's
+(the 2A03's simulation powers S on at $C0, this die's at $00, so its
+pushes land $40 lower for the rest of time). Both are configuration, not
+state: they survive `power_cycle` and are not in the machine value.
+`tests/knobs.rs` holds each to the golden: the adjust off must diverge at
+exactly the listed stores and nowhere else, and a seeded S must move
+every stack address by its offset and nothing else.
+
 The input pins are authored against those six traces (2026-08-31), and
 the mechanism is smaller than it sounds because the silicon's own trick
 carries over: **an interrupt is the recorded BRK span hijacked**. The

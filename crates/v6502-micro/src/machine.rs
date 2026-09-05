@@ -148,6 +148,19 @@ pub struct MicroCpu {
     /// Suppress the sync pin (and the fetch it would register) while the
     /// freewheel plays.
     mask_sync: bool,
+    /// Whether the D flag reaches the selector. True is the 6502. False is
+    /// the 2A03's core, whose decimal adjust is disconnected on the die:
+    /// D still sets and clears, and the ADC/SBC families play their
+    /// binary spans under it (no #DAA/#DSA, binary flags). Measured on the
+    /// 2A03 against the recorded decimal fixtures before it was authored
+    /// here (tinymachines/2a03, `lockstep-probe`).
+    decimal_adjust: bool,
+    /// The stack pointer at h=0, when it is not the recorder's. Silicon
+    /// leaves S undefined at power-on and every die's simulation settles
+    /// it its own way (the 2A03's comes up $C0 where this die's comes up
+    /// $00); a chip presenting this core seeds the value its own rung 0
+    /// measured.
+    stack_at_h0: Option<u8>,
 }
 
 impl MicroCpu {
@@ -189,7 +202,27 @@ impl MicroCpu {
             res_sel: false,
             res_phase: ResPhase::Run,
             mask_sync: false,
+            decimal_adjust: true,
+            stack_at_h0: None,
         }
+    }
+
+    /// Connect or disconnect the decimal adjust (see `decimal_adjust`).
+    /// Configuration, not state: it survives `power_cycle` and is not
+    /// part of the machine value.
+    pub fn set_decimal_adjust(&mut self, on: bool) {
+        self.decimal_adjust = on;
+    }
+
+    pub fn decimal_adjust(&self) -> bool {
+        self.decimal_adjust
+    }
+
+    /// Seed the stack pointer at h=0 with a measured value in place of
+    /// the recorder's (see `stack_at_h0`). Applies at the next
+    /// `power_cycle`; configuration, not state.
+    pub fn set_stack_at_h0(&mut self, s: Option<u8>) {
+        self.stack_at_h0 = s;
     }
 
     pub fn rung3(loads: &[Load], reset_vector: u16) -> MicroCpu {
@@ -225,6 +258,10 @@ impl MicroCpu {
             ai: r[14], bi: r[15],
             sb: 0xff, db: 0xff, adl: 0xff, adh: 0xff, dec_add: 0,
         };
+        if let Some(s) = self.stack_at_h0 {
+            self.dp.s_in = s;
+            self.dp.s_out = s;
+        }
         self.p = r[4] | 0x20;
         self.stream = Stream::Tail;
         self.span = &table::RESET_TAIL;
@@ -530,7 +567,10 @@ impl MicroCpu {
         } else {
             0
         };
-        let key = select::selector(op, self.p, self.dp.x, self.dp.y, self.fetch_pc, &self.mem);
+        // With the adjust disconnected the selector never sees D, so the
+        // binary variant plays and its lines never assert #DAA/#DSA.
+        let p_seen = if self.decimal_adjust { self.p } else { self.p & !0x08 };
+        let key = select::selector(op, p_seen, self.dp.x, self.dp.y, self.fetch_pc, &self.mem);
         let span = table::span(op, key).unwrap_or_else(|| {
             panic!(
                 "op {op:02x} at {:04x}: no recorded variant for key {key:#04x} (mask {:#04x})",
