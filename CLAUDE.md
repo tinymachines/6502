@@ -181,6 +181,16 @@ cargo run --release -p v6502-sim --example alu-probe [hex] [half-cycles]
                                            # SB and A per half-cycle beside the
                                            # ALU lines: the measurement behind
                                            # rung 3's seam bit and shift carries
+OP=0b cargo run --release -p v6502-sim --features probe --example latch-probe -- 1 12 13
+                                           # one bit of the ALU input latches
+                                           # through OP #$81 with A=$ff: the
+                                           # group each sits in per half-cycle
+                                           # with its members and pass gates,
+                                           # and every recalc of the phi2 settle
+                                           # that carried it. Where rung 0's
+                                           # ANC/ASR fight resolves against the
+                                           # part; ALLRECALCS=1 lists every
+                                           # change in the settle
 python3 tools/check-compiled-nodata.py     # the generated kernel is numbers only
 cargo test --release -p v6502-gpu          # GPU lane k == CPU lane k, every node
                                            # and every memory byte through the

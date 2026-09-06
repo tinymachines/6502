@@ -556,6 +556,38 @@ and must go red). With these, 03-immediate on rung 3 alone lists only
 ADC and SBC, which is the 6502's decimal mode meeting a 2A03 checksum;
 the console's core, with the adjust disconnected, passes it.
 
+**Where rung 0's fight resolves, measured** (`latch-probe`, under the
+`probe` feature, 2026-09-06). The wired-AND is right at phi1: for ANC
+#$81 with A=$ff, bit 1's group at h=12 is {alua1, sb1, idb1, A's storage
+node with its pullup, the data latch's node, alub1, idl1, vss}, joined
+through ACSB, SBDB, DL/DB, SBADD and DBADD, and it resolves low because
+the data latch's node reaches the pin-side latch, and vss, through the
+cp1 pass gate. At the phi2 edge the settle is one queue, and its order
+is what decides the byte: cp1 falls at recalc 16, the data latch's node
+is requeued at recalc 63 and its group is now {n87, idb1, sb1, alub1,
+alua1, n929^}, a pullup and no rail, so it charges high; ACSB, DBADD and
+SBADD only fall at recalcs 245, 246 and 253, and alua1 is isolated at
+recalc 386 holding the 1. So both ALU input latches sample $ff, and the
+ALU computes on it. The official AND (op 29) keeps A on SB and the latch
+on DB in separate groups, and at the same edge alub1's group is {n87,
+idb1, alub1}, no pullup, which holds its 0 until DBADD closes. The
+reference resolves the same group the same way (a pullup and no rail is
+high under either rule), so this is not a port error, and it is not an
+ordering the solver could be told to reverse: in silicon the same edge
+happens, and the question is whether one depletion load can lift the
+whole of SB and DB (the buses the part precharges precisely because a
+load cannot lift them quickly) in the interval before the pass gates
+close. The checksum says it cannot: the part keeps the AND. A model with
+no capacitance ratio and no rise time answers that race the other way
+(`ChargedHigh < PullUp`, instantly), which is the one place the
+documented limitation of the model (CLAUDE.md: "there is no decay or
+capacitance ratio") reaches an instruction. It is left as it is:
+introducing a rise time to lose one fight would be fitting, and rung 3
+carries the answer under a label. `DEADTIME=1` on the probe, which
+drives SBADD and DBADD low before the edge to try the other order, does
+not take: the node's own driver holds it high through the settle, which
+is the same fact from the other side.
+
 **The interrupt inputs are sampled at every phi1, the final cycle's
 included, and a BRK ends without a poll.** The console's alignment gate
 (tinymachines/nes, `tests/gate1_nmi.rs`: the PPU's real NMI landing

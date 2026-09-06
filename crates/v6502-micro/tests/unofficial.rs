@@ -1,8 +1,12 @@
 //! The immediate-mode unofficial opcodes whose result is a bus fight,
 //! held to the documented behaviour on rung 3 alone. Rung 0 is not the
-//! oracle here: a switch-level model with one drive strength settles a
-//! fight between A's drivers and the data latch's its own way (its ASR
-//! shifts $ff where the part shifts the AND), and the pin golden's one
+//! oracle here: the fight between A's drivers and the data latch on SB
+//! is the AND at phi1, but at the phi2 edge the latch's low path (the
+//! cp1 pass gate) opens before SBADD and DBADD close, and A's pullup
+//! charges the joined buses instantly in a model with no rise time, so
+//! the ALU input latches sample $ff where the part, whose one load
+//! cannot lift SB and DB in that interval, holds the AND (measured with
+//! v6502-sim's latch-probe; docs/notes/engine.md). The pin golden's one
 //! trace per opcode has A and the operand chosen so the two agree.
 //! blargg's instr_test 03-immediate, whose checksums are from a real
 //! 2A03, is what these were authored against; this file is the reading
