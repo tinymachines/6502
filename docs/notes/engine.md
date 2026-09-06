@@ -522,6 +522,39 @@ Under the old rules the chain fails at the first PHP after each
 agree over twelve million half-cycles of 02-implied, through to its
 idle loop, and every rung replays all 282.
 
+**Three immediate-mode unofficial opcodes are authored where rung 0 is
+not the oracle** (`tests/unofficial.rs`; blargg's 03-immediate found
+them, its checksums from a real 2A03). Each is a bus fight, A's drivers
+against the data latch's on SB, which a switch-level model with one
+drive strength settles its own way: rung 0's ASR #$81 with A=$ff shifts
+$ff (the input latches read $ff at phi2 where the part holds the AND),
+and its ANC #$81 with A=$ff leaves A at $ff, both against the checksum,
+while rung 3, which ANDs on its modelled bus, passes ANC. The pin
+golden's one trace per opcode has A=$41 and operand $34, on which the
+two agree, so nothing there could tell. Authored, each against the
+documented result and the checksum: ASR (op 4b) asserts EORS beside
+SRS, and the datapath now tests SRS first, the shift being what the
+part produces; ARR (op 6b) takes its C from the result's bit 6 and V
+from bits 6 and 5 differing, binary mode only (a decimal ARR's adjust
+is not authored); ATX (op ab) loads A and X with (A | `LAX_MAGIC`) &
+the immediate, and the constant is $FF because $EE, the figure often
+quoted for the NES, fails the checksum by name (`MUTATE=1` swaps them
+and must go red). With these, 03-immediate on rung 3 alone lists only
+ADC and SBC, which is the 6502's decimal mode meeting a 2A03 checksum;
+the console's core, with the adjust disconnected, passes it.
+
+**An NMI edge arriving in an instruction's final cycle waits one
+instruction**, the same rule the IRQ level already followed: the edge
+is latched at the pin (`nmi_edge`) and becomes `nmi_pending` at the
+next phi2 sample that can still hijack the coming fetch. blargg's
+04-nmi_control #11 ("immediate occurrence should be after NEXT
+instruction") is the test: the STA that enables NMI with the flag
+already set completes in its own final cycle, and the interrupt must
+follow the instruction after it. The scripted NMI trace in the golden
+asserts eight half-cycles ahead of its BRK, so it could not see the
+difference; the machine value carries the edge as bit 1 of the pending
+byte, the layout unchanged.
+
 The input pins are authored against those six traces (2026-08-31), and
 the mechanism is smaller than it sounds because the silicon's own trick
 carries over: **an interrupt is the recorded BRK span hijacked**. The

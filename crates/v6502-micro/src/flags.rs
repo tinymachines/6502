@@ -106,6 +106,21 @@ pub fn update(op: u8, p: &mut u8, a: u8, x: u8, y: u8, s: u8, c: &Caps) {
                 nz(p, r);
             }
         }
+        // ARR: AND then ROR, the carry into bit 7 riding SB7 as ROR A's
+        // does; C is the result's bit 6 and V its bits 6 and 5 differing.
+        // AUTHORED for the binary mode (blargg's 03-immediate); a decimal
+        // ARR's adjust is not authored, and the D key plays its recorded
+        // lines only.
+        0x6b => {
+            if let Some((_, r)) = c.srs {
+                let v = r | (*p & C) << 7;
+                nz(p, v);
+                put(p, C, v & 0x40 != 0);
+                put(p, V, (v ^ v << 1) & 0x40 != 0);
+            }
+        }
+        // ATX: what A and X receive (lines.rs, `LAX_MAGIC`).
+        0xab => nz(p, (a | crate::lines::LAX_MAGIC) & c.last_read),
         // ANC: AND, with N copied into C.
         0x0b | 0x2b => {
             if let Some(r) = logic {

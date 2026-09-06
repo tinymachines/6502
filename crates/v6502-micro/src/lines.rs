@@ -60,6 +60,16 @@ pub const WB_MASK: u64 = (1 << bit::SBY) | (1 << bit::SBX) | (1 << bit::SBS) | (
 // with bit 7 clear.
 pub const SEAM_ADDSB7_OFF: u64 = 1 << 63;
 
+// ATX (LXA, op ab) loads A and X with (A | this) & the immediate: A's
+// drive onto SB fights the data latch's, and the bits A cannot pull low
+// against the precharge read as this constant. AUTHORED: blargg's
+// instr_test 03-immediate (its checksum from a real 2A03) is the oracle:
+// $FF passes it and $EE, the figure often quoted for the NES, fails it
+// by name. Rung 0 is not consulted, because a bus fight is exactly what
+// a switch-level model with one drive strength cannot settle. Applied
+// to op ab alone.
+pub const LAX_MAGIC: u8 = 0xff;
+
 /// The selector key's bits: which way each measured mechanism went for one
 /// execution. The RECORDER computes these from full knowledge (registers,
 /// flags and memory at the opcode's fetch); the sequencer reproduces each

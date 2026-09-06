@@ -29,6 +29,9 @@ pub enum Phase {
 /// Every register and latch of the diagram, one byte each.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Datapath {
+    /// OR-ed into A's drive onto SB (lines.rs, `LAX_MAGIC`): the
+    /// sequencer sets it for op ab and clears it for every other.
+    pub lax_magic: u8,
     pub a: u8,
     pub x: u8,
     pub y: u8,
@@ -99,7 +102,7 @@ impl Datapath {
             sb &= self.s_out;
         }
         if on(w, ACSB) && p1 {
-            sb &= self.a;
+            sb &= self.a | self.lax_magic;
         }
         if on(w, ADDSB06) {
             sb &= self.add | 0x80;
@@ -252,6 +255,18 @@ impl Datapath {
                 } else {
                     0
                 };
+            } else if on(w, SRS) {
+                // The right shift is of the B input ALONE, with the
+                // carry-in into bit 7 (how ROR and LSR share one line).
+                // The Python model's (a | b) >> 1 could not be told apart
+                // on the four programs, because an accumulator shift loads
+                // both latches with A; rung 0's own latches through LSR zp
+                // (ai=ff, bi=ea, add=75) settled it. Tested before the
+                // logic lines: ASR (op 4b) asserts EORS beside SRS, and
+                // the shift is what comes out (blargg's 03-immediate;
+                // rung 0 differs there, see the ladder note).
+                self.add = ((b >> 1) as u8) | (cin as u8) << 7;
+                self.dec_add = 0;
             } else if on(w, ANDS) {
                 self.add = (a & b) as u8;
                 self.dec_add = 0;
@@ -260,15 +275,6 @@ impl Datapath {
                 self.dec_add = 0;
             } else if on(w, EORS) {
                 self.add = (a ^ b) as u8;
-                self.dec_add = 0;
-            } else if on(w, SRS) {
-                // The right shift is of the B input ALONE, with the
-                // carry-in into bit 7 (how ROR and LSR share one line).
-                // The Python model's (a | b) >> 1 could not be told apart
-                // on the four programs, because an accumulator shift loads
-                // both latches with A; rung 0's own latches through LSR zp
-                // (ai=ff, bi=ea, add=75) settled it.
-                self.add = ((b >> 1) as u8) | (cin as u8) << 7;
                 self.dec_add = 0;
             }
             self.dl = data_in;

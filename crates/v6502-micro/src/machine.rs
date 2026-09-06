@@ -151,6 +151,12 @@ pub struct MicroCpu {
     /// The IRQ level as of the last effective poll (every phi2 except the
     /// final cycle's), and the NMI edge, latched until serviced.
     irq_seen: bool,
+    /// An NMI edge seen at the pin and not yet sampled: it becomes
+    /// `nmi_pending` at the next phi2 sample that can still hijack the
+    /// coming fetch (the same rule as the IRQ level), so an edge arriving
+    /// in an instruction's final cycle waits one instruction (the
+    /// manual's rule; blargg's 04-nmi_control #11 is the test).
+    nmi_edge: bool,
     nmi_pending: bool,
     /// Decided at the poll as the fetch begins; consumed at the boundary.
     hijack_next: Option<Intr>,
@@ -218,6 +224,7 @@ impl MicroCpu {
             in_rdy: true,
             in_so: false,
             irq_seen: false,
+            nmi_edge: false,
             nmi_pending: false,
             hijack_next: None,
             hijacked: None,
@@ -293,6 +300,7 @@ impl MicroCpu {
         }
         let r = &r;
         self.dp = Datapath {
+            lax_magic: 0,
             a: r[0], x: r[1], y: r[2], s_in: r[3], s_out: r[3],
             pcl: r[5], pch: r[6], pclp: r[7], pchp: r[8],
             abl: r[9], abh: r[10], dl: r[11], dor: r[12], add: r[13],
@@ -318,6 +326,7 @@ impl MicroCpu {
         self.in_rdy = true;
         self.in_so = false;
         self.irq_seen = false;
+        self.nmi_edge = false;
         self.nmi_pending = false;
         self.hijack_next = None;
         self.hijacked = None;
@@ -559,6 +568,10 @@ impl MicroCpu {
         // in the final cycle waits one instruction).
         if phase == Phase::Phi2 && !(self.stream == Stream::Span && self.pos + 3 == self.span.len()) {
             self.irq_seen = !self.in_irq;
+            if self.nmi_edge {
+                self.nmi_edge = false;
+                self.nmi_pending = true;
+            }
         }
         // The RES latches: the phi1 level is what boundaries consult, and
         // the vector-select arm takes two phi2s to bite (both measured;
@@ -656,6 +669,7 @@ impl MicroCpu {
         self.op = op;
         self.kil = table::is_kil(op);
         self.cin_from_c = table::overlap_cin_from_c(op, key);
+        self.dp.lax_magic = if op == 0xab { crate::lines::LAX_MAGIC } else { 0 };
         self.cur_key = key;
         self.caps = Caps::default();
         self.reads = 0;
@@ -721,6 +735,7 @@ pub struct MicroState {
     pub inputs: [bool; 5],
     pub irq_seen: bool,
     pub nmi_pending: bool,
+    pub nmi_edge: bool,
     /// 0 = none, 1 = irq, 2 = nmi, 3 = res.
     pub hijack_next: u8,
     pub hijacked: u8,
@@ -789,7 +804,7 @@ impl MicroState {
         }
         b.extend_from_slice(&[
             self.irq_seen as u8,
-            self.nmi_pending as u8,
+            self.nmi_pending as u8 | (self.nmi_edge as u8) << 1,
             self.hijack_next,
             self.hijacked,
             self.stalled as u8,
@@ -822,6 +837,7 @@ impl MicroState {
         let p = take(1)?[0];
         let d = take(21)?;
         let dp = Datapath {
+            lax_magic: 0,
             a: d[0], x: d[1], y: d[2], s_in: d[3], s_out: d[4], pcl: d[5], pch: d[6],
             pclp: d[7], pchp: d[8], abl: d[9], abh: d[10], dl: d[11], dor: d[12], add: d[13],
             ai: d[14], bi: d[15], sb: d[16], db: d[17], adl: d[18], adh: d[19], dec_add: d[20],
@@ -911,7 +927,8 @@ impl MicroState {
             pin_hold,
             inputs,
             irq_seen: bit(tail[0], "irq_seen")?,
-            nmi_pending: bit(tail[1], "nmi_pending")?,
+            nmi_pending: bit(tail[1] & 1, "nmi_pending")?,
+            nmi_edge: bit(tail[1] >> 1, "nmi_edge")?,
             hijack_next: tail[2],
             hijacked: tail[3],
             stalled: bit(tail[4], "stalled")?,
@@ -975,6 +992,7 @@ impl MicroCpu {
             inputs: [self.in_res, self.in_irq, self.in_nmi, self.in_rdy, self.in_so],
             irq_seen: self.irq_seen,
             nmi_pending: self.nmi_pending,
+            nmi_edge: self.nmi_edge,
             hijack_next: intr_code(self.hijack_next),
             hijacked: intr_code(self.hijacked),
             stalled: self.stalled,
@@ -1048,6 +1066,7 @@ impl MicroCpu {
         self.in_so = s;
         self.irq_seen = st.irq_seen;
         self.nmi_pending = st.nmi_pending;
+        self.nmi_edge = st.nmi_edge;
         self.hijack_next = hijack_next;
         self.hijacked = hijacked;
         self.stalled = st.stalled;
@@ -1070,7 +1089,7 @@ impl PinEngine for MicroCpu {
         // sets V, the polarity `fixture-so-pulse` measured of rung 0.
         // A reset asserted mid-run is not authored yet (module note).
         if self.in_nmi && !nmi {
-            self.nmi_pending = true;
+            self.nmi_edge = true;
         }
         if so && !self.in_so {
             self.p |= 0x40;

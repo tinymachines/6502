@@ -71,6 +71,7 @@ fn nine_fields_exact_over_four_programs() {
         let regs = cpu.registers();
         let ints = cpu.internals().expect("the netlist names the internal buses");
         let mut m = Datapath {
+        lax_magic: 0,
             a: regs.a, x: regs.x, y: regs.y, s_in: regs.s, s_out: regs.s,
             pcl: regs.pc as u8, pch: (regs.pc >> 8) as u8,
             pclp: ints.pclp, pchp: ints.pchp, abl: ints.abl, abh: ints.abh,
