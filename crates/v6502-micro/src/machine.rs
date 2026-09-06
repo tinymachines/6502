@@ -151,12 +151,15 @@ pub struct MicroCpu {
     /// The IRQ level as of the last effective poll (every phi2 except the
     /// final cycle's), and the NMI edge, latched until serviced.
     irq_seen: bool,
-    /// An NMI edge seen at the pin and not yet sampled: it becomes
-    /// `nmi_pending` at the next phi2 sample that can still hijack the
-    /// coming fetch (the same rule as the IRQ level), so an edge arriving
-    /// in an instruction's final cycle waits one instruction (the
-    /// manual's rule; blargg's 04-nmi_control #11 is the test).
-    nmi_edge: bool,
+    /// The NMI level as the last phi1 sampled it: the edge detector is
+    /// a comparison of two phi1 samples, so a low confined to a phi2 is
+    /// never an edge (MEASURED: brk-nmi-probe with PULSE=1 on rung 0
+    /// sees a one-half-cycle low on a phi1 frame and never one on a
+    /// phi2 frame; the golden's nmi-pulse pair holds both).
+    nmi_low_at_phi1: bool,
+    /// This BRK's vector is the NMI's: the edge was sampled by its
+    /// fifth cycle's phi1 (see the sample point).
+    brk_takes_nmi: bool,
     nmi_pending: bool,
     /// Decided at the poll as the fetch begins; consumed at the boundary.
     hijack_next: Option<Intr>,
@@ -224,7 +227,8 @@ impl MicroCpu {
             in_rdy: true,
             in_so: false,
             irq_seen: false,
-            nmi_edge: false,
+            nmi_low_at_phi1: false,
+            brk_takes_nmi: false,
             nmi_pending: false,
             hijack_next: None,
             hijacked: None,
@@ -326,7 +330,8 @@ impl MicroCpu {
         self.in_rdy = true;
         self.in_so = false;
         self.irq_seen = false;
-        self.nmi_edge = false;
+        self.nmi_low_at_phi1 = false;
+        self.brk_takes_nmi = false;
         self.nmi_pending = false;
         self.hijack_next = None;
         self.hijacked = None;
@@ -390,6 +395,14 @@ impl MicroCpu {
             if !self.res_seen {
                 self.mask_sync = true;
                 self.hijack_next = None;
+            } else if self.op == 0x00 {
+                // A BRK and every interrupt sequence end without a poll:
+                // an edge that missed the vector decision is taken after
+                // the handler's first instruction (MEASURED, the same
+                // probe: nine to sixteen half-cycles after the BRK's
+                // fetch, the vector read comes fourteen later than the
+                // handler's first fetch would allow).
+                self.hijack_next = None;
             } else {
                 self.hijack_next = if self.nmi_pending {
                     self.nmi_pending = false;
@@ -432,7 +445,7 @@ impl MicroCpu {
         // undriven precharge in the recorded span, so keying off `0/ADL0`
         // alone would read ffff where the chip reads fffb (or fffd).
         let vector_cycle = self.pos + 6 >= self.span.len() && self.pos + 3 < self.span.len();
-        if self.hijacked == Some(Intr::Nmi) && vector_cycle {
+        if (self.hijacked == Some(Intr::Nmi) || self.brk_takes_nmi) && vector_cycle {
             w |= 1 << bit::VADL2;
         }
         if self.hijacked == Some(Intr::Res) && vector_cycle {
@@ -562,15 +575,35 @@ impl MicroCpu {
                 }
             }
         }
-        // The IRQ level, sampled at every phi2 except the final cycle's:
-        // the last poll that can still hijack the coming fetch is the
-        // second-to-last cycle's (the manual's rule; an assertion arriving
-        // in the final cycle waits one instruction).
-        if phase == Phase::Phi2 && !(self.stream == Stream::Span && self.pos + 3 == self.span.len()) {
+        // The interrupt inputs, sampled at every phi1, the final
+        // cycle's included: an input present as the final cycle's phi1
+        // begins is taken at the coming fetch, one arriving in its phi2
+        // waits one instruction (MEASURED on rung 0 with brk-nmi-probe,
+        // the NMI edge and the IRQ level alike, at every half-cycle of a
+        // NOP sled; the manual's "second-to-last cycle" reading, which
+        // sampled at phi2 and excluded the final cycle's, was a
+        // half-cycle early). The poll at the overlap's first half-cycle
+        // runs before this, so that half-cycle's sample belongs to the
+        // next instruction. Inside a BRK the NMI's arrival decides more
+        // (below).
+        if phase == Phase::Phi1 {
             self.irq_seen = !self.in_irq;
-            if self.nmi_edge {
-                self.nmi_edge = false;
+            let low = !self.in_nmi;
+            if low && !self.nmi_low_at_phi1 {
                 self.nmi_pending = true;
+            }
+            self.nmi_low_at_phi1 = low;
+            // A BRK whose NMI edge is sampled by its fifth cycle's phi1
+            // (the status push) takes the NMI's vector instead of its
+            // own and services the NMI by doing so; a later edge waits
+            // (MEASURED: brk-nmi-probe, the boundary between eight and
+            // nine half-cycles after the BRK's fetch, and the golden's
+            // fixture-nmi-in-brk pair holds both sides).
+            if self.nmi_pending && self.stream == Stream::Span && self.op == 0x00 && self.hijacked.is_none()
+                && !self.brk_takes_nmi && self.pos <= 6
+            {
+                self.brk_takes_nmi = true;
+                self.nmi_pending = false;
             }
         }
         // The RES latches: the phi1 level is what boundaries consult, and
@@ -633,6 +666,7 @@ impl MicroCpu {
         // A hijacked fetch read and discarded its opcode: the predecode
         // forces BRK, and the span edits above make it the interrupt.
         self.hijacked = self.hijack_next.take();
+        self.brk_takes_nmi = false;
         if self.hijacked == Some(Intr::Res) {
             // Reset sets I (documented; the fixture cannot see it, its
             // program starts with CLI) and drops any latched NMI edge.
@@ -735,7 +769,8 @@ pub struct MicroState {
     pub inputs: [bool; 5],
     pub irq_seen: bool,
     pub nmi_pending: bool,
-    pub nmi_edge: bool,
+    pub nmi_low_at_phi1: bool,
+    pub brk_takes_nmi: bool,
     /// 0 = none, 1 = irq, 2 = nmi, 3 = res.
     pub hijack_next: u8,
     pub hijacked: u8,
@@ -804,7 +839,7 @@ impl MicroState {
         }
         b.extend_from_slice(&[
             self.irq_seen as u8,
-            self.nmi_pending as u8 | (self.nmi_edge as u8) << 1,
+            self.nmi_pending as u8 | (self.nmi_low_at_phi1 as u8) << 1 | (self.brk_takes_nmi as u8) << 2,
             self.hijack_next,
             self.hijacked,
             self.stalled as u8,
@@ -928,7 +963,8 @@ impl MicroState {
             inputs,
             irq_seen: bit(tail[0], "irq_seen")?,
             nmi_pending: bit(tail[1] & 1, "nmi_pending")?,
-            nmi_edge: bit(tail[1] >> 1, "nmi_edge")?,
+            nmi_low_at_phi1: bit(tail[1] >> 1 & 1, "nmi_low_at_phi1")?,
+            brk_takes_nmi: bit(tail[1] >> 2, "brk_takes_nmi")?,
             hijack_next: tail[2],
             hijacked: tail[3],
             stalled: bit(tail[4], "stalled")?,
@@ -992,7 +1028,8 @@ impl MicroCpu {
             inputs: [self.in_res, self.in_irq, self.in_nmi, self.in_rdy, self.in_so],
             irq_seen: self.irq_seen,
             nmi_pending: self.nmi_pending,
-            nmi_edge: self.nmi_edge,
+            nmi_low_at_phi1: self.nmi_low_at_phi1,
+            brk_takes_nmi: self.brk_takes_nmi,
             hijack_next: intr_code(self.hijack_next),
             hijacked: intr_code(self.hijacked),
             stalled: self.stalled,
@@ -1066,7 +1103,8 @@ impl MicroCpu {
         self.in_so = s;
         self.irq_seen = st.irq_seen;
         self.nmi_pending = st.nmi_pending;
-        self.nmi_edge = st.nmi_edge;
+        self.nmi_low_at_phi1 = st.nmi_low_at_phi1;
+        self.brk_takes_nmi = st.brk_takes_nmi;
         self.hijack_next = hijack_next;
         self.hijacked = hijacked;
         self.stalled = st.stalled;
@@ -1088,9 +1126,8 @@ impl PinEngine for MicroCpu {
         // active low) until serviced, and SO's false-to-true transition
         // sets V, the polarity `fixture-so-pulse` measured of rung 0.
         // A reset asserted mid-run is not authored yet (module note).
-        if self.in_nmi && !nmi {
-            self.nmi_edge = true;
-        }
+        // The NMI edge is found by the phi1 sampler (see `nmi_low_at_phi1`),
+        // not here: a level is presented, and the sampler decides.
         if so && !self.in_so {
             self.p |= 0x40;
         }

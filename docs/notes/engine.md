@@ -234,7 +234,7 @@ reset reaches `$FFFC`; RDY holds `$0202` for exactly the scripted span; the
 SO pulse shows in the pushed P (`$72` against `$32`); `KIL` sits on `$FFFF`
 to the end.
 
-`tests/replay.rs` replays all 282 through rung 0 and is the shape every other
+`tests/replay.rs` replays all 289 through rung 0 and is the shape every other
 rung's test takes: swap the constructor, nothing else. It SKIPS without the
 files (`REQUIRE_PINS=1` insists) and `MUTATE=1` flips one `db` bit halfway
 through the first trace and must go red, which it does, naming the trace, the
@@ -358,7 +358,7 @@ side first and the sweep by the tie-break, and a real chip by noise. The
 program result agrees. `examples/agree.rs` reports the node agreement and
 names the persistent nodes; it asserts nothing.
 
-**Held to the pin golden, all of it.** Lane 0 replays every one of the 282
+**Held to the pin golden, all of it.** Lane 0 replays every one of the 289
 traces identically: the seven programs, the reference's program, the seven
 scripted interrupt and RDY runs, the three decimal chains, all 256 opcodes
 including the twelve that never finish. `MUTATE=1` goes red by name. `tests/lanes.rs` gives lane 1 a
@@ -428,7 +428,7 @@ sequencer (`machine.rs`) plays spans through the datapath
 with the flags and the P-to-stack timing authored (`flags.rs`) and the
 selector shared with the recorder by include.
 
-**Held to the pin golden: all 282 traces replay with every pin equal at
+**Held to the pin golden: all 289 traces replay with every pin equal at
 every half-cycle**, `EXPECTED_FAILURES` and `UNAUTHORED_STIM` both empty,
 undocumented opcodes and the six scripted stimulus traces included.
 Decimal mode is unexercised by any trace. `MUTATE=1` goes red on the
@@ -520,7 +520,7 @@ with `v6502-sim --example alu-probe` before being authored:
 Under the old rules the chain fails at the first PHP after each
 (mutation-proved in the session, by hand); with them, rung 0 and rung 3
 agree over twelve million half-cycles of 02-implied, through to its
-idle loop, and every rung replays all 282.
+idle loop, and every rung replays all 289.
 
 **Three immediate-mode unofficial opcodes are authored where rung 0 is
 not the oracle** (`tests/unofficial.rs`; blargg's 03-immediate found
@@ -543,17 +543,40 @@ and must go red). With these, 03-immediate on rung 3 alone lists only
 ADC and SBC, which is the 6502's decimal mode meeting a 2A03 checksum;
 the console's core, with the adjust disconnected, passes it.
 
-**An NMI edge arriving in an instruction's final cycle waits one
-instruction**, the same rule the IRQ level already followed: the edge
-is latched at the pin (`nmi_edge`) and becomes `nmi_pending` at the
-next phi2 sample that can still hijack the coming fetch. blargg's
-04-nmi_control #11 ("immediate occurrence should be after NEXT
-instruction") is the test: the STA that enables NMI with the flag
-already set completes in its own final cycle, and the interrupt must
-follow the instruction after it. The scripted NMI trace in the golden
-asserts eight half-cycles ahead of its BRK, so it could not see the
-difference; the machine value carries the edge as bit 1 of the pending
-byte, the layout unchanged.
+**The interrupt inputs are sampled at every phi1, the final cycle's
+included, and a BRK ends without a poll.** The console's alignment gate
+(tinymachines/nes, `tests/gate1_nmi.rs`: the PPU's real NMI landing
+around a BRK, the console's CPU against rung 0 half-cycle for
+half-cycle) found rung 3 parting from rung 0 when the edge fell inside
+the BRK, and `brk-nmi-probe` then measured both rungs at every
+half-cycle of a NOP sled and of a BRK, for the NMI edge and the IRQ
+level, with pulses down to one half-cycle. What rung 0 does, now
+authored and held by six scripted traces in the golden
+(`nmi-final-phi1`, `nmi-final-phi2`, `nmi-in-brk-early`,
+`nmi-in-brk-late`, `nmi-pulse-phi1`, `nmi-pulse-phi2`, and
+`irq-final-phi1`):
+
+- An input present as a cycle's phi1 begins is seen by the poll for the
+  coming fetch, the final cycle's phi1 included; one arriving in the
+  final cycle's phi2 waits one instruction. The earlier reading here
+  (sampled at phi2, the final cycle's excluded, "the manual's
+  second-to-last cycle") was a half-cycle early on one side and a
+  half-cycle late on the other, and the golden's scripts had all landed
+  clear of both boundaries. blargg's 04-nmi_control #11 (the STA that
+  enables NMI with the flag set completes in its own final cycle's
+  phi2) still holds.
+- The NMI edge is two phi1 samples compared (`nmi_low_at_phi1`), not a
+  latch at the pin: a low confined to a phi2 is not an edge, a low on
+  one phi1 frame is.
+- A BRK whose NMI edge is sampled by its fifth cycle's phi1 (the status
+  push) takes the NMI's vector, and that services the NMI
+  (`brk_takes_nmi`, the seam between eight and nine half-cycles after
+  the fetch); a later edge waits, because a BRK, and every interrupt
+  sequence, ends without a poll, so the handler's first instruction
+  runs before the NMI is taken.
+
+The machine value carries the sampled level and the BRK's choice as
+bits 1 and 2 of the pending byte, the layout unchanged.
 
 The input pins are authored against those six traces (2026-08-31), and
 the mechanism is smaller than it sounds because the silicon's own trick
@@ -670,7 +693,7 @@ live in halfwave (the account is in `service.md`: the binary moved to
 a step by the machine value's shape).
 
 **Decimal mode, measured and authored (2026-08-31).** Three BCD chain
-fixtures joined the pin golden (274 traces then; 282 since the two RDY scripts and the flag chains below): every result lands in a
+fixtures joined the pin golden (274 traces then; 289 since the two RDY scripts and the flag chains below): every result lands in a
 `STA` and every flag set in a `PHP`, so a binary add where the chip
 adjusts fails by address and byte. `decimal-probe` (a `v6502-sim`
 example, the `reset-probe` method) showed where the adjust lives: `#DAA`

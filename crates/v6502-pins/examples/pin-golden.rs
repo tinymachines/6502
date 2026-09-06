@@ -194,6 +194,28 @@ fn fixture_cases() -> Vec<Case> {
         case("rdy-release-phi1", vec![stim(first + 6, true, true, true, false, false), idle(first + 15)]),
         // NMI is edge triggered: one falling edge, released six later.
         case("nmi-edge", vec![stim(brk - 8, true, true, false, true, false), idle(brk - 2)]),
+        // The sample point, both sides of it (measured with rung 3's
+        // brk-nmi-probe, the console's gate 1 the finder). The NOP before
+        // the BRK is fetched at brk - 4: an edge present as its final
+        // cycle's phi1 begins (the frame at brk - 2, so the script at
+        // brk - 3) hijacks the BRK's fetch; one arriving in that cycle's
+        // phi2 (brk - 1, script brk - 2) does not, and is sampled inside
+        // the BRK instead, whose vector it replaces.
+        case("nmi-final-phi1", vec![stim(brk - 3, true, true, false, true, false), idle(brk + 3)]),
+        case("nmi-final-phi2", vec![stim(brk - 2, true, true, false, true, false), idle(brk + 4)]),
+        // Inside the BRK: an edge sampled by its fifth cycle's phi1 (the
+        // frame at brk + 8) replaces its vector with the NMI's; one
+        // half-cycle later it waits for the handler's first instruction,
+        // because a BRK ends without a poll.
+        case("nmi-in-brk-early", vec![stim(brk + 7, true, true, false, true, false), idle(brk + 13)]),
+        case("nmi-in-brk-late", vec![stim(brk + 8, true, true, false, true, false), idle(brk + 14)]),
+        // A one-half-cycle low: on a phi1 frame it is an edge (the frame
+        // at brk - 4, the NOP's fetch), on a phi2 frame it is not (brk - 3),
+        // because the detector compares two phi1 samples.
+        case("nmi-pulse-phi1", vec![stim(brk - 5, true, true, false, true, false), idle(brk - 4)]),
+        case("nmi-pulse-phi2", vec![stim(brk - 4, true, true, false, true, false), idle(brk - 3)]),
+        // The IRQ level at the same final phi1: taken at the BRK's fetch.
+        case("irq-final-phi1", vec![stim(brk - 3, true, false, true, true, false)]),
         // SO sets the overflow flag on its own edge; a four-half-cycle pulse.
         case("so-pulse", vec![stim(first + 8, true, true, true, true, true), idle(first + 12)]),
         // RDY falling DURING A WRITE cycle: the write completes (NMOS
