@@ -477,6 +477,19 @@ on the very read it lies on. Configuration, not state; the machine value
 neither carries nor restores it. The NES console (tinymachines/nes) is
 the host it was made for.
 
+The bus has two more verbs a flat memory never needs. `peek` is a look
+at a byte that is not a bus cycle (the selector's operand and pointer
+peeks; a console answers from RAM and ROM and must not touch a register
+a read would clear). `read_late` (2026-09-06) is the byte the core
+latches at the end of a read's phi2 where it differs from the one the
+bus drove at phi1: the 2A03's $4015, whose frame IRQ flag can rise
+inside that very half-step, is read as set while the data pins still
+show it clear (measured there, `tests/reads.rs`, the whole chip against
+its switch-level rung with the read stepped a cycle at a time across
+the flag's rise). The pins keep the phi1 byte, as the chip's do; the
+datapath, the opcode fetch and the flags take the late one. The third
+case in `tests/bus.rs` holds both halves of that.
+
 **Six flag chains joined the golden the same day**, recorded while the
 NES console (tinymachines/nes, N5) ran real programs on this rung:
 `flags-zero` (the transfers, increments, decrements and a pull through

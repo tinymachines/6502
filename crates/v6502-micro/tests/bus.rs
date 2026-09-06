@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use v6502_micro::machine::{MicroBus, MicroCpu};
+use v6502_pins::PinEngine;
 use v6502_pins::{compare, parse_trace, run};
 
 struct Flat {
@@ -97,4 +98,53 @@ fn a_bus_that_lies_about_one_byte_is_seen_on_that_read() {
     assert_eq!(m.field, "db", "the lie shows as the data byte");
     assert_eq!(m.expected.ab, target, "on the very read it lied on");
     eprintln!("a lie at ${target:04x} surfaced at h={}: {}", m.h, m.field);
+}
+
+/// A bus whose byte at the latch differs from the byte on the pins: the
+/// pins must show the phi1 byte and the register the late one.
+struct Late {
+    mem: Vec<u8>,
+    at: u16,
+    late: u8,
+}
+
+impl MicroBus for Late {
+    fn read(&mut self, a: u16) -> u8 {
+        self.mem[a as usize]
+    }
+    fn write(&mut self, a: u16, v: u8) {
+        self.mem[a as usize] = v;
+    }
+    fn read_late(&mut self, a: u16) -> Option<u8> {
+        (a == self.at).then_some(self.late)
+    }
+}
+
+#[test]
+fn a_bus_that_hands_a_different_byte_at_the_latch_keeps_the_pins_and_moves_the_register() {
+    // LDA $0010; STA $0020; spin. The bus shows $11 at $0010 on the pins
+    // and hands $ee at the latch.
+    let prog = vec![0xad, 0x10, 0x00, 0x8d, 0x20, 0x00, 0x4c, 0x06, 0x02];
+    let mut mem = vec![0u8; 0x10000];
+    mem[0x0200..0x0200 + prog.len()].copy_from_slice(&prog);
+    mem[0x0010] = 0x11;
+    mem[0xfffc] = 0x00;
+    mem[0xfffd] = 0x02;
+    let mut cpu = MicroCpu::new();
+    cpu.bus = Some(Box::new(Late { mem, at: 0x0010, late: 0xee }));
+    cpu.power_cycle();
+    let mut read_frames = Vec::new();
+    let mut stored = None;
+    for _ in 0..40 {
+        PinEngine::half_step(&mut cpu);
+        let f = PinEngine::pins(&cpu);
+        if f.rw && f.ab == 0x0010 {
+            read_frames.push(f.db);
+        }
+        if !f.rw && f.clk0 && f.ab == 0x0020 {
+            stored = Some(f.db);
+        }
+    }
+    assert_eq!(read_frames, vec![0x11, 0x11], "the pins show the bus's phi1 byte through both halves of the read");
+    assert_eq!(stored, Some(0xee), "the register took the byte handed at the latch");
 }

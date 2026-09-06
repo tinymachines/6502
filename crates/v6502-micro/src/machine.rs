@@ -106,6 +106,17 @@ pub trait MicroBus {
     fn peek(&mut self, a: u16) -> u8 {
         self.read(a)
     }
+    /// The byte the core latches at the end of a read cycle's phi2,
+    /// where it differs from the one the bus drove at phi1: a register
+    /// that changes inside the cycle (the 2A03's $4015, whose frame IRQ
+    /// flag can rise in that very half-step and be read as set while the
+    /// data pins still showed it clear, tinymachines/2a03 tests/reads.rs).
+    /// The pins keep showing the phi1 byte, as the chip's do; only what
+    /// the datapath, the opcode fetch and the flags consume is this. None,
+    /// the default, is the phi1 byte.
+    fn read_late(&mut self, _a: u16) -> Option<u8> {
+        None
+    }
 }
 
 pub struct MicroCpu {
@@ -478,6 +489,9 @@ impl MicroCpu {
         };
 
         let db;
+        // What the datapath consumes at phi2, which a bus may set apart
+        // from the pins' byte on a read (`MicroBus::read_late`).
+        let data_in;
         if phase == Phase::Phi1 {
             self.dp.step(w, Phase::Phi1, 0, cin);
             // A byte cached here belongs to THIS cycle only: a cycle whose
@@ -510,6 +524,11 @@ impl MicroCpu {
                 };
                 self.pin_hold = db;
                 self.reads += 1;
+                data_in = match self.bus.as_mut() {
+                    Some(b) => b.read_late(addr).unwrap_or(db),
+                    None => db,
+                };
+                let db = data_in;
                 if !overlap {
                     self.caps.last_read = db;
                     // P from the stack, by position: PLP's and RTI's
@@ -546,11 +565,12 @@ impl MicroCpu {
                 }
                 self.bus_write(addr, data);
                 db = data;
+                data_in = data;
                 if !overlap {
                     self.caps.last_write = data;
                 }
             }
-            self.dp.step(w, Phase::Phi2, db, cin);
+            self.dp.step(w, Phase::Phi2, data_in, cin);
             // ALU captures, kept apart by where they ran: the overlap is
             // the accumulator path's compute, mid-span is an RMW's.
             let (ai, bi, r) = (self.dp.ai, self.dp.bi, self.dp.add);
