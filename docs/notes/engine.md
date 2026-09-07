@@ -466,6 +466,23 @@ unchanged, which is what settled a question the 2A03 raised: after its
 sprite DMA the held fetch runs once more with RDY already high, and that
 is the bus coming back with RDY, not a property of the core's release.
 
+**A held read asks the bus at every phi2 it is held (2026-09-06).** The
+6502 latches DL on every phi2, a held cycle's included, so the byte a
+read stretched by RDY finally delivers is the last one on the bus
+before release. The memory harness answers the same byte every time and
+no pin golden could tell; the 2A03's joypad port could: on its die
+(`v2a03-sim`'s `joy-clock-probe`) a DMC fetch landing on a `LDA $4016`
+holds /OE1 low through the halt cycles, lets it rise during the fetch's
+own read, and pulses it again when the core re-runs the read with RDY
+high, so a 4021 shifts twice and the core takes the bit after the one it
+asked for. Rung 3 now re-asks its `MicroBus` on each held phi2
+(`refresh_held_read`: the pin, DL, the opcode on a sync cycle and P on
+PLP's and RTI's pull), and `tests/bus.rs` holds it with a bus whose byte
+changes on every ask: the register takes the last, one ask per held
+phi2; `MUTATE_HELD=1` keeps the first and must go red. Which of those
+asks reach a console's board is the 2A03 rung's decision, since the die
+shows one continuous low through the halt and not a pulse per cycle.
+
 **The bus hook (2026-09-05).** `MicroBus` is the world outside the pins
 for a host that is not flat memory: a console routes each read and write
 to its RAM, its PPU, its ports and its cartridge at the moment the core

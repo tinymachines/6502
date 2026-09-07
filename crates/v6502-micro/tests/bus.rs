@@ -148,3 +148,71 @@ fn a_bus_that_hands_a_different_byte_at_the_latch_keeps_the_pins_and_moves_the_r
     assert_eq!(read_frames, vec![0x11, 0x11], "the pins show the bus's phi1 byte through both halves of the read");
     assert_eq!(stored, Some(0xee), "the register took the byte handed at the latch");
 }
+
+/// A bus that answers a read of one address with a byte that changes on
+/// every ask: what a port with side effects looks like.
+struct Counting {
+    mem: Vec<u8>,
+    at: u16,
+    asks: u8,
+}
+
+impl MicroBus for Counting {
+    fn read(&mut self, a: u16) -> u8 {
+        if a == self.at {
+            self.asks += 1;
+            return 0x10 + self.asks;
+        }
+        self.mem[a as usize]
+    }
+    fn write(&mut self, a: u16, v: u8) {
+        self.mem[a as usize] = v;
+    }
+}
+
+#[test]
+fn a_read_held_by_rdy_asks_the_bus_at_every_held_phi2_and_keeps_the_last_byte() {
+    // LDA $0010; STA $0020; spin. RDY falls on the read's first frame
+    // and rises four half-cycles later, so the cycle is held for two
+    // more phi2s: the 6502 latches DL on each, and the register takes
+    // the last (measured on the 2A03's die through its joypad port:
+    // the re-run read clocks the pad again and the core takes the next
+    // bit). MUTATE_HELD=1 keeps the first byte and must go red.
+    let prog = vec![0xad, 0x10, 0x00, 0x8d, 0x20, 0x00, 0x4c, 0x06, 0x02];
+    let mut mem = vec![0u8; 0x10000];
+    mem[0x0200..0x0200 + prog.len()].copy_from_slice(&prog);
+    mem[0xfffc] = 0x00;
+    mem[0xfffd] = 0x02;
+    let mut cpu = MicroCpu::new();
+    cpu.bus = Some(Box::new(Counting { mem, at: 0x0010, asks: 0 }));
+    cpu.power_cycle();
+    let mut fell_at = None;
+    let mut stored = None;
+    let mut held_frames = 0;
+    for h in 0..60u64 {
+        let f = PinEngine::pins(&cpu);
+        if f.rw && f.ab == 0x0010 && fell_at.is_none() {
+            fell_at = Some(h);
+            cpu.set_inputs(true, true, true, false, false);
+        }
+        if let Some(t) = fell_at {
+            if h == t + 4 {
+                cpu.set_inputs(true, true, true, true, false);
+            }
+            if f.rw && f.ab == 0x0010 {
+                held_frames += 1;
+            }
+        }
+        PinEngine::half_step(&mut cpu);
+        let f = PinEngine::pins(&cpu);
+        if !f.rw && f.clk0 && f.ab == 0x0020 {
+            stored = Some(f.db);
+        }
+    }
+    assert!(held_frames >= 6, "the read was held: {held_frames} frames at $0010 (two, plus the held ones)");
+    let stored = stored.expect("the store happened");
+    assert!(stored > 0x11, "the register took a later ask: stored {stored:02x}, the first byte was 11 (MUTATE_HELD keeps it)");
+    let asks = stored - 0x10;
+    assert_eq!(asks as usize, (held_frames - 2) / 2 + 1, "one ask per phi2 the cycle was on the bus: {asks} asks over {held_frames} frames");
+    eprintln!("held read: {held_frames} frames at $0010, the register took ask #{}", stored - 0x10);
+}

@@ -154,7 +154,10 @@ cargo test -p v6502-micro                  # rung 3: the recorded table proven o
                                            # immediate-mode unofficial opcodes
                                            # (ASR, ARR, ATX, ANC) held to their
                                            # documented results, where rung 0 is
-                                           # not the oracle (a bus fight)
+                                           # not the oracle (a bus fight); a read
+                                           # held by RDY re-asks its bus at every
+                                           # held phi2 and keeps the last byte
+                                           # (MUTATE_HELD=1 must go red)
 cargo run --release -p v6502-micro --example brk-nmi-probe -- [op] [nmi|irq]
                                            # rung 0 beside rung 3: an interrupt
                                            # input at every half-cycle around an

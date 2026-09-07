@@ -1137,6 +1137,38 @@ impl MicroCpu {
     }
 }
 
+impl MicroCpu {
+    /// The core is standing in a read cycle RDY holds: its bus reads
+    /// until release are that cycle's, asked again (`refresh_held_read`).
+    pub fn held(&self) -> bool {
+        self.stalled
+    }
+
+    /// One more phi2 of a read cycle held by RDY: the bus asked again at
+    /// the same address, the pin and DL taking the byte, and the two
+    /// consumers that read at phi2 rather than from DL (the opcode on a
+    /// sync cycle, P on PLP's and RTI's pull) taking it too. The read
+    /// counters do not move: it is the same cycle.
+    fn refresh_held_read(&mut self) {
+        let addr = self.dp.address();
+        let db = self.bus_read(addr);
+        self.pin_db = db;
+        self.pin_hold = db;
+        let data = match self.bus.as_mut() {
+            Some(b) => b.read_late(addr).unwrap_or(db),
+            None => db,
+        };
+        self.dp.dl = data;
+        self.caps.last_read = data;
+        if self.pin_w >> BIT_SYNC & 1 != 0 {
+            self.next_op = data;
+        }
+        if (self.op == 0x28 || self.op == 0x40) && self.reads == 3 {
+            self.p = (data & 0xcf) | 0x20;
+        }
+    }
+}
+
 impl PinEngine for MicroCpu {
     fn power_cycle(&mut self) {
         MicroCpu::power_cycle(self);
@@ -1169,6 +1201,18 @@ impl PinEngine for MicroCpu {
             if self.next_phase == Phase::Phi1 && self.in_rdy {
                 self.stalled = false;
             } else {
+                // A held read cycle samples its bus at every phi2: the
+                // 6502 latches DL on each one, so the byte the cycle
+                // finally delivers is the last one before release. The
+                // memory harness answers the same byte every time and the
+                // pin golden cannot tell; a bus with side effects can (the
+                // 2A03's joypad port under a DMC fetch, measured on its die
+                // with `joy-clock-probe`: the re-run read clocks the pad
+                // again and the core takes the bit after the one it asked
+                // for). MUTATE_HELD=1 keeps the first byte and must go red.
+                if self.next_phase == Phase::Phi2 && self.pin_w >> BIT_RW & 1 != 0 && std::env::var_os("MUTATE_HELD").is_none() {
+                    self.refresh_held_read();
+                }
                 self.next_phase =
                     if self.next_phase == Phase::Phi1 { Phase::Phi2 } else { Phase::Phi1 };
                 self.half_cycle += 1;
