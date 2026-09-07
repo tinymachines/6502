@@ -243,7 +243,7 @@ w("The chip has no cycle counter. It has a shift register of %d stages, and an" 
 w("instruction ends when a product term resets it. So an instruction's length")
 w("is not stored anywhere: it is **how many cycles went by before something")
 w("stopped the chain**.\n")
-w("Measured over all 256 opcodes: %s, and **%d opcodes never finish at all**"
+w("We measured all 256 opcodes: %s, and **%d opcodes never finish at all**"
   % (", ".join("%d take %d cycles" % (v, k) for k, v in sorted(cyc.items())), jams))
 w("because nothing ever resets their chain. Those are the JAM opcodes, and")
 w("they are not a special case in the silicon. They are the absence of one.\n")

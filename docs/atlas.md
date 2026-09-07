@@ -24,7 +24,7 @@ and a bundle names two of them (`regs:a~sbus:sb`).
 
 ### Why the separator is a colon
 
-Measured, not chosen. Across the die's 707 names the punctuation in use is
+The die decided this, not taste. Across its 707 names the punctuation in use is
 `# ( ) + - . / _`; container keys add `:`. A colon appears in **zero** die
 names, and `kind:id` is already how this project spells a container
 everywhere else. `.` and `/` were both out: `.` is in 33 names and 14 keys,

@@ -156,7 +156,7 @@ instruction ends when a product term resets it. So an instruction's length
 is not stored anywhere: it is **how many cycles went by before something
 stopped the chain**.
 
-Measured over all 256 opcodes: 56 take 2 cycles, 27 take 3 cycles, 64 take 4 cycles, 27 take 5 cycles, 39 take 6 cycles, 19 take 7 cycles, 12 take 8 cycles, and **12 opcodes never finish at all**
+We measured all 256 opcodes: 56 take 2 cycles, 27 take 3 cycles, 64 take 4 cycles, 27 take 5 cycles, 39 take 6 cycles, 19 take 7 cycles, 12 take 8 cycles, and **12 opcodes never finish at all**
 because nothing ever resets their chain. Those are the JAM opcodes, and
 they are not a special case in the silicon. They are the absence of one.
 

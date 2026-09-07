@@ -206,7 +206,7 @@ w("before it, and the container is everything left over. A fixed field count")
 w("does not work: container keys legitimately contain colons (`alat:ADL/ABL`),")
 w("and a bundle names two of them (`regs:a~sbus:sb`).\n")
 w("### Why the separator is a colon\n")
-w("Measured, not chosen. Across the die's %d names the punctuation in use is"
+w("The die decided this, not taste. Across its %d names the punctuation in use is"
   % len([n for n in names if n]))
 w("`# ( ) + - . / _`; container keys add `:`. A colon appears in **zero** die")
 w("names, and `kind:id` is already how this project spells a container")
