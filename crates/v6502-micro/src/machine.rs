@@ -1138,10 +1138,12 @@ impl MicroCpu {
 }
 
 impl MicroCpu {
-    /// The core is standing in a read cycle RDY holds: its bus reads
-    /// until release are that cycle's, asked again (`refresh_held_read`).
+    /// The coming half-step stands in a read cycle RDY holds (a release
+    /// already fed for a phi1 boundary is not held: that half-step plays
+    /// the next cycle): its bus read, if any, is the held cycle's asked
+    /// again (`refresh_held_read`).
     pub fn held(&self) -> bool {
-        self.stalled
+        self.stalled && !(self.next_phase == Phase::Phi1 && self.in_rdy)
     }
 
     /// One more phi2 of a read cycle held by RDY: the bus asked again at
