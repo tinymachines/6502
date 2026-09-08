@@ -217,13 +217,22 @@ let TILES = starterTiles(16);
 let HOUSE = TILES;
 
 /** Point TILES at the cartridge on screen. The sheet is a property of the
- *  cartridge, not of the page: a cartridge with its own CHR draws in it and
- *  every other one draws in the house set. Called wherever `state.cart` or
- *  HOUSE changes. */
+ *  cartridge, not of the page: a cartridge with its own CHR draws in it, the
+ *  tiles it does not carry are the house's, and every other cartridge draws
+ *  in the house set alone. Called wherever `state.cart` or HOUSE changes. */
+let shown = { own: undefined, house: undefined }; // what TILES was built from
 function selectTiles() {
-  const want = (state.cart && state.cart.tileset) || HOUSE;
-  if (want === TILES) return;
-  TILES = want;
+  const own = (state.cart && state.cart.tileset) || null;
+  if (own === shown.own && HOUSE === shown.house) return;
+  shown = { own, house: HOUSE };
+  // Merged, not swapped. A cartridge's set can be shorter than the screen's
+  // tile indexes (the registry's "life" carries one tile), and pointing
+  // TILES at the short set drew blanks on screen while the legend kept
+  // whichever swatches it had painted before, so the key depended on which
+  // fetch won. Worse, the house sheet landing AFTER the cartridge never
+  // repainted anything: the cartridge was already selected, and the tiles
+  // it borrows from the house stayed blank for good.
+  TILES = own ? Object.assign(HOUSE.slice(), own) : HOUSE;
   state.sheet = null;              // the atlas was built from the old set
   legend();
 }
