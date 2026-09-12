@@ -13,9 +13,13 @@
 //! tile on a title screen, walked back through the pins to the read that
 //! never happened), located with `examples/diverge`, and held here
 //! against rung 0: every seam-written index register before every
-//! crossing form, and the same pairs with an instruction between them,
-//! where the register has landed and nothing was ever wrong.
-//! `MUTATE_SEAM=1` asks the registers as stored and must go red.
+//! crossing form, in both directions (the written register crosses where
+//! the stored one would not, and the reverse: the first fix answered
+//! "cross" for anything in flight and passed a one-sided version of this
+//! file, which the cartridge's menu then refuted), and the same pairs
+//! with an instruction between them, where the register has landed and
+//! nothing was ever wrong. `MUTATE_SEAM=1` asks the registers as stored
+//! and must go red.
 
 use v6502_micro::machine::MicroCpu;
 use v6502_pins::{compare, Load, PinEngine};
@@ -72,6 +76,17 @@ const CASES: &[(&str, &[u8])] = &[
     ("LDY zp then LDA abs,Y", &[0xa9, 0x0d, 0x85, 0x10, 0xa4, 0x10, 0xb9, 0xf3, 0x03]),
     ("INY then INC abs,X (X stale, Y in flight)", &[0xa2, 0x0d, 0xa0, 0x0c, 0xc8, 0xfe, 0xf3, 0x03]),
     ("INX then LDA (zp),Y (Y stale, X in flight)", &[0xa0, 0x0d, 0xa2, 0x0c, 0xe8, 0xb1, 0x00]),
+    // The other direction: the stored register would cross, the written
+    // one does not. A selector answering "cross" for anything in flight
+    // passes every case above and fails these (the first fix did).
+    ("DEY then LDA (zp),Y, no crossing", &[0xa0, 0x0d, 0x88, 0xb1, 0x00]),
+    ("DEX then LDA abs,X, no crossing", &[0xa2, 0x0d, 0xca, 0xbd, 0xf3, 0x03]),
+    ("INY from zero then LDA (zp),Y, no crossing", &[0xa0, 0x00, 0xc8, 0xb1, 0x00]),
+    ("INX from zero then STA abs,X, no crossing", &[0xa2, 0x00, 0xe8, 0x9d, 0xf3, 0x03]),
+    ("INY under carry set then LDA (zp),Y, no crossing", &[0x38, 0xa0, 0x00, 0xc8, 0xb1, 0x00]),
+    ("INY after a store then LDA (zp),Y, no crossing (the cartridge's sequence)", &[0xa0, 0x00, 0xb1, 0x00, 0x8d, 0x00, 0x02, 0xc8, 0xb1, 0x00]),
+    ("ADC then TAY then LDA (zp),Y (A's seam, Y loaded in its own span)", &[0x18, 0xa9, 0xf0, 0x69, 0x0f, 0xa8, 0xb1, 0x00]),
+    ("TSX then LDA abs,X", &[0xa2, 0x0d, 0x9a, 0xba, 0xbd, 0xf3, 0x03]),
 ];
 
 #[test]
@@ -103,4 +118,7 @@ fn crossing_len(program: &[u8]) -> usize {
         0xb9 | 0xbd | 0x9d | 0xfe => 3,
         _ => 2,
     }
+    // (every case ends in its crossing form; a 3-byte form's opcode sits
+    // three from the end, a 2-byte form's two, and no case's operand
+    // byte collides with those opcodes at that position)
 }

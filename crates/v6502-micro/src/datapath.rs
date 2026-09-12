@@ -18,6 +18,7 @@
 //! or the increment short-circuits), the sequencer's to compute, and the
 //! test reads it off the chip so only the SEMANTICS are under test here.
 
+use crate::lines::{SEAM_ADDSB7_OFF};
 use crate::lines::bit::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -285,65 +286,18 @@ impl Datapath {
     pub fn pc(&self) -> u16 {
         (self.pch as u16) << 8 | self.pcl as u16
     }
-    /// The index registers as a seam is about to leave them: the SB bus
-    /// driven by `w`'s lines the way `step` drives it in a phi1 (the seam
-    /// lands in one), written into X or Y where `w` says so, the stored
-    /// value elsewhere. Nothing is stepped. The selector asks this at the
-    /// fetch, where the finished op's result is still in the hold register
-    /// and the stored register is one instruction stale (tests/seam.rs).
-    pub fn index_after(&self, w: u64) -> (u8, u8) {
-        let mut sb = 0xffu8;
-        let mut db = 0xffu8;
-        let mut adh = 0xffu8;
-        if on(w, YSB) {
-            sb &= self.y;
-        }
-        if on(w, XSB) {
-            sb &= self.x;
-        }
-        if on(w, SSB) {
-            sb &= self.s_out;
-        }
-        if on(w, ACSB) {
-            sb &= self.a | self.lax_magic;
-        }
-        if on(w, ADDSB06) {
-            sb &= self.add | 0x80;
-        }
-        if on(w, ADDSB7) {
-            sb &= self.add | 0x7f;
-        }
-        if on(w, ACDB) {
-            db &= self.a;
-        }
-        if on(w, PCHDB) {
-            db &= self.pchp;
-        }
-        if on(w, PCLDB) {
-            db &= self.pclp;
-        }
-        if on(w, DL_DB) {
-            db &= self.dl;
-        }
-        if on(w, PCHADH) {
-            adh &= self.pchp;
-        }
-        if on(w, DL_ADH) {
-            adh &= self.dl;
-        }
-        if on(w, ZADH0) {
-            adh &= 0xfe;
-        }
-        if on(w, ZADH17) {
-            adh &= 0x01;
-        }
-        if on(w, SBDB) {
-            sb &= db;
-        }
-        if on(w, SBADH) {
-            sb &= adh;
-        }
-        (if on(w, SBX) { sb } else { self.x }, if on(w, SBY) { sb } else { self.y })
+    /// The index registers as the seam is about to leave them. A seam word
+    /// carries the register's load line alone (`SBX`, `SBY`, `SBAC`:
+    /// measured by printing every seam beside the span word it lands in);
+    /// the bus it loads from is driven by the NEXT span's first word,
+    /// which on every span is the T0 word with `ADDSB7|ADDSB06`, so the
+    /// value is the ADD register, the finished op's ALU result. `ROR A`'s
+    /// held-off bit 7 (`SEAM_ADDSB7_OFF`) rides SB7 precharged high. The
+    /// selector asks this at the fetch, where the stored register is one
+    /// instruction stale (tests/seam.rs).
+    pub fn index_after(&self, seam: u64) -> (u8, u8) {
+        let sb = if seam & SEAM_ADDSB7_OFF != 0 { self.add | 0x80 } else { self.add };
+        (if on(seam, SBX) { sb } else { self.x }, if on(seam, SBY) { sb } else { self.y })
     }
 
     pub fn address(&self) -> u16 {

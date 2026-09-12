@@ -722,7 +722,7 @@ impl MicroCpu {
         let (x_seen, y_seen) = if mutate_seam() {
             (self.dp.x, self.dp.y)
         } else {
-            self.dp.index_after(self.seam & !SEAM_ADDSB7_OFF)
+            self.dp.index_after(self.seam)
         };
         let (bus, mem) = (&mut self.bus, &self.mem);
         let mut peek = |a: u16| match bus.as_mut() {

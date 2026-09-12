@@ -160,8 +160,8 @@ cargo test -p v6502-micro                  # rung 3: the recorded table proven o
                                            # (MUTATE_HELD=1 must go red); and the
                                            # selector asks an index register for
                                            # the value the seam is about to write,
-                                           # INY then LDA (zp),Y crossing a page
-                                           # held to rung 0 (tests/seam.rs, found
+                                           # INY then LDA (zp),Y held to rung 0
+                                           # crossing and not (tests/seam.rs, found
                                            # by the NES console's cartridge trace;
                                            # MUTATE_SEAM=1 must go red)
 cargo run --release -p v6502-micro --example brk-nmi-probe -- [op] [nmi|irq]
