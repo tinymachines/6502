@@ -792,6 +792,22 @@ where it belongs:
   it ran, and the sequence that breaks a table is the one no context was
   written for; and a test whose cases all answer the same way cannot
   tell a fix from a constant.
+- **A branch taken on its page does not poll in the cycle it is taken.**
+  Rung 3 sampled its inputs at every phi1 and polled at the fetch, the
+  rule measured on a NOP sled with `brk-nmi-probe`, and took an NMI that
+  fell in a taken branch's last cycle at once; the part waits one
+  instruction. Found by the NES console's record of a commercial
+  cartridge replayed on rung 0 (`recorded.rs`: h=591,074, `BEQ` at $813F,
+  the die finishing `LDA $20` first), measured with
+  `tests/branch_interrupt.rs` (an edge at every half-cycle around a
+  branch taken on its page, not taken, and taken across a page, NMI and
+  IRQ, rung 0 beside rung 3: only the first kind differs, and only for
+  the two edges of its second cycle), and authored as the samples of one
+  phi1 earlier for that one kind, two bits more in the machine value.
+  `MUTATE_BRANCH=1` polls it like any other instruction and goes red on
+  those four runs. The first crossing case in the test landed on $02FF
+  and measured the same as the on-page case; the test now asserts that a
+  crossing crosses.
 - **`dpc34_PCLC`/`dpc35_PCHC` are data signals wearing control-line
   names** (the PC incrementer's carries), masked out of the table; the
   datapath computes them.

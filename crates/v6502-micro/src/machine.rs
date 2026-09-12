@@ -55,7 +55,7 @@
 
 use crate::datapath::{Datapath, Phase};
 use crate::flags::{self, Caps};
-use crate::lines::{BIT_ALUCIN, BIT_RW, BIT_SYNC, SEAM_ADDSB7_OFF};
+use crate::lines::{BIT_ALUCIN, BIT_RW, BIT_SYNC, SEAM_ADDSB7_OFF, SEL_BCROSS, SEL_TAKEN};
 use crate::lines::bit;
 use crate::select;
 use crate::table;
@@ -172,6 +172,17 @@ pub struct MicroCpu {
     /// fifth cycle's phi1 (see the sample point).
     brk_takes_nmi: bool,
     nmi_pending: bool,
+    /// The two samples as they stood one phi1 earlier: what a taken
+    /// branch that stays on its page polls with. The part does not poll
+    /// in the cycle the branch is taken, so an input first seen at that
+    /// cycle's phi1 waits one instruction (MEASURED: tests/branch_interrupt.rs
+    /// on rung 0, an edge two or three half-cycles after the fetch lands
+    /// its vector read four half-cycles later than a NOP's would; a
+    /// branch not taken, or taken across a page, polls as every other
+    /// instruction does). Found by the NES console's record of a
+    /// commercial cartridge replayed on rung 0.
+    irq_seen_prev: bool,
+    nmi_pending_prev: bool,
     /// Decided at the poll as the fetch begins; consumed at the boundary.
     hijack_next: Option<Intr>,
     /// The current span is an interrupt sequence, not a fetched BRK.
@@ -204,6 +215,13 @@ pub struct MicroCpu {
     /// $00); a chip presenting this core seeds the value its own rung 0
     /// measured.
     stack_at_h0: Option<u8>,
+}
+
+/// The mutation switch of tests/branch_interrupt.rs, read once: a taken
+/// branch polls like any other instruction.
+fn mutate_branch() -> bool {
+    static M: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *M.get_or_init(|| std::env::var_os("MUTATE_BRANCH").is_some())
 }
 
 /// The mutation switch of tests/seam.rs, read once: the selector asks the
@@ -247,6 +265,8 @@ impl MicroCpu {
             irq_seen: false,
             nmi_low_at_phi1: false,
             brk_takes_nmi: false,
+            irq_seen_prev: false,
+            nmi_pending_prev: false,
             nmi_pending: false,
             hijack_next: None,
             hijacked: None,
@@ -351,6 +371,8 @@ impl MicroCpu {
         self.nmi_low_at_phi1 = false;
         self.brk_takes_nmi = false;
         self.nmi_pending = false;
+        self.irq_seen_prev = false;
+        self.nmi_pending_prev = false;
         self.hijack_next = None;
         self.hijacked = None;
         self.stalled = false;
@@ -422,10 +444,22 @@ impl MicroCpu {
                 // handler's first fetch would allow).
                 self.hijack_next = None;
             } else {
-                self.hijack_next = if self.nmi_pending {
+                // A taken branch on its page polls with the samples of one
+                // cycle earlier (the field's note); MUTATE_BRANCH=1 polls
+                // it like any other instruction and must go red.
+                let branch_taken_on_page = self.op & 0x1f == 0x10
+                    && self.cur_key & SEL_TAKEN != 0
+                    && self.cur_key & SEL_BCROSS == 0
+                    && !mutate_branch();
+                let (nmi, irq) = if branch_taken_on_page {
+                    (self.nmi_pending_prev, self.irq_seen_prev)
+                } else {
+                    (self.nmi_pending, self.irq_seen)
+                };
+                self.hijack_next = if nmi {
                     self.nmi_pending = false;
                     Some(Intr::Nmi)
-                } else if self.irq_seen && self.p & 0x04 == 0 {
+                } else if irq && self.p & 0x04 == 0 {
                     Some(Intr::Irq)
                 } else {
                     None
@@ -614,6 +648,8 @@ impl MicroCpu {
         // next instruction. Inside a BRK the NMI's arrival decides more
         // (below).
         if phase == Phase::Phi1 {
+            self.irq_seen_prev = self.irq_seen;
+            self.nmi_pending_prev = self.nmi_pending;
             self.irq_seen = !self.in_irq;
             let low = !self.in_nmi;
             if low && !self.nmi_low_at_phi1 {
@@ -811,6 +847,8 @@ pub struct MicroState {
     pub nmi_pending: bool,
     pub nmi_low_at_phi1: bool,
     pub brk_takes_nmi: bool,
+    pub irq_seen_prev: bool,
+    pub nmi_pending_prev: bool,
     /// 0 = none, 1 = irq, 2 = nmi, 3 = res.
     pub hijack_next: u8,
     pub hijacked: u8,
@@ -878,8 +916,8 @@ impl MicroState {
             b.push(i as u8);
         }
         b.extend_from_slice(&[
-            self.irq_seen as u8,
-            self.nmi_pending as u8 | (self.nmi_low_at_phi1 as u8) << 1 | (self.brk_takes_nmi as u8) << 2,
+            self.irq_seen as u8 | (self.irq_seen_prev as u8) << 1,
+            self.nmi_pending as u8 | (self.nmi_low_at_phi1 as u8) << 1 | (self.brk_takes_nmi as u8) << 2 | (self.nmi_pending_prev as u8) << 3,
             self.hijack_next,
             self.hijacked,
             self.stalled as u8,
@@ -1001,10 +1039,12 @@ impl MicroState {
             pin_db,
             pin_hold,
             inputs,
-            irq_seen: bit(tail[0], "irq_seen")?,
+            irq_seen: bit(tail[0] & 1, "irq_seen")?,
+            irq_seen_prev: bit(tail[0] >> 1, "irq_seen_prev")?,
             nmi_pending: bit(tail[1] & 1, "nmi_pending")?,
             nmi_low_at_phi1: bit(tail[1] >> 1 & 1, "nmi_low_at_phi1")?,
-            brk_takes_nmi: bit(tail[1] >> 2, "brk_takes_nmi")?,
+            brk_takes_nmi: bit(tail[1] >> 2 & 1, "brk_takes_nmi")?,
+            nmi_pending_prev: bit(tail[1] >> 3, "nmi_pending_prev")?,
             hijack_next: tail[2],
             hijacked: tail[3],
             stalled: bit(tail[4], "stalled")?,
@@ -1068,6 +1108,8 @@ impl MicroCpu {
             inputs: [self.in_res, self.in_irq, self.in_nmi, self.in_rdy, self.in_so],
             irq_seen: self.irq_seen,
             nmi_pending: self.nmi_pending,
+            irq_seen_prev: self.irq_seen_prev,
+            nmi_pending_prev: self.nmi_pending_prev,
             nmi_low_at_phi1: self.nmi_low_at_phi1,
             brk_takes_nmi: self.brk_takes_nmi,
             hijack_next: intr_code(self.hijack_next),
@@ -1145,6 +1187,8 @@ impl MicroCpu {
         self.nmi_pending = st.nmi_pending;
         self.nmi_low_at_phi1 = st.nmi_low_at_phi1;
         self.brk_takes_nmi = st.brk_takes_nmi;
+        self.irq_seen_prev = st.irq_seen_prev;
+        self.nmi_pending_prev = st.nmi_pending_prev;
         self.hijack_next = hijack_next;
         self.hijacked = hijacked;
         self.stalled = st.stalled;
