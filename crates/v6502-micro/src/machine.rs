@@ -206,6 +206,13 @@ pub struct MicroCpu {
     stack_at_h0: Option<u8>,
 }
 
+/// The mutation switch of tests/seam.rs, read once: the selector asks the
+/// index registers as stored, one instruction stale after an ALU write.
+fn mutate_seam() -> bool {
+    static M: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *M.get_or_init(|| std::env::var_os("MUTATE_SEAM").is_some())
+}
+
 impl MicroCpu {
     pub fn new() -> MicroCpu {
         MicroCpu {
@@ -704,12 +711,25 @@ impl MicroCpu {
         // With the adjust disconnected the selector never sees D, so the
         // binary variant plays and its lines never assert #DAA/#DSA.
         let p_seen = if self.decimal_adjust { self.p } else { self.p & !0x08 };
+        // The index registers as the selector must see them: at the fetch
+        // the finished op's result is still in the hold register and lands
+        // through the seam in this span's first half-cycle, so a register
+        // the seam writes is asked for the value it is about to take. Asked
+        // as stored, INY then LDA (zp),Y whose add carries only with the
+        // new Y played the five-cycle variant (tests/seam.rs, found by the
+        // NES console's trace of a cartridge). MUTATE_SEAM=1 asks the
+        // stored registers and must go red.
+        let (x_seen, y_seen) = if mutate_seam() {
+            (self.dp.x, self.dp.y)
+        } else {
+            self.dp.index_after(self.seam & !SEAM_ADDSB7_OFF)
+        };
         let (bus, mem) = (&mut self.bus, &self.mem);
         let mut peek = |a: u16| match bus.as_mut() {
             Some(b) => b.peek(a),
             None => mem[a as usize],
         };
-        let key = select::selector(op, p_seen, self.dp.x, self.dp.y, self.fetch_pc, &mut peek);
+        let key = select::selector(op, p_seen, x_seen, y_seen, self.fetch_pc, &mut peek);
         let span = table::span(op, key).unwrap_or_else(|| {
             panic!(
                 "op {op:02x} at {:04x}: no recorded variant for key {key:#04x} (mask {:#04x})",

@@ -702,6 +702,27 @@ where it belongs:
   half-cycle. Direct loads complete inside their own span, which is why
   the recorder's contexts, all ending in loads or flag ops, recorded clean
   spans.
+- **The selector must ask the register the seam is about to write, not
+  the one stored.** The span is chosen at the fetch, and its X/Y crossing
+  bits asked `dp.x`/`dp.y` as they stood: one instruction stale after
+  INX/INY/DEX/DEY, whose result was still in the hold register. `INY` then
+  `LDA (zp),Y` whose add carried only with the new Y played the five-cycle
+  variant, read the un-carried address and kept that byte. Nothing here
+  saw it: the pin golden's 256-opcode traces set their registers by loads,
+  blargg's instruction tests never pair an index increment with a crossing
+  form, and the recorder's contexts recorded correctly because a stored
+  register is the right answer whenever nothing is in flight. What saw it
+  was the NES console's trace of a commercial cartridge: one tile wrong on
+  a title screen (`GWME`), the $2007 write walked back through the pins
+  to an `LDA ($00),Y` whose fixed-up read never happened, reproduced in
+  five instructions with `examples/diverge`. `Datapath::index_after`
+  drives SB with the seam word the way `step` would and hands the selector
+  X and Y as they will be one half-cycle later; `tests/seam.rs` holds
+  fourteen register-then-crossing pairs to rung 0 and their spaced
+  controls, and `MUTATE_SEAM=1` (ask as stored) goes red on the seven ALU
+  cases. The lesson is the oracle's: a golden as wide as every node is
+  still only as wide as the programs it ran, and the sequence that breaks
+  a table is the one no context was written for.
 - **`dpc34_PCLC`/`dpc35_PCHC` are data signals wearing control-line
   names** (the PC incrementer's carries), masked out of the table; the
   datapath computes them.
