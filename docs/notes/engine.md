@@ -409,6 +409,64 @@ memory, half_cycle and last_fetch. What is expected to differ, and says so
 in the type's doc: exported `value`/`trans_on` against another rung.
 Compare memory and gates instead.
 
+## The recorded bus: rung 0 runs another machine's program
+
+`v6502_sim::recorded::RecordedBus` (2026-09-12) answers each read with the
+byte a `.pins` record shows at the half-cycle being stepped into and holds
+each write to the write the record shows there, so the switch-level chip
+runs the NES console's program from reset with no ROM in the room and its
+pins are compared with the console's frame for frame. `rung0_recorded`
+builds it, `run_recorded` drives it (the same driver as `run`, the bus told
+which frame each half-step produces, the comparison after every step), and
+`examples/replay-recorded` in `v6502-pins` is the command. Rules and what
+they cost to learn:
+
+- **The bus refuses, never fills in.** A read at an address the record
+  does not show, or a write the record does not carry, stops the run with
+  the half-cycle, the address and the frame. `tests/recorded.rs` replays
+  the whole pin golden through it with the loads withheld and `MUTATE=1`
+  flips one recorded write: the bus must refuse at exactly that
+  half-cycle, which is the proof it is on the path. The first mutation
+  aimed at the first file in name order, a decimal chain that never
+  writes, and went red for the wrong reason; it now aims at the last
+  write of the first trace that has one.
+- **Frame 0 is the reset sequence's last read.** The record starts at
+  `h = 0`, the fetch the reset leaves behind, and that read is serviced
+  BEFORE `h = 0` by the reset sequence. Served from the shadow (the loads
+  and the reset vector), every replay parted at `h = 0` in `db`; the bus
+  now answers that one address from frame 0.
+- **A stimulus line at h is applied before the step that produces frame
+  h + 1.** The console's trace tool wrote each input change at the frame
+  where it first showed, one half-cycle late; rung 0 on the record found
+  it at the first NMI (the record's frame carried the level, the chip's
+  did not). Fixed in the tool (`h - 1`).
+- **Under RDY low the bus is the DMA's.** The 2A03's sprite DMA holds the
+  core and drives the bus; the record shows the DMA's addresses and a
+  bare 6502 held mid-read samples what is on the data lines at every
+  held phi2 (rung 3's own measured rule). So under RDY low the bus
+  answers the byte without asking the address, and the comparison asks
+  the byte and the inputs only.
+- **A stack pointer is a program's to set.** The 2A03 die leaves S at
+  `$BD` after its reset (measured in the 2a03 repository) and the 6502
+  die at `$FD`; the family's test cartridge set neither, and the two
+  parted at the first NMI's push. Every real program has `LDX #$FF;
+  TXS`, and now so does the cartridge.
+
+With those, rung 0 agrees with the console over all twelve frames of the
+test cartridge's record (714,732 half-cycles, 356,095 reads and 1,271
+writes held to the record, at about 33,000 half-cycles a second). On the
+bench's own commercial cartridge it agrees for 294,364 half-cycles and
+parts where the first sprite DMA releases the core: the die resumes its
+held fetch one cycle before the record does. With every RDY rise driven
+one half-cycle later (`RDY_RISE_SHIFT=1`, an experiment knob, not a rule)
+it agrees for 591,074 and parts at an NMI that fell during the last cycle
+of a taken branch: the die finishes the next instruction first (the
+taken-branch interrupt delay the part is known for), the console's rung
+takes it at once. Both are the plan's expected class (the input sample
+points), both are named by half-cycle and instruction, and both are the
+next work: the branch delay in rung 3 against rung 0, and the phase of
+the 2A03 rung's reported hold against the 6502 pin.
+
 ## Rung 3: `v6502-micro`, the table measured out of the transistors
 
 No nodes. `build.rs` runs rung 0 over all 256 opcodes in ten contexts

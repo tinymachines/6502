@@ -40,6 +40,7 @@ pub mod bus;
 pub mod cpu;
 pub mod history;
 pub mod pins;
+pub mod recorded;
 pub mod rows;
 pub mod state;
 pub mod timing;
