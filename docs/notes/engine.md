@@ -463,9 +463,19 @@ it agrees for 591,074 and parts at an NMI that fell during the last cycle
 of a taken branch: the die finishes the next instruction first (the
 taken-branch interrupt delay the part is known for), the console's rung
 takes it at once. Both are the plan's expected class (the input sample
-points), both are named by half-cycle and instruction, and both are the
-next work: the branch delay in rung 3 against rung 0, and the phase of
-the 2A03 rung's reported hold against the 6502 pin.
+points), both named by half-cycle and instruction, and both closed the
+same night: the branch delay is rung 3's rule (the next bullet in the
+rung 3 section); the RDY phase was the record carrying the 2A03's
+pin-level account of the hold, where the 2A03 die re-runs its held read
+with RDY already high and feeds its core one cycle later, so the console's
+trace now writes the level the core is fed. A third came free: with rung
+3 polling as the die does, the cartridge's menu jammed, and rung 0 on
+that record agreed with it to the last half-cycle, which put the CPU
+beyond suspicion and sent the search to the 2A03 rung's sprite DMA,
+which read its page through the held core's memo and copied it as it was
+last read (fixed there, with a test of two DMAs on a bus). After all
+three: 17,868,314 half-cycles of the commercial cartridge, the die and
+the console identical at the pins.
 
 ## Rung 3: `v6502-micro`, the table measured out of the transistors
 
