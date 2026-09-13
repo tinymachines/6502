@@ -13,17 +13,105 @@ use std::sync::Arc;
 
 use v6502_sim::state::{self, MachineState};
 use v6502_sim::rows;
-use v6502_sim::{bus::FlatMemory, cpu::Cpu, cpu::Fetch, history::History, ReadWrite};
+use v6502_sim::recorded::RecordedBus;
+use v6502_sim::{bus::Bus, bus::FlatMemory, cpu::Cpu, cpu::Fetch, history::History, ReadWrite};
 use wasm_bindgen::prelude::*;
 
-/// A 6502 with 64 KiB of RAM and a rewind buffer.
+/// What rung 0 talks to here: 64 KiB of RAM, or a window of a record
+/// (`v6502_sim::recorded`) that answers every read from what another
+/// machine's run showed and holds every write to it. One enum rather than
+/// a second machine type, so every page method works on either.
+enum AnyBus {
+    Flat(FlatMemory),
+    Recorded(RecordedBus),
+}
+
+impl Bus for AnyBus {
+    fn read(&mut self, addr: u16) -> u8 {
+        match self {
+            AnyBus::Flat(b) => b.read(addr),
+            AnyBus::Recorded(b) => b.read(addr),
+        }
+    }
+    fn write(&mut self, addr: u16, value: u8) {
+        match self {
+            AnyBus::Flat(b) => b.write(addr, value),
+            AnyBus::Recorded(b) => b.write(addr, value),
+        }
+    }
+    fn checkpoint(&mut self) -> Option<Vec<u8>> {
+        match self {
+            AnyBus::Flat(b) => b.checkpoint(),
+            AnyBus::Recorded(b) => b.checkpoint(),
+        }
+    }
+    fn rollback(&mut self, token: &[u8]) -> bool {
+        match self {
+            AnyBus::Flat(b) => b.rollback(token),
+            AnyBus::Recorded(b) => b.rollback(token),
+        }
+    }
+    fn half_step(&mut self, h: u64) {
+        match self {
+            AnyBus::Flat(b) => b.half_step(h),
+            AnyBus::Recorded(b) => b.half_step(h),
+        }
+    }
+}
+
+impl AnyBus {
+    /// A look that is not a bus cycle: RAM, or the record's shadow (what
+    /// the run wrote, never what answers a read).
+    fn peek(&self, addr: u16) -> u8 {
+        match self {
+            AnyBus::Flat(b) => b.peek(addr),
+            AnyBus::Recorded(b) => b.shadow()[addr as usize],
+        }
+    }
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            AnyBus::Flat(b) => b.as_slice(),
+            AnyBus::Recorded(b) => b.shadow(),
+        }
+    }
+    /// Write bytes in: RAM, or the record's shadow (an overlay's memory,
+    /// with no effect on what the chip reads).
+    fn load(&mut self, addr: u16, bytes: &[u8]) {
+        match self {
+            AnyBus::Flat(b) => b.load(addr, bytes),
+            AnyBus::Recorded(b) => {
+                for (i, &v) in bytes.iter().enumerate() {
+                    b.write(addr.wrapping_add(i as u16), v);
+                }
+            }
+        }
+    }
+    fn set_reset_vector(&mut self, addr: u16) {
+        match self {
+            AnyBus::Flat(b) => b.set_reset_vector(addr),
+            AnyBus::Recorded(_) => {}
+        }
+    }
+    fn clear_journal(&mut self) {
+        if let AnyBus::Flat(b) = self {
+            b.clear_journal();
+        }
+    }
+}
+
+/// A 6502 with 64 KiB of RAM and a rewind buffer, or the same chip standing
+/// inside a window of another machine's recorded run (`fromWindow`).
 #[wasm_bindgen]
 pub struct Machine {
-    cpu: Cpu<FlatMemory>,
+    cpu: Cpu<AnyBus>,
     history: History,
     /// One byte per node, refreshed on demand. Held here so the buffer is
     /// stable and reused rather than reallocated every frame.
     node_scratch: Vec<u8>,
+    /// The window this machine stands in, if it is one: its own text
+    /// parsed, kept for the stimulus (applied by half-cycle on every step)
+    /// and for the restore that a rewind is on a record.
+    window: Option<v6502_pins::Window>,
 }
 
 #[wasm_bindgen]
@@ -61,7 +149,7 @@ impl Machine {
 
     fn with(netlist: Arc<v6502_sim::Netlist>) -> Machine {
         let node_count = netlist.node_count();
-        let cpu = Cpu::new(netlist, FlatMemory::new())
+        let cpu = Cpu::new(netlist, AnyBus::Flat(FlatMemory::new()))
             .expect("netlist has every required signal");
         Machine {
             cpu,
@@ -70,6 +158,141 @@ impl Machine {
             // reach any point in it.
             history: History::new(16, 256),
             node_scratch: vec![0u8; node_count],
+            window: None,
+        }
+    }
+
+    // -- a window of a record ---------------------------------------------
+    //
+    // The NES console records its CPU at the pins every half-cycle in the
+    // pin crate's own format; `v6502_sim::recorded` runs this chip on such
+    // a record with no ROM in the room, and a window (`.window` text: the
+    // machine value at its first half-cycle, the frames, the inputs in
+    // force, the shadow of memory) is the piece of one a page can stand
+    // inside. The chip is restored into it, never reset; the bus follows
+    // the chip's own count; the stimulus is applied on every step; and a
+    // rewind is a restore to the origin and a run forward, because a
+    // record is read, never rolled back.
+
+    /// Stand this chip inside a window: the `.window` text in, the machine
+    /// at the window's origin out. Refuses text that is not a window, a
+    /// state that does not restore, and a window whose origin frame the
+    /// restored chip does not show at its pins (a window from another
+    /// chip, or a window cut wrong).
+    #[cfg(feature = "mos6502")]
+    #[wasm_bindgen(js_name = fromWindow)]
+    pub fn from_window(text: &str) -> Result<Machine, JsError> {
+        Machine::window_on(std::sync::Arc::new(v6502_sim::mos6502()), text)
+    }
+
+    /// The same door for a build that ships no die data: the netlist blob
+    /// comes first, as with `fromNetlist`.
+    #[wasm_bindgen(js_name = fromWindowNetlist)]
+    pub fn from_window_netlist(blob: &[u8], text: &str) -> Result<Machine, JsError> {
+        let netlist = halfphi::netlist::Netlist::decode(blob)
+            .map_err(|e| JsError::new(&format!("netlist: {e:?}")))?;
+        Machine::window_on(std::sync::Arc::new(netlist), text)
+    }
+
+    fn window_on(netlist: Arc<v6502_sim::Netlist>, text: &str) -> Result<Machine, JsError> {
+        let w = v6502_pins::parse_window(text).map_err(|e| JsError::new(&format!("window: {e}")))?;
+        let node_count = netlist.node_count();
+        let transistors = netlist.transistor_count();
+        let bus = AnyBus::Recorded(RecordedBus::window(w.frames.clone(), w.origin, w.fill, &w.pages));
+        let mut cpu = Cpu::new(netlist, bus).expect("netlist has every required signal");
+        let fetch = w.state.fetch.map(|(addr, opcode)| Fetch { addr, opcode });
+        let st = MachineState::from_hex(node_count, transistors, &w.state.value, &w.state.pullup, &w.state.pulldown, &w.state.trans_on, w.state.half_cycle, fetch)
+            .map_err(|e| JsError::new(&format!("window state: {e}")))?;
+        state::restore(&mut cpu, &st);
+        let mut m = Machine { cpu, history: History::new(16, 256), node_scratch: vec![0u8; node_count], window: Some(w) };
+        m.apply_stim();
+        let shown = v6502_pins::PinEngine::pins(&m.cpu);
+        let expected = m.window.as_ref().unwrap().frames[0];
+        if let Some(field) = v6502_sim::recorded::first_difference_under_record(&expected, &shown) {
+            return Err(JsError::new(&format!(
+                "window: the restored chip does not show the origin frame at its pins ({field}: record {} chip {})",
+                v6502_pins::line(&expected),
+                v6502_pins::line(&shown)
+            )));
+        }
+        m.history.capture(&mut m.cpu);
+        Ok(m)
+    }
+
+    /// Whether this machine stands in a window.
+    #[wasm_bindgen(js_name = isWindow)]
+    pub fn is_window(&self) -> bool {
+        self.window.is_some()
+    }
+
+    /// The window's name, its record's stamp, its origin and its last
+    /// half-cycle, as one JSON object; `null` for a machine on RAM.
+    #[wasm_bindgen(js_name = windowInfo)]
+    pub fn window_info(&self) -> String {
+        match &self.window {
+            None => "null".into(),
+            Some(w) => format!(
+                "{{\"name\":{},\"record\":{},\"origin\":{},\"end\":{},\"stim\":{}}}",
+                json_str(&w.name),
+                json_str(&w.record),
+                w.origin,
+                w.origin + w.frames.len() as u64 - 1,
+                w.stim.len()
+            ),
+        }
+    }
+
+    /// The record's frame at `h` in the pin crate's own line
+    /// (`h clk0 ab db rw sync inputs`), or an empty string outside the
+    /// window or on a machine that has no record.
+    #[wasm_bindgen(js_name = recordLine)]
+    pub fn record_line(&self, h: f64) -> String {
+        match &self.cpu.bus {
+            AnyBus::Recorded(b) => b.frame_at(h as u64).map(|f| v6502_pins::line(&f)).unwrap_or_default(),
+            AnyBus::Flat(_) => String::new(),
+        }
+    }
+
+    /// The first field where the chip's pins now differ from the record's
+    /// frame at this half-cycle, by the record's rule (every field where RDY
+    /// is high, the byte and the inputs under RDY low); empty when they
+    /// agree or there is no record.
+    #[wasm_bindgen(js_name = recordDiffers)]
+    pub fn record_differs(&self) -> String {
+        let AnyBus::Recorded(b) = &self.cpu.bus else { return String::new() };
+        let Some(expected) = b.frame_at(self.cpu.half_cycle()) else { return "outside".into() };
+        let got = v6502_pins::PinEngine::pins(&self.cpu);
+        v6502_sim::recorded::first_difference_under_record(&expected, &got).unwrap_or("").to_string()
+    }
+
+    /// The bus's refusal, if the chip asked the record for what it does not
+    /// show: `h`, what, the address and the record's frame, as text; empty
+    /// while every read and write has been the record's.
+    #[wasm_bindgen(js_name = recordRefusal)]
+    pub fn record_refusal(&self) -> String {
+        match &self.cpu.bus {
+            AnyBus::Recorded(b) => b.refusal.as_ref().map(|r| r.to_string()).unwrap_or_default(),
+            AnyBus::Flat(_) => String::new(),
+        }
+    }
+
+    /// The window's stimulus lines at or before the chip's half-cycle,
+    /// applied: what the driver does before a step.
+    fn apply_stim(&mut self) {
+        let Some(w) = &self.window else { return };
+        let h = self.cpu.half_cycle();
+        let mut level = None;
+        for s in &w.stim {
+            if s.h <= h {
+                level = Some(*s);
+            }
+        }
+        if let Some(s) = level {
+            self.cpu.set_res(s.res);
+            self.cpu.set_irq(s.irq);
+            self.cpu.set_nmi(s.nmi);
+            self.cpu.set_rdy(s.rdy);
+            self.cpu.set_so(s.so);
         }
     }
 
@@ -106,6 +329,7 @@ impl Machine {
     #[wasm_bindgen(js_name = halfStep)]
     pub fn half_step(&mut self) {
         self.history.maybe_capture(&mut self.cpu);
+        self.apply_stim();
         self.cpu.half_step();
     }
 
@@ -210,11 +434,44 @@ impl Machine {
         if half_cycle < 0.0 {
             return false;
         }
+        if self.window.is_some() {
+            return self.rewind_window(half_cycle as u64);
+        }
         self.history.rewind_to(&mut self.cpu, half_cycle as u64).is_ok()
+    }
+
+    /// A rewind on a window: the chip restored to the window's origin and
+    /// run forward with the stimulus applied, because a record is read and
+    /// never rolled back, and a window is short. The shadow keeps what the
+    /// longer run wrote (it is an overlay's memory, not the chip's).
+    fn rewind_window(&mut self, target: u64) -> bool {
+        let Some(w) = self.window.clone() else { return false };
+        if target < w.origin || target > w.origin + w.frames.len() as u64 - 1 {
+            return false;
+        }
+        let nl = self.cpu.engine().netlist();
+        let fetch = w.state.fetch.map(|(addr, opcode)| Fetch { addr, opcode });
+        let Ok(st) = MachineState::from_hex(nl.node_count(), nl.transistor_count(), &w.state.value, &w.state.pullup, &w.state.pulldown, &w.state.trans_on, w.state.half_cycle, fetch) else {
+            return false;
+        };
+        state::restore(&mut self.cpu, &st);
+        if let AnyBus::Recorded(b) = &mut self.cpu.bus {
+            b.refusal = None;
+        }
+        self.history.clear();
+        self.history.capture(&mut self.cpu);
+        while self.cpu.half_cycle() < target {
+            self.half_step();
+        }
+        true
     }
 
     #[wasm_bindgen(js_name = stepBack)]
     pub fn step_back(&mut self) -> bool {
+        if self.window.is_some() {
+            let now = self.cpu.half_cycle();
+            return now > 0 && self.rewind_window(now - 1);
+        }
         self.history.step_back(&mut self.cpu).is_ok()
     }
 
@@ -378,6 +635,8 @@ impl Machine {
 
     // -- memory -----------------------------------------------------------
 
+    /// A look at memory that is not a bus cycle. On a window this is the
+    /// record's shadow: what the run wrote, never what answered a read.
     pub fn peek(&self, addr: u16) -> u8 {
         self.cpu.bus.peek(addr)
     }
@@ -645,6 +904,23 @@ fn machine_json(st: &MachineState, image: &[u8]) -> String {
     out.push_str("},\"memory\":");
     push_memory(&mut out, image);
     out.push('}');
+    out
+}
+
+/// A string as a JSON literal (quotes and backslashes escaped, control
+/// characters as \uXXXX): enough for a name and a stamp.
+fn json_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
     out
 }
 

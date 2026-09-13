@@ -44,6 +44,10 @@ const PREAMBLE = [
   0x18,         // CLC
 ];
 const SUBJECT = BASE + PREAMBLE.length;
+// Where the traced instruction was fetched: the fixture's subject, or, inside
+// a window of a console's record (?window=NAME&h=H), the first opcode fetch
+// at or after H, found by running the record.
+let subject = SUBJECT;
 
 // Somewhere for the addressing modes to point. $0010/$0011 and $0012/$0013 both
 // hold the pointer $1234 so that (zp,X) with X=2 and (zp),Y land on the same
@@ -100,6 +104,11 @@ const state = {
   // half-cycles a second, so the strip on tinymachines.ai could pause every
   // page but this one.
   acc: 0,
+  // A window of a record (?window=NAME&h=H): the page follows the
+  // instruction the console fetched at or after half-cycle H, with every
+  // read answered by the record; there is no fixture and no opcode to
+  // choose, so both controls say so and do nothing.
+  window: null,      // { name, origin, end, h }
 };
 
 const nameOf = (n) => state.data.names[n] ?? `#${n}`;
@@ -128,6 +137,21 @@ function loadProgram() {
  */
 function runToSubject() {
   const m = state.m;
+  const w = state.window;
+  if (w) {
+    // Inside a window: from the origin to the first opcode fetch (sync high
+    // on the clk0-low frame, the read that latched it) at or after h.
+    if (!m.rewindTo(w.origin)) return false;
+    while (m.halfCycle() < w.end) {
+      m.halfStep();
+      if (m.halfCycle() >= w.h && m.sync() && !m.clk0()) {
+        subject = m.lastFetchAddr();
+        state.opcode = m.lastFetchOpcode();
+        return true;
+      }
+    }
+    return false;
+  }
   for (let i = 0; i < 4000; i++) {
     m.halfStep();
     if (m.sync() && m.lastFetchAddr() === SUBJECT) return true;
@@ -170,7 +194,7 @@ function sampleRow(prev) {
  * this page could do.
  */
 function trace() {
-  loadProgram();
+  if (!state.window) loadProgram();
   if (!runToSubject()) return false;
 
   state.startHalf = state.m.halfCycle();
@@ -185,9 +209,22 @@ function trace() {
     rows.push(row);
     prev = row.levels;
     if (syncsSeen > 0 && rows.filter((r) => r.tail).length >= 4) break;
+    // A window ends where the record does.
+    if (state.window && state.m.halfCycle() >= state.window.end) break;
     state.m.halfStep();
   }
   state.rows = rows;
+  if (state.window) {
+    // The operand bytes as the record shows them read: the bytes after the
+    // opcode, up to what the disassembler admits the opcode takes.
+    const len = Math.max(0, instructionLength(state.opcode) - 1);
+    state.operand = [];
+    for (let i = 1; i <= len; i++) {
+      const r = rows.find((x) => x.read && x.ab === ((subject + i) & 0xffff) && x.half > state.startHalf);
+      state.operand.push(r ? r.db : 0);
+    }
+    $('tr-operand').value = state.operand.map(hex2).join(' ');
+  }
   // How long the instruction is, measured the same way everything else on this
   // page is: the distance from this opcode's own fetch to the next one. The
   // page already runs past that fetch to show the tail, so the address is
@@ -197,8 +234,8 @@ function trace() {
   // branch all land somewhere that is not the following byte, and the distance
   // to it is not a length -- printing one anyway would be the single kind of
   // number this page exists to avoid.
-  const onward = rows.find((r) => r.tail && r.fetchAddr !== SUBJECT);
-  const step = onward ? onward.fetchAddr - SUBJECT : null;
+  const onward = rows.find((r) => r.tail && r.fetchAddr !== subject);
+  const step = onward ? onward.fetchAddr - subject : null;
   state.bytes = step !== null && step >= 1 && step <= 3 ? step : null;
   state.endHalf = rows[rows.length - 1].half;
   state.m.rewindTo(state.startHalf);
@@ -491,6 +528,7 @@ function setBit(b) {
 }
 
 function chooseOpcode(op) {
+  if (state.window) { go(); return; }
   state.opcode = op;
   const mode = OPCODES[op] ? OPCODES[op][1] : null;
   const want = mode ? DEFAULT_OPERAND[mode] : null;
@@ -528,7 +566,21 @@ async function boot() {
       if (!state.controlOf.has(control)) state.controlOf.set(control, []);
       state.controlOf.get(control).push({ a, b });
     }
-    state.m = new Machine();
+    // ?window=NAME&h=H: a window of a console's record from windows/,
+    // instead of the fixture.
+    const q = new URLSearchParams(location.search);
+    const winName = q.get('window');
+    if (winName) {
+      if (!/^[A-Za-z0-9_.-]+$/.test(winName)) throw new Error(`not a window name: ${winName}`);
+      const r = await fetch(`windows/${winName}.window`);
+      if (!r.ok) throw new Error(`no window ${winName} (${r.status})`);
+      state.m = Machine.fromWindow(await r.text());
+      const info = JSON.parse(state.m.windowInfo());
+      const h = Number(q.get('h'));
+      state.window = { name: winName, origin: info.origin, end: info.end, h: Number.isInteger(h) && h >= info.origin ? h : info.origin };
+    } else {
+      state.m = new Machine();
+    }
 
     // The opcode picker. Documented instructions first and named; the rest are
     // offered too, because the chip executes them and this page has no opinion
@@ -544,6 +596,11 @@ async function boot() {
     }
     sel.value = String(state.opcode);
     sel.addEventListener('change', (e) => chooseOpcode(Number(e.target.value)));
+    if (state.window) {
+      sel.disabled = true;
+      sel.title = 'Inside a window the instruction is the record\'s';
+      $('tr-operand').disabled = true;
+    }
 
     $('tr-operand').addEventListener('change', (e) => {
       const bytes = e.target.value.trim().split(/[\s,]+/).filter(Boolean)
@@ -583,15 +640,17 @@ async function boot() {
       else if (ev.key === 'r' || ev.key === 'R') { restart(); ev.preventDefault(); }
     });
 
-    $('tr-preamble').textContent =
-      'LDA #$41 · LDX #$02 · LDY #$03 · CLC   then the instruction at $'
-      + hex4(SUBJECT);
-
     setBit(0);
     chooseOpcode(state.opcode);
+    $('tr-preamble').textContent = state.window
+      ? `window ${state.window.name}, half-cycles ${state.window.origin} to ${state.window.end} of a console's record: the instruction fetched at $${hex4(subject)} at or after half-cycle ${state.window.h}`
+      : 'LDA #$41 · LDX #$02 · LDY #$03 · CLC   then the instruction at $' + hex4(SUBJECT);
+    if (state.window) sel.value = String(state.opcode);
     $('tr-boot').hidden = true;
     $('tr-main').hidden = false;
     tick();
+    // For a harness: the rows and where the page stands.
+    window.__trace = { state, subject: () => subject };
   } catch (e) {
     status.textContent = 'Could not load: ' + (e && e.message ? e.message : e);
     status.classList.add('error');

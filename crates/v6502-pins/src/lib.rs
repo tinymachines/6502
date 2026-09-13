@@ -575,3 +575,190 @@ mod tests {
         assert!(f[7].irq && f[7].nmi);
     }
 }
+
+// ---------------------------------------------------------------------------
+// A window: a piece of a record with the machine standing at its first
+// half-cycle, so a run can be resumed at any point without the record's
+// whole length or the reset sequence. Text, like everything here, and one
+// format for the service, the wasm machine and the pages:
+//
+//   # window 1
+//   # name <name>
+//   # record <the record's stamp>
+//   # origin <h of the first frame>
+//   # state <value> <pullup> <pulldown> <trans_on> <half_cycle> <fetch|->
+//   # fill <hex2>
+//   # page <hex2> <512 hex>            (repeatable: the shadow's pages that
+//                                        differ from the fill)
+//   # stim <h> <inputs>                (repeatable: the inputs in force from
+//                                        the step after h, first at origin)
+//   # h clk0 ab db rw sync inputs(res irq nmi rdy so)
+//   <origin> ...                       (one frame line per half-cycle)
+//
+// The state line is the engine's own machine value in its own words (the
+// hex planes are opaque here: this crate has no chip), the way `halfwave`'s
+// `STATE` line carries it, and `half_cycle` must equal `origin`. The shadow
+// is what the run had written by then plus the header's loads: never what
+// answers a read, which is the record's business, but what an overlay of
+// memory shows.
+
+/// The machine value at a window's first half-cycle, as text.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct WindowState {
+    pub value: String,
+    pub pullup: String,
+    pub pulldown: String,
+    pub trans_on: String,
+    pub half_cycle: u64,
+    /// The last opcode fetch, (address, opcode), if any.
+    pub fetch: Option<(u16, u8)>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct Window {
+    pub name: String,
+    pub record: String,
+    pub origin: u64,
+    pub state: WindowState,
+    pub fill: u8,
+    pub pages: Vec<(u8, Vec<u8>)>,
+    pub stim: Vec<Stim>,
+    pub frames: Vec<PinFrame>,
+}
+
+pub fn write_window(w: &Window) -> String {
+    let mut out = String::new();
+    out.push_str("# window 1\n");
+    out.push_str(&format!("# name {}\n", w.name));
+    out.push_str(&format!("# record {}\n", w.record));
+    out.push_str(&format!("# origin {}\n", w.origin));
+    let fetch = match w.state.fetch {
+        Some((a, o)) => format!("{a:04x}{o:02x}"),
+        None => "-".into(),
+    };
+    out.push_str(&format!(
+        "# state {} {} {} {} {} {fetch}\n",
+        w.state.value, w.state.pullup, w.state.pulldown, w.state.trans_on, w.state.half_cycle
+    ));
+    out.push_str(&format!("# fill {:02x}\n", w.fill));
+    for (id, bytes) in &w.pages {
+        out.push_str(&format!("# page {id:02x} "));
+        for b in bytes {
+            out.push_str(&format!("{b:02x}"));
+        }
+        out.push('\n');
+    }
+    for s in &w.stim {
+        let b: String = [s.res, s.irq, s.nmi, s.rdy, s.so].iter().map(|&x| BIT[x as usize]).collect();
+        out.push_str(&format!("# stim {} {}\n", s.h, b));
+    }
+    out.push_str("# h clk0 ab db rw sync inputs(res irq nmi rdy so)\n");
+    for f in &w.frames {
+        out.push_str(&line(f));
+        out.push('\n');
+    }
+    out
+}
+
+pub fn parse_window(text: &str) -> Result<Window, String> {
+    let mut w = Window::default();
+    let mut versioned = false;
+    let mut have_state = false;
+    for (n, raw) in text.lines().enumerate() {
+        let lineno = n + 1;
+        if let Some(rest) = raw.strip_prefix("# ") {
+            let rest = rest.trim();
+            if rest == "window 1" {
+                versioned = true;
+                continue;
+            }
+            let (key, val) = rest.split_once(' ').unwrap_or((rest, ""));
+            match key {
+                "name" => w.name = val.to_string(),
+                "record" => w.record = val.to_string(),
+                "origin" => w.origin = val.parse().map_err(|_| format!("line {lineno}: origin"))?,
+                "state" => {
+                    let f: Vec<&str> = val.split_whitespace().collect();
+                    if f.len() != 6 {
+                        return Err(format!("line {lineno}: a state line has six fields, this one {}", f.len()));
+                    }
+                    for (i, x) in f[..4].iter().enumerate() {
+                        if x.is_empty() || !x.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) {
+                            return Err(format!("line {lineno}: state field {i} is not lowercase hex"));
+                        }
+                    }
+                    let fetch = if f[5] == "-" {
+                        None
+                    } else if f[5].len() == 6 {
+                        Some((
+                            u16::from_str_radix(&f[5][..4], 16).map_err(|_| format!("line {lineno}: fetch"))?,
+                            u8::from_str_radix(&f[5][4..], 16).map_err(|_| format!("line {lineno}: fetch"))?,
+                        ))
+                    } else {
+                        return Err(format!("line {lineno}: fetch is '-' or six hex digits"));
+                    };
+                    w.state = WindowState {
+                        value: f[0].into(),
+                        pullup: f[1].into(),
+                        pulldown: f[2].into(),
+                        trans_on: f[3].into(),
+                        half_cycle: f[4].parse().map_err(|_| format!("line {lineno}: state half_cycle"))?,
+                        fetch,
+                    };
+                    have_state = true;
+                }
+                "fill" => w.fill = u8::from_str_radix(val.trim(), 16).map_err(|_| format!("line {lineno}: fill"))?,
+                "page" => {
+                    let (id, hex) = val.split_once(' ').ok_or(format!("line {lineno}: page needs an id and bytes"))?;
+                    let id = u8::from_str_radix(id, 16).map_err(|_| format!("line {lineno}: page id"))?;
+                    let hex = hex.trim();
+                    if hex.len() != 512 {
+                        return Err(format!("line {lineno}: a page is 512 hex digits, this one {}", hex.len()));
+                    }
+                    let bytes: Result<Vec<u8>, _> = (0..256).map(|i| u8::from_str_radix(&hex[2 * i..2 * i + 2], 16)).collect();
+                    w.pages.push((id, bytes.map_err(|_| format!("line {lineno}: page bytes"))?));
+                }
+                "stim" => {
+                    let (h, bits) = val.split_once(' ').ok_or(format!("line {lineno}: stim needs h and inputs"))?;
+                    let bits = bits.trim();
+                    if bits.len() != 5 || !bits.chars().all(|c| c == '0' || c == '1') {
+                        return Err(format!("line {lineno}: inputs are five bits"));
+                    }
+                    let b: Vec<bool> = bits.chars().map(|c| c == '1').collect();
+                    w.stim.push(Stim {
+                        h: h.parse().map_err(|_| format!("line {lineno}: stim h"))?,
+                        res: b[0],
+                        irq: b[1],
+                        nmi: b[2],
+                        rdy: b[3],
+                        so: b[4],
+                    });
+                }
+                _ => {} // the column heading, and anything a later version adds
+            }
+            continue;
+        }
+        if raw.trim().is_empty() {
+            continue;
+        }
+        let f = parse_line(raw).map_err(|e| format!("line {lineno}: {e}"))?;
+        let expected = w.origin + w.frames.len() as u64;
+        if f.h != expected {
+            return Err(format!("line {lineno}: h={} where {expected} was expected", f.h));
+        }
+        w.frames.push(f);
+    }
+    if !versioned {
+        return Err("not a .window file (no '# window 1' line)".into());
+    }
+    if !have_state {
+        return Err("no '# state' line".into());
+    }
+    if w.state.half_cycle != w.origin {
+        return Err(format!("the state stands at {} and the window starts at {}", w.state.half_cycle, w.origin));
+    }
+    if w.frames.is_empty() {
+        return Err("a window with no frames".into());
+    }
+    Ok(w)
+}

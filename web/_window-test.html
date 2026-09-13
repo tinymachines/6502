@@ -1,0 +1,73 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>window test</title>
+<!--
+  The wasm machine inside a window of a console's record, checked without a
+  page: windows/pad-poll-6.window (the family's test cartridge polling its
+  pad with $08 on it, cut around the sixth latch) is loaded with
+  Machine.fromWindow, stepped to the window's end, and at every step the
+  chip's pins are held to the record (recordDiffers empty, recordRefusal
+  empty). Then the reads of $4016 are counted and their D0 bits assembled:
+  eight reads, and the byte they spell is the script's $08. A rewind inside
+  the window must land on the same frame the forward run showed.
+
+    ?window=NAME   another window (the byte check then only reports)
+
+  The title reads ALL PASS or the first failure.
+-->
+<pre id="out"></pre>
+<script type="module">
+import init, { Machine } from './pkg/v6502_wasm.js';
+const out = document.getElementById('out');
+const q = new URLSearchParams(location.search);
+const name = q.get('window') || 'pad-poll-6';
+const log = (s) => { out.textContent += s + '\n'; };
+const fails = [];
+const check = (c, what) => { log((c ? 'ok   ' : 'FAIL ') + what); if (!c) fails.push(what); };
+try {
+  await init();
+  const text = await (await fetch(`windows/${name}.window`)).text();
+  const m = Machine.fromWindow(text);
+  const info = JSON.parse(m.windowInfo());
+  check(m.isWindow(), 'the machine stands in a window');
+  check(m.halfCycle() === info.origin, `the chip stands at the origin ${info.origin} (h ${m.halfCycle()})`);
+  check(m.recordDiffers() === '', `the origin frame agrees (${m.recordDiffers() || 'agrees'})`);
+  let steps = 0, differed = 0, reads = [], lines = [];
+  const seen = [];
+  while (m.halfCycle() < info.end) {
+    m.halfStep();
+    steps++;
+    const d = m.recordDiffers();
+    if (d) { differed++; if (differed === 1) log(`differs at h ${m.halfCycle()} in ${d}: record ${m.recordLine(m.halfCycle())}`); }
+    const r = m.recordRefusal();
+    if (r) { check(false, `refused: ${r}`); break; }
+    seen.push([m.halfCycle(), m.addressBus(), m.dataBus(), m.isRead(), m.sync()]);
+    if (m.addressBus() === 0x4016 && m.isRead() && !m.clk0()) reads.push(m.dataBus());
+  }
+  check(steps === info.end - info.origin, `stepped the window's ${info.end - info.origin} half-cycles (${steps})`);
+  check(differed === 0, `${differed} half-cycles differ from the record`);
+  check(m.recordRefusal() === '', 'the bus refused nothing');
+  const bits = reads.map((b) => b & 1);
+  const byte = bits.slice(0, 8).reduce((acc, b, i) => acc | (b << i), 0);
+  log(`reads of $4016: ${reads.length}, D0 bits ${bits.join('')}, byte $${byte.toString(16).padStart(2, '0')}`);
+  if (name === 'pad-poll-6') {
+    check(reads.length === 8, `eight reads of $4016 (${reads.length})`);
+    check(byte === 0x08, `the eight D0 bits spell $08, the script's byte at that latch ($${byte.toString(16)})`);
+  }
+  // A rewind: back to the middle, and the frame there is the one the
+  // forward run showed.
+  const mid = seen[Math.floor(seen.length / 2)];
+  check(m.rewindTo(mid[0]), `rewound to h ${mid[0]}`);
+  check(m.halfCycle() === mid[0] && m.addressBus() === mid[1] && m.dataBus() === mid[2] && m.isRead() === mid[3] && m.sync() === mid[4],
+        `the frame at h ${mid[0]} after the rewind is the one recorded forward`);
+  check(m.recordDiffers() === '', 'and it agrees with the record');
+  // The export carries the shadow, never a program: memory at $0200 is
+  // what the run wrote (the cartridge's RAM), a look that is not a read.
+  const exp = JSON.parse(m.exportMachine());
+  check(exp.state.half_cycle === mid[0], 'the machine exports at the rewound half-cycle');
+  document.title = fails.length ? `FAIL ${fails[0]}` : 'ALL PASS';
+} catch (e) {
+  document.title = 'ERROR ' + (e && e.message ? e.message : e);
+  log(String(e && e.stack || e));
+}
+</script>

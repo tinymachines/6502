@@ -192,6 +192,18 @@ def main() -> None:
         print(f"  chip-elk: {n} container diagrams")
     else:
         print("  chip-elk: none drawn (tools/chip-elk/run.sh)")
+    # Windows of a console's record (halfshot.js's ?window=name asks for
+    # windows/name.window by name, so they are not hashed). Text, a few
+    # hundred half-cycles each, cut by v6502-pins' replay-recorded example
+    # from the family's own test cartridge; a commercial cartridge's window
+    # is ROM content and never lands here.
+    windows = src / "windows"
+    if windows.is_dir():
+        n = 0
+        for w in sorted(windows.glob("*.window")):
+            b.emit(f"windows/{w.name}", w.read_bytes(), hashed=False)
+            n += 1
+        print(f"  windows: {n} windows of a record")
 
     b.copy_hashed("layout.bin")
     b.copy_hashed("pkg/v6502_wasm_bg.wasm")

@@ -85,6 +85,15 @@ if (file.build != null) {
 } else {
   note('no build stamp (an export from before the stamp existed)');
 }
+// A window of a console's record instead of a program: the record block
+// carries the window's own text, and the checks below hold the frames to it.
+const rec = file.record || null;
+if (rec) {
+  check(typeof rec.name === 'string' && typeof rec.window === 'string', 'record names the window and carries its text');
+  check(Number.isInteger(rec.origin) && Number.isInteger(rec.end) && rec.end > rec.origin, `record spans ${rec.origin}..${rec.end}`);
+  check(file.program == null, 'a recording of a window names no program');
+  note(`a window of a record: ${rec.name}, ${rec.stamp ?? 'no stamp'}`);
+}
 check(Number.isInteger(file.nodes) && file.nodes > 0, `nodes is ${file.nodes}`);
 check(file.rails && Number.isInteger(file.rails.vss) && Number.isInteger(file.rails.vcc), 'rails declared');
 check(file.rails && file.rails.vss === 558 && file.rails.vcc === 657,
@@ -102,7 +111,11 @@ let hBad = 0;
 let phBad = 0;
 for (let k = 0; k < N; k++) {
   const f = frames[k];
-  if (k === 0) { check(f.h === 0, `frame 0 is half-cycle 0 (h ${f.h})`); continue; }
+  if (k === 0) {
+    const h0 = rec ? rec.origin : 0;
+    check(f.h === h0, rec ? `frame 0 is the window's origin ${h0} (h ${f.h})` : `frame 0 is half-cycle 0 (h ${f.h})`);
+    continue;
+  }
   const p = frames[k - 1];
   if (f.gap > 0) {
     gaps++;
@@ -201,7 +214,7 @@ group('memory');
 const prog = file.program || {};
 const progBytes = typeof prog.bytes === 'string' ? prog.bytes.match(/../g).map((h) => parseInt(h, 16)) : null;
 const loadAddr = prog.loadAddr;
-check(progBytes && Number.isInteger(loadAddr), 'the file names the program and where it was loaded');
+check(rec || (progBytes && Number.isInteger(loadAddr)), 'the file names the program and where it was loaded, or the record it stands in');
 let known = new Map(); // addr -> byte, what we can say memory holds
 let image = null;      // after a gap: the whole thing
 let readBad = 0, readsChecked = 0, selfMod = 0;
@@ -220,6 +233,10 @@ for (let k = 1; k < N; k++) {
   }
   const a = f.access;
   if (!a) continue;
+  // Inside a window only the console's RAM ($0000..$1FFF, 2 KiB mirrored)
+  // reads back what was written: the rest of the map is registers and the
+  // cartridge, where a write is a strobe or a mapper latch, never a byte.
+  if (rec && a.addr >= 0x2000) continue;
   if (a.kind === 'W') {
     if (progBytes && a.addr >= loadAddr && a.addr < loadAddr + progBytes.length) selfMod++;
     if (image) image[a.addr] = a.val; else known.set(a.addr, a.val);
@@ -228,9 +245,46 @@ for (let k = 1; k < N; k++) {
     if (expect !== undefined) { readsChecked++; if (expect !== a.val) readBad++; }
   }
 }
-check(readBad === 0, `${readBad} reads disagree with what memory must hold`);
-note(`${readsChecked} reads checked against the program bytes, earlier writes${image ? ' and the post-gap image' : ''}`
-     + (selfMod ? `; ${selfMod} writes into the program area` : ''));
+if (rec) {
+  // Inside a window a read is answered by the record, never by memory: a
+  // byte the run itself wrote and read back must still agree (RAM is RAM
+  // on the console too), and that is what was counted above.
+  check(readBad === 0, `${readBad} reads of a byte this recording wrote disagree with it`);
+  note(`${readsChecked} reads checked against earlier writes; the rest are the record's, held to it below`);
+} else {
+  check(readBad === 0, `${readBad} reads disagree with what memory must hold`);
+  note(`${readsChecked} reads checked against the program bytes, earlier writes${image ? ' and the post-gap image' : ''}`
+       + (selfMod ? `; ${selfMod} writes into the program area` : ''));
+}
+
+// --- record: every frame held to the window it stands in ----------------------
+if (rec) {
+  group('record');
+  const lines = new Map();
+  let stimLines = 0;
+  for (const raw of rec.window.split('\n')) {
+    if (raw.startsWith('# stim ')) { stimLines++; continue; }
+    if (raw.startsWith('#') || !raw.trim()) continue;
+    const t = raw.trim().split(/\s+/);
+    if (t.length < 7) continue;
+    lines.set(Number(t[0]), { clk0: Number(t[1]), ab: parseInt(t[2], 16), db: parseInt(t[3], 16), rw: Number(t[4]), sync: Number(t[5]), rdy: t[6][3] === '1' });
+  }
+  check(lines.size === rec.end - rec.origin + 1, `the window text carries ${lines.size} frames for ${rec.end - rec.origin + 1} half-cycles`);
+  let held = 0, recBad = 0, first = null;
+  for (let k = 0; k < N; k++) {
+    const f = frames[k];
+    const r = lines.get(f.h);
+    if (!r) { recBad++; if (!first) first = `frame ${k}: h ${f.h} is not in the window`; continue; }
+    // The record's rule: every field where RDY is high; under RDY low the
+    // bus is a DMA's and only the byte is the chip's to show.
+    const same = r.rdy
+      ? (r.clk0 === f.clk0 && r.ab === f.ab && r.db === f.db && (r.rw === 1) === (f.rw === 'R') && r.sync === f.sync)
+      : (r.clk0 === f.clk0 && r.db === f.db);
+    if (same) held++; else { recBad++; if (!first) first = `frame ${k} (h ${f.h}): chip ${hex4(f.ab)} ${hex2(f.db)} ${f.rw} sync ${f.sync}, record ${hex4(r.ab)} ${hex2(r.db)} ${r.rw ? 'R' : 'W'} sync ${r.sync}`; }
+  }
+  check(recBad === 0, `${recBad} frames differ from the record${first ? ` (first: ${first})` : ''}`);
+  note(`${held} frames held to the window's record, ${stimLines} stimulus lines`);
+}
 
 // --- derived, when the JSON is beside us --------------------------------------
 group('derived');
@@ -284,7 +338,8 @@ else {
 
 // --- program ------------------------------------------------------------------
 group('program');
-if (!progBytes) note('no program bytes in the file');
+if (rec) note(`no program: the recording stands in window ${rec.name}`);
+else if (!progBytes) note('no program bytes in the file');
 else {
   try {
     const { PROGRAMS, LOAD_ADDR } = await import(join(web, 'programs.js'));
@@ -311,6 +366,9 @@ ins.forEach((s, i) => {
   const f = frames[s.start];
   if (!f) { insBad++; return; }
   if (s.gap > 0) { if (!(f.gap > 0)) insBad++; return; }
+  // A window is cut inside an instruction: its first entry opens on the
+  // origin, not on a fetch, and says so.
+  if (rec && i === 0 && s.start === 0 && s.at < 0) return;
   if (!(f.sync === 1 && f.clk0 === 0 && f.fetch === s.at && f.op === s.op)) insBad++;
 });
 check(ins.length > 0, 'the file groups frames into instructions');

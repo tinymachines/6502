@@ -171,6 +171,10 @@ export function encode(frames, meta) {
     encoding: ENCODING,
     build: meta.build || null,
     program: meta.program,
+    // A window of a console's record instead of a program (halfshot.js's
+    // ?window=): name, the record's stamp, origin and end, and the window's
+    // own text, so a reader can hold every frame to what the record showed.
+    record: meta.record ?? null,
     nodes: meta.nodes,
     rails: { vss: meta.vss, vcc: meta.vcc },
     units: meta.units,

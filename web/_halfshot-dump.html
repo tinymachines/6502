@@ -14,6 +14,8 @@
                  then carries a gap frame with its memory image, which is the
                  branch of the format worth checking.
     ?frames=N    grow the recording to at least N frames first (up to the cap)
+    ?window=NAME the page inside windows/NAME.window (a console's record)
+                 instead of a program; the export then carries the record
 
   The title reads DUMPED when #out is filled, or the error.
 -->
@@ -24,7 +26,8 @@ const q = new URLSearchParams(location.search);
 const f = document.getElementById('f');
 const out = document.getElementById('out');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-f.src = 'halfshot.html' + (q.get('program') ? `?program=${q.get('program')}` : '');
+// ?window=name drives the page inside a window of a record instead.
+f.src = 'halfshot.html' + (q.get('window') ? `?window=${q.get('window')}` : q.get('program') ? `?program=${q.get('program')}` : '');
 f.addEventListener('load', async () => {
   try {
     const d = f.contentDocument, w = f.contentWindow;

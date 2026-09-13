@@ -20,11 +20,20 @@
 //!
 //! Rung 0 runs at about thirty thousand half-cycles a second, so a NES
 //! frame is two seconds; give the count to stop early.
+//!
+//!     ... replay-recorded -- <name.pins> --window <from> <to> <out.window>
+//!
+//! cuts a window instead (`v6502_sim::pins::cut_window`): rung 0 runs
+//! the record to `from`, its machine value is taken there, and the
+//! frames `from..=to` with the inputs in force go out as one text file
+//! the service, the wasm machine and the pages can stand inside of.
+//! The window is then run back through rung 0 from its own state and
+//! must agree with itself before it is written.
 
 use std::path::Path;
 
-use v6502_pins::{line, parse_stim, parse_trace};
-use v6502_sim::pins::{run_recorded, rung0_recorded, Replayed};
+use v6502_pins::{line, parse_stim, parse_trace, parse_window, write_window};
+use v6502_sim::pins::{cut_window, run_recorded, run_window, rung0_recorded, rung0_window, Replayed};
 use v6502_sim::recorded::instruction_at;
 
 fn main() {
@@ -48,7 +57,48 @@ fn main() {
         eprintln!("REFUSED: {}: {e}", stim_path.display());
         std::process::exit(2)
     });
-    let steps: u64 = std::env::args().nth(2).and_then(|a| a.parse().ok()).unwrap_or(trace.header.half_cycles);
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(2).map(|a| a.as_str()) == Some("--window") {
+        let from: u64 = args.get(3).and_then(|a| a.parse().ok()).expect("--window <from> <to> <out>");
+        let to: u64 = args.get(4).and_then(|a| a.parse().ok()).expect("--window <from> <to> <out>");
+        let out = args.get(5).expect("--window <from> <to> <out>");
+        let t = std::time::Instant::now();
+        let w = cut_window(&trace.header.name, &trace, &stim, from, to).unwrap_or_else(|e| {
+            eprintln!("REFUSED: {e}");
+            std::process::exit(1)
+        });
+        let text = write_window(&w);
+        let back = parse_window(&text).unwrap_or_else(|e| {
+            eprintln!("REFUSED: the window written does not parse: {e}");
+            std::process::exit(1)
+        });
+        let mut cpu = rung0_window(&back).unwrap_or_else(|e| {
+            eprintln!("REFUSED: the window's state does not restore: {e}");
+            std::process::exit(1)
+        });
+        match run_window(&mut cpu, &back, u64::MAX) {
+            Replayed::Agrees { steps, held_reads } => {
+                std::fs::write(out, &text).expect("write the window");
+                println!(
+                    "{}: window {from}..={to} cut in {:.1} s; rung 0 restored into it agrees with its {steps} half-cycles ({held_reads} under RDY low); {} pages of shadow, {} stimulus lines; wrote {out}",
+                    trace.header.name,
+                    t.elapsed().as_secs_f64(),
+                    back.pages.len(),
+                    back.stim.len()
+                );
+                return;
+            }
+            Replayed::Refused(r, _) => {
+                eprintln!("REFUSED: the window does not agree with itself: the bus refused at {r}");
+                std::process::exit(1);
+            }
+            Replayed::Differs { h, field, expected, got, .. } => {
+                eprintln!("REFUSED: the window does not agree with itself at h={h} in {field}\n  record {}\n  chip   {}", line(&expected), line(&got));
+                std::process::exit(1);
+            }
+        }
+    }
+    let steps: u64 = args.get(2).and_then(|a| a.parse().ok()).unwrap_or(trace.header.half_cycles);
 
     let mut mutated_at = None;
     if std::env::var_os("MUTATE").is_some() {

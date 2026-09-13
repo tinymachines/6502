@@ -349,6 +349,7 @@ impl<B: Bus> Cpu<B> {
     /// a read is serviced as `clk0` falls, a write as it rises. Reads therefore
     /// present data to the chip one phase before it latches them.
     pub fn half_step(&mut self) {
+        self.bus.half_step(self.half_cycle + 1);
         if self.engine.is_high(self.sig.clk0) {
             self.engine.drive_low(self.sig.clk0);
             self.service_read();

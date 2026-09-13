@@ -9,6 +9,13 @@ pub trait Bus {
     fn read(&mut self, addr: u16) -> u8;
     fn write(&mut self, addr: u16, value: u8);
 
+    /// The chip is about to take the half-step that produces frame `h`.
+    /// A bus that is a recording (`crate::recorded`) follows the chip's own
+    /// half-cycle count through this and needs no driver to tell it where
+    /// it is, so history's replay, the service and the pages all run on a
+    /// record unchanged. Memory ignores it.
+    fn half_step(&mut self, _h: u64) {}
+
     /// Return an opaque token that [`Bus::rollback`] can later restore to.
     ///
     /// Returning `None` (the default) means this bus cannot be rewound, and

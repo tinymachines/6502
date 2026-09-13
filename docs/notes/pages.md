@@ -114,6 +114,17 @@ obvious design:
   follows only switches can never leave the pad ring, which is why the watch
   list starts at `idl`/`idb`.
 
+- **`?window=NAME&h=H` follows an instruction out of a console's record.**
+  The page stands the wasm machine inside `windows/NAME.window` (the same
+  door as the Halfshot page's), runs the record from the window's origin to
+  the first opcode fetch at or after `H`, and traces that instruction as it
+  traces the fixture's: the subject is where the console fetched it, the
+  opcode and operand are the record's, the tail runs past the next fetch as
+  always but never past the window's end, and the rewind to the start is a
+  restore of the window. The opcode and operand controls are disabled and
+  say why; the preamble line names the window, its half-cycles and the
+  instruction. `window.__trace` exposes the rows for a harness.
+
 ## The Exploded view (`exploded.html`, `exploded-gl.js`, `blocks.rs`)
 
 The same 83,227 triangles as the die view, **moved rather than redrawn**, along
@@ -517,7 +528,21 @@ around. Under it, **the manual's Figure 3.4 redrawn from the recording**: φ1,
 cursor (`createScope` from `demos.js`, which grew a windowed `set(list, at)`
 for it). Back, Next, the arrow keys, Home/End and a click on a tick all move
 the same cursor; running paces through the frames at the clock rate.
-`?program=N&frame=K` deep-links.
+`?program=N&frame=K` deep-links. `?window=NAME` stands the page inside
+`windows/NAME.window` instead of a program: a window of the NES console's
+recorded run of the family's own test cartridge (the 6502 repository's
+recorded bus, `docs/notes/engine.md`), the chip restored at the window's
+first half-cycle, every read answered by the record, the recording capped
+at the window's end, frame `h` the record's own, and the export carrying a
+`record` block (name, stamp, origin, end, the window's text) instead of a
+program, which `tools/check-halfshot.mjs` holds every frame to. The two
+windows shipped are the test cartridge's first pad poll and its seventh,
+where the eight reads of $4016 spell $08 on the data bus. The program
+select says which window and does nothing; the head segment before the
+first fetch is labelled "cut inside an instruction", not "reset".
+`_window-test.html` steps the wasm machine through a window without the
+page and reads the pad's byte off it; `_halfshot-dump.html?window=NAME`
+gets the page's export headlessly.
 
 - **This page carries its own program and clock selects, and the header
   carries none.** Its transport moves through a recording rather than driving a

@@ -32,7 +32,8 @@ state that decodes to the wrong chip is worse than one that is rejected.
   what is proven is what travels.
 - **`halfwave` parses no JSON, and that is the workspace's zero-dependency
   rule holding.** Requests are a line protocol (`BOOT`/`STEP n`/`RUN max` +
-  `STATE`/`FILL`/`PAGE`/`WATCH`/`TRACE`/`ROWS`, ending `GO`) read with
+  `STATE`/`FILL`/`PAGE`/`WATCH`/`TRACE`/`ROWS`, and `WINDOW <name>` to
+  stand in a window of a console's record instead of memory, ending `GO`) read with
   `split_whitespace` and `from_str_radix`, which have nothing in them to be
   wrong about; responses are one hand-written JSON line, the emission style
   every export binary already uses. The asymmetry is the point: parse

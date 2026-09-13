@@ -477,6 +477,29 @@ last read (fixed there, with a test of two DMAs on a bus). After all
 three: 17,868,314 half-cycles of the commercial cartridge, the die and
 the console identical at the pins.
 
+**Windows (T2 of the bench's trace plan).** A whole record is too long
+for a page and starts at reset; a window is a piece of one with the
+machine standing at its first half-cycle: `# state` (the four planes,
+the half-cycle, the last fetch, halfwave's own STATE words), `# origin`,
+`# fill` and `# page` lines for the shadow, `# stim` lines for the
+inputs in force, and the frames, one text file (`v6502_pins::Window`,
+`write_window`/`parse_window`). `cut_window` runs rung 0 to the origin on
+the record, takes its machine value and shadow, and copies the frames,
+ending on a phi2 so no cycle is left half done; `rung0_window` restores
+the chip into one and `run_window` holds it to the window's frames. The
+bus follows the chip's own count through `Bus::half_step` (a default
+no-op every other bus ignores), so history's replay, the service and the
+wasm machine need no driver to tell it where it is; a window is never
+reset into, and a rewind on one is a restore to the origin and a run
+forward, because a record is read and never rolled back. `tests/recorded.rs`
+cuts a window from every golden trace with room for one and restores
+into it (`MUTATE=1` red on a flipped window frame); halfwave's `WINDOW`,
+`Machine.fromWindow` (one `AnyBus` enum behind the one `Machine`, so every
+page method works on either) and the Halfshot page's `?window=` stand in
+it. The gate, met: the Halfshot export of the test cartridge's pad poll
+validates cold with every frame held to the window's record, and its
+eight reads of $4016 spell the script's byte on the data bus.
+
 ## Rung 3: `v6502-micro`, the table measured out of the transistors
 
 No nodes. `build.rs` runs rung 0 over all 256 opcodes in ten contexts

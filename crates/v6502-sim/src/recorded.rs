@@ -30,6 +30,11 @@
 //! address, direction and sync there for the same reason: a bare 6502 has
 //! no DMA unit, and what it can be held to is the byte it sampled.
 //!
+//! A window (`RecordedBus::window`, the `.window` text of `v6502_pins`)
+//! is a record from some `origin` on with the chip's machine value at that
+//! half-cycle beside it: the chip is restored into it, never reset, and the
+//! bus follows the chip's own half-cycle count through `Bus::half_step`.
+//!
 //! Before `h = 0` (the reset sequence) the record has one thing to say: its
 //! frame 0 is the fetch the reset leaves behind, so a read at that address
 //! gets that byte; every other reset read comes from a shadow holding the
@@ -71,11 +76,19 @@ impl std::fmt::Display for Refusal {
 
 pub struct RecordedBus {
     frames: Vec<PinFrame>,
+    /// The record's `h` of `frames[0]`: 0 for a whole record, the window's
+    /// first half-cycle for a window cut from one.
+    pub origin: u64,
     shadow: Vec<u8>,
     /// The frame the coming half-step produces (the record's `h`), or
     /// `None` before the run starts, when the reset sequence reads the
-    /// shadow. The driver sets it before every `half_step`.
+    /// shadow. Set by the chip itself through `Bus::half_step` once the
+    /// bus is `armed`; the reset sequence runs unarmed.
     pub at: Option<u64>,
+    /// Follow the chip's half-cycle count. Off through the reset
+    /// sequence, on from `h = 0` (or from a window's origin, where the
+    /// chip is restored rather than reset).
+    pub armed: bool,
     /// The first refusal, if any. Once set, nothing later is checked; the
     /// driver is expected to stop.
     pub refusal: Option<Refusal>,
@@ -94,7 +107,32 @@ impl RecordedBus {
         }
         shadow[0xfffc] = reset_vector as u8;
         shadow[0xfffd] = (reset_vector >> 8) as u8;
-        RecordedBus { frames, shadow, at: None, refusal: None, reads: 0, writes: 0, held_reads: 0 }
+        RecordedBus { frames, origin: 0, shadow, at: None, armed: false, refusal: None, reads: 0, writes: 0, held_reads: 0 }
+    }
+
+    /// A window: frames from `origin` on, the shadow as the run had left
+    /// it there (a fill and pages), armed from the first step because the
+    /// chip is restored into the window rather than reset into it.
+    pub fn window(frames: Vec<PinFrame>, origin: u64, fill: u8, pages: &[(u8, Vec<u8>)]) -> RecordedBus {
+        let mut shadow = vec![fill; 0x1_0000];
+        for (id, bytes) in pages {
+            let start = *id as usize * 256;
+            shadow[start..start + bytes.len().min(256)].copy_from_slice(&bytes[..bytes.len().min(256)]);
+        }
+        RecordedBus { frames, origin, shadow, at: None, armed: true, refusal: None, reads: 0, writes: 0, held_reads: 0 }
+    }
+
+    /// The record's frame at `h`, if the record has it.
+    pub fn frame_at(&self, h: u64) -> Option<PinFrame> {
+        if h < self.origin {
+            return None;
+        }
+        self.frames.get((h - self.origin) as usize).copied()
+    }
+
+    /// The record's last `h`.
+    pub fn last_h(&self) -> u64 {
+        self.origin + self.frames.len().saturating_sub(1) as u64
     }
 
     pub fn frames(&self) -> &[PinFrame] {
@@ -109,13 +147,19 @@ impl RecordedBus {
 
     fn refuse(&mut self, h: u64, what: &'static str, addr: u16, value: u8) {
         if self.refusal.is_none() {
-            let frame = self.frames.get(h as usize).copied().unwrap_or(PinFrame { h, ..PinFrame::default() });
+            let frame = self.frame_at(h).unwrap_or(PinFrame { h, ..PinFrame::default() });
             self.refusal = Some(Refusal { h, what, addr, value, frame });
         }
     }
 }
 
 impl Bus for RecordedBus {
+    fn half_step(&mut self, h: u64) {
+        if self.armed {
+            self.at = Some(h);
+        }
+    }
+
     fn read(&mut self, addr: u16) -> u8 {
         let Some(h) = self.at else {
             // The reset sequence: the shadow answers, except that the
@@ -129,8 +173,8 @@ impl Bus for RecordedBus {
             };
         };
         self.reads += 1;
-        let Some(f) = self.frames.get(h as usize).copied() else {
-            self.refuse(h, "a read past the end of the record", addr, 0xff);
+        let Some(f) = self.frame_at(h) else {
+            self.refuse(h, "a read outside the record", addr, 0xff);
             return 0xff;
         };
         if !f.rdy {
@@ -152,8 +196,8 @@ impl Bus for RecordedBus {
             return;
         };
         self.writes += 1;
-        let Some(f) = self.frames.get(h as usize).copied() else {
-            self.refuse(h, "a write past the end of the record", addr, value);
+        let Some(f) = self.frame_at(h) else {
+            self.refuse(h, "a write outside the record", addr, value);
             return;
         };
         if f.rw {

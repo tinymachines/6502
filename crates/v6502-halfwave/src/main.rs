@@ -37,6 +37,9 @@
 //!     PAGE <hex2> <512 hex>       one 256-byte page over the fill
 //!     WATCH <name> [name...]     node names to read out (repeatable)
 //!     PIN <name> <0|1>            drive an input pin (res irq nmi rdy so)
+//!     WINDOW <name>               stand in a window of a record instead of memory:
+//!                                 windows/<name>.window (HALFWAVE_WINDOWS names the
+//!                                 directory), v6502_pins' text; STATE optional
 //!     TRACE                       record an observation per half-cycle
 //!     ROWS                        ...as columnar rows (v6502_sim::rows), implies TRACE
 //!     GO
@@ -64,13 +67,26 @@
 //! Its observation carries what the rung genuinely has (pins, registers,
 //! the datapath latches) and omits the timing-chain fields rather than
 //! faking them.
+//!
+//! `WINDOW` (the NES bench's trace plan, T2) runs rung 0 inside a window of
+//! another machine's recorded run (`v6502_sim::recorded`): the chip is
+//! restored to the window's own machine value (or to a STATE line saved
+//! from an earlier step in the same window), every read is answered by
+//! the record and every write held to it, the window's stimulus is applied
+//! by half-cycle before each step, and PIN lines override it for the first
+//! step. The record is the memory, so FILL and PAGE are refused with it;
+//! the reply's `memory` is the window's shadow (what the run wrote, never
+//! what answered a read), and a `window` object carries where the chip
+//! stands, the first field where its pins differ from the record there,
+//! and the bus's refusal if it asked for what the record does not show.
+//! Never BOOTed: a window is stood in, not reset into.
 
 use std::fmt::Write as _;
 use std::io::{BufRead, Write};
 use std::sync::Arc;
 
 use v6502_netlist::{mos6502, NodeId};
-use v6502_sim::bus::FlatMemory;
+use v6502_sim::bus::{Bus, FlatMemory};
 use v6502_sim::cpu::{Cpu, Fetch, ReadWrite};
 use v6502_sim::rows;
 use v6502_sim::state::{restore, snapshot, MachineState};
@@ -94,6 +110,10 @@ struct Request {
     micro: Option<String>,
     /// Which rung answers this block: 0 (default) or 3.
     engine: u8,
+    /// A window of a record to stand in (`WINDOW <name>`): the file
+    /// `<name>.window` under `HALFWAVE_WINDOWS` (default `windows`). The
+    /// record is the memory; FILL and PAGE are refused with it.
+    window: Option<String>,
     fill: u8,
     pages: Vec<(u8, Vec<u8>)>,
     watch: Vec<String>,
@@ -112,6 +132,7 @@ impl Request {
             state: None,
             micro: None,
             engine: 0,
+            window: None,
             fill: 0,
             pages: Vec::new(),
             watch: Vec::new(),
@@ -150,7 +171,7 @@ fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
 
 /// One observation as flat JSON: the architectural and microarchitectural
 /// state a learner reads off the running chip, plus any watched nodes.
-fn obs_json(cpu: &Cpu<FlatMemory>, watch: &[(String, NodeId)]) -> String {
+fn obs_json<B: Bus>(cpu: &Cpu<B>, watch: &[(String, NodeId)]) -> String {
     let o = cpu.observe();
     let mut s = String::with_capacity(320);
     let _ = write!(
@@ -232,7 +253,7 @@ fn obs_json(cpu: &Cpu<FlatMemory>, watch: &[(String, NodeId)]) -> String {
     s
 }
 
-fn state_json(cpu: &Cpu<FlatMemory>) -> String {
+fn state_json<B: Bus>(cpu: &Cpu<B>) -> String {
     let st = snapshot(cpu);
     let [v, pu, pd, t] = st.chip_hex();
     let fetch = match st.last_fetch {
@@ -492,6 +513,9 @@ fn handle(cpu: &mut Cpu<FlatMemory>, micro: &mut MicroCpu, req: &Request) -> Str
     if req.micro.is_some() {
         return err("MICRO is rung 3's machine; add ENGINE 3, or send STATE for the node engine");
     }
+    if req.window.is_some() && verb != "META" && verb != "NODES" {
+        return handle_window(cpu.engine().netlist_arc().clone(), req);
+    }
 
     if verb == "NODES" {
         // Every named node, sorted by name so the output is deterministic.
@@ -604,66 +628,7 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
                 }
             }
 
-            // The rows form is the same trace packed by v6502_sim::rows, the
-            // packer the wasm Machine uses too: the service passes it
-            // through untouched, so nothing downstream re-encodes a column.
-            let watch_ids: Vec<NodeId> = watch.iter().map(|w| w.1).collect();
-            let mut trace = String::new();
-            if req.rows {
-                let _ = write!(
-                    trace,
-                    ",\"trace_rows\":{{\"cols\":{},\"watch_names\":{},\"watch_encoding\":\"hex\",\"rows\":[",
-                    rows::cols_json(),
-                    rows::names_json(&req.watch)
-                );
-            } else if req.trace {
-                trace.push_str(",\"trace\":[");
-            }
-            let mut stepped = 0u64;
-            let mut completed = true;
-            for i in 0..n {
-                cpu.half_step();
-                stepped += 1;
-                if req.trace {
-                    if i > 0 {
-                        trace.push(',');
-                    }
-                    if req.rows {
-                        rows::push_row(&mut trace, cpu, &watch_ids);
-                    } else {
-                        trace.push_str(&obs_json(cpu, &watch));
-                    }
-                }
-                // RUN stops at the next opcode fetch: sync high with clk0
-                // low, the same boundary `step_instruction` uses. RUNTO stops
-                // at the fetch OF a given address -- a breakpoint, with the
-                // address read from the latched fetch, the same latch the
-                // disassembler relies on.
-                let at_fetch = cpu.sync() && !cpu.clk0();
-                let stop = match verb {
-                    "RUN" => at_fetch,
-                    "RUNTO" => at_fetch && cpu.last_fetch().map(|f| f.addr) == req.target,
-                    _ => false,
-                };
-                if stop {
-                    break;
-                }
-            }
-            let at_fetch = cpu.sync() && !cpu.clk0();
-            let arrived = match verb {
-                "RUN" => at_fetch,
-                "RUNTO" => at_fetch && cpu.last_fetch().map(|f| f.addr) == req.target,
-                _ => true,
-            };
-            if !arrived {
-                completed = false; // the cap came first: a JAM, a loop that
-                                   // never fetches there, or the cap is low
-            }
-            if req.rows {
-                trace.push_str("]}");
-            } else if req.trace {
-                trace.push(']');
-            }
+            let (stepped, completed, trace) = drive(cpu, req, verb, n, &watch, &mut |_| true);
             return format!(
                 "{{\"ok\":true,\"stepped\":{},\"completed\":{},\"state\":{},\"memory\":{},\"observe\":{}{}}}",
                 stepped,
@@ -683,6 +648,230 @@ node numbering is visual6502's own; node bitsets 216 bytes, transistor set 439 b
         state_json(cpu),
         memory_json(cpu.bus.as_slice(), req.fill),
         obs_json(cpu, &watch)
+    )
+}
+
+/// The STEP/RUN/RUNTO loop, shared by the memory machine and a window:
+/// `n` half-steps at most, each traced if asked (rows or observations),
+/// RUN stopping at the next opcode fetch and RUNTO at the fetch of the
+/// target; `before` runs before every step and returns false to stop the
+/// run short (a window's bus refusing). Returns (stepped, completed, the
+/// trace fragment).
+fn drive<B: Bus>(cpu: &mut Cpu<B>, req: &Request, verb: &str, n: u64, watch: &[(String, NodeId)], before: &mut dyn FnMut(&mut Cpu<B>) -> bool) -> (u64, bool, String) {
+    // The rows form is the same trace packed by v6502_sim::rows, the
+    // packer the wasm Machine uses too: the service passes it
+    // through untouched, so nothing downstream re-encodes a column.
+    let watch_ids: Vec<NodeId> = watch.iter().map(|w| w.1).collect();
+    let mut trace = String::new();
+    if req.rows {
+        let _ = write!(
+            trace,
+            ",\"trace_rows\":{{\"cols\":{},\"watch_names\":{},\"watch_encoding\":\"hex\",\"rows\":[",
+            rows::cols_json(),
+            rows::names_json(&req.watch)
+        );
+    } else if req.trace {
+        trace.push_str(",\"trace\":[");
+    }
+    let mut stepped = 0u64;
+    let mut short = false;
+    for i in 0..n {
+        if !before(cpu) {
+            short = true;
+            break;
+        }
+        cpu.half_step();
+        stepped += 1;
+        if req.trace {
+            if i > 0 {
+                trace.push(',');
+            }
+            if req.rows {
+                rows::push_row(&mut trace, cpu, &watch_ids);
+            } else {
+                trace.push_str(&obs_json(cpu, watch));
+            }
+        }
+        // RUN stops at the next opcode fetch: sync high with clk0
+        // low, the same boundary `step_instruction` uses. RUNTO stops
+        // at the fetch OF a given address -- a breakpoint, with the
+        // address read from the latched fetch, the same latch the
+        // disassembler relies on.
+        let at_fetch = cpu.sync() && !cpu.clk0();
+        let stop = match verb {
+            "RUN" => at_fetch,
+            "RUNTO" => at_fetch && cpu.last_fetch().map(|f| f.addr) == req.target,
+            _ => false,
+        };
+        if stop {
+            break;
+        }
+    }
+    let at_fetch = cpu.sync() && !cpu.clk0();
+    let arrived = match verb {
+        "RUN" => at_fetch,
+        "RUNTO" => at_fetch && cpu.last_fetch().map(|f| f.addr) == req.target,
+        _ => true,
+    };
+    // Not completed when the cap came first (a JAM, a loop that never
+    // fetches there, or the cap is low) or the bus stopped the run.
+    let completed = arrived && !short;
+    if req.rows {
+        trace.push_str("]}");
+    } else if req.trace {
+        trace.push(']');
+    }
+    (stepped, completed, trace)
+}
+
+/// `WINDOW <name>`: rung 0 standing inside a window of a record
+/// (`v6502_sim::recorded`, the `.window` text of `v6502_pins`). The chip
+/// is restored to the window's own machine value, or to a STATE line if
+/// one is sent (a state saved from an earlier step in the same window);
+/// the record is the memory, so FILL and PAGE are refused; the window's
+/// stimulus is applied by half-cycle before every step, and PIN lines
+/// override it for the first step only. The reply carries the usual
+/// fields plus `window`: name, origin, end, where the chip stands, the
+/// first field where its pins differ from the record there (or null), and
+/// the bus's refusal if the chip asked for what the record does not show
+/// (the run stops there, `completed` false).
+fn handle_window(netlist: Arc<v6502_sim::Netlist>, req: &Request) -> String {
+    let name = req.window.as_deref().unwrap_or("");
+    let verb = req.verb.as_deref().unwrap_or("");
+    if !matches!(verb, "STEP" | "RUN" | "RUNTO") {
+        return err("a window answers STEP, RUN and RUNTO (it is never BOOTed: the chip is restored into it)");
+    }
+    if !req.pages.is_empty() || req.fill != 0 {
+        return err("a window is the memory; FILL and PAGE do not apply");
+    }
+    let dir = std::env::var("HALFWAVE_WINDOWS").unwrap_or_else(|_| "windows".into());
+    let path = std::path::Path::new(&dir).join(format!("{name}.window"));
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) => return err(&format!("window {name:?}: {}: {e}", path.display())),
+    };
+    let w = match v6502_pins::parse_window(&text) {
+        Ok(w) => w,
+        Err(e) => return err(&format!("window {name:?}: {e}")),
+    };
+    let mut watch: Vec<(String, NodeId)> = Vec::new();
+    for wname in &req.watch {
+        match netlist.node(wname) {
+            Some(id) => watch.push((wname.clone(), id)),
+            None => return err(&format!("unknown node name {wname:?}")),
+        }
+    }
+    let n = match req.arg {
+        Some(n) if n <= MAX_STEP => n,
+        Some(n) => return err(&format!("{n} half-cycles exceeds max_step {MAX_STEP}")),
+        None => return err("STEP/RUN needs a count"),
+    };
+    if req.trace && n > MAX_TRACED {
+        return err(&format!("{n} traced half-cycles exceeds max_traced {MAX_TRACED}"));
+    }
+    if verb == "RUNTO" && req.target.is_none() {
+        return err("RUNTO needs a target address");
+    }
+    let bus = v6502_sim::recorded::RecordedBus::window(w.frames.clone(), w.origin, w.fill, &w.pages);
+    let mut cpu = match Cpu::new(netlist, bus) {
+        Ok(c) => c,
+        Err(e) => return err(&format!("{e:?}")),
+    };
+    // The window's own state, or the caller's.
+    let (planes, half_cycle, fetch): ([&str; 4], u64, Option<Fetch>) = match &req.state {
+        Some(st) => {
+            let half_cycle: u64 = match st[4].parse() {
+                Ok(h) => h,
+                Err(_) => return err(&format!("bad half_cycle {:?}", st[4])),
+            };
+            let fetch = if st[5] == "-" {
+                None
+            } else if st[5].len() == 6 {
+                match (u16::from_str_radix(&st[5][..4], 16), u8::from_str_radix(&st[5][4..], 16)) {
+                    (Ok(addr), Ok(opcode)) => Some(Fetch { addr, opcode }),
+                    _ => return err(&format!("bad fetch {:?}", st[5])),
+                }
+            } else {
+                return err(&format!("bad fetch {:?} (want - or 6 hex chars)", st[5]));
+            };
+            ([&st[0], &st[1], &st[2], &st[3]], half_cycle, fetch)
+        }
+        None => (
+            [&w.state.value, &w.state.pullup, &w.state.pulldown, &w.state.trans_on],
+            w.state.half_cycle,
+            w.state.fetch.map(|(addr, opcode)| Fetch { addr, opcode }),
+        ),
+    };
+    if half_cycle < w.origin || half_cycle > w.origin + w.frames.len() as u64 - 1 {
+        return err(&format!("the state stands at {half_cycle}, outside the window {}..={}", w.origin, w.origin + w.frames.len() as u64 - 1));
+    }
+    let ms = match MachineState::from_hex(1725, 3510, planes[0], planes[1], planes[2], planes[3], half_cycle, fetch) {
+        Ok(ms) => ms,
+        Err(e) => return err(&e),
+    };
+    restore(&mut cpu, &ms);
+    for (pname, _) in &req.pins {
+        if !matches!(pname.as_str(), "res" | "irq" | "nmi" | "rdy" | "so") {
+            return err(&format!("unknown pin {pname:?} (res, irq, nmi, rdy, so)"));
+        }
+    }
+    let stim = w.stim.clone();
+    let mut first = true;
+    let pins = req.pins.clone();
+    let mut before = |cpu: &mut Cpu<v6502_sim::recorded::RecordedBus>| -> bool {
+        let h = cpu.half_cycle();
+        let mut level = None;
+        for st in &stim {
+            if st.h <= h {
+                level = Some(*st);
+            }
+        }
+        if let Some(st) = level {
+            cpu.set_res(st.res);
+            cpu.set_irq(st.irq);
+            cpu.set_nmi(st.nmi);
+            cpu.set_rdy(st.rdy);
+            cpu.set_so(st.so);
+        }
+        if first {
+            for (pname, lvl) in &pins {
+                match pname.as_str() {
+                    "res" => cpu.set_res(*lvl),
+                    "irq" => cpu.set_irq(*lvl),
+                    "nmi" => cpu.set_nmi(*lvl),
+                    "rdy" => cpu.set_rdy(*lvl),
+                    "so" => cpu.set_so(*lvl),
+                    _ => unreachable!("validated above"),
+                }
+            }
+            first = false;
+        }
+        cpu.bus.refusal.is_none() && cpu.bus.frame_at(h + 1).is_some()
+    };
+    let (stepped, completed, trace) = drive(&mut cpu, req, verb, n, &watch, &mut before);
+    let h = cpu.half_cycle();
+    let differs = match cpu.bus.frame_at(h) {
+        Some(expected) => v6502_sim::recorded::first_difference_under_record(&expected, &v6502_pins::PinEngine::pins(&cpu)).map(|f| format!("\"{f}\"")).unwrap_or_else(|| "null".into()),
+        None => "\"outside\"".into(),
+    };
+    let refusal = match &cpu.bus.refusal {
+        Some(r) => format!("\"{}\"", json_escape(&r.to_string())),
+        None => "null".into(),
+    };
+    format!(
+        "{{\"ok\":true,\"stepped\":{},\"completed\":{},\"state\":{},\"memory\":{},\"observe\":{},\"window\":{{\"name\":\"{}\",\"origin\":{},\"end\":{},\"h\":{},\"differs\":{},\"refusal\":{}}}{}}}",
+        stepped,
+        completed && cpu.bus.refusal.is_none(),
+        state_json(&cpu),
+        memory_json(cpu.bus.shadow(), 0),
+        obs_json(&cpu, &watch),
+        json_escape(&w.name),
+        w.origin,
+        w.origin + w.frames.len() as u64 - 1,
+        h,
+        differs,
+        refusal,
+        trace
     )
 }
 
@@ -743,6 +932,14 @@ fn main() {
                     r.target =
                         Some(u16::from_str_radix(t, 16).map_err(|_| format!("bad target {t:?}"))?);
                 }
+                Ok(false)
+            }
+            "WINDOW" => {
+                let name = parts.next().ok_or("WINDOW needs a name")?;
+                if name.contains('/') || name.contains("..") {
+                    return Err("a window name has no path in it".into());
+                }
+                r.window = Some(name.into());
                 Ok(false)
             }
             "VEC" => {

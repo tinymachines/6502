@@ -71,6 +71,11 @@ const state = {
   layout: null,      // the plate's positions, from blueprint-draw
   drawer: null,      // sch-draw, for the island
   program: 0,
+  // A window of a record (?window=name): the page stands inside another
+  // machine's recorded run instead of booting a program. The chip is
+  // restored to the window's first half-cycle, every read is answered by
+  // the record, and the recording cannot grow past the window's end.
+  window: null,      // { name, record, origin, end, text }
   frames: [],
   cur: 0,
   segs: [],          // [{ start, end, label, fetch }] one per instruction, plus reset
@@ -89,6 +94,7 @@ const nameOf = (n) => state.sch.names[n] ?? `#${n}`;
 // ---------------------------------------------------------------------------
 
 function loadProgram(index) {
+  if (state.window) return loadWindow(state.window.text, state.window.name);
   const m = state.m;
   const prog = PROGRAMS[index] || PROGRAMS[0];
   state.program = PROGRAMS[index] ? index : 0;
@@ -103,6 +109,31 @@ function loadProgram(index) {
   state.skipped = 0;
   record(BATCH);
 }
+
+/**
+ * Stand the page inside a window of a record: the `.window` text (the
+ * pin crate's own format, cut by the 6502 repository's replay-recorded
+ * example from a console's record) in, the chip restored at its origin.
+ * Frame 0 is the origin, `h` is the record's own, memory before the first
+ * frame is the window's shadow (what the run had written by then), and
+ * the recording stops at the window's end because past it the record has
+ * nothing to answer with.
+ */
+function loadWindow(text, name) {
+  const m = Machine.fromWindow(text);
+  const info = JSON.parse(m.windowInfo());
+  state.m = m;
+  state.window = { name, record: info.record, origin: info.origin, end: info.end, text };
+  state.mem0 = new Uint8Array(m.memorySlice(0, 65536));
+  state.frames = [];
+  state.segs = [];
+  state.cur = 0;
+  state.skipped = 0;
+  record(BATCH);
+}
+
+/** The last half-cycle the chip may reach: the window's end, or none. */
+const endOfRun = () => (state.window ? state.window.end : Infinity);
 
 /**
  * One frame: everything the plate and the island need, read out of the chip
@@ -160,6 +191,8 @@ function resume() {
 
 /** Move the chip `n` half-cycles without keeping frames. */
 function skip(n) {
+  n = Math.max(0, Math.min(n, endOfRun() - state.m.halfCycle()));
+  if (n === 0) return;
   state.m.runHalfCycles(n);
   state.skipped += n;
 }
@@ -177,9 +210,10 @@ function record(n) {
   const frames = state.frames;
   if (!frames.length) { frames.push(sample(null)); n -= 1; }
   const stop = Math.min(MAX_FRAMES, frames.length + n);
+  const more = () => m.halfCycle() < endOfRun();
   const take = () => { m.halfStep(); frames.push(sample(frames[frames.length - 1])); };
-  while (frames.length < stop) take();
-  if (frames.length < MAX_FRAMES && frames[frames.length - 1].ph === 1) take();
+  while (frames.length < stop && more()) take();
+  if (frames.length < MAX_FRAMES && frames[frames.length - 1].ph === 1 && more()) take();
   segment();
 }
 
@@ -219,7 +253,9 @@ function segment() {
         open = { start: k, label: d.text, fetch: f.fetch, op: f.op, len: d.length };
       }
     } else if (!open) {
-      open = { start: k, label: 'reset', fetch: -1, op: null };
+      // Before the first fetch: the reset sequence on a program, or, in a
+      // window, the tail of the instruction the window was cut inside.
+      open = { start: k, label: state.window ? 'cut inside an instruction' : 'reset', fetch: -1, op: null };
     }
   }
   close(frames.length);
@@ -607,12 +643,19 @@ function paintHead(k, f) {
 function paintCaption() {
   const n = state.frames.length;
   const ops = state.segs.filter((s) => s.fetch >= 0).length;
-  const prog = PROGRAMS[state.program];
-  $('hs-stat').textContent =
-    `${prog.name} · ${n} frames recorded · ${ops} instructions · grows by ${BATCH} up to ${MAX_FRAMES}`;
+  const w = state.window;
+  const f = state.frames[state.cur];
+  const differs = w && state.m.recordDiffers();
+  const refusal = w && state.m.recordRefusal();
+  $('hs-stat').textContent = w
+    ? `window ${w.name}, half-cycles ${w.origin} to ${w.end} of a console's record · ${n} frames recorded · ${ops} instructions`
+      + (refusal ? ` · the record refused: ${refusal}` : differs ? ` · the chip differs from the record now in ${differs}` : ' · the chip agrees with the record')
+    : `${PROGRAMS[state.program].name} · ${n} frames recorded · ${ops} instructions · grows by ${BATCH} up to ${MAX_FRAMES}`;
+  const atEnd = w && f && f.h >= w.end;
   $('hs-caption').textContent =
-    `Frame ${state.cur} of ${n - 1}. Click a tick on the strip to jump to it; stepping past the end `
-    + (n < MAX_FRAMES ? `records ${BATCH} more half-cycles, up to ${MAX_FRAMES}.` : `is the end: ${MAX_FRAMES} is the cap.`);
+    `Frame ${state.cur} of ${n - 1}${w ? ` (half-cycle ${f ? f.h : '?'})` : ''}. Click a tick on the strip to jump to it; stepping past the end `
+    + (atEnd ? 'is the end of the window: the record has nothing past it.'
+      : n < MAX_FRAMES ? `records ${BATCH} more half-cycles, up to ${MAX_FRAMES}.` : `is the end: ${MAX_FRAMES} is the cap.`);
 }
 
 function refresh() {
@@ -652,7 +695,9 @@ function seek(want) {
       // Past the end with Record on: first a frame where the chip is now, if
       // it moved while Record was off, then batches until the target is in.
       if (resume()) target = Math.max(target, last());
-      while (target > last() && state.frames.length < MAX_FRAMES) record(BATCH);
+      // ...and never past a window's end, where the record has nothing
+      // more to answer with (a seek past it used to loop forever).
+      while (target > last() && state.frames.length < MAX_FRAMES && state.m.halfCycle() < endOfRun()) record(BATCH);
       target = Math.min(target, last());
     }
   }
@@ -691,9 +736,14 @@ function tick(now = 0) {
 
 function exportRecording(download = true) {
   const prog = PROGRAMS[state.program];
+  const w = state.window;
   const file = encode(state.frames, {
-    program: { id: prog.id, name: prog.name, loadAddr: LOAD_ADDR,
-               bytes: Array.from(prog.bytes, hex2).join('') },
+    // A window carries the record it stands in, whole (a few hundred
+    // half-cycles of text), so the validator can hold every frame to it;
+    // there is then no program to name.
+    program: w ? null : { id: prog.id, name: prog.name, loadAddr: LOAD_ADDR,
+                          bytes: Array.from(prog.bytes, hex2).join('') },
+    record: w ? { name: w.name, stamp: w.record, origin: w.origin, end: w.end, window: w.text } : undefined,
     nodes: state.sch.names.length,
     vss: state.sch.vss, vcc: state.sch.vcc,
     units: state.bp.units.map((u) => u.name),
@@ -712,7 +762,7 @@ function exportRecording(download = true) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `halfshot-${prog.id}-${state.frames.length}.json`;
+  a.download = `halfshot-${w ? `window-${w.name}` : prog.id}-${state.frames.length}.json`;
   document.body.append(a);
   a.click();
   a.remove();
@@ -777,15 +827,34 @@ async function boot() {
 
     const q = new URLSearchParams(location.search);
     const chosen = selectedProgram(location.search);
-    loadProgram(chosen);
+    // ?window=name: a window of a console's record from windows/, instead
+    // of a program. The name is a file name here, so it is kept to what
+    // one can be.
+    const winName = q.get('window');
+    if (winName) {
+      if (!/^[A-Za-z0-9_.-]+$/.test(winName)) throw new Error(`not a window name: ${winName}`);
+      const r = await fetch(`windows/${winName}.window`);
+      if (!r.ok) throw new Error(`no window ${winName} (${r.status})`);
+      loadWindow(await r.text(), winName);
+    } else {
+      loadProgram(chosen);
+    }
 
     // The program: this page's own select, writing the site-wide choice, so
     // arriving here from the Explorer records what the Explorer was running and
-    // leaving takes this choice along.
+    // leaving takes this choice along. Inside a window the select says so
+    // and does nothing: the program is the record's.
     const progSel = $('hs-program');
-    PROGRAMS.forEach((pr, i) => progSel.add(new Option(pr.name, String(i))));
-    progSel.value = String(state.program);
+    if (state.window) {
+      progSel.add(new Option(`window ${state.window.name} (a console's record)`, 'window'));
+      progSel.value = 'window';
+      progSel.disabled = true;
+    } else {
+      PROGRAMS.forEach((pr, i) => progSel.add(new Option(pr.name, String(i))));
+      progSel.value = String(state.program);
+    }
     progSel.addEventListener('change', () => {
+      if (state.window) return;
       const i = Number(progSel.value);
       setSelectedProgram(i);
       setRunning(false);
