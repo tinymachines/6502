@@ -229,6 +229,9 @@ def main() -> None:
     # The halfshot recording format. A leaf, importable by a harness without
     # booting the page, which is how the round trip is checked.
     b.copy_hashed("halfshot-codec.js")
+    # Where a page finds a window of a console's record by name, under the
+    # chip's own host and under the roof alike. A leaf.
+    b.copy_hashed("windows.js")
     # Node centroids from layout.bin, shared by diegraph.js and tracer.js so
     # the two cannot put a node in two places. A leaf.
     b.copy_hashed("die-centroids.js")
@@ -481,6 +484,7 @@ def main() -> None:
         ("./program-nav.js", "./" + b.ref("program-nav.js")),
         ("./chip-nav.js", "./" + b.ref("chip-nav.js")),
         ("./chip-controls.js", "./" + b.ref("chip-controls.js")),
+        ("./windows.js", "./" + b.ref("windows.js")),
     ]:
         tr = replace_once(tr, f"'{original}'", f"'{resolved}'", where="trace.js")
     tr = replace_once(tr, "fetch('schematic.json')",
@@ -647,6 +651,7 @@ def main() -> None:
         ("./disasm.js", "./" + b.ref("disasm.js")),
         ("./demos.js", "./" + b.ref("demos.js")),
         ("./halfshot-codec.js", "./" + b.ref("halfshot-codec.js")),
+        ("./windows.js", "./" + b.ref("windows.js")),
     ]:
         hs = replace_once(hs, f"'{original}'", f"'{resolved}'", where="halfshot.js")
     for original in ["blueprint.json", "schematic.json", "decode.json"]:

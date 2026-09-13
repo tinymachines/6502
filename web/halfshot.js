@@ -23,6 +23,7 @@
 
 import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
+import { fetchWindow } from './windows.js';
 // The store behind run/pause and the clock rate is the site's, but this page
 // carries its own controls for it rather than the header's: its transport moves
 // through a recording rather than driving a live chip, and Record and Reset
@@ -832,10 +833,7 @@ async function boot() {
     // one can be.
     const winName = q.get('window');
     if (winName) {
-      if (!/^[A-Za-z0-9_.-]+$/.test(winName)) throw new Error(`not a window name: ${winName}`);
-      const r = await fetch(`windows/${winName}.window`);
-      if (!r.ok) throw new Error(`no window ${winName} (${r.status})`);
-      loadWindow(await r.text(), winName);
+      loadWindow(await fetchWindow(winName), winName);
     } else {
       loadProgram(chosen);
     }

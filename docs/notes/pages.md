@@ -542,7 +542,12 @@ select says which window and does nothing; the head segment before the
 first fetch is labelled "cut inside an instruction", not "reset".
 `_window-test.html` steps the wasm machine through a window without the
 page and reads the pad's byte off it; `_halfshot-dump.html?window=NAME`
-gets the page's export headlessly.
+gets the page's export headlessly. Both pages find a window through
+`windows.js`, one leaf: a relative fetch on the chip's own host, and
+under the roof (where nginx aliases only the hashed bin, json and wasm)
+the chip's host by name, which the roof's connect-src allows. The
+roof's own alias rule gains `.window` in the public repository for the
+next deliberate nginx install.
 
 - **This page carries its own program and clock selects, and the header
   carries none.** Its transport moves through a recording rather than driving a

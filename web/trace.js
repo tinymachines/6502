@@ -23,6 +23,7 @@ import { OPCODES, instructionLength } from './disasm.js';
 // just changed.
 import { setupProgramNav } from './program-nav.js';
 import { setupChipNav } from './chip-nav.js';
+import { fetchWindow } from './windows.js';
 import { isRunning, setRunning, toggleRunning, halfCyclesFor, subscribe } from './chip-controls.js';
 
 
@@ -571,10 +572,7 @@ async function boot() {
     const q = new URLSearchParams(location.search);
     const winName = q.get('window');
     if (winName) {
-      if (!/^[A-Za-z0-9_.-]+$/.test(winName)) throw new Error(`not a window name: ${winName}`);
-      const r = await fetch(`windows/${winName}.window`);
-      if (!r.ok) throw new Error(`no window ${winName} (${r.status})`);
-      state.m = Machine.fromWindow(await r.text());
+      state.m = Machine.fromWindow(await fetchWindow(winName));
       const info = JSON.parse(state.m.windowInfo());
       const h = Number(q.get('h'));
       state.window = { name: winName, origin: info.origin, end: info.end, h: Number.isInteger(h) && h >= info.origin ? h : info.origin };
