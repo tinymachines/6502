@@ -4,9 +4,12 @@
 // the pages on the chip's own host. Under the roof (tinymachines.ai/6502/)
 // the chip's pages are served from the same build, but its unhashed text
 // assets are not aliased there (nginx aliases the hashed .bin/.json/.wasm
-// only), so a relative fetch answers 404 and the window is fetched from
-// the chip's host instead, which the roof's connect-src allows. One place
-// for that rule, shared by the Halfshot and Trace pages.
+// only), so a relative fetch answers 404; the roof also aliases the whole
+// build under <base>/chip/, same origin, which is where the window is
+// fetched from then, with the chip's own host as the last resort (a
+// cross-origin fetch the roof's connect-src allows but the chip's host
+// does not yet answer with CORS headers). One place for that rule,
+// shared by the Halfshot and Trace pages.
 
 const NAME = /^[A-Za-z0-9_.-]+$/;
 const CHIP_HOST = 'https://6502.tinymachines.ai';
@@ -17,7 +20,11 @@ export async function fetchWindow(name) {
   const rel = `windows/${name}.window`;
   let r = await fetch(rel);
   if (r.status === 404 && location.origin !== CHIP_HOST) {
-    r = await fetch(`${CHIP_HOST}/${rel}`);
+    // The roof aliases the chip's whole build under <base>/chip/ (same
+    // origin, so no CORS to arrange); the chip's host is the last resort.
+    const base = location.pathname.replace(/\/[^/]*$/, '');
+    r = await fetch(`${base}/chip/${rel}`);
+    if (r.status === 404) r = await fetch(`${CHIP_HOST}/${rel}`);
   }
   if (!r.ok) throw new Error(`no window ${name} (${r.status})`);
   return r.text();
