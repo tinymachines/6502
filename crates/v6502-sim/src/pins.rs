@@ -200,6 +200,15 @@ pub fn run_window(cpu: &mut Cpu<crate::recorded::RecordedBus>, w: &v6502_pins::W
 /// the origin are written at the origin.
 #[cfg(feature = "mos6502")]
 pub fn cut_window(name: &str, trace: &v6502_pins::Trace, stim: &[v6502_pins::Stim], from: u64, to: u64) -> Result<v6502_pins::Window, String> {
+    cut_window_with(name, trace, stim, &[], from, to)
+}
+
+/// `cut_window` with the record's overlay lines beside it (`<kind> <h> ...`
+/// as the console's trace tool writes them): a line whose second field is
+/// a half-cycle is carried when it falls inside the window, any other line
+/// whole.
+#[cfg(feature = "mos6502")]
+pub fn cut_window_with(name: &str, trace: &v6502_pins::Trace, stim: &[v6502_pins::Stim], overlay: &[String], from: u64, to: u64) -> Result<v6502_pins::Window, String> {
     if from >= to || to as usize >= trace.frames.len() {
         return Err(format!("a window {from}..={to} does not fit a record of {} frames", trace.frames.len()));
     }
@@ -233,6 +242,16 @@ pub fn cut_window(name: &str, trace: &v6502_pins::Trace, stim: &[v6502_pins::Sti
             last = Some(now);
         }
     }
+    let extras: Vec<String> = overlay
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .filter(|l| match l.split_whitespace().nth(1).and_then(|t| t.parse::<u64>().ok()) {
+            Some(h) => h >= from && h <= to,
+            None => true,
+        })
+        .map(str::to_string)
+        .collect();
     Ok(v6502_pins::Window {
         name: name.to_string(),
         record: trace.header.stamp.clone(),
@@ -248,6 +267,7 @@ pub fn cut_window(name: &str, trace: &v6502_pins::Trace, stim: &[v6502_pins::Sti
         fill: 0,
         pages,
         stim: wstim,
+        extras,
         frames,
     })
 }

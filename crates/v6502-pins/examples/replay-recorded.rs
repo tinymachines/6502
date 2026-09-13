@@ -33,7 +33,7 @@
 use std::path::Path;
 
 use v6502_pins::{line, parse_stim, parse_trace, parse_window, write_window};
-use v6502_sim::pins::{cut_window, run_recorded, run_window, rung0_recorded, rung0_window, Replayed};
+use v6502_sim::pins::{cut_window_with, run_recorded, run_window, rung0_recorded, rung0_window, Replayed};
 use v6502_sim::recorded::instruction_at;
 
 fn main() {
@@ -63,7 +63,12 @@ fn main() {
         let to: u64 = args.get(4).and_then(|a| a.parse().ok()).expect("--window <from> <to> <out>");
         let out = args.get(5).expect("--window <from> <to> <out>");
         let t = std::time::Instant::now();
-        let w = cut_window(&trace.header.name, &trace, &stim, from, to).unwrap_or_else(|e| {
+        // The record's overlay beside it, if the recording machine wrote
+        // one (`<stem>.overlay`): its lines inside the window ride along.
+        let overlay: Vec<String> = std::fs::read_to_string(path.with_extension("overlay"))
+            .map(|t| t.lines().map(str::to_string).collect())
+            .unwrap_or_default();
+        let w = cut_window_with(&trace.header.name, &trace, &stim, &overlay, from, to).unwrap_or_else(|e| {
             eprintln!("REFUSED: {e}");
             std::process::exit(1)
         });
@@ -80,11 +85,12 @@ fn main() {
             Replayed::Agrees { steps, held_reads } => {
                 std::fs::write(out, &text).expect("write the window");
                 println!(
-                    "{}: window {from}..={to} cut in {:.1} s; rung 0 restored into it agrees with its {steps} half-cycles ({held_reads} under RDY low); {} pages of shadow, {} stimulus lines; wrote {out}",
+                    "{}: window {from}..={to} cut in {:.1} s; rung 0 restored into it agrees with its {steps} half-cycles ({held_reads} under RDY low); {} pages of shadow, {} stimulus lines, {} overlay lines; wrote {out}",
                     trace.header.name,
                     t.elapsed().as_secs_f64(),
                     back.pages.len(),
-                    back.stim.len()
+                    back.stim.len(),
+                    back.extras.len()
                 );
                 return;
             }

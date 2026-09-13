@@ -14,10 +14,9 @@
 const NAME = /^[A-Za-z0-9_.-]+$/;
 const CHIP_HOST = 'https://6502.tinymachines.ai';
 
-/** The window's text, or a thrown Error naming what could not be had. */
-export async function fetchWindow(name) {
-  if (!NAME.test(name)) throw new Error(`not a window name: ${name}`);
-  const rel = `windows/${name}.window`;
+/** A file beside the windows, by the same rule: the Response, or a thrown Error. */
+async function fetchBeside(file) {
+  const rel = `windows/${file}`;
   let r = await fetch(rel);
   if (r.status === 404 && location.origin !== CHIP_HOST) {
     // The roof aliases the chip's whole build under <base>/chip/ (same
@@ -26,6 +25,18 @@ export async function fetchWindow(name) {
     r = await fetch(`${base}/chip/${rel}`);
     if (r.status === 404) r = await fetch(`${CHIP_HOST}/${rel}`);
   }
-  if (!r.ok) throw new Error(`no window ${name} (${r.status})`);
-  return r.text();
+  if (!r.ok) throw new Error(`no ${file} beside the windows (${r.status})`);
+  return r;
+}
+
+/** The window's text, or a thrown Error naming what could not be had. */
+export async function fetchWindow(name) {
+  if (!NAME.test(name)) throw new Error(`not a window name: ${name}`);
+  return (await fetchBeside(`${name}.window`)).text();
+}
+
+/** A picture the window names (`# picture - <frame> <file>`), as bytes. */
+export async function fetchWindowAsset(file) {
+  if (!NAME.test(file)) throw new Error(`not a window asset name: ${file}`);
+  return new Uint8Array(await (await fetchBeside(file)).arrayBuffer());
 }

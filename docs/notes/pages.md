@@ -540,6 +540,20 @@ windows shipped are the test cartridge's first pad poll and its seventh,
 where the eight reads of $4016 spell $08 on the data bus. The program
 select says which window and does nothing; the head segment before the
 first fetch is labelled "cut inside an instruction", not "reset".
+Inside a window the page also shows **the console around the half-cycle**,
+from the console's own lines the window carries (`# latch`, `# read`,
+`# ppu`, `# nmi`, `# dot`, `# alignment`, `# picture`, written by the
+console's trace tool beside its record and copied by the cutter unread):
+the picture of the frame being drawn through the window (a P6 PPM the
+window names, decoded onto a canvas), the pad column (the latch in force
+with the script's byte, the reads of $4016 since it, the bit this read
+returned, the byte the bits so far spell, and at the eighth read whether
+it is the latch's), the PPU column (frame, line and dot counted by the
+alignment from the window's anchor, the last register write with its
+own frame, line and dot, the last NMI edge) and the stack page from
+memory as it stood at the frame, S marked. `_halfshot-window-test.html`
+boots the page in an iframe, walks the eight reads and holds the byte
+spelled to the latch's, which is the trace plan's T3 gate on the page.
 `_window-test.html` steps the wasm machine through a window without the
 page and reads the pad's byte off it; `_halfshot-dump.html?window=NAME`
 gets the page's export headlessly. Both pages find a window through

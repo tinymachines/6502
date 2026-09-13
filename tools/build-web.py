@@ -200,10 +200,10 @@ def main() -> None:
     windows = src / "windows"
     if windows.is_dir():
         n = 0
-        for w in sorted(windows.glob("*.window")):
+        for w in sorted(list(windows.glob("*.window")) + list(windows.glob("*.ppm"))):
             b.emit(f"windows/{w.name}", w.read_bytes(), hashed=False)
             n += 1
-        print(f"  windows: {n} windows of a record")
+        print(f"  windows: {n} files (windows of a record and the pictures they name)")
 
     b.copy_hashed("layout.bin")
     b.copy_hashed("pkg/v6502_wasm_bg.wasm")

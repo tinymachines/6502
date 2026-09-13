@@ -592,6 +592,11 @@ mod tests {
 //                                        differ from the fill)
 //   # stim <h> <inputs>                (repeatable: the inputs in force from
 //                                        the step after h, first at origin)
+//   # <kind> <h> ...                    (repeatable: the recording machine's
+//                                        own lines about the window, carried
+//                                        whole and unread here: a console's
+//                                        latches, its PPU writes with dot and
+//                                        line, its frame ends, its picture)
 //   # h clk0 ab db rw sync inputs(res irq nmi rdy so)
 //   <origin> ...                       (one frame line per half-cycle)
 //
@@ -623,8 +628,16 @@ pub struct Window {
     pub fill: u8,
     pub pages: Vec<(u8, Vec<u8>)>,
     pub stim: Vec<Stim>,
+    /// The recording machine's own lines about the window, each without
+    /// its `# `: whatever the record's overlay said within the window's
+    /// half-cycles (the console's latches, PPU writes, frame ends, NMI
+    /// edges, alignment, picture). This crate carries them and reads none.
+    pub extras: Vec<String>,
     pub frames: Vec<PinFrame>,
 }
+
+/// The header words this format owns; any other `# ` line is an extra.
+const WINDOW_WORDS: [&str; 8] = ["window", "name", "record", "origin", "state", "fill", "page", "stim"];
 
 pub fn write_window(w: &Window) -> String {
     let mut out = String::new();
@@ -651,6 +664,9 @@ pub fn write_window(w: &Window) -> String {
     for s in &w.stim {
         let b: String = [s.res, s.irq, s.nmi, s.rdy, s.so].iter().map(|&x| BIT[x as usize]).collect();
         out.push_str(&format!("# stim {} {}\n", s.h, b));
+    }
+    for e in &w.extras {
+        out.push_str(&format!("# {e}\n"));
     }
     out.push_str("# h clk0 ab db rw sync inputs(res irq nmi rdy so)\n");
     for f in &w.frames {
@@ -734,7 +750,13 @@ pub fn parse_window(text: &str) -> Result<Window, String> {
                         so: b[4],
                     });
                 }
-                _ => {} // the column heading, and anything a later version adds
+                "h" => {} // the column heading
+                _ => {
+                    // The recording machine's own line, carried whole.
+                    if !WINDOW_WORDS.contains(&key) {
+                        w.extras.push(rest.to_string());
+                    }
+                }
             }
             continue;
         }

@@ -23,7 +23,7 @@
 
 import init, { Machine } from './pkg/v6502_wasm.js';
 import { PROGRAMS, LOAD_ADDR, selectedProgram, setSelectedProgram } from './programs.js';
-import { fetchWindow } from './windows.js';
+import { fetchWindow, fetchWindowAsset } from './windows.js';
 // The store behind run/pause and the clock rate is the site's, but this page
 // carries its own controls for it rather than the header's: its transport moves
 // through a recording rather than driving a live chip, and Record and Reset
@@ -124,7 +124,8 @@ function loadWindow(text, name) {
   const m = Machine.fromWindow(text);
   const info = JSON.parse(m.windowInfo());
   state.m = m;
-  state.window = { name, record: info.record, origin: info.origin, end: info.end, text };
+  state.window = { name, record: info.record, origin: info.origin, end: info.end, text, console: parseConsole(text) };
+  loadPicture();
   state.mem0 = new Uint8Array(m.memorySlice(0, 65536));
   state.frames = [];
   state.segs = [];
@@ -133,7 +134,163 @@ function loadWindow(text, name) {
   record(BATCH);
 }
 
-/** The last half-cycle the chip may reach: the window's end, or none. */
+/**
+ * The console's own lines in a window (`# <kind> <h> ...`, written by the
+ * console's trace tool and carried by the cutter unread): the latches of
+ * the pad with the script's byte, the reads of $4016 with the bit each
+ * returned, the PPU register writes with their frame, line and dot, the NMI
+ * edges, an anchor of where a half-cycle falls in the PPU's frame, the
+ * alignment to count dots from it, and the pictures. What the 6502 pages
+ * have no column for (nes-bench's trace plan, T3).
+ */
+function parseConsole(text) {
+  const c = { latches: [], reads: [], ppu: [], nmi: [], anchors: [], pictures: [], alignment: null };
+  for (const raw of text.split('\n')) {
+    if (!raw.startsWith('# ')) continue;
+    const t = raw.slice(2).trim().split(/\s+/);
+    const h = Number(t[1]);
+    switch (t[0]) {
+      case 'latch': c.latches.push({ h, index: Number(t[2]), byte: parseInt(t[3], 16), frame: Number(t[4]) }); break;
+      case 'read': c.reads.push({ h, addr: parseInt(t[2], 16), bit: Number(t[3]), latch: Number(t[4]) }); break;
+      case 'ppu': c.ppu.push({ h, reg: parseInt(t[2], 16), value: parseInt(t[3], 16), frame: Number(t[4]), line: Number(t[5]), dot: Number(t[6]) }); break;
+      case 'nmi': c.nmi.push({ h, asserted: t[2] === '1' }); break;
+      case 'dot': c.anchors.push({ h, frame: Number(t[2]), line: Number(t[3]), dot: Number(t[4]) }); break;
+      case 'alignment': c.alignment = { cpu: Number(t[2]), ppu: Number(t[3]) }; break;
+      case 'picture': c.pictures.push({ frame: Number(t[2]), file: t[3] }); break;
+      default: break;
+    }
+  }
+  return c;
+}
+
+/** Dots since the PPU's first, for a CPU half-cycle, by the alignment (never converted elsewhere). */
+function dotsAt(h, al) {
+  const m = al.cpu + 12 * h;
+  return m < al.ppu ? 0 : Math.floor((m - al.ppu) / 8) + 1;
+}
+
+const DOTS_PER_LINE = 341;
+const LINES = 262;
+
+/** Where half-cycle h falls in the PPU's frame, counted from the nearest anchor at or before it. */
+function ppuPlace(h) {
+  const c = state.window && state.window.console;
+  if (!c || !c.alignment || !c.anchors.length) return null;
+  let a = null;
+  for (const x of c.anchors) if (x.h <= h && (!a || x.h > a.h)) a = x;
+  if (!a) a = c.anchors[0];
+  const d = dotsAt(h, c.alignment) - dotsAt(a.h, c.alignment) + a.line * DOTS_PER_LINE + a.dot;
+  const frames = Math.floor(d / (DOTS_PER_LINE * LINES));
+  const inFrame = d - frames * DOTS_PER_LINE * LINES;
+  return { frame: a.frame + frames, line: Math.floor(inFrame / DOTS_PER_LINE), dot: inFrame % DOTS_PER_LINE, anchored: a };
+}
+
+/**
+ * The pad at half-cycle h: the latch in force (index, the script's byte),
+ * the reads of $4016 since it, the bit this read returned if this frame is
+ * one, and the byte the bits so far spell (bit 0 first, as the register
+ * shifts). At the eighth read the byte spelled is the latch's, which is the
+ * plan's gate on the page.
+ */
+function padAt(h) {
+  const c = state.window && state.window.console;
+  if (!c) return null;
+  let latch = null;
+  for (const l of c.latches) if (l.h <= h && (!latch || l.h > latch.h)) latch = l;
+  const reads = c.reads.filter((r) => r.addr === 0x4016 && r.h <= h && (!latch || r.h > latch.h) && (latch || r.h < (c.latches[0] ? c.latches[0].h : Infinity)));
+  const bits = reads.map((r) => r.bit);
+  const spelled = bits.slice(0, 8).reduce((acc, b, i) => acc | (b << i), 0);
+  const now = reads.find((r) => r.h === h) || null;
+  return { latch, reads: reads.length, now, bitIndex: now ? reads.indexOf(now) : -1, spelled, complete: reads.length >= 8 };
+}
+
+/** The console at frame k: everything the harness asks for. */
+function consoleAt(k) {
+  const f = state.frames[k];
+  if (!f || !state.window) return null;
+  return { h: f.h, pad: padAt(f.h), ppu: ppuPlace(f.h), s: f.s };
+}
+
+/** The picture the window names for the frame it stands in, drawn onto the canvas (a P6 PPM, decoded here). */
+async function loadPicture() {
+  const w = state.window;
+  const c = w.console;
+  const note = $('hs-picture-note');
+  // The frame being drawn while the window runs, if the window names its
+  // picture; else the nearest named one, and the note says so.
+  const place = ppuPlace(w.origin);
+  const exact = place && c.pictures.find((p) => p.frame === place.frame);
+  const pic = exact || (place && c.pictures.slice().sort((a, b) => Math.abs(a.frame - place.frame) - Math.abs(b.frame - place.frame))[0]) || c.pictures[0];
+  if (!pic) { note.textContent = 'no picture named by the window'; return; }
+  try {
+    const bytes = await fetchWindowAsset(pic.file);
+    const text = new TextDecoder('latin1').decode(bytes.subarray(0, 64));
+    const m = text.match(/^P6\s+(\d+)\s+(\d+)\s+255\s/);
+    if (!m) throw new Error(`${pic.file} is not a P6 picture`);
+    const [wd, ht] = [Number(m[1]), Number(m[2])];
+    const off = m[0].length;
+    const cv = $('hs-picture');
+    cv.width = wd; cv.height = ht;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(wd, ht);
+    for (let i = 0, j = off; i < wd * ht; i++, j += 3) {
+      img.data[4 * i] = bytes[j]; img.data[4 * i + 1] = bytes[j + 1]; img.data[4 * i + 2] = bytes[j + 2]; img.data[4 * i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    note.textContent = exact
+      ? `the console's frame ${pic.frame}, the one being drawn through this window, as the model's PPU drew it (an authored palette, for a look)`
+      : `the console's frame ${pic.frame}, the nearest the window names (this window runs in frame ${place ? place.frame : '?'})`;
+  } catch (e) {
+    note.textContent = `picture: ${e.message}`;
+  }
+}
+
+/** Paint the console panel for frame k: the pad, the PPU, the stack page. */
+function paintConsole(k, f) {
+  const w = state.window;
+  const sec = $('hs-console');
+  if (!w) { sec.hidden = true; return; }
+  sec.hidden = false;
+  const c = w.console;
+  const h = f.h;
+  // The pad.
+  const p = padAt(h);
+  const padEl = $('hs-pad');
+  if (!p || !p.latch) {
+    padEl.innerHTML = `<h4>Pad</h4><p class="muted">no latch of the pad inside this window before this half-cycle${c.latches.length ? ` (the first is at ${c.latches[0].h})` : ''}</p>`;
+  } else {
+    const bits = [];
+    for (let i = 0; i < 8; i++) bits.push(i < p.reads ? ((p.spelled >> i) & 1) : '·');
+    padEl.innerHTML = `<h4>Pad</h4>`
+      + `<p>latch ${p.latch.index} at half-cycle ${p.latch.h}, the script's byte $${hex2(p.latch.byte)}</p>`
+      + `<p>${p.reads} read${p.reads === 1 ? '' : 's'} of $4016 since${p.now ? ` <span class="hs-now">· this one is bit ${p.bitIndex}, D0 = ${p.now.bit}</span>` : ''}</p>`
+      + `<p>bits so far ${bits.join('')} (bit 0 first) = $${hex2(p.spelled)}${p.complete ? (p.spelled === p.latch.byte ? ' · the latch\'s byte, read back' : ' · NOT the latch\'s byte') : ''}</p>`;
+  }
+  // The PPU.
+  const place = ppuPlace(h);
+  const ppuEl = $('hs-ppu');
+  let last = null;
+  for (const x of c.ppu) if (x.h <= h && (!last || x.h > last.h)) last = x;
+  const nmiLast = c.nmi.filter((n) => n.h <= h).pop();
+  ppuEl.innerHTML = `<h4>PPU</h4>`
+    + (place ? `<p>frame ${place.frame}, line ${place.line}, dot ${place.dot}${place.line >= 241 && place.line <= 260 ? ' · vertical blank' : ''} <span class="muted">(counted by the alignment from the anchor at ${place.anchored.h})</span></p>` : '<p class="muted">no anchor in this window</p>')
+    + (last ? `<p>last register write: $${hex4(last.reg)} ← $${hex2(last.value)} at half-cycle ${last.h} (frame ${last.frame}, line ${last.line}, dot ${last.dot})${last.h === h ? ' <span class="hs-now">· now</span>' : ''}</p>` : '<p class="muted">no PPU register write inside this window yet</p>')
+    + (nmiLast ? `<p>NMI ${nmiLast.asserted ? 'asserted' : 'released'} at half-cycle ${nmiLast.h}</p>` : '');
+  // The stack page, from memory as it stood at this frame, S marked.
+  const mem = memAt(k);
+  const st = $('hs-stack');
+  let html = '';
+  for (let row = 0; row < 16; row++) {
+    html += `<span class="hs-stack-row">$01${hex2(row * 16)}</span>`;
+    for (let col = 0; col < 16; col++) {
+      const a = 0x0100 + row * 16 + col;
+      const isS = (a & 0xff) === f.s;
+      const live = (a & 0xff) > f.s;
+      html += `<span class="${isS ? 'hs-stack-s' : ''}${live ? ' hs-stack-live' : ''}" title="$${hex4(a)}${isS ? ' = S' : ''}">${hex2(mem[a])}</span>`;
+    }
+  }
+  st.innerHTML = html;
+}
 const endOfRun = () => (state.window ? state.window.end : Infinity);
 
 /**
@@ -668,6 +825,7 @@ function refresh() {
   paintRegs(f, prev);
   paintPlate(f, prev);
   paintMem(k, f);
+  paintConsole(k, f);
   paintIsland(k);
   paintStrip();
   paintScope(k);
@@ -923,7 +1081,7 @@ async function boot() {
 
     // For the harness: the recording, the segments and the codec entry point.
     window.__halfshot = { state, seek, record, memAt, islandCone, exportRecording, encode,
-                          setRecording, resetRecording, skip };
+                          setRecording, resetRecording, skip, consoleAt };
   } catch (e) {
     status.textContent = 'Could not load: ' + (e && e.message ? e.message : e);
     status.classList.add('error');

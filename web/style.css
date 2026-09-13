@@ -2784,6 +2784,19 @@ body.no-scroll #view { z-index: 70; }
 .hs-written { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: center; min-height: 1.5rem; }
 .hs-w { font-size: .7rem; color: var(--hot); }
 .hs-mem .muted, .hs-events .muted { color: var(--muted); }
+/* The console around a window: the picture, the pad and PPU columns, the stack page. */
+.hs-console { margin-top: 1rem; padding: .6rem .8rem; }
+.hs-console-grid { display: grid; grid-template-columns: auto 1fr; gap: .8rem 1.2rem; align-items: start; }
+.hs-console-pic canvas { width: 256px; height: 240px; image-rendering: pixelated; border: 2px solid var(--line); display: block; }
+.hs-console-cols { display: grid; gap: .6rem; font-size: .82rem; }
+.hs-console-col h4 { margin: 0 0 .2rem; font-size: .8rem; font-weight: 600; letter-spacing: .02em; }
+.hs-console-col p { margin: .1rem 0; }
+.hs-console-col .hs-now { color: var(--accent, #c8102e); font-weight: 600; }
+.hs-stack { grid-column: 1 / -1; display: grid; grid-template-columns: 3.2rem repeat(16, 1.6rem); gap: .05rem .2rem; font-size: .72rem; line-height: 1.25; }
+.hs-stack .hs-stack-row { color: var(--muted); }
+.hs-stack .hs-stack-s { background: var(--accent, #c8102e); color: #fff; border-radius: 2px; }
+.hs-stack .hs-stack-live { font-weight: 600; }
+@media (max-width: 700px) { .hs-console-grid { grid-template-columns: 1fr; } .hs-stack { grid-template-columns: 3.2rem repeat(8, 1.6rem); } }
 
 /* The island: a small schematic on the same dark ground the workbench uses,
    sized to its drawing. */

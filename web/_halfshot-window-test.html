@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>halfshot window test</title>
+<!--
+  The console's overlays on the Halfshot page inside a window
+  (nes-bench's trace plan, T3), checked without a click: the real page is
+  booted in an iframe on windows/pad-poll-6.window (the family's test
+  cartridge polling its pad with $08 on it), the recording is grown to the
+  window's end, and at every frame that is a read of $4016 the pad column
+  is read back: the bit this read returned, the byte the bits so far spell,
+  and at the eighth read the byte is the latch's, $08, which is the plan's
+  gate on the page. The PPU column places every frame in the PPU's frame
+  by the alignment from the window's anchor and names a register write; the
+  stack page shows S; the picture note names the console's frame.
+
+    ?window=NAME   another window (the byte check then only reports)
+
+  The title reads ALL PASS or the first failure.
+-->
+<pre id="out"></pre>
+<iframe id="f" style="width:1200px;height:900px"></iframe>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const name = q.get('window') || 'pad-poll-6';
+const f = document.getElementById('f');
+const out = document.getElementById('out');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const fails = [];
+const log = (s) => { out.textContent += s + '\n'; };
+const check = (c, what) => { log((c ? 'ok   ' : 'FAIL ') + what); if (!c) fails.push(what); };
+f.src = `halfshot.html?window=${name}`;
+f.addEventListener('load', async () => {
+  try {
+    const d = f.contentDocument, w = f.contentWindow;
+    for (let i = 0; i < 600 && !(w.__halfshot && !d.getElementById('hs-main').hidden); i++) await sleep(50);
+    const H = w.__halfshot;
+    if (!H) throw new Error('page did not boot: ' + d.getElementById('hs-status').textContent);
+    const st = H.state;
+    check(!!st.window, `the page stands in window ${st.window && st.window.name}`);
+    const con = st.window.console;
+    check(con.latches.length >= 1 && con.reads.length >= 8, `the window carries ${con.latches.length} latch(es) and ${con.reads.length} pad reads`);
+    check(!!con.alignment && con.anchors.length >= 1, `an alignment and ${con.anchors.length} anchor(s)`);
+    // Grow the recording to the window's end.
+    H.seek(st.window.end - st.window.origin);
+    check(st.frames[st.frames.length - 1].h === st.window.end, `recorded to the window's end (h ${st.frames[st.frames.length - 1].h})`);
+    // Every frame that is a read of $4016: the pad column.
+    const readFrames = [];
+    st.frames.forEach((fr, k) => { if (fr.access && fr.access.kind === 'R' && fr.access.addr === 0x4016) readFrames.push(k); });
+    check(readFrames.length === 8, `eight frames read $4016 (${readFrames.length})`);
+    let bitsSeen = [];
+    for (const k of readFrames) {
+      H.seek(k);
+      const c = H.consoleAt(k);
+      check(!!c && !!c.pad && !!c.pad.now, `frame ${k} (h ${st.frames[k].h}): the pad column sees this read`);
+      if (!c || !c.pad || !c.pad.now) continue;
+      bitsSeen.push(c.pad.now.bit);
+      check(c.pad.now.bit === (st.frames[k].db & 1), `its bit ${c.pad.bitIndex} is the data bus's D0 (${c.pad.now.bit})`);
+      const padText = d.getElementById('hs-pad').textContent;
+      check(padText.includes(`bit ${c.pad.bitIndex}`), 'the pad column names the bit');
+      if (c.pad.reads === 8) {
+        check(c.pad.complete && c.pad.spelled === c.pad.latch.byte, `at the eighth read the byte spelled ($${c.pad.spelled.toString(16).padStart(2, '0')}) is the latch's ($${c.pad.latch.byte.toString(16).padStart(2, '0')})`);
+        check(padText.includes("the latch's byte, read back"), 'and the page says so');
+        if (name === 'pad-poll-6') check(c.pad.latch.byte === 0x08, 'the latch\'s byte is the script\'s $08');
+      }
+    }
+    log(`bits seen ${bitsSeen.join('')}`);
+    // The PPU column and the stack page at the last read.
+    const kLast = readFrames[readFrames.length - 1];
+    const c = H.consoleAt(kLast);
+    check(!!c.ppu && Number.isInteger(c.ppu.line) && c.ppu.line >= 0 && c.ppu.line < 262 && c.ppu.dot < 341, `the PPU column places the frame: frame ${c.ppu && c.ppu.frame}, line ${c.ppu && c.ppu.line}, dot ${c.ppu && c.ppu.dot}`);
+    const ppuText = d.getElementById('hs-ppu').textContent;
+    check(/register write: \$200[0-7]|\$4014|no PPU register write/.test(ppuText), 'the PPU column names the last register write or says there is none');
+    const sEl = d.querySelector('#hs-stack .hs-stack-s');
+    const sWant = `$01${st.frames[kLast].s.toString(16).padStart(2, '0')} = S`;
+    check(!!sEl && sEl.title.toLowerCase() === sWant.toLowerCase(), `the stack page marks S at ${sWant} (found ${sEl ? JSON.stringify(sEl.title) : "no marker"})`);
+    const note = d.getElementById('hs-picture-note').textContent;
+    check(/frame \d+, the one being drawn/.test(note), `the picture is the frame being drawn through the window (${note.slice(0, 70)})`);
+    const cv = d.getElementById('hs-picture');
+    const px = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    let lit = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i] + px[i + 1] + px[i + 2] > 0) lit++;
+    check(lit > 0, `the picture is drawn (${lit} lit pixels)`);
+    document.title = fails.length ? `FAIL ${fails[0]}` : 'ALL PASS';
+  } catch (e) {
+    document.title = 'ERROR ' + e.message;
+    out.textContent += String(e && e.stack || e);
+  }
+}, { once: true });
+</script>
