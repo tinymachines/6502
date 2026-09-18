@@ -551,7 +551,14 @@ returned, the byte the bits so far spell, and at the eighth read whether
 it is the latch's), the PPU column (frame, line and dot counted by the
 alignment from the window's anchor, the last register write with its
 own frame, line and dot, the last NMI edge) and the stack page from
-memory as it stood at the frame, S marked. `_halfshot-window-test.html`
+memory as it stood at the frame, S marked. The anchor's line is the
+index from the frame's start, and the PPU runs its pre-render line
+first, so index 0 is the PPU's line 261 and index 1 its line 0; the
+column shows the PPU's own line (the conversion is in `ppuPlace`, since
+2026-09-18: the index had been shown as the line, one high, and the
+bench found it when the part's poll would not sit where the model's
+said). The console's trace keeps the anchors as indices for this
+reason and names the PPU's line in its events. `_halfshot-window-test.html`
 boots the page in an iframe, walks the eight reads and holds the byte
 spelled to the latch's, which is the trace plan's T3 gate on the page.
 `_window-test.html` steps the wasm machine through a window without the

@@ -179,10 +179,15 @@ function ppuPlace(h) {
   let a = null;
   for (const x of c.anchors) if (x.h <= h && (!a || x.h > a.h)) a = x;
   if (!a) a = c.anchors[0];
+  // The anchor's line is the index from the frame's start, where the
+  // PPU runs its pre-render line first: index 0 is the PPU's line 261,
+  // index 1 its line 0. The place shown is the PPU's own line, which is
+  // what the console's traces and the bench's tools name (until
+  // 2026-09-18 the index was shown as the line, one high).
   const d = dotsAt(h, c.alignment) - dotsAt(a.h, c.alignment) + a.line * DOTS_PER_LINE + a.dot;
   const frames = Math.floor(d / (DOTS_PER_LINE * LINES));
   const inFrame = d - frames * DOTS_PER_LINE * LINES;
-  return { frame: a.frame + frames, line: Math.floor(inFrame / DOTS_PER_LINE), dot: inFrame % DOTS_PER_LINE, anchored: a };
+  return { frame: a.frame + frames, line: (Math.floor(inFrame / DOTS_PER_LINE) + LINES - 1) % LINES, dot: inFrame % DOTS_PER_LINE, anchored: a };
 }
 
 /**
