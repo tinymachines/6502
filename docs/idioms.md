@@ -244,8 +244,8 @@ dead deep link looks exactly like a broken feature.
 | one gate, and what makes it | [`/schematic?signal=sb0`](https://6502.tinymachines.ai/schematic?signal=sb0) |
 
 `docs/atlas.md` gives the address rubric, so anything above can be looked up
-by name. A register cell is `regs:x:#1` (`x2`). The chip map draws every container
-the tracer lights them half-cycle by half-cycle.
+by name. A register cell is `regs:x:#1` (`x2`). The chip map draws every container,
+and the tracer lights them half-cycle by half-cycle.
 
 And the other direction, which is the one that makes it stick: write a
 program for it. Die Runner is a 6502 ROM whose screen is a page of its own

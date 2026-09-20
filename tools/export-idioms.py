@@ -378,9 +378,9 @@ for lbl, page, param, val in LINKS:
       % (lbl, page, param, val, page, param, val))
 w("")
 w("`docs/atlas.md` gives the address rubric, so anything above can be looked up")
-w("by name. A register cell is `%s` (`%s`). The chip map draws every container"
+w("by name. A register cell is `%s` (`%s`). The chip map draws every container,"
   % (addr(rings[0]), nm(rings[0])))
-w("the tracer lights them half-cycle by half-cycle.\n")
+w("and the tracer lights them half-cycle by half-cycle.\n")
 w("And the other direction, which is the one that makes it stick: write a")
 w("program for it. Die Runner is a 6502 ROM whose screen is a page of its own")
 w("memory, run on this simulation rather than on an emulator of it, so every")

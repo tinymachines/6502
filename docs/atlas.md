@@ -64,10 +64,10 @@ computes, not a label for it. `aoi2.1` is `NOT((A AND B) OR C)`.
 | `inv` | 534 | inverter |
 | `bus` | 386 | no gate drives it: a bus bit or a pass-only node |
 | `nor2` | 165 | 2-input NOR |
-| `dyn1` | 73 | precharged, 1 legs, no pullup |
+| `dyn1` | 73 | precharged, 1 leg, no pullup |
 | `nor3` | 53 | 3-input NOR |
 | `aoi2.1` | 46 | AND-OR-invert, legs 2 and 1 deep |
-| `nand2` | 39 | 2-deep NAND |
+| `nand2` | 39 | 2-input NAND |
 | `dyn3` | 36 | precharged, 3 legs, no pullup |
 | `nor5` | 33 | 5-input NOR |
 | `nor8` | 30 | 8-input NOR |

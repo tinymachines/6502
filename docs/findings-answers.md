@@ -16,8 +16,8 @@ It is story (a), and not by inference: the fix is one line in
 writes a group's resolved level into every member's storage. Nothing clamps
 anything at serialization time; the halfshot writer reads the same storage it
 always read. Before the fix, a group joined to both rails resolved to Vss and
-wrote `false` into vcc's own storage cell -- the reference implementation does
-exactly the same -- and it was unobservable to the solver because a rail
+wrote `false` into vcc's own storage cell (the reference implementation does
+exactly the same), and it was unobservable to the solver because a rail
 resolves by identity, never by its stored level. The reported level was wrong;
 every input the solver fed downstream was right. That is (a) as stated.
 

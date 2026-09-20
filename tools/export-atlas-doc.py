@@ -61,6 +61,10 @@ def klass(n):
 
 def naddr(n): return "%s:%s:#%d" % (owner[n], klass(n), n)
 
+def count(n, noun):
+    """A count and its noun, agreeing with the count wherever one is printed."""
+    return "%d %s%s" % (n, noun, "" if n == 1 else "s")
+
 # the tracer's measured bus-stem rule, re-derived here rather than imported:
 # letters only, no `not` complement, bit 0 named, at least 7 of bits 0..7.
 stems = set()
@@ -243,8 +247,8 @@ for k, c in cv.most_common():
     r = READ.get(k)
     if r is None:
         if k.startswith("nor"):  r = "%s-input NOR" % k[3:]
-        elif k.startswith("nand"): r = "%s-deep NAND" % k[4:]
-        elif k.startswith("dyn"): r = "precharged, %s legs, no pullup" % k[3:]
+        elif k.startswith("nand"): r = "%s-input NAND" % k[4:]
+        elif k.startswith("dyn"): r = "precharged, %s, no pullup" % count(int(k[3:]), "leg")
         else: r = "AND-OR-invert, legs %s deep" % k[3:].replace(".", " and ")
     w("| `%s` | %d | %s |" % (k, c, r))
 w("")
