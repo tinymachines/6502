@@ -71,6 +71,29 @@ const CONTEXTS: &[(&str, u16, &[u8], &[u8])] = &[
     ("bnegcross", 0x0400, &[0xa9, 0x01, 0xa2, 0x02, 0xa0, 0x03, 0x18], &[0xf0, 0x02, 0x00]),
     ("bnegcross_cz", 0x0400, &[0xa9, 0x00, 0xa2, 0x02, 0xa0, 0x03, 0x38], &[0xf0, 0x02, 0x00]),
     ("bnegcross_nv", 0x0400, &[0xa9, 0xc0, 0x85, 0x10, 0x24, 0x10, 0xa2, 0x02], &[0xf0, 0x02, 0x00]),
+    // The same backward cross for BMI and BEQ, which the three above
+    // leave out: each of them ends on an LDX or an LDY, and those write
+    // N and Z, so by the branch N is clear and Z is clear and neither op
+    // is taken. Without these two the only crossing recording either op
+    // has is a FORWARD one, the mask search finds `taken + crosses`
+    // single-valued, and a backward branch selects the forward span:
+    // rung 3 then adds a page where the part subtracts one. The carry is
+    // CLEAR in both, which is what keeps C from being learned as a
+    // stand-in for the offset's sign a second time (tinymachines/nes:
+    // Super Mario Bros. 2 crashed on a backward BEQ at $ED10, and
+    // `bnegcross_n`'s BMI is what a two-rung diverge run failed on
+    // first). MEASURED, not authored: the spans come from rung 0.
+    ("bnegcross_n", 0x0400, &[0xa2, 0x02, 0xa0, 0x03, 0x18, 0xa9, 0x80], &[0xf0, 0x02, 0x00]),
+    ("bnegcross_z", 0x0400, &[0xa2, 0x02, 0xa0, 0x03, 0x18, 0xa9, 0x00], &[0xf0, 0x02, 0x00]),
+    // And the negative offset that stays on its page, for the same two:
+    // once the sign is in their mask, the ordinary backward loop needs a
+    // recording under it as well. `cneg` is this pair's positive-flag
+    // twin, and ends on an LDY for the same reason.
+    ("cneg_n", 0x0240, &[0xa2, 0x02, 0xa0, 0x03, 0x18, 0xa9, 0x80], &[0xf8, 0x02, 0x00]),
+    ("cneg_z", 0x0240, &[0xa2, 0x02, 0xa0, 0x03, 0x18, 0xa9, 0x00], &[0xf8, 0x02, 0x00]),
+    // BVS on its page with a negative offset: V survives an LDA, so no
+    // context above leaves it set at a backward branch that stays put.
+    ("cneg_v", 0x0240, &[0xa9, 0x40, 0x85, 0x10, 0x24, 0x10, 0x18], &[0xf8, 0x02, 0x00]),
 ];
 
 /// How far past the fetch the recorder looks before calling an opcode KIL.

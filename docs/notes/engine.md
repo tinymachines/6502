@@ -841,6 +841,38 @@ where it belongs:
   those four runs. The first crossing case in the test landed on $02FF
   and measured the same as the on-page case; the test now asserts that a
   crossing crosses.
+- **A branch taken backward across a page went forward instead, on two
+  of the eight branches.** The direction of the high-byte fixup is a
+  control difference (`DBADD` for a positive offset, `nDBADD` for a
+  negative one) and the selector carries it as `SEL_NEG`, but the
+  relevance mask is the SMALLEST set of bits that keeps the recordings
+  single-valued, and it can only see what was recorded. All three
+  `bnegcross` contexts ended on an `LDX` or an `LDY`, which write N and
+  Z, so BMI and BEQ were never taken in any of them: their only
+  crossing recording was a forward one, `taken + crosses` was
+  single-valued for those two without the sign, the mask dropped it, and
+  a backward branch selected the forward span. Rung 3 added a page where
+  the part subtracts one. Super Mario Bros. 2 on the console
+  (tinymachines/nes) died on it: `BEQ` at $ED10 went to $EEE3 instead of
+  $ECE3, ran through the bank's `$FF` padding into a `BRK`, and spun on
+  the IRQ vector with the screen one flat colour. Located with the
+  console's `where-it-sits` (the histogram, then the hundred fetches
+  before the crash, then the bus trace of the branch itself) and pinned
+  with `diverge`, which parted at the first backward-crossing BMI.
+  `bnegcross_n` and `bnegcross_z` are the missing recordings, with
+  `cneg_n`, `cneg_z` and `cneg_v` for the same branches staying on their
+  page once the sign was in their mask; all eight now carry it.
+  `tests/branch_page.rs` holds every branch to rung 0 both ways, on the
+  page and across it, under both carries, and `MUTATE_BSIGN=1` drops the
+  sign from the key and goes red on exactly the backward-crossing cases.
+  Two lessons: the carry had been learned as a stand-in for the offset's
+  sign once before (the `cpos`/`cneg` decorrelators exist for it), and
+  the same substitution came back in the crossing case, where nobody had
+  looked; and a missing variant surfaces as one panic at a time in
+  whatever order the cases run, so the second test in that file asks the
+  table for every selector key a branch can present and names them all
+  at once. That is what found BVS's on-page backward case, which nothing
+  else had reached.
 - **`dpc34_PCLC`/`dpc35_PCHC` are data signals wearing control-line
   names** (the PC incrementer's carries), masked out of the table; the
   datapath computes them.

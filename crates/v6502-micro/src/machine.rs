@@ -224,6 +224,19 @@ fn mutate_branch() -> bool {
     *M.get_or_init(|| std::env::var_os("MUTATE_BRANCH").is_some())
 }
 
+/// The mutation switch of tests/branch_page.rs, read once: the offset's
+/// sign is dropped from the selector key, so a taken branch across a page
+/// picks whichever direction the table recorded first. This is exactly
+/// what the table did before `bnegcross_n` and `bnegcross_z` were
+/// recorded: BMI and BEQ had no backward-crossing recording, the mask
+/// search found `taken + crosses` single-valued without the sign, and a
+/// backward branch across a page added a page where the part subtracts
+/// one. Super Mario Bros. 2 died on it at $ED10.
+fn mutate_branch_sign() -> bool {
+    static M: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *M.get_or_init(|| std::env::var_os("MUTATE_BSIGN").is_some())
+}
+
 /// The mutation switch of tests/seam.rs, read once: the selector asks the
 /// index registers as stored, one instruction stale after an ALU write.
 fn mutate_seam() -> bool {
@@ -765,7 +778,10 @@ impl MicroCpu {
             Some(b) => b.peek(a),
             None => mem[a as usize],
         };
-        let key = select::selector(op, p_seen, x_seen, y_seen, self.fetch_pc, &mut peek);
+        let mut key = select::selector(op, p_seen, x_seen, y_seen, self.fetch_pc, &mut peek);
+        if mutate_branch_sign() {
+            key &= !crate::lines::SEL_NEG;
+        }
         let span = table::span(op, key).unwrap_or_else(|| {
             panic!(
                 "op {op:02x} at {:04x}: no recorded variant for key {key:#04x} (mask {:#04x})",
