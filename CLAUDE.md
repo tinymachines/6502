@@ -765,6 +765,16 @@ story of each is in the note for its area.
   `/usr/bin/rustc` that is 1.75 -- all three have produced confident wrong
   conclusions. Anything the deploy shells out to runs under **systemd's**
   environment, not yours.
+- **A gate piped through `tail` reports the pipe's exit code, so a refusal
+  reads as a warning.** `board-nes.py` refused to board a stale pin, printed
+  the reason to stderr and exited 1; run as `... 2>&1 | tail -40` the shell
+  reported 0, the tree was simply unchanged, and the one line that mattered
+  had floated to the TOP of the output because stderr is unbuffered and
+  stdout is not. Two conclusions, both wrong: that it had warned, and that it
+  had written. **Run a gate on its own and check its status before piping
+  anything**, or `set -o pipefail` and keep the two streams in separate
+  files. Anything that prints its verdict to stderr and its progress to
+  stdout will do this again.
 - **`head` showing a line that `grep` cannot find is an instrument failure, not
   a fact about the code.** A raw NUL byte in a source file makes `file` report
   `data` and every binary-guarded grep return no matches. Prefer an escape to a
