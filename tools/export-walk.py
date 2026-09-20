@@ -54,6 +54,21 @@ i0 = hits[5]                          # a pass with X non-zero, so the adder wor
 win = tr[i0:i0 + 12]
 XVAL = win[0]["x"]
 
+# The prose below points at one readout as an example of a mid-instruction
+# value that is no value at all: ADL at the write's phi1. That only holds
+# while the byte on ADL there is the low byte of no address the instruction
+# touches, so refuse rather than print it if the chip stops agreeing. The
+# earlier version of this paragraph pointed at X and was wrong for a month
+# because nothing checked it.
+WBUS = next((o for o in win[:10] if o["rw"] == "write" and o["phase"] == "phi1"), None)
+if WBUS is None:
+    print("FAIL no write phi1 in the window: the bus paragraph has no example"); sys.exit(1)
+LOWS = {o["addr"] & 0xFF for o in win[:10]} | {win[1]["data"]}   # + the operand's low byte
+if WBUS["adl"] in LOWS:
+    print("FAIL ADL $%02X at half-cycle %d is an address byte after all (%s)"
+          % (WBUS["adl"], WBUS["half_cycle"],
+             ", ".join("$%02X" % v for v in sorted(LOWS)))); sys.exit(1)
+
 # ---------------------------------------------------------------- figures
 FIGS = [
     ("xsb",    "dpc2_XSB",     "back", 1, "What opens X onto the special bus"),
@@ -314,12 +329,17 @@ w("their values not because anything is protecting them but because **their")
 w("two-inverter rings are still circulating**, and they will keep doing that")
 w("only as long as the clock keeps arriving.\n")
 w("So: at an instruction boundary, the registers are meaningful and you can")
-w("read them. **In the middle of an instruction they are not.** In the table")
-w("above, X reads `$%02X` at one point during the store, which is not a value X"
-  % win[6]["x"])
-w("ever held: it is a dynamic node with the bus driving past it. If you are")
-w("going to look inside a chip, the first discipline is knowing when a readout")
-w("means something.\n")
+w("read them. **In the middle of an instruction they are not, and neither are")
+w("the buses.** Look at the write's block above: at half-cycle %d the low"
+  % WBUS["half_cycle"])
+w("address bus reads `$%02X` while the pins hold `$%04X`, and `$%02X` is the low"
+  % (WBUS["adl"], WBUS["addr"], WBUS["adl"]))
+w("byte of no address this instruction touches. `ADL` is a bus in this chip's")
+w("sense (`docs/idioms.md`, 4): a wire nothing owns, precharged high by the")
+w("clock, with a pass transistor to every source. Nothing has been opened onto")
+w("it at that half-cycle, so the readout is the precharge, not a value")
+w("anything put there. If you are going to look inside a chip, the first")
+w("discipline is knowing when a readout means something.\n")
 
 w("## Half-cycles, and why this simulation counts them\n")
 w("Most 6502 documentation counts cycles. This counts half-cycles, because the")

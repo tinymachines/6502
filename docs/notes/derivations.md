@@ -157,9 +157,20 @@ for a reader who has never seen inside a chip.
   not in depth 3 either, so the text now says what the labels say (opcode bits,
   T-states, the two store-data latches) and names the ready interlock as a fact
   that is deliberately *not* in the picture.
-- **Registers are only meaningful at instruction boundaries**, and the walk
-  says so with an example from its own data: X reads a value mid-store that it
-  never held, because it is a dynamic node with the bus driving past it.
+- **A mid-instruction readout is not always a value**, and the walk says so
+  with an example from its own data: at the write's phi1, half-cycle 130, the
+  low address bus reads `$FF` while the pins hold `$0402`, and `$FF` is the low
+  byte of no address that instruction touches. `ADL` is a bus (idiom 4),
+  precharged high with a pass transistor to every source, so with nothing
+  opened onto it the readout is the precharge.
+- **That example used to be X, and X was the wrong node.** Both this bullet and
+  the walk said X read a value mid-store it never held. Driving the exporter's
+  own trace shows X is `$02` in every half-cycle of the window, and `$02` is
+  the value X held on that pass: the walk states it two screens earlier. The
+  claim was false from 2026-08-23, and it survived because nothing re-derived
+  it. `tools/export-walk.py` now refuses to write the document if the byte on
+  ADL at that half-cycle turns out to be an address byte after all, which is
+  the check the first version should have had.
 
 ### The walk ends at the silicon
 

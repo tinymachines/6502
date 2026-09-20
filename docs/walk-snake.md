@@ -307,11 +307,15 @@ two-inverter rings are still circulating**, and they will keep doing that
 only as long as the clock keeps arriving.
 
 So: at an instruction boundary, the registers are meaningful and you can
-read them. **In the middle of an instruction they are not.** In the table
-above, X reads `$02` at one point during the store, which is not a value X
-ever held: it is a dynamic node with the bus driving past it. If you are
-going to look inside a chip, the first discipline is knowing when a readout
-means something.
+read them. **In the middle of an instruction they are not, and neither are
+the buses.** Look at the write's block above: at half-cycle 130 the low
+address bus reads `$FF` while the pins hold `$0402`, and `$FF` is the low
+byte of no address this instruction touches. `ADL` is a bus in this chip's
+sense (`docs/idioms.md`, 4): a wire nothing owns, precharged high by the
+clock, with a pass transistor to every source. Nothing has been opened onto
+it at that half-cycle, so the readout is the precharge, not a value
+anything put there. If you are going to look inside a chip, the first
+discipline is knowing when a readout means something.
 
 ## Half-cycles, and why this simulation counts them
 
