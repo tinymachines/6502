@@ -94,6 +94,15 @@ const CONTEXTS: &[(&str, u16, &[u8], &[u8])] = &[
     // BVS on its page with a negative offset: V survives an LDA, so no
     // context above leaves it set at a backward branch that stays put.
     ("cneg_v", 0x0240, &[0xa9, 0x40, 0x85, 0x10, 0x24, 0x10, 0x18], &[0xf8, 0x02, 0x00]),
+    // And the commonest branch there is: TAKEN, forward, staying on its
+    // page. Every context that leaves N set above sets it last with an
+    // LDA and then branches backward or across, so BMI had no recording
+    // of it, the mask search found the TAKEN bit redundant for that
+    // opcode, and a plain `LDA #$80 / BMI` played the NOT-taken span.
+    // The masks are the reason this is one line and not a comment: a bit
+    // the search drops is a bit no recording needed, and the way to need
+    // it is to record the case.
+    ("cpos_n", 0x0200, &[0xa2, 0x02, 0xa0, 0x03, 0x18, 0xa9, 0x80], &[0x34, 0x02, 0x00]),
 ];
 
 /// How far past the fetch the recorder looks before calling an opcode KIL.

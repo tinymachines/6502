@@ -873,6 +873,42 @@ where it belongs:
   table for every selector key a branch can present and names them all
   at once. That is what found BVS's on-page backward case, which nothing
   else had reached.
+- **And then the fix opened a worse hole in the same wall, in the same
+  hour.** With the new contexts recorded, BMI had a taken case on its
+  page (negative), taken cases across a page both ways, and not one
+  plain TAKEN, FORWARD, ON ITS PAGE. That is the commonest branch there
+  is, and with nothing recording it no pair of recordings needed the
+  TAKEN bit: the mask search dropped it, `LDA #$80 / BMI` masked onto
+  the NOT-taken span, and rung 3 stopped taking the commonest branch on
+  the chip. `cpos_n` is the missing recording.
+
+  What it cost is the measure of how little the suite can see here. All
+  135 tests were green with it. The pin golden's 289 traces were green:
+  its one-per-opcode traces run BMI from the `plain` context, where N is
+  clear and the branch is not taken, and none of its seven programs has
+  a forward BMI on its page. blargg's three `branch_timing_tests` ROMs
+  passed on the console. What found it was a game: blargg's
+  `01-vbl_basics` reporting "VBL period is way off", walked back through
+  the console's `where-it-sits` and `vbl-probe` to `LDA $2002 / BMI` at
+  $E222 reading $80 and not branching, and reproduced in four
+  instructions with `diverge`.
+
+  The mask had been printed and read the same hour, and BMI's `0x22`
+  beside seven `0x23`s was noticed and reasoned away as single-valued.
+  It was single-valued. Single-valued over the recordings is not the
+  claim that matters.
+
+  `tests/branch_page.rs` now asserts the invariant directly: a branch's
+  mask must keep TAKEN, BCROSS and NEG, because taken and not taken are
+  different lengths, crossing is a cycle longer than not, and the sign
+  is the direction of the fixup. No recording can make one of those
+  redundant, so a mask without one is a hole whatever the search
+  concluded. The lockstep gained the fourth case, forward and on its
+  page, which is the one both the contexts and the first version of the
+  test had left out. Removing `cpos_n` sends both red and names the
+  opcode and the bit; the key-coverage test stays green through it,
+  which is why it is not enough on its own: asking whether a variant
+  ANSWERS is weaker than asking whether the right one does.
 - **`dpc34_PCLC`/`dpc35_PCHC` are data signals wearing control-line
   names** (the PC incrementer's carries), masked out of the table; the
   datapath computes them.

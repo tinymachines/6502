@@ -53,6 +53,11 @@ enum Way {
     ForwardAcross,
     /// Back, staying on the page: the ordinary loop.
     BackOnPage,
+    /// Forward, staying on the page: the commonest branch there is, and
+    /// the one whose absence from the recordings let the mask search
+    /// drop the TAKEN bit for BMI. `LDA #$80 / BMI` then played the
+    /// not-taken span.
+    ForwardOnPage,
 }
 
 const SPIN: u16 = 0x0280;
@@ -77,6 +82,7 @@ fn loads(op: u8, setup: &[u8], carry: bool, way: Way) -> (Vec<Load>, u16, u16, u
         Way::ForwardAcross => 0x02f0,
         _ => 0x0310,
     };
+
     let at = org + pre.len() as u16;
     // Each landing is clear of the program that branches to it, so a
     // case cannot pass by overwriting its own setup.
@@ -84,6 +90,7 @@ fn loads(op: u8, setup: &[u8], carry: bool, way: Way) -> (Vec<Load>, u16, u16, u
         Way::BackAcross => 0x02e0,
         Way::ForwardAcross => 0x0310,
         Way::BackOnPage => 0x0300,
+        Way::ForwardOnPage => 0x0340,
     };
     let off = (target as i32 - (at as i32 + 2)) as i8;
     let mut prog = pre;
@@ -124,7 +131,7 @@ fn a_branch_across_a_page_goes_the_way_the_sign_says() {
             if (op == 0x90 && carry) || (op == 0xb0 && !carry) {
                 continue;
             }
-            for way in [Way::BackAcross, Way::ForwardAcross, Way::BackOnPage] {
+            for way in [Way::BackAcross, Way::ForwardAcross, Way::BackOnPage, Way::ForwardOnPage] {
                 runs += 1;
                 let (l, entry, at, target) = loads(op, setup, carry, way);
                 // What the part did, before either rung is believed: the
@@ -132,7 +139,8 @@ fn a_branch_across_a_page_goes_the_way_the_sign_says() {
                 let (_, landed) = measured(op, setup, carry, way);
                 assert_eq!(landed, target, "{name} C={} {way:?}: rung 0's branch at {at:04x} landed at {landed:04x}, not {target:04x}", carry as u8);
                 let crosses = (at & 0xff00) != (target & 0xff00);
-                assert_eq!(crosses, way != Way::BackOnPage, "{name} C={} {way:?}: {at:04x} -> {target:04x} does not cross as the case says", carry as u8);
+                let should_cross = matches!(way, Way::BackAcross | Way::ForwardAcross);
+                assert_eq!(crosses, should_cross, "{name} C={} {way:?}: {at:04x} -> {target:04x} does not cross as the case says", carry as u8);
 
                 let mut a = rung0(&l, entry);
                 let expected = run(&mut a, STEPS, &[]);
@@ -162,6 +170,13 @@ fn a_branch_across_a_page_goes_the_way_the_sign_says() {
 /// and the offset's sign, times the carry and the decimal flag, which
 /// the mask keeps or drops per opcode. Nothing here consults the mask:
 /// the point is to ask for what a program can ask for.
+///
+/// It asks whether a variant ANSWERS, which is weaker than asking
+/// whether the right one does: a key the mask folds onto another case's
+/// span answers, and answers wrongly. This test stayed green through
+/// the whole of the TAKEN hole below. It is kept for what it does see,
+/// a key with nothing at all behind it, and the mask invariant and the
+/// lockstep are what see the rest.
 #[test]
 fn every_key_a_branch_can_present_has_a_variant() {
     use v6502_micro::lines::{SEL_BCROSS, SEL_CARRY, SEL_D, SEL_NEG, SEL_TAKEN};
@@ -189,4 +204,43 @@ fn every_key_a_branch_can_present_has_a_variant() {
         }
     }
     assert!(missing.is_empty(), "{} branch keys have no recorded variant:\n{}", missing.len(), missing.join("\n"));
+}
+
+/// Every branch's selector mask keeps the three bits that change what
+/// the instruction DOES.
+///
+/// The relevance mask is the smallest set of selector bits that keeps
+/// the recordings single-valued, and it can only see what was recorded.
+/// A bit it drops is one no pair of recordings needed, which is not the
+/// same as one no program needs: the key of a case nobody recorded is
+/// then masked onto some other case's span, silently, with no panic to
+/// find. It has happened twice. The sign went first (BMI and BEQ took a
+/// backward branch across a page forwards, and Super Mario Bros. 2 died
+/// on it); adding the contexts for that left BMI with no plain
+/// taken-forward-on-page recording at all, so TAKEN went next and
+/// `LDA #$80 / BMI` played the not-taken span.
+///
+/// These three bits are not a judgement call. Taken and not taken are
+/// different lengths; crossing a page is a cycle longer than not; and
+/// the offset's sign is the direction of the high byte's fixup. No
+/// recording can ever make one of them redundant, so a mask without one
+/// is a hole whatever the search concluded, and this says so directly
+/// rather than waiting for a program to fall into it.
+#[test]
+fn no_branchs_mask_drops_taken_crossing_or_the_sign() {
+    use v6502_micro::lines::{SEL_BCROSS, SEL_NEG, SEL_TAKEN};
+    let need = SEL_TAKEN | SEL_BCROSS | SEL_NEG;
+    let mut missing = Vec::new();
+    for (name, op, _) in BRANCHES {
+        let mask = v6502_micro::table::MASKS[op as usize];
+        if mask & need != need {
+            let lost: Vec<&str> = [(SEL_TAKEN, "taken"), (SEL_BCROSS, "crosses"), (SEL_NEG, "sign")]
+                .iter()
+                .filter(|(b, _)| mask & b == 0)
+                .map(|&(_, n)| n)
+                .collect();
+            missing.push(format!("{name} ({op:02x}): mask {mask:#04x} drops {}", lost.join(", ")));
+        }
+    }
+    assert!(missing.is_empty(), "{} branch masks have a hole:\n{}", missing.len(), missing.join("\n"));
 }

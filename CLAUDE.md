@@ -26,7 +26,7 @@ Everything below is built, verified and live. Nothing is half-finished.
 
 | | |
 |---|---|
-| Simulation | Complete. 135 tests, bit-exact against the original. |
+| Simulation | Complete. 136 tests, bit-exact against the original. |
 | Pin contract | `v6502-pins`: what "the same chip at the pins" means, in one crate with no dependencies. Rung 0 of the engine ladder (`docs/engine-ladder.md`) is the switch-level `Cpu` behind it; its pin golden is 289 recorded traces (seven programs, the reference's program, sixteen scripted interrupt and RDY runs, three decimal-mode chains, six flag chains, all 256 opcodes), replayed by `cargo test -p v6502-pins` and mutation-proved. Rung 1 (`v6502-hybrid`, the gates folded into per-output counters) is done and bit-exact with rung 0 by construction, every node every half-cycle; it is not faster (4.5% fewer instructions, inside noise), and that finding is the point: the lever is the recalc count, which an exact rung cannot touch. Because the state is the same four bitsets, rung 0's machine value restores into it mid-run and back, proven every node (`v6502-hybrid/tests/state.rs`), which is what the console's engine switch rides on. Rung 2 (`v6502-compiled`, the network as generated code, 64 machines per word) passes the whole pin golden through lane 0 at **6.83x rung 0 per machine**; it is not node-exact with rung 0 by nature, and says so. A machine value still crosses mid-run between rung 0 and rung 2 in both directions, held at the pins, Die Runner's eight watched gates and memory every half-cycle (`tests/crossing.rs`; measured first: 20,000/20,000 half-cycles of pin and gate agreement while internal nodes diverged as expected), which is what its console engine rides on. The same kernel as WGSL runs on a GPU (`v6502-gpu`), bit-exact with the CPU rung lane for lane, with memory sparse per lane (one shared base, copy-on-write pages, a spent pool refusing by the numbers): **4.95 M machine-half-cycles/s at 128,000 machines** on one RTX 3070, about 167x rung 0, and 512,000 machines run at 4.46 M. Rung 3 (`v6502-micro`) is built: no nodes, the control table measured out of rung 0 at build time, the datapath authored from the proven model, the input pins authored against the six scripted stimulus traces (an interrupt is the recorded BRK span hijacked; the warm reset's freewheel was measured with `reset-probe` before being written), decimal mode measured (`decimal-probe`: the adjust lives on the SB-to-AC path) and authored under a seventh selector bit, and the whole pin golden, **all 289 traces, replays exactly**. **39.0 M half-cycles/s, about 1,465x rung 0: 19.5x a real 1 MHz part.** |
 | Library | `halfphi`, extracted and published. Loads the 6502, the 6800 and the Z80. Kept in step by `tools/check-halfphi.mjs`, which the deploy runs; released by `tools/release-halfphi.sh X.Y.Z`, which tags both repositories (`halfphi-vX.Y.Z` here, `vX.Y.Z` there) at one shared-file digest after every gate passes here. |
 | Renderer | WebGL2, 83,227 triangles, live state overlay, GPU picking. |
@@ -113,11 +113,11 @@ cargo test --workspace --profile proof   # the verification build: same
                                     # opt-level, thin LTO over parallel codegen
                                     # units. A cold full build measured 3m50s
                                     # against ~20m under release's fat LTO,
-                                    # 135 green either way. Benches and
+                                    # 136 green either way. Benches and
                                     # anything shipped stay on --release,
                                     # whose published figures were measured
                                     # there.
-cargo test --workspace              # 135 tests: netlist, functional, golden,
+cargo test --workspace              # 136 tests: netlist, functional, golden,
                                     # rewind, state, rows, blueprint, pla,
                                     # decode, blocks, interrupts, pins,
                                     # hybrid (lockstep + replay + state), compiled
@@ -833,6 +833,25 @@ story of each is in the note for its area.
   offset's sign. Super Mario Bros. 2 found it. Ask the table for every
   key the thing can present, not just the ones a context happened to
   produce.
+- **Fixing that opened a worse hole in the same wall within the hour,
+  and every gate here stayed green through it.** The new contexts gave
+  BMI taken cases on its page and across it but none taken, forward, on
+  its page, so no pair of recordings needed the TAKEN bit, the search
+  dropped it, and `LDA #$80 / BMI` played the not-taken span. 135 tests,
+  the 289-trace pin golden and blargg's branch-timing ROMs were all
+  green; a game found it. **When a derived table drops a bit, assert the
+  invariant, not the search's conclusion**: taken and not taken are
+  different lengths, so no recording can make that bit redundant, and
+  `tests/branch_page.rs` now says so in one line. The same anomaly had
+  been printed and read aloud an hour earlier and reasoned away as
+  single-valued, which it was: single-valued over the recordings is not
+  the claim that matters.
+- **A test written from the same list as the code tests the same three
+  cases and misses the same fourth.** The branch lockstep covered
+  backward-across, forward-across and backward-on-page, exactly the
+  cases the recording contexts covered, and left out the commonest
+  branch on the chip. Enumerate the space, not the interesting part of
+  it.
 - **An all-green comparison is what a broken comparison produces.** Pin the row
   that differs, by name.
 - **Numbers are never typed into shipped prose.** The stray-digit scans exist
