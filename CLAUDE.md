@@ -362,6 +362,14 @@ python3 tools/check-self-counts.py
 # --fix copies this repo's copy over the published one.
 node tools/check-halfphi.mjs
 
+# The console repository's own self-counts, run from here because it has no
+# deploy of its own. A weaker tie than halfphi's above (that guards files this
+# repo SHIPS; this guards a sibling's prose), but the engine the console is
+# built on is cut here. SKIPS without a sibling clone, and the skip is a LOG
+# LINE, not a silence: a skip and a pass both exit 0. NES=<path> names one,
+# REQUIRE_NES=1 makes a skip fatal.
+python3 ../nes/tools/check-self-counts.py
+
 # Every measured cycle count and byte length against the published instruction
 # table: 138 of its 150 rows in about four seconds, against the 33 the
 # hand-typed checks cover. RESCAN=1 re-reads the pages the first pass could not

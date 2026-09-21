@@ -221,6 +221,28 @@ done
 log "checking halfphi against its published copy"
 "$NODE_BIN" tools/check-halfphi.mjs || exit 1
 
+# The console repository keeps its own counts of itself the way this one does,
+# and has no deploy of its own to run them from, so this is the only gate that
+# runs them automatically. It is a weaker tie than halfphi's above: that one
+# guards files this repository SHIPS, where this guards a sibling's prose. It
+# earns its place because the engine that sibling is built on is cut here, and
+# a release going out beside documents that misquote their own constants is
+# the thing that already happened twice.
+#
+# SKIPS when the sibling checkout is absent, so a machine with only this repo
+# can still deploy. NES=<path> names one; REQUIRE_NES=1 makes a skip fatal.
+NES_DIR="${NES:-$(cd "$(dirname "$0")/../.." 2>/dev/null && pwd)/nes}"
+NES_COUNTS="$NES_DIR/tools/check-self-counts.py"
+if [ -f "$NES_COUNTS" ]; then
+  log "checking the console's counts of itself"
+  python3 "$NES_COUNTS" || exit 1
+elif [ "${REQUIRE_NES:-}" = "1" ]; then
+  echo "deploy: REQUIRE_NES=1 but $NES_COUNTS is absent" >&2
+  exit 1
+else
+  log "skipping the console's counts (no sibling checkout at $NES_DIR)"
+fi
+
 log "composing the chip atlas"
 "$NODE_BIN" tools/export-groups.mjs || exit 1
 [ -s web/groups.json ] || { echo "deploy: web/groups.json is empty" >&2; exit 1; }
