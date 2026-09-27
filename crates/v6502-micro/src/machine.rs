@@ -844,6 +844,12 @@ pub struct MicroState {
     pub pos: usize,
     /// The phase the NEXT half-cycle plays in: true = phi1.
     pub phi1_next: bool,
+    /// The byte a read cycle took from the bus as the clock fell, held
+    /// for the phi2 that consumes it. Some only between the two halves
+    /// of a read; a state that dropped it would ask the bus again at
+    /// phi2, a second read of a register a read changes (found by the
+    /// 2A03's state test, tinymachines/2a03 a7fa5f5).
+    pub phi1_read: Option<u8>,
     pub op: u8,
     pub cur_key: u8,
     pub kil: bool,
@@ -880,12 +886,13 @@ pub struct MicroState {
 impl MicroState {
     /// The wire form of everything but the memory, which travels as the
     /// API's own sparse pages beside it: a version byte, then each field
-    /// in declaration order. About 90 bytes against rung 0's 1.3 KB of
+    /// in declaration order, except `phi1_read`, which version 2 appended
+    /// after the rest so that version 1 is a prefix of it. About 90 bytes against rung 0's 1.3 KB of
     /// node planes; a different value for a different kind of machine,
     /// and it says so with its own field name on the wire.
     pub fn encode(&self) -> Vec<u8> {
         let mut b = Vec::with_capacity(96);
-        b.push(1u8);
+        b.push(2u8);
         b.extend_from_slice(&self.half_cycle.to_le_bytes());
         b.push(self.p);
         let d = &self.dp;
@@ -943,6 +950,11 @@ impl MicroState {
             self.res_phase,
             self.mask_sync as u8,
         ]);
+        // Version 2 appends this, and only this, after version 1's bytes.
+        match self.phi1_read {
+            Some(v) => b.extend_from_slice(&[1, v]),
+            None => b.extend_from_slice(&[0, 0]),
+        }
         b
     }
 
@@ -959,8 +971,11 @@ impl MicroState {
             Ok(s)
         };
         let version = take(1)?[0];
-        if version != 1 {
-            return Err(format!("micro state version {version} is not 1"));
+        // Version 1 predates `phi1_read` and reads as None: exactly what
+        // restoring it did before the field existed, so a value a client
+        // held across the change behaves as it did when it was made.
+        if version != 1 && version != 2 {
+            return Err(format!("micro state version {version} is not 1 or 2"));
         }
         let half_cycle = u64::from_le_bytes(take(8)?.try_into().unwrap());
         let p = take(1)?[0];
@@ -1026,6 +1041,16 @@ impl MicroState {
         let pin_hold = take(1)?[0];
         let inp = take(5)?.to_vec();
         let tail = take(10)?.to_vec();
+        let phi1_read = if version >= 2 {
+            let s = take(2)?;
+            match s[0] {
+                0 => None,
+                1 => Some(s[1]),
+                n => return Err(format!("phi1_read: {n} is not an option tag")),
+            }
+        } else {
+            None
+        };
         if at != blob.len() {
             return Err(format!("micro state blob has {} trailing bytes", blob.len() - at));
         }
@@ -1041,6 +1066,7 @@ impl MicroState {
             stream,
             pos,
             phi1_next,
+            phi1_read,
             op,
             cur_key,
             kil,
@@ -1108,6 +1134,7 @@ impl MicroCpu {
             },
             pos: self.pos,
             phi1_next: self.next_phase == Phase::Phi1,
+            phi1_read: self.phi1_read,
             op: self.op,
             cur_key: self.cur_key,
             kil: self.kil,
@@ -1180,6 +1207,7 @@ impl MicroCpu {
         self.span = span;
         self.pos = st.pos;
         self.next_phase = if st.phi1_next { Phase::Phi1 } else { Phase::Phi2 };
+        self.phi1_read = st.phi1_read;
         self.op = st.op;
         self.cur_key = st.cur_key;
         self.kil = st.kil;

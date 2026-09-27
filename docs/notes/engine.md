@@ -953,6 +953,25 @@ gates are) and refuses every other name with -1; there is deliberately
 no `importMachine`, so a node-shaped value has no way in and an engine
 switch onto this rung means powering the cartridge here.
 
+**"Every sequencer field" was one short until 2026-09-27.** A read
+cycle takes its byte from the bus as the clock falls and consumes it at
+phi2, and that byte (`phi1_read`) was not in `MicroState`. A snapshot
+taken between the two halves restored it as None, so the resumed core
+asked the bus again at phi2. On flat memory a second read is harmless,
+which is why the golden and all ten snapshot points passed; on a
+register a read changes (the 2C02's $2002) it is a second read and a
+wrong byte on the pins. The 2A03's own state test found it (split at
+h=74, pins 0xa9 where the unbroken run showed 0x8a; tinymachines/2a03
+a7fa5f5). The field now travels, the codec is version 2 with the byte
+appended last (version 1 still decodes, as None, which is what
+restoring it did then), and `tests/state.rs` splits EVERY read cycle of
+`LDA $2002` on a bus whose register counts its reads, against a
+reference machine that is never interrupted: 54 splits, 6 on the
+register. `MUTATE_PHI1=1` drops the byte and goes red on the register
+read. The first draft of that test resumed its reference from a
+snapshot too, so both sides lost the byte and agreed: a reference has
+to be the machine that was not cut.
+
 In wasm the whole per-frame flow, export, import into a fresh machine and
 an 8,704 half-cycle frame, measured **0.86 ms per frame (10.1 M hc/s)**
 in node against the same frame's 350 ms on rung 0's wasm: the first
