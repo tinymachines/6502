@@ -57,7 +57,8 @@ preflight() {
   say "preflight"
   local head dirty
   head="$(git rev-parse --short HEAD)"
-  dirty="$(git status --porcelain | wc -l)"
+  # Tracked files only, the same rule as tools/build-info.py.
+  dirty="$(git status --porcelain --untracked-files=no | wc -l)"
   note "HEAD $head on $(git rev-parse --abbrev-ref HEAD)"
 
   # The live build carries a `dirty` flag, and it has been true before. A

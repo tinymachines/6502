@@ -120,7 +120,11 @@ def main() -> None:
         n = git("rev-list", "--count", "HEAD")
         version = f"v0.{n}" if n else "v0"
 
-    dirty = bool(git("status", "--porcelain"))
+    # Tracked files only. The checkout carries untracked files on purpose
+    # (NES.zip, which must never be committed, bench photos, drafts), and
+    # counting them stamped every release dirty while the build matched
+    # its commit exactly, which made the flag mean nothing.
+    dirty = bool(git("status", "--porcelain", "--untracked-files=no"))
     info = {
         "version": version,
         "commit": git("rev-parse", "--short", "HEAD"),
