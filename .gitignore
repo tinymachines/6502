@@ -100,3 +100,7 @@ games/pack/
 extern/oscr-*/
 extern/cartreader/
 extern/cartreader.wiki/
+
+# Secrets: never in this public repository
+.env
+.env.*
