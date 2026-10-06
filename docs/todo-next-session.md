@@ -1,4 +1,4 @@
-# To do next session (written 2026-10-06)
+# To do next session (written 2026-10-06, updated that afternoon)
 
 ## The TRNG emitter (geiger, `docs/HARDEN-PLAN.md`)
 
@@ -20,6 +20,12 @@ bench.
 5. **Pull the retired Pi's SD card** before it goes to the donor pile:
    the 44M-row event record is on it and nowhere else.
 6. **Order the fast opto** (TLP2361 or HCPL-060L class), two.
+
+The emitter survived losing its screen (checked 2026-10-06: boots,
+6.25 ns capture, PULSE 5 delivered, -69 dBm). What looked like a dead
+board was the receiver stuck on a half-open socket; geiger 8831945 drops
+a peer silent for 10 s (not pushed yet). The rev C PDF is current for
+the wiring; its "firmware not written" and screen notes are stale.
 
 ## Boards on hand (nes-bench `docs/pile.md`)
 
