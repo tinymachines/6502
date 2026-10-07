@@ -1,6 +1,26 @@
-# To do next session (written 2026-10-06, updated that night)
+# To do next session (written 2026-10-06, updated 2026-10-07 midday)
 
 ## The TRNG emitter (geiger, `docs/HARDEN-PLAN.md`)
+
+**Where the bench stopped, 2026-10-07.** The opto is wired but passes no
+edge. The C6 runs `firmware/pin-watch` (GPIO18's level and falling edges,
+once a second; read it with `tools/pin-watch.py` on the machine its USB
+is plugged into), NOT the emitter: reflash `firmware/emitter` before bits
+can flow.
+
+- Proven: GPIO18 reaches the chip (a GND jumper on it reads level=0). The
+  earlier "18" jumper never did; it was most likely on GPIO9, the BOOT
+  strap, which is the header's end pin: a reset with it low sits in the
+  ROM bootloader ("waiting for download"). Keep the end pin clear.
+- On camera the output side looks right: OUT to GPIO18, module GND to ESP
+  GND, 4.7 k to 3V3. No edge came from the CAJOE's blinks, nor from the
+  CAJOE's P3 "GND" tapped to IN -.
+- **First test:** pink and blue off the module's INPUT, then ESP 3V3 to
+  IN + and ESP GND to IN -. Low: the opto is good and the fault is the
+  CAJOE side (meter P3: which pin reads 5 V, which dips per click; the
+  order is still only from photographs). High: swap the two jumpers;
+  still high, the module is suspect and the HW-399 stands in.
+- Shorting IN + to IN - turns the LED off, not on: not a test.
 
 It runs end to end on self-test pulses: the ESP32-C6 board latches each
 edge at 6.25 ns, streams it over Wi-Fi to the workstation, and bits come
@@ -35,9 +55,11 @@ The emitter survived losing its screen (checked 2026-10-06: boots,
 board was the receiver stuck on a half-open socket; geiger 8831945 drops
 a peer silent for 10 s. It was left connected that night with no edges
 on GPIO18 (the opto not yet wired). The drawings are TM-TRNG-001 rev D,
-published on the public site's hotbits notebook page; a new revision
-is built from a clean tree (it writes built.json) and handed to the
-site's session, which deploys on the owner's word.
+published on the public site's hotbits notebook page. Every geiger
+commit makes the package's built.json stale and the site's pull
+refuses it, so a post-commit hook (tools/hooks/post-commit) rebuilds it;
+a new revision letter is handed to the site's session, which deploys
+on the owner's word.
 
 ## Boards on hand (nes-bench `docs/pile.md`)
 
