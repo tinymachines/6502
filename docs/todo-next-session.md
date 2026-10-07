@@ -1,4 +1,4 @@
-# To do next session (written 2026-10-06, updated that afternoon)
+# To do next session (written 2026-10-06, updated that night)
 
 ## The TRNG emitter (geiger, `docs/HARDEN-PLAN.md`)
 
@@ -11,27 +11,40 @@ bench.
    photograph by elimination) and the opto module's R1 (its code reads
    1 k sideways). TM-TRNG-001 sheet 3 has both.
 2. **Wire the opto** (sheet 3): CAJOE 5V to INPUT +, VIN to INPUT -,
-   OUT to GPIO18, the 4.7 k pull-up at J3, the CAJOE on its own
-   adapter. The P2 lead's bare ends and the wires at the tube's clip get
+   OUT to GPIO18, the 4.7 k pull-up at J3, the module's VCC left
+   open. The CAJOE on its own adapter: if the enclosure's PSU feeds
+   both the CAJOE and the ESP, the grounds join and the opto isolates
+   nothing (an isolated 5 to 5 V module on the CAJOE side fixes that;
+   if the grounds are shared anyway, the next drawing revision says
+   so). From the PSU, 5 V goes to the board's 5V pin, never with USB-C
+   plugged in, never 12 V; an ATX supply needs PS_ON to ground. The P2 lead's bare ends and the wires at the tube's clip get
    a look first (2026-10-05 camera frames).
 3. **First real counts.** `missed` must stay 0 in the heartbeat; the
    rate should come back near the 2026-06-21 report's 9.8 Hz.
 4. **Site the emitter.** Its Wi-Fi reads -82 to -84 dBm on the bench.
 5. **Pull the retired Pi's SD card** before it goes to the donor pile:
    the 44M-row event record is on it and nowhere else.
-6. **Order the fast opto** (TLP2361 or HCPL-060L class), two.
+6. **Order** the fast opto (TLP2361 or HCPL-060L class), two; two
+   Seeed XIAO ESP32S3 (plain, not Sense: USB keyboard, BLE and Wi-Fi
+   on one board, for both NES pads; fit its antenna before testing);
+   and, if the PSU will feed the CAJOE, an isolated 5 V to 5 V 1 W
+   module.
 
 The emitter survived losing its screen (checked 2026-10-06: boots,
 6.25 ns capture, PULSE 5 delivered, -69 dBm). What looked like a dead
 board was the receiver stuck on a half-open socket; geiger 8831945 drops
-a peer silent for 10 s (not pushed yet). The rev C PDF is current for
-the wiring; its "firmware not written" and screen notes are stale.
+a peer silent for 10 s. It was left connected that night with no edges
+on GPIO18 (the opto not yet wired). The drawings are TM-TRNG-001 rev D,
+published on the public site's hotbits notebook page; a new revision
+is built from a clean tree (it writes built.json) and handed to the
+site's session, which deploys on the owner's word.
 
 ## Boards on hand (nes-bench `docs/pile.md`)
 
 7. **LITTLEGUY** (the Stamp P4, no buttons, running pad-usb): hold
    G35/BOOT to GND through a reset, then `esp-reset LITTLEGUY
-   --characterize`.
+   --characterize`. Its first second on USB already gave a MAC,
+   30:ED:A0:EA:99:6E; which P4 board it is still waits on this.
 8. **HP-16C:** three LR44 cells, power on; then, if wanted, an
    independent check of ADC/SBC carry and overflow at word size 8.
 
