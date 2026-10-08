@@ -2,6 +2,35 @@
 
 ## The TRNG emitter (geiger, `docs/HARDEN-PLAN.md`)
 
+**Where the bench stopped, 2026-10-08: the CAJOE gets a wire.** The
+fault was never the opto. On the CAJOE v1.1 schematic, P3 pin 3 (INT,
+the "VIN" of every earlier note) hangs off the detector transistor Q3
+through a 470 k resistor (R19), so it can pass about 5 uA: no opto on P3
+can ever light. P3 is pin 1 GND, pin 2 5V, pin 3 INT; the pink lead had
+been on pin 1. The scope proved the detector good (INT drops from 2.3 V
+to 0 V for about 210 us per count). Full account, with the opto's
+datasheet numbers, in geiger `docs/HARDEN-PLAN.md`, "Where it stands,
+2026-10-08". The owner is fine with modifying the CAJOE.
+
+1. **Tap Q3's collector** (the lower end of R18, 47 k): module INPUT +
+   to P3 pin 2 (5V), INPUT - to the collector; about 2 mA through the
+   LED on a count, full rate, the tube's own 210 us pulse. The CAJOE
+   unplugged and its high-voltage side discharged before soldering.
+   The fallback is the module in place of the board's LED D23: it works,
+   but its 555 holds each pulse 52 ms and drops about a third of the
+   counts.
+2. **Output side unchanged:** OUT to GPIO18, module GND to ESP GND,
+   4.7 k to 3V3 (or the module's own 10 k: VCC to 3V3, 4.7 k out, for
+   more margin). Scope CH1 on OUT against ESP GND: about 3.2 V at rest,
+   under 0.5 V for each count. pin-watch: falls at the count rate.
+3. **Reflash `firmware/emitter`** (the C6 still runs pin-watch), then
+   the first real counts below. No firmware change: the falling edge is
+   still the timed one.
+4. The C6 dropped off the bench Pi's USB three times on 2026-10-08:
+   check its cable before trusting a silence.
+5. The drawing (sheet 3) still wires INPUT - to VIN: it changes when the
+   tap is soldered, and the new revision goes to the roof session.
+
 **Where the bench stopped, 2026-10-07.** The opto is wired but passes no
 edge. The C6 runs `firmware/pin-watch` (GPIO18's level and falling edges,
 once a second; read it with `tools/pin-watch.py` on the machine its USB
