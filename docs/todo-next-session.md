@@ -1,4 +1,55 @@
-# To do next session (written 2026-10-06, updated 2026-10-07 midday)
+# To do next session (written 2026-10-06, updated 2026-10-09)
+
+## The owner's list, 2026-10-09, in their order
+
+1. **Finish the CAJOE.** Ready now: the tap on Q3's collector, below.
+   Direct links: the CAJOE v1.1 schematic
+   (<https://github.com/SensorsIot/Geiger-Counter-RadiationD-v1.1-CAJOE-/blob/master/Sch__Geiger%20Counter%20Kit-v1.1.pdf>),
+   the TLP785 datasheet
+   (<https://sy-dep-epc-lpc.web.cern.ch/components/datasheets/epc-lpc%20(converters)/TLP785-Optocoupler-Toshiba.pdf>),
+   geiger `docs/HARDEN-PLAN.md` (the 2026-10-08 section), and the
+   published drawing (<https://tinymachines.ai/hotbits/geiger-TM-TRNG-001-revD.pdf>,
+   whose sheet 3 still wires INPUT - to VIN).
+2. **Lessons.** More articles in the shape of "Using an Oscilloscope for
+   Software Developers" (geiger `docs/articles/`, live at
+   <https://tinymachines.ai/docs/nes/oscilloscope>). Candidates drawn from
+   this week's bench, each with a real failure at its centre:
+   - Read the schematic before the wire: the CAJOE's INT pin sat behind
+     470 k, and two days of wiring could never have worked.
+   - A datasheet in ten minutes: the four numbers that decide an
+     optocoupler (forward voltage, CTR, saturated CTR, switching), and the
+     indicator LED in series that the module never mentions.
+   - Debugging from a picture: one wrong colour (white as green, red as
+     black) named a single address line, A3, on the tile chip.
+   - Devices that move: USB names that change on replug, udev symlinks,
+     and a daemon still "active" with a dead thread inside.
+   - The serial port that resets the chip: DTR and RTS on open.
+   - Isolation is a property of grounds, not of parts: the probe's clip,
+     the shared supply, what an opto actually separates.
+3. **Board designs to have printed.** The NES bench / bridge (the UNO
+   bridge, the pad shift registers, reset and power), and the USB/BLE
+   gamepad (the XIAO ESP32S3 plan). Discuss first, then lay out.
+   Alongside: **redesign and simplify the Geiger circuit** around an ESP,
+   choosing the parts together (tube supply, detector transistor, a fast
+   opto with a 3.3 V logic output such as the TLP2361, no 555 stretcher
+   in the timed path).
+4. **An MCP/URI tool for an addressable, multimedia NES knowledge pool.**
+   The owner is working on it; more to come before anything is built.
+5. **A final UI / ergonomics sweep.**
+
+## The NES bench, 2026-10-09
+
+- The bench head (`nes-bench-head` on the bench Pi) had lost the UNO when
+  it was replugged (its pump thread died at 15:01 and the unit stayed
+  "active"): restarted, bridge v1b answers in PASS. Restart it after any
+  UNO replug.
+- The cal cart: gray screen, then garbled tiles, then wrong colours, all
+  three cured by reseating. The last was CHR A3 (U3 pin 9) not reaching
+  the chip: white read as green, red as black. After the reseat the strip
+  reader read 24 of 24 fields and the palette screen scores |dY| at most
+  0.10, hue median -7.5 deg (the grabber's decode). U3's socket and the
+  cart's seat are the first suspects for any new fault.
+
 
 ## The TRNG emitter (geiger, `docs/HARDEN-PLAN.md`)
 
