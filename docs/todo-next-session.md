@@ -1,4 +1,41 @@
-# To do next session (written 2026-10-06, updated 2026-10-10)
+# To do next session (written 2026-10-06, updated 2026-10-11)
+
+## Where it stopped, 2026-10-11: every monitoring unit runs on the Pi again
+
+Item 1 of the TRNG list below is done. geiger is pushed at 82ba99b.
+
+- **Seven units came back, each on the emitter's file and each with a
+  test that goes red under its mutation** (geiger `deploy/pi/README.md`
+  has the table; `docs/HARDEN-PLAN.md` has a dated section for each):
+  rolling statistics (every 5 min), min-entropy (Sun 02:30), the battery
+  (03:00), the analysis report (04:00), the Parquet export (04:30),
+  rotation (05:15) and the file server on port 8001. Times are the Pi's.
+- **The counts are Poisson behind the 2 ms holdoff.** The report's plain
+  test fails at 0.0227, which is 1 - exp(-2 ms / 87.2 ms); against the
+  exponential shifted by that known 2 ms it reads 0.0038, p = 0.59, on
+  41,332 intervals. 11.5 counts a second. The report prints both.
+- **Rotation loses and doubles nothing.** A forced run on the live pool:
+  866,351 rows archived in 5 s, the sequence continuing with no gap row.
+  `rx_seen.json` is what tells the receiver what the archive holds.
+- **geiger's tests are sixteen**, run with `.venv/bin/python -m pytest
+  tests -q` (a venv in the checkout, made today, with polars and
+  plotly; the system python skips four).
+
+Read these before trusting an early number:
+
+- Min-entropy means nothing below 1,000,000 bits: about 2026-10-12
+  18:00 EDT. Run it by hand then; the timer waits for Sunday.
+- The battery's 64 KB window fills about a day after the reset; the
+  2026-10-12 03:00 run is the first near-full one.
+- The archive (`~/geiger-data/archive/` on the Pi) is on the same card:
+  it bounds the live file, it is not a backup.
+- Port 8001 has no auth, as port 8000 has none: LAN only, never
+  forwarded. The events are what the bits are made from.
+
+Open, small: `analysis/explore.py` still reads the logger's one column;
+one test on the Pi fails because the tree there is not a repository;
+`journald-persistent.conf` is the last thing in `deploy/pi/not-yet/`;
+an untracked `pi_time.txt` sits in the geiger checkout.
 
 ## Where it stopped, 2026-10-10 (late): the pool is served again, the tree is tidy
 
@@ -20,10 +57,8 @@
 
 Next on the TRNG, in order:
 
-1. Bring the monitoring back, one unit at a time, on the emitter's data
-   (`deploy/pi/not-yet/`: rolling statistics first, then min-entropy,
-   the battery, the analysis, the exports, rotation). None has read the
-   six-column `events.csv` yet.
+1. DONE 2026-10-11 (section above). Bring the monitoring back, one unit
+   at a time, on the emitter's data.
 2. A day of real counts against the 2026-06-21 report.
 3. A dedicated Pi with a fixed address, or a name the firmware can use.
 4. Pull the retired Pi's SD card: the 44M-row record and the history
