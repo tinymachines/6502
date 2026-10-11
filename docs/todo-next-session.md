@@ -1,5 +1,42 @@
 # To do next session (written 2026-10-06, updated 2026-10-10)
 
+## Where it stopped, 2026-10-10 (late): the pool is served again, the tree is tidy
+
+- **Hotbits had been down since the Pi retired on 2026-10-05.** It is
+  back: the NES bench's Pi stands in as `trng.local` (receiver,
+  extraction, API on port 8000; geiger `deploy/pi/` has the units and
+  the install steps). The emitter sends to it. The gateway and the web
+  server were not changed. Checked: the API, the gateway's `/v1/health`,
+  the public health routes, bradley.io's probe.
+- **It is a stand-in.** The Pi's address is a DHCP lease the firmware
+  holds as a number (a change means a reflash; the old value is in
+  geiger's ignored `.env.bak-impera`), and the Pi also runs the bench
+  head.
+- **Old versions archived** to `~/archive/trng-versions-2026-10-10/`
+  (README inside); the stale `~/projects/geiger` clone is deleted.
+- **geiger is pushed at 6c20c82**: units sorted into `deploy/pi`,
+  `deploy/pi/not-yet` and `deploy/retired`; `CLAUDE.md` opens with the
+  layout today.
+
+Next on the TRNG, in order:
+
+1. Bring the monitoring back, one unit at a time, on the emitter's data
+   (`deploy/pi/not-yet/`: rolling statistics first, then min-entropy,
+   the battery, the analysis, the exports, rotation). None has read the
+   six-column `events.csv` yet.
+2. A day of real counts against the 2026-06-21 report.
+3. A dedicated Pi with a fixed address, or a name the firmware can use.
+4. Pull the retired Pi's SD card: the 44M-row record and the history
+   `/random/archive` replayed exist nowhere else.
+5. Rev E of TM-TRNG-001, then tell the roof session.
+6. The bench pages, step 2 (geiger `docs/HOTBITS-BENCH-PAGES-PLAN.md`).
+7. Issue 5 (one falling edge per count), and the capture count against
+   the hardware tally.
+
+Left alone, the owner's call: the disabled system unit
+`hotbits-webapp.service` that names the archived folder, and the 5577
+files geiger tracks under `reports/`.
+
 ## Where it stopped, 2026-10-10: the CAJOE counts, hotbits has a bench page
 
 Item 1 of the owner's list below is done in substance.
