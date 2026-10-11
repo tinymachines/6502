@@ -1,4 +1,42 @@
-# To do next session (written 2026-10-06, updated 2026-10-09)
+# To do next session (written 2026-10-06, updated 2026-10-10)
+
+## Where it stopped, 2026-10-10: the CAJOE counts, hotbits has a bench page
+
+Item 1 of the owner's list below is done in substance.
+
+- **Real counts flow.** The tap is module INPUT + on P3 pin 2 (5V) and
+  INPUT - on the collector end of R19 (metered 467 k). The build lives
+  in a cigar box now, not the steel case. `emitter-0.2` on the C6,
+  8.65 counts a second, `missed` 0. geiger is pushed at b5f361b.
+- **Two finds, both in geiger `docs/HARDEN-PLAN.md` (2026-10-10
+  section).** The emitter stalled with no reader on its USB port (fixed
+  in 0.2). Each count makes about two falling edges; the extraction
+  holds off emitter edges for 1 ms (`MUTATE_HOLDOFF=1` red), and the
+  hardware cure is <https://github.com/tinymachines/geiger/issues/5>.
+- **The bits file was reset** to real counts only; the old files sit in
+  the emitter data directory under `reset-20261010/` and can go.
+- **/hotbits/bench is live** (<https://tinymachines.ai/hotbits/bench>),
+  shelved like /nes/bench. The plan for its 18 pages is geiger
+  `docs/HOTBITS-BENCH-PAGES-PLAN.md`; the roof session did step 1 and
+  waits for the first geiger page (step 2: the nine ready ones, house
+  style and host names fixed in geiger's source). New pages may ship
+  with the untranslated notice (owner's decision).
+
+Next on this thread, in order:
+
+1. A day of real counts; compare the rate and the health verdicts with
+   the 2026-06-21 report.
+2. Point the analysis and the API at the emitter's data.
+3. Rev E of TM-TRNG-001 (sheet 3: the R19 tap, the cigar box, whether
+   isolation still holds), then tell the roof session so the bench page
+   drops its rev D note.
+4. Step 2 of the bench pages. *The counter board, read from its
+   schematic* is the one to write first.
+5. Issue 5, and why the capture counted more edges than the hardware
+   tally while `missed` read 0.
+
+Do not open the C6's serial port casually: it resets the chip and
+starts a new session on the receiver.
 
 ## The owner's list, 2026-10-09, in their order
 
