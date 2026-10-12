@@ -99,9 +99,10 @@ Next on this thread, in order:
 1. A day of real counts; compare the rate and the health verdicts with
    the 2026-06-21 report.
 2. Point the analysis and the API at the emitter's data.
-3. Rev E of TM-TRNG-001 (sheet 3: the R19 tap, the cigar box, whether
-   isolation still holds), then tell the roof session so the bench page
-   drops its rev D note.
+3. DONE 2026-10-12 (geiger 2e4ea1a): rev E of TM-TRNG-001, sheet 3 the
+   R19 tap as built, the metal box, two edges a count; the roof session
+   told. Marked NOT CONFIRMED on the sheets, to ask the owner: the two
+   supplies (isolation holds only while separate), the box's cable entry.
 4. Step 2 of the bench pages. *The counter board, read from its
    schematic* is the one to write first.
 5. Issue 5, and why the capture counted more edges than the hardware
