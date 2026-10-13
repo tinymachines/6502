@@ -266,14 +266,12 @@ on the owner's word.
 9. Find the "gh issues / 6502 project" (`gh auth refresh -s read:project`).
 10. Which change the iPhone needed (no report ID, or the clean pairing).
 11. Pad latency, press to key event.
-12. One pad circuit (nes-bench#4): BUILT ON THE DESK 2026-10-12 (nes-bench
-    163a16f, not pushed): `firmware/pad` does USB and BLE from one sketch,
-    the sink following the host; `firmware/p4-c6-update` puts the slave
-    image the core names on the P4's C6 (the cause of every BLE crash
-    there); `docs/pad-build.md` has header P2 for the UART way. BENCH:
-    plug the kit's UART socket into a host, flash the updater, read its
-    verdict (in-band or P2), then the merged pad off the Pi. The P4 was
-    on the Pi as a keyboard that day; no button was seen pressed.
+12. One pad circuit (nes-bench#4): DONE 2026-10-13, issue closed. The P4 does
+    both from one binary: the C6 took the in-band esp-hosted update, the
+    P4 pairs legacy (SC fails at the DHKey check over the hosted radio), an
+    iPhone typed from the pad over BLE and a laptop over USB. Next: the
+    small one, nes-bench#6: the same pad on a XIAO ESP32S3 with the 2000 mAh
+    cell and a TP4056 board, tracked by drawing package TM-NESB-004.
 13. Screen streaming (nes#1): read RFC 4175 and VITA 49; prototype on
     palette indices.
 14. Bench items 4.2/5.2 (the pad through the bridge), C1 part side, and
