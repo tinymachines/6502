@@ -99,10 +99,12 @@ Next on this thread, in order:
 1. A day of real counts; compare the rate and the health verdicts with
    the 2026-06-21 report.
 2. Point the analysis and the API at the emitter's data.
-3. DONE 2026-10-12 (geiger 2e4ea1a): rev E of TM-TRNG-001, sheet 3 the
-   R19 tap as built, the metal box, two edges a count; the roof session
-   told. Marked NOT CONFIRMED on the sheets, to ask the owner: the two
-   supplies (isolation holds only while separate), the box's cable entry.
+3. DONE 2026-10-13: rev F of TM-TRNG-001 (geiger, committed, push on the
+   owner's word; the roof session told). The owner's answers: the CAJOE
+   alone on the chassis PSU's 5 V line, the emitter on a USB brick outside
+   the box, the detector and the opto sealed in the container inside the
+   metal chassis, in a garage out of the sun. Nothing left marked NOT
+   CONFIRMED; the chassis's bond to ground is the one thing not read.
 4. Step 2 of the bench pages. *The counter board, read from its
    schematic* is the one to write first.
 5. Issue 5, and why the capture counted more edges than the hardware
