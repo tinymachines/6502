@@ -197,7 +197,9 @@ async function loadCartFrom(url) {
   say(`loading ${url} ...`);
   const r = await fetch(url, { cache: 'no-cache' });
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-  useCart(cartFromDoc(JSON.parse(await ungzip(await r.arrayBuffer()))));
+  const cart = cartFromDoc(JSON.parse(await ungzip(await r.arrayBuffer())));
+  useCart(cart);
+  return cart;
 }
 
 /* The tile set. `art/tiles.chr` is the shipped sheet; the drawn-in-code
@@ -582,5 +584,14 @@ if (WANT) {
       + WANT.from.handle.replace(/[<>&"]/g, '') + '</a>';
     document.querySelector('header .sub').after(back);
   }
-  loadCartFrom(WANT.url).catch((e) => say(`could not load that cartridge: ${e.message}`, true));
+  // ?power=1 powers the cartridge on as soon as it has loaded, so a page that frames the console behind its own
+  // Boot button (bradley.io's front page, beta.bradley.io scene 5) is one press, not two. The explorer's ?run=1
+  // deep link is the model. Guarded like everything else here by `gen`: loading the cartridge bumps it exactly
+  // once (useCart), so anything more means the reader did something meanwhile (another cartridge, a power press)
+  // and their choice wins; and the cartridge in force must still be the one this link loaded.
+  const autopower = new URLSearchParams(location.search).get('power') === '1';
+  const asked = state.gen;
+  loadCartFrom(WANT.url)
+    .then((cart) => { if (autopower && state.cart === cart && state.gen === asked + 1) return power(); })
+    .catch((e) => say(`could not load that cartridge: ${e.message}`, true));
 }

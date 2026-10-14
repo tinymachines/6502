@@ -213,7 +213,8 @@ and the game drew unrelated memory with nothing erroring.
 python3 games/tools/mint.py --api https://6502.tinymachines.ai/api
 ```
 
-The page loads one from `?cart=<url>` or from the file picker, and a loaded
+Add `?power=1` to either spelling (`?cart=<url>` or `/b/<handle>/<slug>`) and the console powers on once the cartridge
+has loaded: one press for a page that frames it behind its own button. The page loads one from `?cart=<url>` or from the file picker, and a loaded
 cartridge joins the picker rather than quietly replacing what the label says
 is on screen. Its tiles replace the sheet, so a cartridge brings its own art.
 `games/deploy.sh` mints the sample rather than keeping it in the tree, so it
