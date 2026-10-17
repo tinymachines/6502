@@ -81,7 +81,7 @@ index, not the record. Tick a line here when its source closes.
 - [ ] Upstream the EM2980 id and the querystd fix.
 - [ ] `tools/oscr-card.py` not written.
 - [ ] The reader names a banked cart by 512 bytes; the Super Mario Bros. cart needs a re-read.
-- [ ] The reset hand stopped working (2026-10-16): GPIO17 drives, the polls never pause; check OK1 to the reset pads.
+- [x] The reset hand stopped working (2026-10-16): OK1's output side rewired, OUT to orange, GND to yellow, VCC open; bench-check all green again (2026-10-17).
 - [x] Injected bytes stopped reaching the console (2026-10-16): the 165 loaded and never shifted; R2 (CLK to its CP) sat one row off the blue lead. Walk 15 of 15 again (2026-10-17).
 - [x] The scope was off the LAN (2026-10-16): DHCP off, AutoIP on; DHCP set over link-local from the Pi, back at its reserved address.
 - [ ] The head stalls about three minutes with no log line when the scope is off (found 2026-10-16).
