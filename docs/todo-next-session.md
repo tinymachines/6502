@@ -1,5 +1,7 @@
 # To do next session (written 2026-10-06, updated 2026-10-11)
 
+Every open idea across the projects, ticked as it closes, is in `docs/master-list.md`.
+
 ## Where it stopped, 2026-10-11: every monitoring unit runs on the Pi again
 
 Item 1 of the TRNG list below is done. geiger is pushed at 82ba99b.
