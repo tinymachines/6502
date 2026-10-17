@@ -68,6 +68,8 @@ index, not the record. Tick a line here when its source closes.
 ### Boards and drawings
 
 - [ ] nes-bench#5: the NES bridge and the pad bridge exist only on breadboards (boards to have printed; discuss first).
+- [x] v1c drawn and routed (2026-10-17, nes-bench 1904458..1ae7b27, not pushed): v1b as an UNO shield with the hands on board, keyed KK-254 cables, a test point per probe; 0 unconnected, 0 clearance. `docs/bench-v1c.md`.
+- [ ] v1c ordered: K1's NO/NC metered, R3 confirmed, header height, enclosure, fab house and quantity first.
 - [ ] The inverter's five spare inputs tied.
 - [ ] The ribbon and breakout headers on the breadboard sheet.
 - [ ] nes-bench#3: two documents still open with "Nothing here has been built".
