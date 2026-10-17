@@ -81,6 +81,9 @@ index, not the record. Tick a line here when its source closes.
 - [ ] Upstream the EM2980 id and the querystd fix.
 - [ ] `tools/oscr-card.py` not written.
 - [ ] The reader names a banked cart by 512 bytes; the Super Mario Bros. cart needs a re-read.
+- [ ] The reset hand stopped working (2026-10-16): GPIO17 drives, the polls never pause; check OK1 to the reset pads.
+- [ ] Injected bytes stopped reaching the console (2026-10-16): Select at latch 400 left the menu cursor where it was; the register walk will say where.
+- [ ] The scope is off the LAN (2026-10-16): no Rigol hardware address answers; its cable or its network settings.
 - [ ] The head stalls about three minutes with no log line when the scope is off (found 2026-10-16).
 
 ### Pile (`docs/pile.md`)
