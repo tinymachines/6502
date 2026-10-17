@@ -25,6 +25,8 @@ index, not the record. Tick a line here when its source closes.
 - [x] Programme 3: the x-ray diff, the encyclopedia (seven entries), the Mario dissection (2026-09-18).
 - [ ] Programme 2: screens and the search over episodes (proposed only).
 - [ ] More encyclopedia entries and more games dissected.
+- [x] PLAN: Super Mario Bros. 1-1 cleared on the part by a schedule searched on the model (2026-10-17, nes-bench c9a8ddc, nes 11c242e).
+- [ ] PLAN on 1-2 and on: the death codes measured, a saved state on the model to make a candidate cheaper.
 
 ### Experiments on the part
 
