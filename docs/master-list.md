@@ -29,7 +29,8 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN on saved states, 1-2 cleared on the part to WORLD 1-3 with no life lost (2026-10-17, nes 46eeca2, nes-bench f92b780); death codes measured (0B, 06).
 - [x] PLAN 1-3 cleared on the part, power-on to WORLD 1-4 with no life lost (2026-10-18, run 20261018-012133).
 - [x] PLAN 1-4 cleared on the part, power-on to WORLD 2-1 with no life lost (2026-10-18, run 20261018-021108).
-- [ ] PLAN 2-1, 2-2 (swimming moves needed), 2-3; the schedule nears the UNO's 600 entries.
+- [x] PLAN 2-1 cleared on the part, power-on to WORLD 2-2 with no life lost (2026-10-18, run 20261018-023103, 258 entries).
+- [ ] PLAN 2-2 (swimming moves needed), 2-3, 2-4, 3-1; the schedule nears the UNO's 600 entries.
 
 ### Experiments on the part
 
