@@ -35,7 +35,8 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN 2-2 cleared on the part, power-on to WORLD 2-3 with no life lost (2026-10-18, run 20261018-031731, 370 entries).
 - [x] PLAN 2-3 cleared on the part, power-on to WORLD 2-4 with no life lost (2026-10-18, run 20261018-034339, 404 entries).
 - [x] PLAN 2-4 cleared on the part, power-on to WORLD 3-1 with no life lost (2026-10-18, run 20261018-040301, 435 entries).
-- [ ] PLAN 3-1, 3-2 (the pipeline is on it).
+- [x] PLAN 3-1 cleared on the part, power-on to WORLD 3-2 with no life lost, the first streamed run (2026-10-18, run 20261018-042415, 492 entries).
+- [ ] PLAN 3-2 (the pipeline is on it).
 - [ ] Tell the roof: bench-v1b-uno.md still describes the 600-entry limit (a pulled document; streaming changed it).
 
 ### Experiments on the part
