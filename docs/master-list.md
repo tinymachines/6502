@@ -27,7 +27,8 @@ index, not the record. Tick a line here when its source closes.
 - [ ] More encyclopedia entries and more games dissected.
 - [x] PLAN: Super Mario Bros. 1-1 cleared on the part by a schedule searched on the model (2026-10-17, nes-bench c9a8ddc, nes 11c242e).
 - [x] PLAN on saved states, 1-2 cleared on the part to WORLD 1-3 with no life lost (2026-10-17, nes 46eeca2, nes-bench f92b780); death codes measured (0B, 06).
-- [ ] PLAN on 1-3 and on; the schedule nears the UNO's 600 entries around World 2.
+- [x] PLAN 1-3 cleared on the part, power-on to WORLD 1-4 with no life lost (2026-10-18, run 20261018-012133).
+- [ ] PLAN on 1-4 and on; the schedule nears the UNO's 600 entries around World 2.
 
 ### Experiments on the part
 
