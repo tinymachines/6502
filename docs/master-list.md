@@ -33,7 +33,8 @@ index, not the record. Tick a line here when its source closes.
 - [x] Streaming: the UNO's schedule a ring fed by the head during the run, no 600-entry wall (2026-10-18, nes-bench 8f35ed6; on the part, run 20261018-024952, 200 entries streamed, 11,623 polls gap-free and none wrong).
 - [x] Swimming moves for 2-2, measured on the model (nes-bench 4d7dd9f).
 - [x] PLAN 2-2 cleared on the part, power-on to WORLD 2-3 with no life lost (2026-10-18, run 20261018-031731, 370 entries).
-- [ ] PLAN 2-3, 2-4, 3-1 (the pipeline is on it).
+- [x] PLAN 2-3 cleared on the part, power-on to WORLD 2-4 with no life lost (2026-10-18, run 20261018-034339, 404 entries).
+- [ ] PLAN 2-4, 3-1, 3-2 (the pipeline is on it).
 - [ ] Tell the roof: bench-v1b-uno.md still describes the 600-entry limit (a pulled document; streaming changed it).
 
 ### Experiments on the part
