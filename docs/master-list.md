@@ -40,6 +40,7 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN 3-3 cleared on the part with a beam search, power-on to WORLD 3-4 (2026-10-18, run 20261018-061315, 587 entries).
 - [x] PLAN 3-4 cleared on the part, power-on to WORLD 4-1 with no life lost (2026-10-18, run 20261018-145621, 618 entries): twelve levels in one schedule. The first plan failed its straight replay: nes `branch` RUN stopped at a frame's end, so a two-poll frame made an AT late on the model; fixed (nes ecdb2d6), replanned.
 - [x] PLAN 4-1 cleared on the part, power-on to WORLD 4-2 with no life lost (2026-10-18, run 20261018-162219, 662 entries): thirteen levels in one schedule.
+- [x] PLAN 4-2 cleared on the part, power-on to WORLD 4-3 with no life lost (2026-10-18, run 20261018-234630, 730 entries): fourteen levels. Five plans failed; it taught the planner --no-ceiling, --beam-high, the A-held way on, --resume, and that a warp is a change to any but the next level. The last tall pipe was crossed by a route searched by hand on the model, from the beam's own state.
 - [x] The plan log: PLAN's level sequence as a notebook page drawn from measurements (nes-bench docs/plan-log.md, tools/plan-log.py).
 - [ ] Put the plan log on the roof's notebook (their pull list; asked in the roof notice).
 - [ ] Tell the roof: bench-v1b-uno.md still describes the 600-entry limit (a pulled document; streaming changed it).
