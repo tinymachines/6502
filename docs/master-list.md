@@ -28,7 +28,8 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN: Super Mario Bros. 1-1 cleared on the part by a schedule searched on the model (2026-10-17, nes-bench c9a8ddc, nes 11c242e).
 - [x] PLAN on saved states, 1-2 cleared on the part to WORLD 1-3 with no life lost (2026-10-17, nes 46eeca2, nes-bench f92b780); death codes measured (0B, 06).
 - [x] PLAN 1-3 cleared on the part, power-on to WORLD 1-4 with no life lost (2026-10-18, run 20261018-012133).
-- [ ] PLAN on 1-4 and on; the schedule nears the UNO's 600 entries around World 2.
+- [x] PLAN 1-4 cleared on the part, power-on to WORLD 2-1 with no life lost (2026-10-18, run 20261018-021108).
+- [ ] PLAN 2-1, 2-2 (swimming moves needed), 2-3; the schedule nears the UNO's 600 entries.
 
 ### Experiments on the part
 
@@ -92,6 +93,7 @@ index, not the record. Tick a line here when its source closes.
 - [x] Injected bytes stopped reaching the console (2026-10-16): the 165 loaded and never shifted; R2 (CLK to its CP) sat one row off the blue lead. Walk 15 of 15 again (2026-10-17).
 - [x] The scope was off the LAN (2026-10-16): DHCP off, AutoIP on; DHCP set over link-local from the Pi, back at its reserved address.
 - [ ] The head stalls about three minutes with no log line when the scope is off (found 2026-10-16).
+- [ ] The console sometimes fails to start: one poll after the reset and no more, bridge healthy (2026-10-16 cold boot, 2026-10-18 run 20261018-020509); retries run clean.
 - [x] Every feature exercised through the Pi (2026-10-17): E0 green; E2's title and Duck Hunt's field reached and scored (the September shape); E3's replay agrees with the model on 2301 latches; split, poll line, eyes and the x-ray as before.
 - [ ] The warmth knob reads `runs/*/head.log` on the workstation, but the runs live on the Pi: a run not yet pulled reads as weeks warm (found 2026-10-17).
 - [x] The Pi's nes-bench checkout brought level by git bundle (2026-10-17): head restarted, `pad` answers, a script played from the checkout.
