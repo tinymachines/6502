@@ -37,7 +37,9 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN 2-4 cleared on the part, power-on to WORLD 3-1 with no life lost (2026-10-18, run 20261018-040301, 435 entries).
 - [x] PLAN 3-1 cleared on the part, power-on to WORLD 3-2 with no life lost, the first streamed run (2026-10-18, run 20261018-042415, 492 entries).
 - [x] PLAN 3-2 cleared on the part, power-on to WORLD 3-3 with no life lost (2026-10-18, run 20261018-044744, 548 entries): ten levels in one schedule.
-- [ ] PLAN 3-3 and on (needs the owner's word).
+- [x] PLAN 3-3 cleared on the part with a beam search, power-on to WORLD 3-4 (2026-10-18, run 20261018-061315, 587 entries).
+- [x] The plan log: PLAN's level sequence as a notebook page drawn from measurements (nes-bench docs/plan-log.md, tools/plan-log.py).
+- [ ] Put the plan log on the roof's notebook (their pull list; asked in the roof notice).
 - [ ] Tell the roof: bench-v1b-uno.md still describes the 600-entry limit (a pulled document; streaming changed it).
 
 ### Experiments on the part
@@ -102,7 +104,7 @@ index, not the record. Tick a line here when its source closes.
 - [x] Injected bytes stopped reaching the console (2026-10-16): the 165 loaded and never shifted; R2 (CLK to its CP) sat one row off the blue lead. Walk 15 of 15 again (2026-10-17).
 - [x] The scope was off the LAN (2026-10-16): DHCP off, AutoIP on; DHCP set over link-local from the Pi, back at its reserved address.
 - [ ] The head stalls about three minutes with no log line when the scope is off (found 2026-10-16).
-- [ ] The console sometimes fails to start: one poll after the reset and no more, bridge healthy (2026-10-16 cold boot, 2026-10-18 run 20261018-020509); retries run clean.
+- [ ] The console misbehaves on its own: fails to start (2026-10-16 cold boot, run 20261018-020509) and restarted itself mid-run with a clean poll log (run 20261018-060411); retries run clean. Suspect the cartridge connector (the lockout chip resets on a poor contact).
 - [x] Every feature exercised through the Pi (2026-10-17): E0 green; E2's title and Duck Hunt's field reached and scored (the September shape); E3's replay agrees with the model on 2301 latches; split, poll line, eyes and the x-ray as before.
 - [ ] The warmth knob reads `runs/*/head.log` on the workstation, but the runs live on the Pi: a run not yet pulled reads as weeks warm (found 2026-10-17).
 - [x] The Pi's nes-bench checkout brought level by git bundle (2026-10-17): head restarted, `pad` answers, a script played from the checkout.
