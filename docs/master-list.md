@@ -30,7 +30,10 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN 1-3 cleared on the part, power-on to WORLD 1-4 with no life lost (2026-10-18, run 20261018-012133).
 - [x] PLAN 1-4 cleared on the part, power-on to WORLD 2-1 with no life lost (2026-10-18, run 20261018-021108).
 - [x] PLAN 2-1 cleared on the part, power-on to WORLD 2-2 with no life lost (2026-10-18, run 20261018-023103, 258 entries).
-- [ ] PLAN 2-2 (swimming moves needed), 2-3, 2-4, 3-1; the schedule nears the UNO's 600 entries.
+- [x] Streaming: the UNO's schedule a ring fed by the head during the run, no 600-entry wall (2026-10-18, nes-bench 8f35ed6; on the part, run 20261018-024952, 200 entries streamed, 11,623 polls gap-free and none wrong).
+- [x] Swimming moves for 2-2, measured on the model (nes-bench 4d7dd9f).
+- [ ] PLAN 2-2, 2-3, 2-4, 3-1 (the pipeline is on it).
+- [ ] Tell the roof: bench-v1b-uno.md still describes the 600-entry limit (a pulled document; streaming changed it).
 
 ### Experiments on the part
 
