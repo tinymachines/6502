@@ -46,6 +46,7 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN 5-1 cleared on the part, power-on to WORLD 5-2 with no life lost (2026-10-19, run 20261019-081032, 845 entries): seventeen levels. The beam crossed it on its own.
 - [x] PLAN 5-2 cleared on the part, power-on to WORLD 5-3 with no life lost (2026-10-19, run 20261019-094241, 902 entries): eighteen levels. The beam crossed it on its own, above ground.
 - [x] PLAN 5-3 cleared on the part, power-on to WORLD 5-4 with no life lost (2026-10-19, run 20261019-104805, 944 entries): nineteen levels. The beam crossed it on its own.
+- [x] PLAN 5-4 cleared on the part, power-on to WORLD 6-1 with no life lost (2026-10-19, run 20261019-115112, 975 entries): twenty levels, five castles. The beam crossed it on its own.
 - [x] The plan log: PLAN's level sequence as a notebook page drawn from measurements (nes-bench docs/plan-log.md, tools/plan-log.py).
 - [ ] Put the plan log on the roof's notebook (their pull list; asked in the roof notice).
 - [ ] Tell the roof: bench-v1b-uno.md still describes the 600-entry limit (a pulled document; streaming changed it).
