@@ -42,6 +42,7 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN 4-1 cleared on the part, power-on to WORLD 4-2 with no life lost (2026-10-18, run 20261018-162219, 662 entries): thirteen levels in one schedule.
 - [x] PLAN 4-2 cleared on the part, power-on to WORLD 4-3 with no life lost (2026-10-18, run 20261018-234630, 730 entries): fourteen levels. Five plans failed; it taught the planner --no-ceiling, --beam-high, the A-held way on, --resume, and that a warp is a change to any but the next level. The last tall pipe was crossed by a route searched by hand on the model, from the beam's own state.
 - [x] PLAN 4-3 cleared on the part, power-on to WORLD 4-4 with no life lost (2026-10-19, run 20261019-015500, 767 entries): fifteen levels. The beam crossed the mushroom tops and falling lifts on its own, nothing new needed.
+- [x] PLAN 4-4 cleared on the part, power-on to WORLD 5-1 with no life lost (2026-10-19, run 20261019-065615, 796 entries): sixteen levels, the first maze. The planner reads the maze's checks out of the game and crossed the first on its own; the second's one-tile entry was searched by hand on the model and spliced on.
 - [x] The plan log: PLAN's level sequence as a notebook page drawn from measurements (nes-bench docs/plan-log.md, tools/plan-log.py).
 - [ ] Put the plan log on the roof's notebook (their pull list; asked in the roof notice).
 - [ ] Tell the roof: bench-v1b-uno.md still describes the 600-entry limit (a pulled document; streaming changed it).
