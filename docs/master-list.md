@@ -55,6 +55,7 @@ index, not the record. Tick a line here when its source closes.
 - [x] PLAN 7-2 cleared on the part, power-on to WORLD 7-3 with no life lost (2026-10-19, run 20261019-224836, 1,353 entries): twenty-six levels. The planner learned that a pipe passed stays passed (the water's exit pipe keeps its area number), resumed from its own state; nothing by hand.
 - [x] PLAN 7-3 cleared on the part, power-on to WORLD 7-4 with no life lost (2026-10-20, run 20261020-002836, 1,393 entries): twenty-seven levels. The beam crossed it on its own.
 - [x] PLAN 7-4 cleared on the part, power-on to WORLD 8-1 with no life lost (2026-10-20, run 20261020-015615, 1,423 entries): twenty-eight levels, seven castles. The six-check maze, passed by the beam on its own, never sent back.
+- [x] PLAN 8-1 cleared on the part, power-on to WORLD 8-2 with no life lost (2026-10-20, run 20261020-042403, 1,519 entries): twenty-nine levels. The longest level in the game; the beam crossed it on its own in about two hours.
 - [x] The plan log: PLAN's level sequence as a notebook page drawn from measurements (nes-bench docs/plan-log.md, tools/plan-log.py).
 - [ ] Put the plan log on the roof's notebook (their pull list; asked in the roof notice).
 - [ ] Tell the roof: bench-v1b-uno.md still describes the 600-entry limit (a pulled document; streaming changed it).
